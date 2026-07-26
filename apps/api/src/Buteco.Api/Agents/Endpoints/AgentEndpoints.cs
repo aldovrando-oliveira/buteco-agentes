@@ -1,9 +1,10 @@
-using Buteco.Api.A2A;
+using Buteco.Api.Agents.Commands.CreateAgent;
+using Buteco.Api.Agents.Queries.GetAgentById;
+using Buteco.Api.Agents.Queries.ListAgents;
 using Buteco.Api.Agents.Requests;
 using Buteco.Api.Agents.Responses;
-using Buteco.Api.Infrastructure;
+using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
 
 namespace Buteco.Api.Agents.Endpoints;
 
@@ -22,8 +23,7 @@ public static class AgentEndpoints
 
     private static async Task<Results<Created<AgentResponse>, ValidationProblem>> CreateAgentAsync(
         CreateAgentRequest request,
-        AppDbContext dbContext,
-        AgentA2AServerRegistry registry,
+        IMediator mediator,
         CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string[]>();
@@ -43,44 +43,30 @@ public static class AgentEndpoints
             return TypedResults.ValidationProblem(errors);
         }
 
-        var agent = new Entities.Agent(request.Name!, request.Instructions!);
+        var command = new CreateAgentCommand(request.Name!, request.Instructions!);
+        var response = await mediator.Send(command, cancellationToken);
 
-        dbContext.Agents.Add(agent);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        // A rota A2A do agente (/agents/{id}/a2a) resolve o A2AServer sob demanda a
-        // partir deste registry; pré-populamos aqui para a primeira chamada já
-        // responder sem precisar de uma consulta extra ao banco (ver RoutingA2ARequestHandler).
-        registry.Register(agent.Id);
-
-        var response = AgentResponse.FromEntity(agent);
-        return TypedResults.Created($"/agents/{agent.Id}", response);
+        return TypedResults.Created($"/agents/{response.Id}", response);
     }
 
     private static async Task<Ok<IReadOnlyList<AgentResponse>>> ListAgentsAsync(
-        AppDbContext dbContext,
+        IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var agents = await dbContext.Agents
-            .AsNoTracking()
-            .OrderBy(agent => agent.CreatedAt)
-            .Select(agent => AgentResponse.FromEntity(agent))
-            .ToListAsync(cancellationToken);
+        var agents = await mediator.Send(new ListAgentsQuery(), cancellationToken);
 
-        return TypedResults.Ok<IReadOnlyList<AgentResponse>>(agents);
+        return TypedResults.Ok(agents);
     }
 
     private static async Task<Results<Ok<AgentResponse>, NotFound>> GetAgentByIdAsync(
         Guid id,
-        AppDbContext dbContext,
+        IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var agent = await dbContext.Agents
-            .AsNoTracking()
-            .FirstOrDefaultAsync(agent => agent.Id == id, cancellationToken);
+        var agent = await mediator.Send(new GetAgentByIdQuery(id), cancellationToken);
 
         return agent is null
             ? TypedResults.NotFound()
-            : TypedResults.Ok(AgentResponse.FromEntity(agent));
+            : TypedResults.Ok(agent);
     }
 }

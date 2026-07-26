@@ -9,7 +9,7 @@ namespace Buteco.Api.A2A;
 public sealed class AgentA2AServerRegistry(
     IServiceScopeFactory scopeFactory,
     ITaskJobPublisher taskJobPublisher,
-    ILoggerFactory loggerFactory)
+    ILoggerFactory loggerFactory) : IAgentA2AServerRegistry
 {
     private readonly ConcurrentDictionary<Guid, A2AServer> _servers = new();
 
