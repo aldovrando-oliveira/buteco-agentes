@@ -11,19 +11,25 @@ decisões).
 
 | App | Stack |
 | --- | --- |
-| `apps/api` | .NET 10, ASP.NET Core Web API (futuro host do `A2AServer`, endpoints A2A e webhooks dos canais) |
-| `apps/workers` | .NET 10, Worker Service (futuro consumidor do RabbitMQ, execução dos agentes via Microsoft Agent Framework) |
-| `apps/frontend` | Vite + React 19 + TypeScript + Mantine 9 (ESLint + Prettier) |
+| `apps/api` | .NET 10, ASP.NET Core Web API. CRUD de agentes (EF Core/Postgres) e endpoint A2A por agente (`/agents/{id}/a2a`, via `A2A`/`A2A.AspNetCore`). Nunca chama o LLM — só persiste a task e publica um job no RabbitMQ |
+| `apps/workers` | .NET 10, Worker Service. Consome o RabbitMQ, monta o agente (`Microsoft.Agents.AI`) com o system prompt cadastrado, chama o LLM (`Microsoft.Extensions.AI.OpenAI`, endpoint formato OpenAI configurável) e escreve o resultado de volta no Postgres |
+| `apps/frontend` | Vite + React 19 + TypeScript + Mantine 9 (ESLint + Prettier) — ainda não consome o backend |
 
-Backend futuro (fora do escopo do scaffold atual): RabbitMQ como broker entre
-`api` e `workers`; PostgreSQL + EF Core para o catálogo (agentes, servidores
-MCP, bindings, inboxes) e para o store durável de tasks/eventos do protocolo
-[A2A](https://a2a-protocol.org/latest/). Canais de entrada suportados hoje:
-ChatWoot e Waha, via adapters.
+RabbitMQ é o broker entre `apps/api` e `apps/workers`. PostgreSQL + EF Core
+para o catálogo de agentes e para o store durável de tasks/eventos do
+protocolo [A2A](https://a2a-protocol.org/latest/) — nada de store em
+memória. Fora de escopo por enquanto: MCP, adapters de canal (ChatWoot/Waha),
+autenticação, push notification/streaming de task, e qualquer UI consumindo
+isso no `apps/frontend` (ver `openspec/changes/backend-agente-a2a-mvp/`).
 
 ## Estrutura
 
 ```
+docker-compose.yml        # Postgres + RabbitMQ para desenvolvimento local
+.env.example               # variáveis usadas pelo compose e pelos apps
+global.json                 # pina o SDK do .NET
+Directory.Build.props       # propriedades comuns aos projetos .NET
+Directory.Packages.props    # Central Package Management (versões dos pacotes)
 apps/
   api/                    # ASP.NET Core Web API
     Api.sln
@@ -36,6 +42,12 @@ apps/
   frontend/               # Vite + React + TS + Mantine
     src/
     package.json
+tests/
+  CrossAppTaskStoreCompatibility.Tests/  # único projeto que referencia
+                                          # Buteco.Api e Buteco.Workers ao
+                                          # mesmo tempo — só para verificar
+                                          # que as duas implementações de
+                                          # ITaskStore concordam no schema
 openspec/                 # Propostas, specs, design e tasks de cada mudança
 ```
 
@@ -43,8 +55,36 @@ openspec/                 # Propostas, specs, design e tasks de cada mudança
 
 - [.NET SDK 10](https://dotnet.microsoft.com/download) (`dotnet --version` deve reportar `10.x`)
 - [Node.js](https://nodejs.org/) 20+ e npm
+- Docker (ou Podman com `podman machine` rodando) — para o `docker-compose.yml`
+  de desenvolvimento e para os testes de integração, que sobem Postgres/RabbitMQ
+  efêmeros via [Testcontainers](https://testcontainers.com/)
+
+## Como subir as dependências (Postgres + RabbitMQ)
+
+```bash
+cp .env.example .env   # ajuste as portas se 5432/5672/15672 já estiverem em uso
+docker compose up -d   # ou: podman compose up -d
+```
+
+Isso sobe:
+
+- **Postgres** na porta `5432` (padrão), banco/usuário/senha definidos no `.env`
+- **RabbitMQ** na porta `5672` (AMQP) e `15672` (UI de management —
+  `http://localhost:15672`, mesmas credenciais do `.env`)
+
+Os dados persistem em volumes nomeados entre `docker compose down`/`up`. Para
+apagar tudo: `docker compose down -v`.
 
 ## Como subir cada app
+
+Antes de rodar `apps/api` pela primeira vez, aplique as migrations (só
+`apps/api` aplica migration em runtime — `apps/workers` usa o mesmo schema
+mas nunca o cria, ver `design.md`):
+
+```bash
+cd apps/api/src/Buteco.Api
+dotnet ef database update
+```
 
 ### apps/api
 
@@ -53,14 +93,33 @@ cd apps/api
 dotnet run --project src/Buteco.Api
 ```
 
-A API sobe em uma porta aleatória do Kestrel (veja a linha `Now listening on...`
-no console). Endpoint de health check:
+Lê `ConnectionStrings:Postgres` e `RabbitMq:*` via `appsettings.Development.json`
+(defaults de dev, mesmos do `.env.example`) ou variáveis de ambiente
+(`ConnectionStrings__Postgres`, `RabbitMq__Host`, etc.) — nunca hardcoded.
 
 ```bash
 curl -i http://localhost:<porta>/health
+
+# cadastrar um agente
+curl -X POST http://localhost:<porta>/agents \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Atendente","instructions":"Você é um atendente simpático."}'
+
+# usar o agente via A2A (SendMessage, JSON-RPC)
+curl -X POST http://localhost:<porta>/agents/<id>/a2a \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","parts":[{"text":"Olá!"}],"messageId":"<uuid>"}}}'
+
+# consultar o estado da task (GetTask)
+curl -X POST http://localhost:<porta>/agents/<id>/a2a \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"id":"<taskId do SendMessage>"}}'
 ```
 
-Esperado: `HTTP/1.1 200 OK`.
+A task nasce `TASK_STATE_SUBMITTED` e, com `apps/workers` rodando, avança
+para `TASK_STATE_WORKING` e depois `TASK_STATE_COMPLETED` (ou `TASK_STATE_FAILED`
+se o LLM falhar) — sem streaming/push notification nesta fatia, é preciso
+consultar `GetTask` de novo para ver o resultado.
 
 ### apps/workers
 
@@ -69,8 +128,13 @@ cd apps/workers
 dotnet run --project src/Buteco.Workers
 ```
 
-Esperado: log `Worker starting at: ...` no console. `Ctrl+C` para encerrar
-(deve logar `Worker stopping at: ...` antes de sair).
+Além de `ConnectionStrings:Postgres` e `RabbitMq:*`, lê `ChatClient:BaseUrl`/
+`ChatClient:ApiKey`/`ChatClient:Model` — endpoint no formato OpenAI (OpenAI,
+Azure OpenAI ou um gateway compatível; basta trocar `BaseUrl`/`ApiKey`).
+
+Esperado: log `Worker starting at: ...` no console, e (com um job na fila)
+logs de transição de estado da task. `Ctrl+C` para encerrar (loga
+`Worker stopping at: ...`).
 
 ### apps/frontend
 
@@ -85,12 +149,20 @@ Abra `http://localhost:5173`. Deve renderizar o `AppShell` (header + navbar +
 
 ## Como testar cada app
 
+Os testes de integração de `apps/api`, `apps/workers` e
+`tests/CrossAppTaskStoreCompatibility.Tests` sobem Postgres/RabbitMQ
+efêmeros via Testcontainers — não precisam do `docker compose up` da seção
+acima rodando, mas precisam de Docker/Podman disponível.
+
 ```bash
 # apps/api
 dotnet test apps/api/Api.sln
 
 # apps/workers
 dotnet test apps/workers/Workers.sln
+
+# compatibilidade de schema entre apps/api e apps/workers
+dotnet test tests/CrossAppTaskStoreCompatibility.Tests
 
 # apps/frontend
 cd apps/frontend
@@ -104,7 +176,14 @@ npm run build
 - **Isolamento entre apps**: nenhum `.csproj` ou arquivo do frontend pode
   referenciar código de outro app. `libs/` só existe quando houver
   necessidade real de compartilhamento, com justificativa explícita no
-  `design.md` da mudança que a criar.
+  `design.md` da mudança que a criar. A única exceção é
+  `tests/CrossAppTaskStoreCompatibility.Tests`, que referencia `Buteco.Api`
+  e `Buteco.Workers` de propósito só para verificar compatibilidade de
+  schema — nenhum dos dois apps o referencia de volta, e ele nunca é
+  publicado com nenhum dos dois.
+- **Central Package Management**: versões de pacotes NuGet ficam em
+  `Directory.Packages.props` na raiz; os `.csproj` referenciam pacotes sem
+  `Version`.
 - **Mudanças planejadas com OpenSpec**: propostas, specs, design e tasks de
   cada mudança ficam em `openspec/changes/<nome-da-mudança>/`. Use
   `openspec status --change "<nome>"` para ver o progresso de uma mudança em

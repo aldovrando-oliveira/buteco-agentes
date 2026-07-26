@@ -7,9 +7,13 @@ context: |
   Monorepo com isolamento estrito entre apps: apps/api, apps/workers e apps/frontend
   nunca referenciam código interno umas das outras. Compartilhamento real só via
   libs/ explícita, pequena e versionada — nunca por padrão.
-  Backend: .NET 9. apps/api = ASP.NET Core (endpoints A2A via Microsoft.Agents.AI.Hosting.A2A
-  e webhooks dos canais). apps/workers = Worker Service (executa os agentes via
-  Microsoft Agent Framework, chamando MCP e o LLM). RabbitMQ é o broker entre api e
+  Backend: .NET 10. apps/api = ASP.NET Core (endpoints A2A via A2A/A2A.AspNetCore
+  — o pacote de conveniência Microsoft.Agents.AI.Hosting.A2A.AspNetCore registra um
+  único A2AServer por app via DI no startup, incompatível com agentes criados em
+  runtime, então apps/api compõe A2AServer diretamente; ver
+  openspec/changes/backend-agente-a2a-mvp/design.md — e webhooks dos canais).
+  apps/workers = Worker Service (executa os agentes via Microsoft Agent Framework,
+  chamando MCP e o LLM). RabbitMQ é o broker entre api e
   workers. PostgreSQL com EF Core para o catálogo (agentes, servidores MCP, bindings,
   inboxes) e para o store durável de tasks/eventos do protocolo A2A
   (https://a2a-protocol.org/latest/) — nada de store em memória em produção.

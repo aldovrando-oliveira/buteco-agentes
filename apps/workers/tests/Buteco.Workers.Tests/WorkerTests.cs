@@ -1,17 +1,38 @@
-using Buteco.Workers;
+using Buteco.Workers.Agents;
+using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Messaging;
+using Buteco.Workers.Options;
+using Buteco.Workers.Tests.Support;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Moq;
 
 namespace Buteco.Workers.Tests;
 
-public class WorkerTests
+public class WorkerTests(WorkerInfrastructureFixture fixture) : IClassFixture<WorkerInfrastructureFixture>
 {
     [Fact]
-    public async Task Host_Starts_And_Stops_Without_Errors()
+    public async Task Host_WithTaskJobConsumer_Starts_And_Stops_Without_Errors()
     {
-        using var host = Host.CreateDefaultBuilder()
-            .ConfigureServices(services => services.AddHostedService<Worker>())
-            .Build();
+        var builder = Host.CreateApplicationBuilder();
+
+        builder.Configuration["ConnectionStrings:Postgres"] = fixture.Postgres.GetConnectionString();
+        builder.Services.AddInfrastructure(builder.Configuration);
+
+        builder.Services.Configure<RabbitMqOptions>(options =>
+        {
+            options.Host = fixture.RabbitMq.Hostname;
+            options.Port = fixture.RabbitMq.GetMappedPublicPort(5672);
+            options.Username = "buteco";
+            options.Password = "buteco_test_password";
+        });
+
+        builder.Services.AddSingleton(new Mock<IChatClient>().Object);
+        builder.Services.AddSingleton<AgentExecutionService>();
+        builder.Services.AddHostedService<TaskJobConsumer>();
+
+        using var host = builder.Build();
 
         await host.StartAsync();
         await host.StopAsync();

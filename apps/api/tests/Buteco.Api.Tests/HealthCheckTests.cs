@@ -1,9 +1,9 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Buteco.Api.Tests.Support;
 
 namespace Buteco.Api.Tests;
 
-public class HealthCheckTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class HealthCheckTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>
 {
     [Fact]
     public async Task Health_Endpoint_Returns_Ok()
