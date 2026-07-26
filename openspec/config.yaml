@@ -1,0 +1,61 @@
+Crie (ou edite, se já existir) o arquivo openspec/config.yaml com o seguinte conteúdo:
+
+schema: spec-driven
+
+context: |
+  Plataforma de gestão de agentes de IA.
+  Monorepo com isolamento estrito entre apps: apps/api, apps/workers e apps/frontend
+  nunca referenciam código interno umas das outras. Compartilhamento real só via
+  libs/ explícita, pequena e versionada — nunca por padrão.
+  Backend: .NET 9. apps/api = ASP.NET Core (endpoints A2A via Microsoft.Agents.AI.Hosting.A2A
+  e webhooks dos canais). apps/workers = Worker Service (executa os agentes via
+  Microsoft Agent Framework, chamando MCP e o LLM). RabbitMQ é o broker entre api e
+  workers. PostgreSQL com EF Core para o catálogo (agentes, servidores MCP, bindings,
+  inboxes) e para o store durável de tasks/eventos do protocolo A2A
+  (https://a2a-protocol.org/latest/) — nada de store em memória em produção.
+  Frontend: apps/frontend = React + TypeScript + Vite + Mantine, seguindo o padrão
+  visual e de composição de https://ui.mantine.dev.
+  Canais de entrada (inboxes) suportados hoje: ChatWoot e Waha, via adapters,
+  com mais canais a serem adicionados no futuro.
+
+
+rules:
+  design:
+    - Incluir a árvore de pastas completa proposta
+    - Justificar qualquer conteúdo colocado em libs/
+    - Antes de fixar qualquer versão de runtime, linguagem, framework ou
+      biblioteca como decisão (ex. .NET, Node, Mantine, React), verificar a
+      versão estável/LTS mais recente e ainda suportada na data atual — nunca
+      assumir a partir de conhecimento de treinamento, que pode estar
+      desatualizado. Buscar a informação (web/docs oficiais) antes de commitar
+      a decisão.
+    - Registrar no Open Questions apenas incertezas reais de negócio/produto —
+      versões de dependências não são "pergunta aberta", são decisão a ser
+      verificada antes de propor.
+    - Sempre incluir testes unitários no frontend e backend (api e workers)
+  proposal:
+    - Mesma regra acima quando a proposta já envolver escolha de stack/versões.
+    - Deixar explícito qual app (api, workers ou frontend) cada tarefa afeta
+    - Nunca propor referência de projeto entre apps/api, apps/workers e apps/frontend
+  tasks:
+    - Cada tarefa deve indicar em qual app ela roda
+    
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

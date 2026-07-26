@@ -1,0 +1,6 @@
+@Buteco.Api_HostAddress = http://localhost:5017
+
+GET {{Buteco.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
