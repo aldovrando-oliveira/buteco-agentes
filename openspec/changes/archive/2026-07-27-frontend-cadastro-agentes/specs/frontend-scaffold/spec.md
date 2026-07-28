@@ -1,19 +1,4 @@
-# frontend-scaffold Specification
-
-## Purpose
-
-TBD - defined by change estrutura-base-monorepo. Update Purpose after archive.
-
-## Requirements
-
-### Requirement: Projeto Vite + React + TypeScript isolado
-O sistema SHALL prover, em `apps/frontend`, um projeto Vite + React +
-TypeScript isolado de `apps/api` e `apps/workers`, sem nenhuma dependência ou
-import de código interno desses outros apps.
-
-#### Scenario: Build isolado do frontend
-- **WHEN** um desenvolvedor executa o comando de build do Vite a partir de `apps/frontend`
-- **THEN** o build conclui com sucesso sem depender de nenhum código-fonte localizado em `apps/api` ou `apps/workers`
+## MODIFIED Requirements
 
 ### Requirement: Mantine configurado com AppShell inicial
 O sistema SHALL incluir, em `apps/frontend`, as bibliotecas Mantine `core`,
@@ -34,6 +19,8 @@ navegação do navbar limitada aos itens que possuem uma página real.
 - **WHEN** o usuário visualiza a navbar do `AppShell`
 - **THEN** só aparecem itens de navegação que apontam para uma rota
   existente na aplicação
+
+## ADDED Requirements
 
 ### Requirement: Tema claro com alternância manual
 O sistema SHALL configurar, em `apps/frontend`, o Mantine com tema claro
@@ -67,15 +54,3 @@ feature disponível.
 - **WHEN** o usuário navega entre páginas diferentes da aplicação
 - **THEN** o header e a navbar do `AppShell` permanecem visíveis e não são
   recarregados, apenas o conteúdo da área principal muda
-
-### Requirement: Lint e formatação configurados
-O sistema SHALL incluir, em `apps/frontend`, configuração de ESLint e Prettier
-aplicável ao código TypeScript/React do projeto.
-
-#### Scenario: Lint executa sem erros no código inicial
-- **WHEN** um desenvolvedor executa o script de lint do `apps/frontend`
-- **THEN** o processo termina sem erros de lint no código gerado pelo scaffold
-
-#### Scenario: Formatação é verificável
-- **WHEN** um desenvolvedor executa o script de checagem de formatação do Prettier em `apps/frontend`
-- **THEN** o processo confirma que todos os arquivos estão formatados de acordo com a configuração do projeto

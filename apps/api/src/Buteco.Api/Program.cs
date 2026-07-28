@@ -21,9 +21,14 @@ builder.Services.AddSingleton<AgentA2AServerRegistry>();
 builder.Services.AddSingleton<IAgentA2AServerRegistry>(sp => sp.GetRequiredService<AgentA2AServerRegistry>());
 builder.Services.AddSingleton<RoutingA2ARequestHandler>();
 
+var corsOptions = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new CorsOptions();
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy => policy.WithOrigins(corsOptions.AllowedOrigins).AllowAnyHeader().AllowAnyMethod()));
+
 var app = builder.Build();
 
 app.UseHttpsRedirection();
+app.UseCors();
 
 app.MapHealthChecks("/health");
 app.MapAgentEndpoints();
