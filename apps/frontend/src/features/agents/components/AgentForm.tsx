@@ -6,11 +6,19 @@ interface AgentFormProps {
   onSubmit: (values: CreateAgentInput) => void;
   errors?: Record<string, string>;
   submitting?: boolean;
+  initialValues?: CreateAgentInput;
+  submitLabel?: string;
 }
 
-export function AgentForm({ onSubmit, errors, submitting }: AgentFormProps) {
+export function AgentForm({
+  onSubmit,
+  errors,
+  submitting,
+  initialValues,
+  submitLabel = 'Criar agente',
+}: AgentFormProps) {
   const form = useForm<CreateAgentInput>({
-    initialValues: { name: '', instructions: '' },
+    initialValues: initialValues ?? { name: '', instructions: '' },
     validate: {
       name: (value) => (value.trim() ? null : 'O nome do agente é obrigatório.'),
       instructions: (value) =>
@@ -32,12 +40,13 @@ export function AgentForm({ onSubmit, errors, submitting }: AgentFormProps) {
           label="Instruções"
           placeholder="System prompt do agente"
           withAsterisk
-          minRows={4}
+          rows={12}
+          resize="vertical"
           {...form.getInputProps('instructions')}
           error={errors?.instructions ?? form.errors.instructions}
         />
         <Button type="submit" loading={submitting}>
-          Criar agente
+          {submitLabel}
         </Button>
       </Stack>
     </form>

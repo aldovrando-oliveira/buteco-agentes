@@ -1,10 +1,9 @@
-# agent-catalog-ui Specification
+## RENAMED Requirements
 
-## Purpose
+- FROM: `### Requirement: Detalhe de agente somente leitura`
+- TO: `### Requirement: Detalhe de agente`
 
-TBD - defined by change frontend-cadastro-agentes. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Listagem de agentes na interface
 O sistema SHALL prover, em `apps/frontend`, uma página que lista os agentes
@@ -36,30 +35,6 @@ para iniciar o cadastro de um novo agente.
 - **THEN** a interface exibe, na linha desse agente, um indicador visual
   diferente do usado para agentes com `isActive: true`
 
-### Requirement: Cadastro de agente pela interface
-O sistema SHALL prover, em `apps/frontend`, um formulário para cadastrar um
-agente informando nome e instruções (system prompt), enviando os dados via
-`POST /agents`.
-
-#### Scenario: Cadastro com sucesso
-- **WHEN** o usuário preenche nome e instruções válidos e submete o
-  formulário
-- **THEN** a interface envia `POST /agents`, exibe uma notificação de
-  sucesso e redireciona o usuário para a página de detalhe do agente
-  recém-criado
-
-#### Scenario: Cadastro rejeitado por validação do servidor
-- **WHEN** o servidor responde com erro de validação (HTTP 400) por nome
-  ou instruções ausentes
-- **THEN** a interface exibe a mensagem de erro correspondente no campo do
-  formulário associado, sem navegar para outra página
-
-#### Scenario: Falha de rede ou do servidor ao cadastrar
-- **WHEN** a chamada a `POST /agents` falha por um motivo diferente de
-  validação (erro de rede ou erro do servidor)
-- **THEN** a interface exibe uma notificação de erro genérica e mantém os
-  dados já preenchidos no formulário
-
 ### Requirement: Detalhe de agente
 O sistema SHALL prover, em `apps/frontend`, uma página que exibe os dados
 completos de um agente consumindo `GET /agents/{id}`, incluindo seu estado
@@ -87,6 +62,8 @@ ativá-lo ou desativá-lo.
 - **WHEN** o agente exibido tem `isActive: true`
 - **THEN** a interface exibe uma ação para desativá-lo, e não exibe uma
   ação para ativá-lo
+
+## ADDED Requirements
 
 ### Requirement: Edição de agente pela interface
 O sistema SHALL prover, em `apps/frontend`, um formulário para editar o

@@ -1,4 +1,4 @@
-import { Anchor, Table } from '@mantine/core';
+import { Anchor, Badge, Table } from '@mantine/core';
 import { Link } from 'react-router';
 import type { Agent } from '../types/agent';
 
@@ -12,6 +12,7 @@ export function AgentTable({ agents }: AgentTableProps) {
       <Table.Thead>
         <Table.Tr>
           <Table.Th>Nome</Table.Th>
+          <Table.Th>Estado</Table.Th>
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>
@@ -21,6 +22,11 @@ export function AgentTable({ agents }: AgentTableProps) {
               <Anchor component={Link} to={`/agents/${agent.id}`}>
                 {agent.name}
               </Anchor>
+            </Table.Td>
+            <Table.Td>
+              <Badge color={agent.isActive ? 'green' : 'gray'}>
+                {agent.isActive ? 'Ativo' : 'Inativo'}
+              </Badge>
             </Table.Td>
           </Table.Tr>
         ))}

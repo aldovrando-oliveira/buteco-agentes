@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createAgent, getAgent, listAgents } from './agentsApi';
-import type { Agent, CreateAgentInput } from '../types/agent';
+import {
+  activateAgent,
+  createAgent,
+  deactivateAgent,
+  getAgent,
+  listAgents,
+  updateAgent,
+} from './agentsApi';
+import type { Agent, CreateAgentInput, UpdateAgentInput } from '../types/agent';
 
 export function useAgentsQuery() {
   return useQuery({ queryKey: ['agents'], queryFn: listAgents });
@@ -17,6 +24,42 @@ export function useCreateAgentMutation() {
     mutationFn: (input: CreateAgentInput) => createAgent(input),
     onSuccess: (created: Agent) => {
       queryClient.setQueryData(['agents', created.id], created);
+      void queryClient.invalidateQueries({ queryKey: ['agents'] });
+    },
+  });
+}
+
+export function useUpdateAgentMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateAgentInput }) => updateAgent(id, input),
+    onSuccess: (updated: Agent) => {
+      queryClient.setQueryData(['agents', updated.id], updated);
+      void queryClient.invalidateQueries({ queryKey: ['agents'] });
+    },
+  });
+}
+
+export function useActivateAgentMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => activateAgent(id),
+    onSuccess: (updated: Agent) => {
+      queryClient.setQueryData(['agents', updated.id], updated);
+      void queryClient.invalidateQueries({ queryKey: ['agents'] });
+    },
+  });
+}
+
+export function useDeactivateAgentMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deactivateAgent(id),
+    onSuccess: (updated: Agent) => {
+      queryClient.setQueryData(['agents', updated.id], updated);
       void queryClient.invalidateQueries({ queryKey: ['agents'] });
     },
   });

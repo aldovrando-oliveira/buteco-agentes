@@ -42,4 +42,29 @@ describe('AgentForm', () => {
     ).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  it('pré-preenche os campos com initialValues quando fornecido', () => {
+    render(
+      <MantineProvider theme={theme}>
+        <AgentForm
+          onSubmit={vi.fn()}
+          initialValues={{ name: 'Atendente', instructions: 'Você é um atendente simpático.' }}
+        />
+      </MantineProvider>,
+    );
+
+    expect(screen.getByLabelText(/nome/i)).toHaveValue('Atendente');
+    expect(screen.getByLabelText(/instruções/i)).toHaveValue('Você é um atendente simpático.');
+  });
+
+  it('usa o rótulo do botão informado em submitLabel', () => {
+    render(
+      <MantineProvider theme={theme}>
+        <AgentForm onSubmit={vi.fn()} submitLabel="Salvar alterações" />
+      </MantineProvider>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /criar agente/i })).not.toBeInTheDocument();
+  });
 });

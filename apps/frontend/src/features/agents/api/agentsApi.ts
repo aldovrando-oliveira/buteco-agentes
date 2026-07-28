@@ -1,4 +1,4 @@
-import type { Agent, CreateAgentInput } from '../types/agent';
+import type { Agent, CreateAgentInput, UpdateAgentInput } from '../types/agent';
 
 export interface ValidationProblemDetails {
   title?: string;
@@ -60,4 +60,19 @@ export function createAgent(input: CreateAgentInput): Promise<Agent> {
     method: 'POST',
     body: JSON.stringify(input),
   });
+}
+
+export function updateAgent(id: string, input: UpdateAgentInput): Promise<Agent> {
+  return request<Agent>(`/agents/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export function activateAgent(id: string): Promise<Agent> {
+  return request<Agent>(`/agents/${id}/activate`, { method: 'POST' });
+}
+
+export function deactivateAgent(id: string): Promise<Agent> {
+  return request<Agent>(`/agents/${id}/deactivate`, { method: 'POST' });
 }

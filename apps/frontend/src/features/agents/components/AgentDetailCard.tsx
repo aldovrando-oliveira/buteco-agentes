@@ -1,4 +1,4 @@
-import { Card, Stack, Text, Title } from '@mantine/core';
+import { Badge, Card, Group, Stack, Text, Title } from '@mantine/core';
 import type { Agent } from '../types/agent';
 
 interface AgentDetailCardProps {
@@ -9,7 +9,12 @@ export function AgentDetailCard({ agent }: AgentDetailCardProps) {
   return (
     <Card withBorder>
       <Stack gap="sm">
-        <Title order={2}>{agent.name}</Title>
+        <Group justify="space-between">
+          <Title order={2}>{agent.name}</Title>
+          <Badge color={agent.isActive ? 'green' : 'gray'}>
+            {agent.isActive ? 'Ativo' : 'Inativo'}
+          </Badge>
+        </Group>
         <Text>{agent.instructions}</Text>
         <Text size="sm" c="dimmed">
           Criado em {new Date(agent.createdAt).toLocaleString('pt-BR')}

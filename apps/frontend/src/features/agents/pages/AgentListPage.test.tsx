@@ -16,6 +16,7 @@ const agent: Agent = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Atendente',
   instructions: 'Você é um atendente simpático.',
+  isActive: true,
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
 };
