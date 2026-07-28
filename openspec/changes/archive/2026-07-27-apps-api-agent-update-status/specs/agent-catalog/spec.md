@@ -1,25 +1,4 @@
-# agent-catalog Specification
-
-## Purpose
-
-TBD - defined by change backend-agente-a2a-mvp. Update Purpose after archive.
-
-## Requirements
-
-### Requirement: Cadastro de agente
-O sistema SHALL permitir, via `apps/api`, cadastrar um agente informando ao
-menos nome e instruções (system prompt), persistindo o registro em
-PostgreSQL via EF Core.
-
-#### Scenario: Criar agente com sucesso
-- **WHEN** um cliente envia `POST /agents` com nome e instruções válidos
-- **THEN** a API cria o registro no banco e responde com o agente criado,
-  incluindo um identificador único gerado pelo sistema
-
-#### Scenario: Criar agente sem nome ou sem instruções é rejeitado
-- **WHEN** um cliente envia `POST /agents` sem nome ou sem instruções
-- **THEN** a API responde com erro de validação (HTTP 400) e não cria
-  nenhum registro
+## MODIFIED Requirements
 
 ### Requirement: Listagem de agentes
 O sistema SHALL permitir, via `apps/api`, listar todos os agentes
@@ -54,6 +33,8 @@ pelo seu identificador, incluindo agentes inativos.
   desativado
 - **THEN** a API responde com HTTP 200 e `isActive: false`, sem tratar
   isso como não encontrado
+
+## ADDED Requirements
 
 ### Requirement: Atualização de agente
 O sistema SHALL permitir, via `apps/api`, atualizar nome e instruções de um
@@ -108,13 +89,3 @@ operações SHALL ser idempotentes.
 - **WHEN** um cliente envia `POST /agents/{id}/activate` ou
   `POST /agents/{id}/deactivate` para um id que não existe
 - **THEN** a API responde com HTTP 404
-
-### Requirement: Persistência durável do catálogo de agentes
-O sistema SHALL persistir o catálogo de agentes em PostgreSQL, sem uso de
-armazenamento em memória, garantindo que os dados sobrevivam a reinícios da
-aplicação.
-
-#### Scenario: Agente cadastrado sobrevive a restart da API
-- **WHEN** um agente é cadastrado e o processo de `apps/api` é reiniciado
-- **THEN** uma consulta subsequente a `GET /agents/{id}` continua
-  retornando o agente com os mesmos dados

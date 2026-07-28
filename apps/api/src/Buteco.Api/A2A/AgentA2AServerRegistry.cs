@@ -37,7 +37,7 @@ public sealed class AgentA2AServerRegistry(
     private A2AServer BuildServer(Guid agentId)
     {
         var taskStore = new PostgresTaskStore(scopeFactory, agentId);
-        var handler = new EnqueueingAgentHandler(agentId, taskJobPublisher);
+        var handler = new EnqueueingAgentHandler(agentId, taskJobPublisher, scopeFactory);
         var notifier = new ChannelEventNotifier();
         var logger = loggerFactory.CreateLogger<A2AServer>();
 

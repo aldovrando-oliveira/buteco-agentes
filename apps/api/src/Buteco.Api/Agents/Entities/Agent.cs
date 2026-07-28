@@ -8,6 +8,8 @@ public class Agent
 
     public string Instructions { get; private set; } = null!;
 
+    public bool IsActive { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -21,7 +23,27 @@ public class Agent
         Id = Guid.NewGuid();
         Name = name;
         Instructions = instructions;
+        IsActive = true;
         CreatedAt = DateTimeOffset.UtcNow;
         UpdatedAt = CreatedAt;
+    }
+
+    public void UpdateDetails(string name, string instructions)
+    {
+        Name = name;
+        Instructions = instructions;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void Activate()
+    {
+        IsActive = true;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void Deactivate()
+    {
+        IsActive = false;
+        UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

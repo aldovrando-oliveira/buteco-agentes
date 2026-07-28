@@ -1,4 +1,7 @@
+using Buteco.Api.Agents.Commands.ActivateAgent;
 using Buteco.Api.Agents.Commands.CreateAgent;
+using Buteco.Api.Agents.Commands.DeactivateAgent;
+using Buteco.Api.Agents.Commands.UpdateAgent;
 using Buteco.Api.Agents.Queries.GetAgentById;
 using Buteco.Api.Agents.Queries.ListAgents;
 using Buteco.Api.Agents.Requests;
@@ -17,6 +20,9 @@ public static class AgentEndpoints
         group.MapPost("/", CreateAgentAsync);
         group.MapGet("/", ListAgentsAsync);
         group.MapGet("/{id:guid}", GetAgentByIdAsync);
+        group.MapPut("/{id:guid}", UpdateAgentAsync);
+        group.MapPost("/{id:guid}/activate", ActivateAgentAsync);
+        group.MapPost("/{id:guid}/deactivate", DeactivateAgentAsync);
 
         return app;
     }
@@ -68,5 +74,60 @@ public static class AgentEndpoints
         return agent is null
             ? TypedResults.NotFound()
             : TypedResults.Ok(agent);
+    }
+
+    private static async Task<Results<Ok<AgentResponse>, NotFound, ValidationProblem>> UpdateAgentAsync(
+        Guid id,
+        UpdateAgentRequest request,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            errors["name"] = ["O nome do agente é obrigatório."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Instructions))
+        {
+            errors["instructions"] = ["As instruções (system prompt) do agente são obrigatórias."];
+        }
+
+        if (errors.Count > 0)
+        {
+            return TypedResults.ValidationProblem(errors);
+        }
+
+        var command = new UpdateAgentCommand(id, request.Name!, request.Instructions!);
+        var response = await mediator.Send(command, cancellationToken);
+
+        return response is null
+            ? TypedResults.NotFound()
+            : TypedResults.Ok(response);
+    }
+
+    private static async Task<Results<Ok<AgentResponse>, NotFound>> ActivateAgentAsync(
+        Guid id,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var response = await mediator.Send(new ActivateAgentCommand(id), cancellationToken);
+
+        return response is null
+            ? TypedResults.NotFound()
+            : TypedResults.Ok(response);
+    }
+
+    private static async Task<Results<Ok<AgentResponse>, NotFound>> DeactivateAgentAsync(
+        Guid id,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var response = await mediator.Send(new DeactivateAgentCommand(id), cancellationToken);
+
+        return response is null
+            ? TypedResults.NotFound()
+            : TypedResults.Ok(response);
     }
 }

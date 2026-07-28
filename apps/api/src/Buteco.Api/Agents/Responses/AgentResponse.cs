@@ -6,9 +6,10 @@ public record AgentResponse(
     Guid Id,
     string Name,
     string Instructions,
+    bool IsActive,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
     public static AgentResponse FromEntity(Agent agent) =>
-        new(agent.Id, agent.Name, agent.Instructions, agent.CreatedAt, agent.UpdatedAt);
+        new(agent.Id, agent.Name, agent.Instructions, agent.IsActive, agent.CreatedAt, agent.UpdatedAt);
 }

@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(agent => agent.Id);
             entity.Property(agent => agent.Name).IsRequired();
             entity.Property(agent => agent.Instructions).IsRequired();
+            entity.Property(agent => agent.IsActive).IsRequired().HasDefaultValue(true);
             entity.Property(agent => agent.CreatedAt).IsRequired();
             entity.Property(agent => agent.UpdatedAt).IsRequired();
         });
