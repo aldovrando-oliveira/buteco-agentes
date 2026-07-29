@@ -7,12 +7,13 @@ import { AgentForm } from './AgentForm';
 
 function renderForm(overrides?: { errors?: Record<string, string>; submitting?: boolean }) {
   const onSubmit = vi.fn();
+  const onCancel = vi.fn();
   render(
     <MantineProvider theme={theme}>
-      <AgentForm onSubmit={onSubmit} {...overrides} />
+      <AgentForm onSubmit={onSubmit} onCancel={onCancel} {...overrides} />
     </MantineProvider>,
   );
-  return { onSubmit };
+  return { onSubmit, onCancel };
 }
 
 describe('AgentForm', () => {
@@ -43,11 +44,23 @@ describe('AgentForm', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('chama onCancel e não chama onSubmit quando o usuário clica em Cancelar', async () => {
+    const user = userEvent.setup();
+    const { onSubmit, onCancel } = renderForm();
+
+    await user.type(screen.getByLabelText(/nome/i), 'Atendente');
+    await user.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('pré-preenche os campos com initialValues quando fornecido', () => {
     render(
       <MantineProvider theme={theme}>
         <AgentForm
           onSubmit={vi.fn()}
+          onCancel={vi.fn()}
           initialValues={{ name: 'Atendente', instructions: 'Você é um atendente simpático.' }}
         />
       </MantineProvider>,
@@ -60,7 +73,7 @@ describe('AgentForm', () => {
   it('usa o rótulo do botão informado em submitLabel', () => {
     render(
       <MantineProvider theme={theme}>
-        <AgentForm onSubmit={vi.fn()} submitLabel="Salvar alterações" />
+        <AgentForm onSubmit={vi.fn()} onCancel={vi.fn()} submitLabel="Salvar alterações" />
       </MantineProvider>,
     );
 

@@ -76,8 +76,7 @@ export function AgentDetailPage() {
 
   return (
     <>
-      <AgentDetailCard agent={data} />
-      <Group mt="md">
+      <Group mb="md">
         <Button component={Link} to={`/agents/${data.id}/edit`} variant="default">
           Editar
         </Button>
@@ -96,6 +95,7 @@ export function AgentDetailPage() {
           </Button>
         )}
       </Group>
+      <AgentDetailCard agent={data} />
 
       <Modal opened={confirmOpened} onClose={closeConfirm} title="Confirmar desativação">
         <Text size="sm">

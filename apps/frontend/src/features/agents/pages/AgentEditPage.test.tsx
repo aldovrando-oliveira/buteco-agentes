@@ -113,4 +113,17 @@ describe('AgentEditPage', () => {
     expect(navigateMock).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/nome/i)).toHaveValue(agent.name);
   });
+
+  it('ao clicar em "Cancelar", navega para o detalhe do agente em edição sem enviar requisição', async () => {
+    vi.mocked(getAgent).mockResolvedValue(agent);
+    const user = userEvent.setup();
+
+    renderPage(agent.id);
+
+    await screen.findByLabelText(/nome/i);
+    await user.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith(`/agents/${agent.id}`);
+    expect(updateAgent).not.toHaveBeenCalled();
+  });
 });

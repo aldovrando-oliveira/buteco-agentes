@@ -75,6 +75,19 @@ describe('AgentDetailPage', () => {
     expect(screen.queryByRole('button', { name: /^ativar$/i })).not.toBeInTheDocument();
   });
 
+  it('exibe o bloco de ações (Editar, Ativar/Desativar) antes dos dados do agente na ordem do DOM', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+    renderPage(activeAgent.id);
+
+    const editLink = await screen.findByRole('link', { name: /editar/i });
+    const nameHeading = screen.getByRole('heading', { name: activeAgent.name });
+
+    expect(
+      editLink.compareDocumentPosition(nameHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('exibe estado de "não encontrado" quando o agente não existe', async () => {
     vi.mocked(getAgent).mockRejectedValue(new ApiError(404, 'Não encontrado'));
 

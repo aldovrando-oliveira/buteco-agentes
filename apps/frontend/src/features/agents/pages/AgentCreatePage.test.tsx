@@ -103,4 +103,15 @@ describe('AgentCreatePage', () => {
     expect(screen.getByLabelText(/nome/i)).toHaveValue(createdAgent.name);
     expect(screen.getByLabelText(/instruções/i)).toHaveValue(createdAgent.instructions);
   });
+
+  it('ao clicar em "Cancelar", navega para a listagem de agentes sem enviar requisição', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.type(screen.getByLabelText(/nome/i), createdAgent.name);
+    await user.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith('/agents');
+    expect(createAgent).not.toHaveBeenCalled();
+  });
 });

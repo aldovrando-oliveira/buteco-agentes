@@ -1,4 +1,6 @@
-import { Badge, Card, Group, Stack, Text, Title } from '@mantine/core';
+import { Badge, Card, Group, ScrollArea, Stack, Text, Title, Typography } from '@mantine/core';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Agent } from '../types/agent';
 
 interface AgentDetailCardProps {
@@ -15,7 +17,11 @@ export function AgentDetailCard({ agent }: AgentDetailCardProps) {
             {agent.isActive ? 'Ativo' : 'Inativo'}
           </Badge>
         </Group>
-        <Text>{agent.instructions}</Text>
+        <ScrollArea h="calc(100vh - 320px)" mih={220} data-testid="instructions-scroll-area">
+          <Typography>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{agent.instructions}</ReactMarkdown>
+          </Typography>
+        </ScrollArea>
         <Text size="sm" c="dimmed">
           Criado em {new Date(agent.createdAt).toLocaleString('pt-BR')}
         </Text>

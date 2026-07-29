@@ -74,6 +74,7 @@ export function AgentEditPage() {
       <Title order={2}>Editar agente</Title>
       <AgentForm
         onSubmit={handleSubmit}
+        onCancel={() => navigate(`/agents/${id}`)}
         errors={fieldErrors}
         submitting={mutation.isPending}
         initialValues={{ name: data.name, instructions: data.instructions }}

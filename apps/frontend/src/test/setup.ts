@@ -25,6 +25,16 @@ if (!window.matchMedia) {
     }) as MediaQueryList;
 }
 
+// jsdom não implementa ResizeObserver; o ScrollArea do Mantine usa isso para
+// medir o conteúdo e decidir quando exibir a scrollbar.
+if (!window.ResizeObserver) {
+  window.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 // A partir do Node 22, `localStorage` é um global nativo (experimental) que
 // exige a flag `--localstorage-file` para funcionar; sem ela, ele sombreia o
 // `window.localStorage` do jsdom com uma implementação inutilizável.

@@ -50,7 +50,12 @@ export function AgentCreatePage() {
   return (
     <Stack>
       <Title order={2}>Novo agente</Title>
-      <AgentForm onSubmit={handleSubmit} errors={fieldErrors} submitting={mutation.isPending} />
+      <AgentForm
+        onSubmit={handleSubmit}
+        onCancel={() => navigate('/agents')}
+        errors={fieldErrors}
+        submitting={mutation.isPending}
+      />
     </Stack>
   );
 }

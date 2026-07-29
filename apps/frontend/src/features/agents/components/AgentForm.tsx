@@ -1,9 +1,10 @@
-import { Button, Stack, Textarea, TextInput } from '@mantine/core';
+import { Button, Group, Stack, Textarea, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import type { CreateAgentInput } from '../types/agent';
 
 interface AgentFormProps {
   onSubmit: (values: CreateAgentInput) => void;
+  onCancel: () => void;
   errors?: Record<string, string>;
   submitting?: boolean;
   initialValues?: CreateAgentInput;
@@ -12,6 +13,7 @@ interface AgentFormProps {
 
 export function AgentForm({
   onSubmit,
+  onCancel,
   errors,
   submitting,
   initialValues,
@@ -45,9 +47,14 @@ export function AgentForm({
           {...form.getInputProps('instructions')}
           error={errors?.instructions ?? form.errors.instructions}
         />
-        <Button type="submit" loading={submitting}>
-          {submitLabel}
-        </Button>
+        <Group>
+          <Button type="submit" loading={submitting}>
+            {submitLabel}
+          </Button>
+          <Button type="button" variant="default" onClick={onCancel}>
+            Cancelar
+          </Button>
+        </Group>
       </Stack>
     </form>
   );
