@@ -1,3 +1,4 @@
+using System.Text.Json;
 using global::A2A;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -5,6 +6,7 @@ using Testcontainers.PostgreSql;
 using ApiAgent = Buteco.Api.Agents.Entities.Agent;
 using ApiDbContext = Buteco.Api.Infrastructure.AppDbContext;
 using ApiTaskStore = Buteco.Api.A2A.PostgresTaskStore;
+using Buteco.Workers.Agents;
 using TaskStatus = A2A.TaskStatus;
 using WorkerDbContext = Buteco.Workers.Infrastructure.AppDbContext;
 using WorkerTaskStore = Buteco.Workers.A2A.PostgresTaskStore;
@@ -97,6 +99,19 @@ public class PostgresTaskStoreCompatibilityTests : IAsyncLifetime
         return agent.Id;
     }
 
+    // Passa pelo mesmo ConversationSessionCodec.Encode que apps/workers usa
+    // de verdade (design.md da change apps-workers-historico-conversa,
+    // Decisão 10) — não um JsonElement de estrutura arbitrária. O valor real
+    // guardado em Metadata é uma string JSON escapada (escalar, opaca para o
+    // jsonb do Postgres); testar com um objeto aninhado cru não pegaria a
+    // reordenação de propriedades que o jsonb faz e que motivou o codec.
+    private static JsonElement BuildSampleConversationSession()
+    {
+        using var document = JsonDocument.Parse(
+            """{"messages":[{"role":"user","text":"Pergunta original"}]}""");
+        return ConversationSessionCodec.Encode(document.RootElement.Clone());
+    }
+
     private static AgentTask BuildSampleTask(string taskId, string contextId, string artifactText) => new()
     {
         Id = taskId,
@@ -120,6 +135,10 @@ public class PostgresTaskStoreCompatibilityTests : IAsyncLifetime
                 Parts = [Part.FromText(artifactText)],
             },
         ],
+        Metadata = new Dictionary<string, JsonElement>
+        {
+            ["conversationSession"] = BuildSampleConversationSession(),
+        },
     };
 
     private static void AssertTasksMatch(AgentTask expected, AgentTask? actual)
@@ -133,5 +152,11 @@ public class PostgresTaskStoreCompatibilityTests : IAsyncLifetime
         Assert.Equal(
             expected.Artifacts?.SelectMany(a => a.Parts).Select(p => p.Text).ToList(),
             actual.Artifacts?.SelectMany(a => a.Parts).Select(p => p.Text).ToList());
+
+        Assert.NotNull(actual.Metadata);
+        Assert.True(actual.Metadata!.ContainsKey("conversationSession"));
+        Assert.Equal(
+            expected.Metadata!["conversationSession"].GetRawText(),
+            actual.Metadata["conversationSession"].GetRawText());
     }
 }

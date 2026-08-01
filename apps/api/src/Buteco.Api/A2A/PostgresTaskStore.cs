@@ -54,6 +54,12 @@ public sealed class PostgresTaskStore(IServiceScopeFactory scopeFactory, Guid ag
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        // Nota: esta consulta não filtra por AgentId (só ContextId/Status),
+        // apesar de A2ATaskRecord.AgentId existir. Mesma lacuna corrigida na
+        // cópia de apps/workers (ver design.md da change
+        // apps-workers-historico-conversa, Decisão 2) — não urgente aqui
+        // porque ListTasksAsync não tem nenhum consumidor em apps/api hoje,
+        // mas vale corrigir junto se isso mudar.
         var query = dbContext.A2ATasks.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrEmpty(request.ContextId))

@@ -117,6 +117,96 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         }
     }
 
+    [Fact]
+    public async Task Consumer_WhenTaskRowNotYetCommittedAtConsumeTime_RetriesThenProcessesSuccessfully()
+    {
+        // Reproduz a corrida real entre A2AServer publicando no RabbitMQ e o
+        // SaveTaskAsync do evento "submitted" ainda não ter commitado quando
+        // o worker consome a mensagem — descoberta via teste manual, ver
+        // design.md da change apps-workers-historico-conversa, Decisão 9.
+        // Aqui simulamos publicando o job ANTES da task existir no store, e
+        // só inserindo a task (com atraso) depois.
+        var agentId = Guid.NewGuid();
+        var taskId = Guid.NewGuid().ToString("N");
+        var contextId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(agentId, "Atendente", "Responda com simpatia.");
+
+        var chatClient = new Mock<IChatClient>();
+        chatClient
+            .Setup(client => client.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "Paris")));
+
+        using var host = BuildHost(chatClient.Object);
+        await host.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(taskId, agentId, contextId);
+
+            // Atraso maior que uma tentativa de retry (100ms cada), menor que
+            // o total (5 tentativas) — garante que o worker precisou
+            // realmente tentar de novo, não passou de primeira por sorte.
+            await Task.Delay(250);
+            await SeedTaskAsync(taskId, agentId, contextId, "Qual é a capital da França?");
+
+            var record = await PollUntilTerminalAsync(taskId);
+
+            Assert.Equal(nameof(TaskState.Completed), record.State);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Consumer_WhenTaskExistsButUserMessageNotYetPersisted_RetriesUntilMessageIsPresent()
+    {
+        // Segunda camada da mesma corrida (design.md, Decisão 9): o A2AServer
+        // grava a task em DOIS eventos separados — SubmitAsync() cria a
+        // linha (History nulo) e só depois, após uma leitura de estado do
+        // agente, EnqueueMessageAsync grava a mensagem do usuário nela —
+        // enquanto publica no RabbitMQ concorrentemente. Um worker pode
+        // consumir a mensagem e achar a task já criada, mas ainda sem a
+        // mensagem do usuário. Aqui simulamos publicando o job com a task já
+        // existente porém sem History, adicionando a mensagem só depois de
+        // um atraso.
+        var agentId = Guid.NewGuid();
+        var taskId = Guid.NewGuid().ToString("N");
+        var contextId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(agentId, "Atendente", "Responda com simpatia.");
+        await SeedTaskWithoutUserMessageAsync(taskId, agentId, contextId);
+
+        var chatClient = new Mock<IChatClient>();
+        chatClient
+            .Setup(client => client.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "Paris")));
+
+        using var host = BuildHost(chatClient.Object);
+        await host.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(taskId, agentId, contextId);
+
+            // Atraso maior que uma tentativa de retry (100ms cada), menor que
+            // o total (5 tentativas) — garante que o worker precisou
+            // realmente tentar de novo, não passou de primeira por sorte.
+            await Task.Delay(250);
+            await AddUserMessageToTaskAsync(taskId, contextId, "Qual é a capital da França?");
+
+            var record = await PollUntilTerminalAsync(taskId);
+
+            Assert.Equal(nameof(TaskState.Completed), record.State);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+    }
+
     private IHost BuildHostWithRealResolver()
     {
         var builder = Host.CreateApplicationBuilder();
@@ -175,6 +265,13 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         string provider = "openai",
         string model = "gpt-5.6-sol")
     {
+        await SeedAgentAsync(agentId, agentName, instructions, provider, model);
+        await SeedTaskAsync(taskId, agentId, contextId, userMessage);
+    }
+
+    private async Task SeedAgentAsync(
+        Guid agentId, string agentName, string instructions, string provider = "openai", string model = "gpt-5.6-sol")
+    {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
         await using var dbContext = new AppDbContext(options);
 
@@ -184,7 +281,14 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
              INSERT INTO agents ("Id", "Name", "Instructions", "Provider", "Model", "CreatedAt", "UpdatedAt")
              VALUES ({agentId}, {agentName}, {instructions}, {provider}, {model}, {now}, {now})
              """);
+    }
 
+    private async Task SeedTaskAsync(string taskId, Guid agentId, string contextId, string userMessage)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        await using var dbContext = new AppDbContext(options);
+
+        var now = DateTimeOffset.UtcNow;
         var agentTask = new AgentTask
         {
             Id = taskId,
@@ -204,6 +308,47 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
 
         var payload = JsonSerializer.Serialize(agentTask, A2AJsonUtilities.DefaultOptions);
         dbContext.A2ATasks.Add(new A2ATaskRecord(taskId, agentId, contextId, nameof(TaskState.Submitted), now, payload));
+        await dbContext.SaveChangesAsync();
+    }
+
+    private async Task SeedTaskWithoutUserMessageAsync(string taskId, Guid agentId, string contextId)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        await using var dbContext = new AppDbContext(options);
+
+        var now = DateTimeOffset.UtcNow;
+        var agentTask = new AgentTask
+        {
+            Id = taskId,
+            ContextId = contextId,
+            Status = new TaskStatus { State = TaskState.Submitted, Timestamp = now },
+        };
+
+        var payload = JsonSerializer.Serialize(agentTask, A2AJsonUtilities.DefaultOptions);
+        dbContext.A2ATasks.Add(new A2ATaskRecord(taskId, agentId, contextId, nameof(TaskState.Submitted), now, payload));
+        await dbContext.SaveChangesAsync();
+    }
+
+    private async Task AddUserMessageToTaskAsync(string taskId, string contextId, string userMessage)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        await using var dbContext = new AppDbContext(options);
+
+        var record = await dbContext.A2ATasks.FirstAsync(t => t.TaskId == taskId);
+        var task = JsonSerializer.Deserialize<AgentTask>(record.Payload, A2AJsonUtilities.DefaultOptions)!;
+        task.History =
+        [
+            new Message
+            {
+                Role = Role.User,
+                Parts = [Part.FromText(userMessage)],
+                MessageId = Guid.NewGuid().ToString("N"),
+                ContextId = contextId,
+            },
+        ];
+
+        var payload = JsonSerializer.Serialize(task, A2AJsonUtilities.DefaultOptions);
+        record.Update(task.ContextId, task.Status.State.ToString(), task.Status.Timestamp, payload);
         await dbContext.SaveChangesAsync();
     }
 

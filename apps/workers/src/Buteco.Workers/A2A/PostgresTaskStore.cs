@@ -59,7 +59,13 @@ public sealed class PostgresTaskStore(IServiceScopeFactory scopeFactory, Guid ag
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var query = dbContext.A2ATasks.AsNoTracking().AsQueryable();
+        // Escopado por AgentId (não só ContextId/Status) porque
+        // AgentExecutionService passa a depender disso para localizar a
+        // sessão anterior do mesmo contextId (ver design.md da change
+        // apps-workers-historico-conversa, Decisão 2) — sem esse filtro, um
+        // contextId teoricamente reusado por dois agentes diferentes
+        // recuperaria a sessão errada.
+        var query = dbContext.A2ATasks.AsNoTracking().Where(task => task.AgentId == agentId).AsQueryable();
 
         if (!string.IsNullOrEmpty(request.ContextId))
         {
