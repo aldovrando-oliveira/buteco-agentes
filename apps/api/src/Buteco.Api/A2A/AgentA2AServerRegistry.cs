@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using global::A2A;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Messaging;
+using Buteco.Api.Providers;
 using Microsoft.EntityFrameworkCore;
 
 namespace Buteco.Api.A2A;
@@ -9,7 +10,8 @@ namespace Buteco.Api.A2A;
 public sealed class AgentA2AServerRegistry(
     IServiceScopeFactory scopeFactory,
     ITaskJobPublisher taskJobPublisher,
-    ILoggerFactory loggerFactory) : IAgentA2AServerRegistry
+    ILoggerFactory loggerFactory,
+    ProviderCatalogService providerCatalogService) : IAgentA2AServerRegistry
 {
     private readonly ConcurrentDictionary<Guid, A2AServer> _servers = new();
 
@@ -37,7 +39,7 @@ public sealed class AgentA2AServerRegistry(
     private A2AServer BuildServer(Guid agentId)
     {
         var taskStore = new PostgresTaskStore(scopeFactory, agentId);
-        var handler = new EnqueueingAgentHandler(agentId, taskJobPublisher, scopeFactory);
+        var handler = new EnqueueingAgentHandler(agentId, taskJobPublisher, scopeFactory, providerCatalogService);
         var notifier = new ChannelEventNotifier();
         var logger = loggerFactory.CreateLogger<A2AServer>();
 

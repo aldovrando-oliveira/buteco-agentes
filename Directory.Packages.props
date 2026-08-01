@@ -12,6 +12,12 @@
 
     <!-- LLM chat client -->
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.1" />
+    <PackageVersion Include="Anthropic" Version="12.39.0" />
+    <PackageVersion Include="Google.GenAI" Version="1.15.0" />
+
+    <!-- libs/ProviderCatalog -->
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
 
     <!-- Data access -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />

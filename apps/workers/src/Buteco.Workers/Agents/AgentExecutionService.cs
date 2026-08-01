@@ -12,7 +12,7 @@ namespace Buteco.Workers.Agents;
 
 public sealed class AgentExecutionService(
     IServiceScopeFactory scopeFactory,
-    IChatClient chatClient,
+    IChatClientResolver chatClientResolver,
     ILogger<AgentExecutionService> logger)
 {
     public async Task ExecuteAsync(TaskJobMessage message, CancellationToken cancellationToken)
@@ -55,6 +55,14 @@ public sealed class AgentExecutionService(
         try
         {
             var userText = ExtractLatestUserText(task);
+
+            // agent.Provider/agent.Model só ficam nulos para um agente "precisa de
+            // reconfiguração" — apps/api já rejeita SendMessage nesse caso antes de
+            // publicar o job (EnqueueingAgentHandler), então nunca deveriam chegar
+            // aqui; o operador nulo-tolerante (!) documenta essa garantia, não a
+            // ignora — se ela falhar, o resolver/aiAgent lançará e cairá no catch
+            // abaixo, terminando a task como failed (Decision 5).
+            var chatClient = chatClientResolver.Resolve(agent.Provider!, agent.Model!);
             var aiAgent = new ChatClientAgent(chatClient, agent.Instructions, agent.Name);
             var response = await aiAgent.RunAsync(userText, session: null, options: null, cancellationToken);
 

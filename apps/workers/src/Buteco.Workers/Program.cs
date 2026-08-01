@@ -1,10 +1,7 @@
-using System.ClientModel;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Options;
-using Microsoft.Extensions.AI;
-using OpenAI;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -12,23 +9,17 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
 builder.Services.Configure<ChatClientOptions>(builder.Configuration.GetSection(ChatClientOptions.SectionName));
+builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection(AnthropicOptions.SectionName));
+builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
 
-builder.Services.AddSingleton<IChatClient>(sp =>
-{
-    var chatClientOptions = builder.Configuration.GetSection(ChatClientOptions.SectionName).Get<ChatClientOptions>()
-        ?? new ChatClientOptions();
-
-    var openAiClient = new OpenAIClient(
-        new ApiKeyCredential(chatClientOptions.ApiKey),
-        new OpenAIClientOptions { Endpoint = new Uri(chatClientOptions.BaseUrl) });
-
-    return openAiClient.GetChatClient(chatClientOptions.Model).AsIChatClient();
-});
+builder.Services.AddSingleton<IChatClientResolver, ChatClientResolver>();
 
 // Singleton porque é injetado no TaskJobConsumer (BackgroundService, singleton) —
 // AgentExecutionService não segura estado escopado diretamente, abre um
 // IServiceScope novo por execução via IServiceScopeFactory quando precisa do
-// AppDbContext.
+// AppDbContext. IChatClientResolver constrói o IChatClient por chamada (sem
+// cache entre execuções), então ser singleton aqui não implica reaproveitar
+// nenhuma instância de IChatClient — ver design.md, Decision 7.
 builder.Services.AddSingleton<AgentExecutionService>();
 builder.Services.AddHostedService<TaskJobConsumer>();
 

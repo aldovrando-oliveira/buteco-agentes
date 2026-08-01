@@ -14,6 +14,12 @@
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+    <PackageReference Include="Anthropic" />
+    <PackageReference Include="Google.GenAI" />
     <PackageReference Include="RabbitMQ.Client" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\libs\ProviderCatalog\Buteco.ProviderCatalog.csproj" />
   </ItemGroup>
 </Project>

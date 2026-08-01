@@ -12,6 +12,15 @@ public class Agent
 
     public string Instructions { get; private set; } = null!;
 
+    // Nullable: agentes cadastrados antes desta capacidade existir (ou nunca
+    // reconfigurados) não têm valor para nenhum dos dois. apps/api já rejeita
+    // SendMessage nesse caso antes de publicar o job (EnqueueingAgentHandler),
+    // então na prática o worker só processa jobs com os dois preenchidos —
+    // ver design.md da change backend-multi-provedor-llm, Decisions 5 e 6.
+    public string? Provider { get; private set; }
+
+    public string? Model { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }

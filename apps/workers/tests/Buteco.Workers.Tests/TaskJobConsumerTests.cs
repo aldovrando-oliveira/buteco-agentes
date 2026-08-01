@@ -84,6 +84,63 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         }
     }
 
+    [Fact]
+    public async Task Consumer_WhenAgentProviderNotConfiguredInWorkerEnvironment_TaskEndsFailed()
+    {
+        // Simula divergência de configuração entre apps/api e apps/workers
+        // (ver design.md, Decision 5, camada complementar): o agente foi
+        // cadastrado com um provider que apps/api considerou configurado,
+        // mas o ambiente de apps/workers não tem a chave desse provider.
+        // Usa o ChatClientResolver real (não mockado) para provar que ele
+        // lança e o catch (Exception) já existente em
+        // AgentExecutionService.ExecuteAsync trata o caso, sem derrubar o worker.
+        var agentId = Guid.NewGuid();
+        var taskId = Guid.NewGuid().ToString("N");
+        var contextId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAndTaskAsync(agentId, "Atendente", "Responda com simpatia.", taskId, contextId, "oi", provider: "anthropic", model: "claude-opus-5");
+
+        using var host = BuildHostWithRealResolver();
+        await host.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(taskId, agentId, contextId);
+
+            var record = await PollUntilTerminalAsync(taskId);
+
+            Assert.Equal(nameof(TaskState.Failed), record.State);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+    }
+
+    private IHost BuildHostWithRealResolver()
+    {
+        var builder = Host.CreateApplicationBuilder();
+
+        builder.Configuration["ConnectionStrings:Postgres"] = fixture.Postgres.GetConnectionString();
+        builder.Services.AddInfrastructure(builder.Configuration);
+
+        builder.Services.Configure<RabbitMqOptions>(options =>
+        {
+            options.Host = fixture.RabbitMq.Hostname;
+            options.Port = fixture.RabbitMq.GetMappedPublicPort(5672);
+            options.Username = "buteco";
+            options.Password = "buteco_test_password";
+        });
+
+        // AnthropicOptions/GeminiOptions nunca configurados aqui de propósito —
+        // é exatamente o ambiente "chave ausente" que este teste exercita.
+        builder.Services.AddSingleton<IChatClientResolver, ChatClientResolver>();
+        builder.Services.AddSingleton<AgentExecutionService>();
+        builder.Services.AddHostedService<TaskJobConsumer>();
+
+        return builder.Build();
+    }
+
     private IHost BuildHost(IChatClient chatClient)
     {
         var builder = Host.CreateApplicationBuilder();
@@ -99,21 +156,34 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
             options.Password = "buteco_test_password";
         });
 
-        builder.Services.AddSingleton(chatClient);
+        var resolverMock = new Mock<IChatClientResolver>();
+        resolverMock.Setup(resolver => resolver.Resolve(It.IsAny<string>(), It.IsAny<string>())).Returns(chatClient);
+        builder.Services.AddSingleton(resolverMock.Object);
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 
         return builder.Build();
     }
 
-    private async Task SeedAgentAndTaskAsync(Guid agentId, string agentName, string instructions, string taskId, string contextId, string userMessage)
+    private async Task SeedAgentAndTaskAsync(
+        Guid agentId,
+        string agentName,
+        string instructions,
+        string taskId,
+        string contextId,
+        string userMessage,
+        string provider = "openai",
+        string model = "gpt-5.6-sol")
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
         await using var dbContext = new AppDbContext(options);
 
         var now = DateTimeOffset.UtcNow;
         await dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $"INSERT INTO agents (\"Id\", \"Name\", \"Instructions\", \"CreatedAt\", \"UpdatedAt\") VALUES ({agentId}, {agentName}, {instructions}, {now}, {now})");
+            $"""
+             INSERT INTO agents ("Id", "Name", "Instructions", "Provider", "Model", "CreatedAt", "UpdatedAt")
+             VALUES ({agentId}, {agentName}, {instructions}, {provider}, {model}, {now}, {now})
+             """);
 
         var agentTask = new AgentTask
         {

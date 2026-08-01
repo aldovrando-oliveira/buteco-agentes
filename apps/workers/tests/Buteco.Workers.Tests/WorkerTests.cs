@@ -3,7 +3,6 @@ using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Options;
 using Buteco.Workers.Tests.Support;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Moq;
@@ -28,7 +27,7 @@ public class WorkerTests(WorkerInfrastructureFixture fixture) : IClassFixture<Wo
             options.Password = "buteco_test_password";
         });
 
-        builder.Services.AddSingleton(new Mock<IChatClient>().Object);
+        builder.Services.AddSingleton(new Mock<IChatClientResolver>().Object);
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

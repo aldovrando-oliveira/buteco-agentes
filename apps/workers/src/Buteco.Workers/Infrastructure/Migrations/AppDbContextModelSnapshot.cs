@@ -75,8 +75,14 @@ namespace Buteco.Workers.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Model")
+                        .HasColumnType("text");
+
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Provider")
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("UpdatedAt")

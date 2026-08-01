@@ -5,14 +5,15 @@ Plataforma de gestão de agentes de IA. Monorepo com três apps independentes �
 interno umas das outras. Compartilhamento real de código só acontece via
 `libs/` explícita, pequena e versionada, criada apenas quando houver
 necessidade concreta (ver `openspec/changes/*/design.md` para o histórico de
-decisões).
+decisões — `libs/ProviderCatalog` é o primeiro caso real, ver
+`openspec/changes/backend-multi-provedor-llm/design.md`).
 
 ## Stack
 
 | App | Stack |
 | --- | --- |
-| `apps/api` | .NET 10, ASP.NET Core Web API. CRUD de agentes (EF Core/Postgres) e endpoint A2A por agente (`/agents/{id}/a2a`, via `A2A`/`A2A.AspNetCore`). Nunca chama o LLM — só persiste a task e publica um job no RabbitMQ |
-| `apps/workers` | .NET 10, Worker Service. Consome o RabbitMQ, monta o agente (`Microsoft.Agents.AI`) com o system prompt cadastrado, chama o LLM (`Microsoft.Extensions.AI.OpenAI`, endpoint formato OpenAI configurável) e escreve o resultado de volta no Postgres |
+| `apps/api` | .NET 10, ASP.NET Core Web API. CRUD de agentes (EF Core/Postgres, com `provider`/`model` por agente) e endpoint A2A por agente (`/agents/{id}/a2a`, via `A2A`/`A2A.AspNetCore`). Expõe `GET /providers` (provedores de LLM disponíveis por configuração de ambiente). Nunca chama o LLM — só persiste a task e publica um job no RabbitMQ |
+| `apps/workers` | .NET 10, Worker Service. Consome o RabbitMQ, monta o agente (`Microsoft.Agents.AI`) com o system prompt cadastrado, resolve o `IChatClient` do provedor do agente (OpenAI via `Microsoft.Extensions.AI.OpenAI`, Anthropic via `Anthropic`, Gemini via `Google.GenAI`) e escreve o resultado de volta no Postgres |
 | `apps/frontend` | Vite + React 19 + TypeScript + Mantine 9 (ESLint + Prettier) — ainda não consome o backend |
 
 RabbitMQ é o broker entre `apps/api` e `apps/workers`. PostgreSQL + EF Core
@@ -30,6 +31,11 @@ docker-compose.yml        # Postgres + RabbitMQ para desenvolvimento local
 global.json                 # pina o SDK do .NET
 Directory.Build.props       # propriedades comuns aos projetos .NET
 Directory.Packages.props    # Central Package Management (versões dos pacotes)
+libs/
+  ProviderCatalog/          # identidade de cada provedor de LLM + nome da
+                             # seção de configuração — só o que apps/api e
+                             # apps/workers precisam concordar entre si
+  ProviderCatalog.Tests/
 apps/
   api/                    # ASP.NET Core Web API
     Api.sln
@@ -100,10 +106,13 @@ Lê `ConnectionStrings:Postgres` e `RabbitMq:*` via `appsettings.Development.jso
 ```bash
 curl -i http://localhost:<porta>/health
 
-# cadastrar um agente
+# provedores de LLM disponíveis (só aparecem os que têm variável de ambiente configurada)
+curl http://localhost:<porta>/providers
+
+# cadastrar um agente — provider/model precisam estar entre os disponíveis em GET /providers
 curl -X POST http://localhost:<porta>/agents \
   -H "Content-Type: application/json" \
-  -d '{"name":"Atendente","instructions":"Você é um atendente simpático."}'
+  -d '{"name":"Atendente","instructions":"Você é um atendente simpático.","provider":"openai","model":"gpt-5.6-sol"}'
 
 # usar o agente via A2A (SendMessage, JSON-RPC)
 curl -X POST http://localhost:<porta>/agents/<id>/a2a \
@@ -128,9 +137,24 @@ cd apps/workers
 dotnet run --project src/Buteco.Workers
 ```
 
-Além de `ConnectionStrings:Postgres` e `RabbitMq:*`, lê `ChatClient:BaseUrl`/
-`ChatClient:ApiKey`/`ChatClient:Model` — endpoint no formato OpenAI (OpenAI,
-Azure OpenAI ou um gateway compatível; basta trocar `BaseUrl`/`ApiKey`).
+Além de `ConnectionStrings:Postgres` e `RabbitMq:*`, lê a configuração de cada
+provedor de LLM — só usada de fato para o provedor referenciado pelo agente
+que está sendo executado, mas todas devem existir em qualquer ambiente onde
+`apps/api` também rode (ver nota abaixo):
+
+- `ChatClient:BaseUrl`/`ChatClient:ApiKey`/`ChatClient:Model` — OpenAI (ou
+  Azure OpenAI/gateway compatível; basta trocar `BaseUrl`/`ApiKey`). Nome de
+  seção mantido por compatibilidade retroativa (era o único provedor antes de
+  existir suporte a múltiplos).
+- `Anthropic:ApiKey` — Claude, via pacote oficial `Anthropic` (beta).
+- `Gemini:ApiKey` — Gemini, via pacote oficial `Google.GenAI`.
+
+Um provedor só aparece em `GET /providers` (`apps/api`) quando sua variável
+de ambiente está configurada **no ambiente de `apps/api`**. `apps/api` e
+`apps/workers` são processos/deploys separados — a mesma chave precisa estar
+configurada nos dois para o agente funcionar de ponta a ponta; se
+`apps/api` achar um provedor disponível mas `apps/workers` não tiver a
+mesma chave, a task termina `failed` (log de erro no worker), não trava.
 
 Esperado: log `Worker starting at: ...` no console, e (com um job na fila)
 logs de transição de estado da task. `Ctrl+C` para encerrar (loga
@@ -155,6 +179,9 @@ efêmeros via Testcontainers — não precisam do `docker compose up` da seção
 acima rodando, mas precisam de Docker/Podman disponível.
 
 ```bash
+# libs/ProviderCatalog
+dotnet test libs/ProviderCatalog.Tests
+
 # apps/api
 dotnet test apps/api/Api.sln
 
@@ -174,13 +201,18 @@ npm run build
 ## Convenções
 
 - **Isolamento entre apps**: nenhum `.csproj` ou arquivo do frontend pode
-  referenciar código de outro app. `libs/` só existe quando houver
-  necessidade real de compartilhamento, com justificativa explícita no
-  `design.md` da mudança que a criar. A única exceção é
-  `tests/CrossAppTaskStoreCompatibility.Tests`, que referencia `Buteco.Api`
-  e `Buteco.Workers` de propósito só para verificar compatibilidade de
-  schema — nenhum dos dois apps o referencia de volta, e ele nunca é
-  publicado com nenhum dos dois.
+  referenciar código de outro app diretamente. `libs/` só existe quando
+  houver necessidade real de compartilhamento, com justificativa explícita
+  no `design.md` da mudança que a criar — `libs/ProviderCatalog`
+  (`openspec/changes/backend-multi-provedor-llm/design.md`) é o único caso
+  hoje: `apps/api` e `apps/workers` referenciam essa lib (nunca um ao
+  outro), e ela carrega só a identidade de cada provedor de LLM e o nome da
+  seção de configuração — o mínimo que precisa concordar entre os dois
+  processos, não um mecanismo geral de código compartilhado. Outra exceção,
+  de natureza diferente, é `tests/CrossAppTaskStoreCompatibility.Tests`,
+  que referencia `Buteco.Api` e `Buteco.Workers` de propósito só para
+  verificar compatibilidade de schema — nenhum dos dois apps o referencia
+  de volta, e ele nunca é publicado com nenhum dos dois.
 - **Central Package Management**: versões de pacotes NuGet ficam em
   `Directory.Packages.props` na raiz; os `.csproj` referenciam pacotes sem
   `Version`.

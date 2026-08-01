@@ -1,3 +1,3 @@
 namespace Buteco.Api.Agents.Requests;
 
-public record CreateAgentRequest(string? Name, string? Instructions);
+public record CreateAgentRequest(string? Name, string? Instructions, string? Provider, string? Model);

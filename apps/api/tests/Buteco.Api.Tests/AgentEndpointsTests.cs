@@ -2,18 +2,24 @@ using System.Net;
 using System.Net.Http.Json;
 using Buteco.Api.Agents.Requests;
 using Buteco.Api.Agents.Responses;
+using Buteco.Api.Infrastructure;
 using Buteco.Api.Tests.Support;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Buteco.Api.Tests;
 
 public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>
 {
+    private const string Provider = "openai";
+    private const string Model = "gpt-5.6-sol";
+
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
     public async Task CreateAgent_WithValidData_ReturnsCreatedAgent()
     {
-        var request = new CreateAgentRequest("Atendente", "Você é um atendente simpático.");
+        var request = new CreateAgentRequest("Atendente", "Você é um atendente simpático.", Provider, Model);
 
         var response = await _client.PostAsJsonAsync("/agents", request);
 
@@ -24,12 +30,14 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
         Assert.NotEqual(Guid.Empty, agent.Id);
         Assert.Equal(request.Name, agent.Name);
         Assert.Equal(request.Instructions, agent.Instructions);
+        Assert.Equal(Provider, agent.Provider);
+        Assert.Equal(Model, agent.Model);
     }
 
     [Fact]
     public async Task CreateAgent_WithoutNameOrInstructions_ReturnsValidationProblem()
     {
-        var request = new CreateAgentRequest(null, null);
+        var request = new CreateAgentRequest(null, null, Provider, Model);
 
         var response = await _client.PostAsJsonAsync("/agents", request);
 
@@ -39,7 +47,7 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
     [Fact]
     public async Task ListAgents_IncludesPreviouslyCreatedAgent()
     {
-        var request = new CreateAgentRequest("Suporte", "Você resolve dúvidas de suporte.");
+        var request = new CreateAgentRequest("Suporte", "Você resolve dúvidas de suporte.", Provider, Model);
         var createResponse = await _client.PostAsJsonAsync("/agents", request);
         var created = await createResponse.Content.ReadFromJsonAsync<AgentResponse>();
 
@@ -54,7 +62,7 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
     [Fact]
     public async Task GetAgentById_Existing_ReturnsAgent()
     {
-        var request = new CreateAgentRequest("Vendas", "Você ajuda com vendas.");
+        var request = new CreateAgentRequest("Vendas", "Você ajuda com vendas.", Provider, Model);
         var createResponse = await _client.PostAsJsonAsync("/agents", request);
         var created = await createResponse.Content.ReadFromJsonAsync<AgentResponse>();
 
@@ -64,6 +72,8 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
         var agent = await response.Content.ReadFromJsonAsync<AgentResponse>();
         Assert.Equal(created.Id, agent!.Id);
         Assert.Equal(request.Name, agent.Name);
+        Assert.Equal(Provider, agent.Provider);
+        Assert.Equal(Model, agent.Model);
     }
 
     [Fact]
@@ -75,11 +85,37 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
     }
 
     [Fact]
+    public async Task GetAgentById_LegacyAgentWithoutProviderOrModel_ReturnsNullFields()
+    {
+        var legacyAgentId = await SeedLegacyAgentWithoutProviderOrModelAsync();
+
+        var response = await _client.GetAsync($"/agents/{legacyAgentId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var agent = await response.Content.ReadFromJsonAsync<AgentResponse>();
+        Assert.Null(agent!.Provider);
+        Assert.Null(agent.Model);
+    }
+
+    [Fact]
+    public async Task ListAgents_IncludesLegacyAgentWithNullProviderAndModel()
+    {
+        var legacyAgentId = await SeedLegacyAgentWithoutProviderOrModelAsync();
+
+        var response = await _client.GetAsync("/agents");
+
+        var agents = await response.Content.ReadFromJsonAsync<List<AgentResponse>>();
+        var legacy = agents!.Single(a => a.Id == legacyAgentId);
+        Assert.Null(legacy.Provider);
+        Assert.Null(legacy.Model);
+    }
+
+    [Fact]
     public async Task UpdateAgent_WithValidData_ReturnsUpdatedAgent()
     {
         var created = await CreateAgentAsync("Atendente", "Instruções originais.");
 
-        var request = new UpdateAgentRequest("Atendente Sênior", "Instruções atualizadas.");
+        var request = new UpdateAgentRequest("Atendente Sênior", "Instruções atualizadas.", Provider, Model);
         var response = await _client.PutAsJsonAsync($"/agents/{created.Id}", request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -95,7 +131,7 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
     {
         var created = await CreateAgentAsync("Atendente", "Instruções originais.");
 
-        var request = new UpdateAgentRequest(null, null);
+        var request = new UpdateAgentRequest(null, null, null, null);
         var response = await _client.PutAsJsonAsync($"/agents/{created.Id}", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -108,7 +144,7 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
     [Fact]
     public async Task UpdateAgent_Missing_ReturnsNotFound()
     {
-        var request = new UpdateAgentRequest("Nome", "Instruções");
+        var request = new UpdateAgentRequest("Nome", "Instruções", Provider, Model);
 
         var response = await _client.PutAsJsonAsync($"/agents/{Guid.NewGuid()}", request);
 
@@ -187,8 +223,28 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
 
     private async Task<AgentResponse> CreateAgentAsync(string name, string instructions)
     {
-        var response = await _client.PostAsJsonAsync("/agents", new CreateAgentRequest(name, instructions));
+        var response = await _client.PostAsJsonAsync("/agents", new CreateAgentRequest(name, instructions, Provider, Model));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<AgentResponse>())!;
+    }
+
+    private async Task<Guid> SeedLegacyAgentWithoutProviderOrModelAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var agentId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        // Simula um agente cadastrado antes desta capacidade existir — mesmo
+        // estado produzido pela migration AddAgentProviderModel para linhas
+        // já existentes (ver AgentUpdateProviderValidationTests para o mesmo padrão).
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             INSERT INTO agents ("Id", "Name", "Instructions", "IsActive", "CreatedAt", "UpdatedAt")
+             VALUES ({agentId}, {"Legado"}, {"Instruções legadas."}, {true}, {now}, {now})
+             """);
+
+        return agentId;
     }
 }

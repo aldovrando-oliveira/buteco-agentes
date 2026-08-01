@@ -6,6 +6,7 @@ using Buteco.Api.Agents.Queries.GetAgentById;
 using Buteco.Api.Agents.Queries.ListAgents;
 using Buteco.Api.Agents.Requests;
 using Buteco.Api.Agents.Responses;
+using Buteco.Api.Providers;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -32,27 +33,20 @@ public static class AgentEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var errors = new Dictionary<string, string[]>();
-
-        if (string.IsNullOrWhiteSpace(request.Name))
+        var shapeErrors = ValidateShape(request.Name, request.Instructions, request.Provider, request.Model);
+        if (shapeErrors is not null)
         {
-            errors["name"] = ["O nome do agente é obrigatório."];
+            return TypedResults.ValidationProblem(shapeErrors);
         }
 
-        if (string.IsNullOrWhiteSpace(request.Instructions))
+        var command = new CreateAgentCommand(request.Name!, request.Instructions!, request.Provider!, request.Model!);
+        var result = await mediator.Send(command, cancellationToken);
+
+        return result.Validation switch
         {
-            errors["instructions"] = ["As instruções (system prompt) do agente são obrigatórias."];
-        }
-
-        if (errors.Count > 0)
-        {
-            return TypedResults.ValidationProblem(errors);
-        }
-
-        var command = new CreateAgentCommand(request.Name!, request.Instructions!);
-        var response = await mediator.Send(command, cancellationToken);
-
-        return TypedResults.Created($"/agents/{response.Id}", response);
+            ProviderValidationOutcome.Valid => TypedResults.Created($"/agents/{result.Agent!.Id}", result.Agent),
+            _ => TypedResults.ValidationProblem(BuildProviderValidationErrors(result.Validation)),
+        };
     }
 
     private static async Task<Ok<IReadOnlyList<AgentResponse>>> ListAgentsAsync(
@@ -82,30 +76,62 @@ public static class AgentEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var shapeErrors = ValidateShape(request.Name, request.Instructions, request.Provider, request.Model);
+        if (shapeErrors is not null)
+        {
+            return TypedResults.ValidationProblem(shapeErrors);
+        }
+
+        var command = new UpdateAgentCommand(id, request.Name!, request.Instructions!, request.Provider!, request.Model!);
+        var result = await mediator.Send(command, cancellationToken);
+
+        if (!result.Found)
+        {
+            return TypedResults.NotFound();
+        }
+
+        return result.Validation switch
+        {
+            ProviderValidationOutcome.Valid => TypedResults.Ok(result.Agent!),
+            _ => TypedResults.ValidationProblem(BuildProviderValidationErrors(result.Validation)),
+        };
+    }
+
+    private static Dictionary<string, string[]>? ValidateShape(string? name, string? instructions, string? provider, string? model)
+    {
         var errors = new Dictionary<string, string[]>();
 
-        if (string.IsNullOrWhiteSpace(request.Name))
+        if (string.IsNullOrWhiteSpace(name))
         {
             errors["name"] = ["O nome do agente é obrigatório."];
         }
 
-        if (string.IsNullOrWhiteSpace(request.Instructions))
+        if (string.IsNullOrWhiteSpace(instructions))
         {
             errors["instructions"] = ["As instruções (system prompt) do agente são obrigatórias."];
         }
 
-        if (errors.Count > 0)
+        if (string.IsNullOrWhiteSpace(provider))
         {
-            return TypedResults.ValidationProblem(errors);
+            errors["provider"] = ["O provedor de LLM do agente é obrigatório."];
         }
 
-        var command = new UpdateAgentCommand(id, request.Name!, request.Instructions!);
-        var response = await mediator.Send(command, cancellationToken);
+        if (string.IsNullOrWhiteSpace(model))
+        {
+            errors["model"] = ["O modelo do agente é obrigatório."];
+        }
 
-        return response is null
-            ? TypedResults.NotFound()
-            : TypedResults.Ok(response);
+        return errors.Count > 0 ? errors : null;
     }
+
+    private static Dictionary<string, string[]> BuildProviderValidationErrors(ProviderValidationOutcome validation) => validation switch
+    {
+        ProviderValidationOutcome.ProviderNotConfigured =>
+            new Dictionary<string, string[]> { ["provider"] = ["O provedor informado não está configurado."] },
+        ProviderValidationOutcome.ModelUnavailable =>
+            new Dictionary<string, string[]> { ["model"] = ["O modelo informado não está disponível para o provedor."] },
+        _ => throw new ArgumentOutOfRangeException(nameof(validation), validation, "Validação inesperada."),
+    };
 
     private static async Task<Results<Ok<AgentResponse>, NotFound>> ActivateAgentAsync(
         Guid id,

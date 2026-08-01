@@ -4,6 +4,8 @@ using Buteco.Api.Agents.Endpoints;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Messaging;
 using Buteco.Api.Options;
+using Buteco.Api.Providers;
+using Buteco.Api.Providers.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +19,7 @@ builder.Services.AddMediator(options => options.ServiceLifetime = ServiceLifetim
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
+builder.Services.AddSingleton<ProviderCatalogService>();
 builder.Services.AddSingleton<AgentA2AServerRegistry>();
 builder.Services.AddSingleton<IAgentA2AServerRegistry>(sp => sp.GetRequiredService<AgentA2AServerRegistry>());
 builder.Services.AddSingleton<RoutingA2ARequestHandler>();
@@ -32,6 +35,7 @@ app.UseCors();
 
 app.MapHealthChecks("/health");
 app.MapAgentEndpoints();
+app.MapProviderEndpoints();
 app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a");
 
 app.Run();

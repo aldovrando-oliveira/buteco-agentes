@@ -89,7 +89,9 @@ public class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IClassFixt
 
     private async Task<Guid> CreateAgentAsync()
     {
-        var response = await _client.PostAsJsonAsync("/agents", new { name = "Atendente", instructions = "Responda com simpatia." });
+        var response = await _client.PostAsJsonAsync(
+            "/agents",
+            new { name = "Atendente", instructions = "Responda com simpatia.", provider = "openai", model = "gpt-5.6-sol" });
         response.EnsureSuccessStatusCode();
         var agent = await response.Content.ReadFromJsonAsync<JsonElement>();
         return agent.GetProperty("id").GetGuid();
