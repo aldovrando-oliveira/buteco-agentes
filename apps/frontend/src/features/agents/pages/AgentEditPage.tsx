@@ -3,6 +3,7 @@ import { Alert, Group, Loader, Stack, Text, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useNavigate, useParams } from 'react-router';
 import { useAgentQuery, useUpdateAgentMutation } from '../api/useAgents';
+import { useProvidersQuery } from '../api/useProviders';
 import { AgentForm } from '../components/AgentForm';
 import { ApiError } from '../api/agentsApi';
 import type { CreateAgentInput } from '../types/agent';
@@ -20,6 +21,7 @@ export function AgentEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data, isLoading, error } = useAgentQuery(id!);
+  const providersQuery = useProvidersQuery();
   const mutation = useUpdateAgentMutation();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string> | undefined>();
 
@@ -52,7 +54,7 @@ export function AgentEditPage() {
     );
   };
 
-  if (isLoading) {
+  if (isLoading || providersQuery.isLoading) {
     return (
       <Group>
         <Loader size="sm" />
@@ -69,6 +71,19 @@ export function AgentEditPage() {
     return <Alert color="red">Não foi possível carregar o agente.</Alert>;
   }
 
+  if (providersQuery.isError) {
+    return <Alert color="red">Não foi possível carregar os provedores de LLM.</Alert>;
+  }
+
+  if (providersQuery.data?.length === 0) {
+    return (
+      <Alert color="yellow">
+        Nenhum provedor de LLM configurado. Configure ao menos uma variável de ambiente antes de
+        cadastrar agentes.
+      </Alert>
+    );
+  }
+
   return (
     <Stack>
       <Title order={2}>Editar agente</Title>
@@ -77,8 +92,14 @@ export function AgentEditPage() {
         onCancel={() => navigate(`/agents/${id}`)}
         errors={fieldErrors}
         submitting={mutation.isPending}
-        initialValues={{ name: data.name, instructions: data.instructions }}
+        initialValues={{
+          name: data.name,
+          instructions: data.instructions,
+          provider: data.provider ?? '',
+          model: data.model ?? '',
+        }}
         submitLabel="Salvar alterações"
+        providers={providersQuery.data ?? []}
       />
     </Stack>
   );

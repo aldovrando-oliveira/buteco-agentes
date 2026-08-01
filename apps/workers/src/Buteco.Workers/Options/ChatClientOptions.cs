@@ -6,7 +6,7 @@ namespace Buteco.Workers.Options;
 /// </summary>
 public sealed class ChatClientOptions
 {
-    public const string SectionName = "ChatClient";
+    public const string SectionName = "OpenAI";
 
     public string BaseUrl { get; set; } = "https://api.openai.com/v1";
 

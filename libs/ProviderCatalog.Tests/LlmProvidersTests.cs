@@ -5,7 +5,7 @@ namespace Buteco.ProviderCatalog.Tests;
 public class LlmProvidersTests
 {
     [Theory]
-    [InlineData(LlmProviders.OpenAi, "ChatClient")]
+    [InlineData(LlmProviders.OpenAi, "OpenAI")]
     [InlineData(LlmProviders.Anthropic, "Anthropic")]
     [InlineData(LlmProviders.Gemini, "Gemini")]
     public void IsConfigured_WhenApiKeyIsSet_ReturnsTrue(string providerId, string sectionName)
@@ -17,7 +17,7 @@ public class LlmProvidersTests
     }
 
     [Theory]
-    [InlineData(LlmProviders.OpenAi, "ChatClient")]
+    [InlineData(LlmProviders.OpenAi, "OpenAI")]
     [InlineData(LlmProviders.Anthropic, "Anthropic")]
     [InlineData(LlmProviders.Gemini, "Gemini")]
     public void IsConfigured_WhenApiKeyIsMissing_ReturnsFalse(string providerId, string sectionName)

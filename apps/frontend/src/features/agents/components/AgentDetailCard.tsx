@@ -8,15 +8,23 @@ interface AgentDetailCardProps {
 }
 
 export function AgentDetailCard({ agent }: AgentDetailCardProps) {
+  const needsReconfiguration = agent.provider === null || agent.model === null;
+
   return (
     <Card withBorder>
       <Stack gap="sm">
         <Group justify="space-between">
           <Title order={2}>{agent.name}</Title>
-          <Badge color={agent.isActive ? 'green' : 'gray'}>
-            {agent.isActive ? 'Ativo' : 'Inativo'}
-          </Badge>
+          <Group gap="xs">
+            {needsReconfiguration && <Badge color="yellow">Precisa de reconfiguração</Badge>}
+            <Badge color={agent.isActive ? 'green' : 'gray'}>
+              {agent.isActive ? 'Ativo' : 'Inativo'}
+            </Badge>
+          </Group>
         </Group>
+        <Text size="sm" c="dimmed">
+          Provider: {agent.provider ?? '—'} · Model: {agent.model ?? '—'}
+        </Text>
         <ScrollArea h="calc(100vh - 320px)" mih={220} data-testid="instructions-scroll-area">
           <Typography>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{agent.instructions}</ReactMarkdown>

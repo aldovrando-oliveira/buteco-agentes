@@ -23,7 +23,7 @@ public static class LlmProviders
 
     public static readonly IReadOnlyList<LlmProviderDefinition> All =
     [
-        new(OpenAi, "ChatClient"),
+        new(OpenAi, "OpenAI"),
         new(Anthropic, "Anthropic"),
         new(Gemini, "Gemini"),
     ];

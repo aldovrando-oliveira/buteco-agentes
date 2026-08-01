@@ -10,6 +10,8 @@ const agent: Agent = {
   name: 'Atendente',
   instructions: 'Você é um atendente simpático.',
   isActive: true,
+  provider: 'openai',
+  model: 'gpt-5.6-sol',
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
 };
@@ -85,7 +87,12 @@ describe('useCreateAgentMutation', () => {
 
     const { result } = renderHook(() => useCreateAgentMutation(), { wrapper: Wrapper });
 
-    result.current.mutate({ name: agent.name, instructions: agent.instructions });
+    result.current.mutate({
+      name: agent.name,
+      instructions: agent.instructions,
+      provider: agent.provider!,
+      model: agent.model!,
+    });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(queryClient.getQueryData(['agents', agent.id])).toEqual(agent);
@@ -108,7 +115,7 @@ describe('useCreateAgentMutation', () => {
 
     const { result } = renderHook(() => useCreateAgentMutation(), { wrapper: Wrapper });
 
-    result.current.mutate({ name: '', instructions: '' });
+    result.current.mutate({ name: '', instructions: '', provider: '', model: '' });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as { status?: number })?.status).toBe(400);

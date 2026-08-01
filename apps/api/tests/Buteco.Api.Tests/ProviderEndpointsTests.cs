@@ -12,7 +12,7 @@ public class ProviderEndpointsTests(ApiFactoryFixture factory) : IClassFixture<A
     [Fact]
     public async Task ListProviders_ProviderWithApiKeyConfigured_AppearsWithItsModels()
     {
-        // appsettings.Development.json configura ChatClient:ApiKey ("changeme") por padrão.
+        // appsettings.Development.json configura OpenAI:ApiKey ("changeme") por padrão.
         var response = await _client.GetAsync("/providers");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

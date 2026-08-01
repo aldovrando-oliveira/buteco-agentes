@@ -6,11 +6,16 @@ import { MantineProvider } from '@mantine/core';
 import { theme } from '../theme';
 import { AppRouter } from './router';
 import { listAgents } from '../features/agents/api/agentsApi';
+import { listProviders } from '../features/agents/api/providersApi';
 
 vi.mock('../features/agents/api/agentsApi', () => ({
   listAgents: vi.fn(),
   getAgent: vi.fn(),
   createAgent: vi.fn(),
+}));
+
+vi.mock('../features/agents/api/providersApi', () => ({
+  listProviders: vi.fn(),
 }));
 
 function renderApp() {
@@ -28,6 +33,8 @@ describe('AppRouter', () => {
   beforeEach(() => {
     vi.mocked(listAgents).mockReset();
     vi.mocked(listAgents).mockResolvedValue([]);
+    vi.mocked(listProviders).mockReset();
+    vi.mocked(listProviders).mockResolvedValue([{ id: 'openai', models: ['gpt-5.6-sol'] }]);
     window.history.pushState({}, '', '/');
   });
 

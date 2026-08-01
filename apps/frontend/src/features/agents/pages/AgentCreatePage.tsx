@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Stack, Title } from '@mantine/core';
+import { Alert, Group, Loader, Stack, Text, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useNavigate } from 'react-router';
 import { useCreateAgentMutation } from '../api/useAgents';
+import { useProvidersQuery } from '../api/useProviders';
 import { AgentForm } from '../components/AgentForm';
 import { ApiError } from '../api/agentsApi';
 import type { CreateAgentInput } from '../types/agent';
@@ -19,6 +20,7 @@ function fieldErrorsFrom(error: unknown): Record<string, string> | undefined {
 export function AgentCreatePage() {
   const navigate = useNavigate();
   const mutation = useCreateAgentMutation();
+  const providersQuery = useProvidersQuery();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string> | undefined>();
 
   const handleSubmit = (values: CreateAgentInput) => {
@@ -47,6 +49,28 @@ export function AgentCreatePage() {
     });
   };
 
+  if (providersQuery.isLoading) {
+    return (
+      <Group>
+        <Loader size="sm" />
+        <Text>Carregando provedores...</Text>
+      </Group>
+    );
+  }
+
+  if (providersQuery.isError) {
+    return <Alert color="red">Não foi possível carregar os provedores de LLM.</Alert>;
+  }
+
+  if (providersQuery.data?.length === 0) {
+    return (
+      <Alert color="yellow">
+        Nenhum provedor de LLM configurado. Configure ao menos uma variável de ambiente antes de
+        cadastrar agentes.
+      </Alert>
+    );
+  }
+
   return (
     <Stack>
       <Title order={2}>Novo agente</Title>
@@ -55,6 +79,7 @@ export function AgentCreatePage() {
         onCancel={() => navigate('/agents')}
         errors={fieldErrors}
         submitting={mutation.isPending}
+        providers={providersQuery.data ?? []}
       />
     </Stack>
   );

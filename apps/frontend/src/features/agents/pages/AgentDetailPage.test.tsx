@@ -30,6 +30,8 @@ const activeAgent: Agent = {
   name: 'Atendente',
   instructions: 'Você é um atendente simpático.',
   isActive: true,
+  provider: 'openai',
+  model: 'gpt-5.6-sol',
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
 };

@@ -142,10 +142,8 @@ provedor de LLM — só usada de fato para o provedor referenciado pelo agente
 que está sendo executado, mas todas devem existir em qualquer ambiente onde
 `apps/api` também rode (ver nota abaixo):
 
-- `ChatClient:BaseUrl`/`ChatClient:ApiKey`/`ChatClient:Model` — OpenAI (ou
-  Azure OpenAI/gateway compatível; basta trocar `BaseUrl`/`ApiKey`). Nome de
-  seção mantido por compatibilidade retroativa (era o único provedor antes de
-  existir suporte a múltiplos).
+- `OpenAI:BaseUrl`/`OpenAI:ApiKey`/`OpenAI:Model` — OpenAI (ou Azure
+  OpenAI/gateway compatível; basta trocar `BaseUrl`/`ApiKey`).
 - `Anthropic:ApiKey` — Claude, via pacote oficial `Anthropic` (beta).
 - `Gemini:ApiKey` — Gemini, via pacote oficial `Google.GenAI`.
 

@@ -25,7 +25,7 @@ public class CreateAgentCommandHandlerTests
     private static ProviderCatalogService CreateProviderCatalogService()
     {
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["ChatClient:ApiKey"] = "changeme" })
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["OpenAI:ApiKey"] = "changeme" })
             .Build();
 
         return new ProviderCatalogService(configuration);

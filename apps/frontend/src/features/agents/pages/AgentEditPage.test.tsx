@@ -8,11 +8,17 @@ import { notifications } from '@mantine/notifications';
 import { theme } from '../../../theme';
 import { AgentEditPage } from './AgentEditPage';
 import { ApiError, getAgent, updateAgent } from '../api/agentsApi';
-import type { Agent } from '../types/agent';
+import { listProviders } from '../api/providersApi';
+import type { Agent, ProviderCatalogEntry } from '../types/agent';
 
 vi.mock('../api/agentsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/agentsApi')>();
   return { ...actual, getAgent: vi.fn(), updateAgent: vi.fn() };
+});
+
+vi.mock('../api/providersApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/providersApi')>();
+  return { ...actual, listProviders: vi.fn() };
 });
 
 const navigateMock = vi.fn();
@@ -31,9 +37,16 @@ const agent: Agent = {
   name: 'Atendente',
   instructions: 'Você é um atendente simpático.',
   isActive: true,
+  provider: 'openai',
+  model: 'gpt-5.6-sol',
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
 };
+
+const defaultProviders: ProviderCatalogEntry[] = [
+  { id: 'openai', models: ['gpt-5.6-sol', 'gpt-5.6-terra'] },
+  { id: 'anthropic', models: ['claude-opus-5', 'claude-sonnet-5'] },
+];
 
 function renderPage(id: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -54,6 +67,8 @@ describe('AgentEditPage', () => {
   beforeEach(() => {
     vi.mocked(getAgent).mockReset();
     vi.mocked(updateAgent).mockReset();
+    vi.mocked(listProviders).mockReset();
+    vi.mocked(listProviders).mockResolvedValue(defaultProviders);
     navigateMock.mockReset();
     vi.mocked(notifications.show).mockReset();
   });
@@ -68,6 +83,8 @@ describe('AgentEditPage', () => {
 
     expect(await screen.findByLabelText(/nome/i)).toHaveValue(agent.name);
     expect(screen.getByLabelText(/instruções/i)).toHaveValue(agent.instructions);
+    expect(screen.getByRole('combobox', { name: /provedor/i })).toHaveValue('openai');
+    expect(screen.getByRole('combobox', { name: /modelo/i })).toHaveValue('gpt-5.6-sol');
 
     await user.clear(screen.getByLabelText(/nome/i));
     await user.type(screen.getByLabelText(/nome/i), updatedAgent.name);
@@ -125,5 +142,33 @@ describe('AgentEditPage', () => {
 
     expect(navigateMock).toHaveBeenCalledWith(`/agents/${agent.id}`);
     expect(updateAgent).not.toHaveBeenCalled();
+  });
+
+  it('quando GET /providers não retorna nenhum provider configurado, exibe mensagem de bloqueio em vez do formulário', async () => {
+    vi.mocked(getAgent).mockResolvedValue(agent);
+    vi.mocked(listProviders).mockResolvedValue([]);
+
+    renderPage(agent.id);
+
+    expect(await screen.findByText(/nenhum provedor de llm configurado/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/nome/i)).not.toBeInTheDocument();
+  });
+
+  it('quando o provider do agente não consta nas opções disponíveis, exibe a opção sintética desabilitada', async () => {
+    vi.mocked(getAgent).mockResolvedValue({
+      ...agent,
+      provider: 'gemini',
+      model: 'gemini-3.6-flash',
+    });
+    const user = userEvent.setup();
+
+    renderPage(agent.id);
+
+    const providerSelect = await screen.findByRole('combobox', { name: /provedor/i });
+    expect(providerSelect).toHaveValue('gemini (indisponível)');
+
+    await user.click(providerSelect);
+    const staleOption = screen.getByRole('option', { name: 'gemini (indisponível)' });
+    expect(staleOption).toHaveAttribute('data-combobox-disabled', 'true');
   });
 });

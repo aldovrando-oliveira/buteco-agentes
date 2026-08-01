@@ -10,6 +10,8 @@ const baseAgent: Agent = {
   name: 'Atendente',
   instructions: 'Você é um atendente simpático.',
   isActive: true,
+  provider: 'openai',
+  model: 'gpt-5.6-sol',
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
 };
@@ -61,5 +63,28 @@ describe('AgentDetailCard', () => {
     // correção: o `scrollTop` do Viewport não se movia com a roda do mouse.
     expect(scrollArea.style.height).toBeTruthy();
     expect(scrollArea.style.minHeight).toBeTruthy();
+  });
+
+  it('exibe o provider e o model do agente', () => {
+    renderCard('Instruções curtas.');
+
+    expect(screen.getByText(/openai/)).toBeInTheDocument();
+    expect(screen.getByText(/gpt-5\.6-sol/)).toBeInTheDocument();
+  });
+
+  it('exibe o indicador de "precisa de reconfiguração" quando provider ou model são nulos', () => {
+    render(
+      <MantineProvider theme={theme}>
+        <AgentDetailCard agent={{ ...baseAgent, provider: null, model: null }} />
+      </MantineProvider>,
+    );
+
+    expect(screen.getByText('Precisa de reconfiguração')).toBeInTheDocument();
+  });
+
+  it('não exibe o indicador de "precisa de reconfiguração" quando provider e model estão preenchidos', () => {
+    renderCard('Instruções curtas.');
+
+    expect(screen.queryByText('Precisa de reconfiguração')).not.toBeInTheDocument();
   });
 });

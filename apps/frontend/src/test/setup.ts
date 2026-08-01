@@ -35,6 +35,45 @@ if (!window.ResizeObserver) {
   };
 }
 
+// jsdom não implementa scrollIntoView; o Combobox do Mantine (usado pelo
+// Select) chama isso ao abrir o dropdown para posicionar a opção ativa.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
+// jsdom não faz layout, o que quebra o middleware `hide` do floating-ui
+// (usado pelo Popover/Combobox do Mantine para posicionar dropdowns) de
+// duas formas que só juntas resolvem:
+// 1. `document.documentElement.clientWidth/clientHeight` (o retângulo da
+//    viewport, via `getViewportRect`) é 0 por padrão — qualquer elemento
+//    fica "fora" dessa viewport degenerada.
+// 2. `getBoundingClientRect` devolve um retângulo 0x0 encostado em (0,0) —
+//    mesmo com a viewport corrigida, `getSideOffsets` subtrai a própria
+//    largura/altura do elemento do cálculo de overflow; com width/height
+//    zero essa margem some e o encosto exato em (0,0) já conta como
+//    "clipado" (`overflow[lado] >= 0`).
+// Sem os dois, `Select` nunca teria suas opções encontráveis em teste —
+// o dropdown fica preso em `display: none` mesmo já aberto.
+Object.defineProperty(document.documentElement, 'clientWidth', {
+  configurable: true,
+  value: 1024,
+});
+Object.defineProperty(document.documentElement, 'clientHeight', {
+  configurable: true,
+  value: 768,
+});
+Element.prototype.getBoundingClientRect = () => ({
+  width: 100,
+  height: 40,
+  top: 10,
+  left: 10,
+  bottom: 50,
+  right: 110,
+  x: 10,
+  y: 10,
+  toJSON() {},
+});
+
 // A partir do Node 22, `localStorage` é um global nativo (experimental) que
 // exige a flag `--localstorage-file` para funcionar; sem ela, ele sombreia o
 // `window.localStorage` do jsdom com uma implementação inutilizável.

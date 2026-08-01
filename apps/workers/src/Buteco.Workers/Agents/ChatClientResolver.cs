@@ -36,7 +36,7 @@ public sealed class ChatClientResolver(
         var options = openAiOptions.Value;
         if (string.IsNullOrWhiteSpace(options.ApiKey))
         {
-            throw new InvalidOperationException("Provedor 'openai' não está configurado (ChatClient:ApiKey ausente).");
+            throw new InvalidOperationException("Provedor 'openai' não está configurado (OpenAI:ApiKey ausente).");
         }
 
         var client = new OpenAIClient(
