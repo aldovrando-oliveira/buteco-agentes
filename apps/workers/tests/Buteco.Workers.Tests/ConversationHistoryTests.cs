@@ -26,7 +26,10 @@ public class ConversationHistoryTests(WorkerInfrastructureFixture fixture) : ICl
     // Deve bater com AgentExecutionService.MaxHistoryMessages (privado de
     // propósito — não vale a pena expor via InternalsVisibleTo só para
     // este teste). Se o valor lá mudar, este teste precisa acompanhar.
-    private const int MaxHistoryMessages = 20;
+    // Revisado de 20 para 200 pela change apps-workers-resumo-historico-conversa
+    // (design.md, Decisão 9) — o mecanismo de truncamento em si não mudou,
+    // só o valor do teto, então este teste continua válido, só mais lento.
+    private const int MaxHistoryMessages = 200;
 
     [Fact]
     public async Task SecondMessageInSameContext_ProcessedByDifferentWorkerInstance_IncludesFirstTurnHistory()

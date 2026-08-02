@@ -4,6 +4,7 @@ using Buteco.Workers.A2A;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Messaging;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Compaction;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,10 +17,28 @@ public sealed class AgentExecutionService(
     IChatClientResolver chatClientResolver,
     ILogger<AgentExecutionService> logger)
 {
+    // Teto de segurança, não um limiar concorrente com
+    // SummarizationTurnThreshold — ver design.md da change
+    // apps-workers-resumo-historico-conversa, Decisão 9. Decompilando
+    // CompactionMessageIndex.Update, confirmou-se que RecentMessageChatReducer
+    // truncando ativamente invalida o bookkeeping incremental do
+    // CompactionProvider a partir do momento em que a conversa ultrapassa
+    // esse valor — por isso ele precisa ficar bem acima da faixa de operação
+    // normal do resumo (SummarizationTurnThreshold), não próximo dela.
     // Constante global, não configurável por agente (non-goal explícito —
-    // ver design.md, Goals/Non-Goals e Decisão 4). Ajustar aqui depois de
-    // observar custo/latência real (ver Open Questions do design.md).
-    private const int MaxHistoryMessages = 20;
+    // ver design.md da change apps-workers-historico-conversa,
+    // Goals/Non-Goals e Decisão 4). Ajustar aqui depois de observar
+    // custo/latência real (ver Open Questions dos dois design.md).
+    private const int MaxHistoryMessages = 200;
+
+    // Limiar de interações (turnos de usuário) que dispara o resumo do
+    // histórico — constante global, não configurável por agente (non-goal
+    // explícito, ver design.md da change apps-workers-resumo-historico-conversa,
+    // Goals/Non-Goals). Precisa ficar maior que MinimumPreservedGroups do
+    // SummarizationCompactionStrategy (padrão do pacote: 8), senão não há
+    // conteúdo elegível para resumir no primeiro gatilho — ver Open
+    // Questions daquele design.md.
+    private const int SummarizationTurnThreshold = 10;
 
     private const string ConversationSessionMetadataKey = "conversationSession";
 
@@ -104,6 +123,19 @@ public sealed class AgentExecutionService(
                 {
                     ChatReducer = new RecentMessageChatReducer(MaxHistoryMessages),
                 }),
+                // Compaction (Microsoft.Agents.AI.Compaction) é
+                // [Experimental("MAAI001")] — risco aceito, ver design.md da
+                // change apps-workers-resumo-historico-conversa, Decisão 1/8.
+                // Reaproveita o mesmo chatClient resolvido acima para a
+                // chamada de resumo — sem client dedicado (Decisão 4).
+#pragma warning disable MAAI001
+                AIContextProviders = new AIContextProvider[]
+                {
+                    new CompactionProvider(new SummarizationCompactionStrategy(
+                        chatClient,
+                        CompactionTriggers.TurnsExceed(SummarizationTurnThreshold))),
+                },
+#pragma warning restore MAAI001
             });
 
             var session = await LoadSessionAsync(aiAgent, taskStore, message.ContextId, cancellationToken);

@@ -46,8 +46,10 @@ task para `working`, montar o agente configurado (nome e instruções
 cadastrados), resolver o `IChatClient` correspondente ao `provider`
 cadastrado no agente, incluir na chamada ao LLM o histórico da conversa de
 tasks anteriores `completed` no mesmo `contextId` (respeitando um limite de
-tamanho e excluindo turnos que não terminaram em `completed`), e escrever o
-resultado de volta no mesmo store durável compartilhado com a API.
+tamanho e excluindo turnos que não terminaram em `completed`), resumir de
+forma incremental a porção do histórico que ultrapassa um limiar global de
+interações em vez de descartá-la, e escrever o resultado de volta no mesmo
+store durável compartilhado com a API.
 
 #### Scenario: Worker processa a task com sucesso até completed
 - **WHEN** o worker consome um job referenciando uma task `submitted` e a
@@ -86,6 +88,29 @@ resultado de volta no mesmo store durável compartilhado com a API.
   no mesmo `contextId` excede o limite configurado globalmente
 - **THEN** o worker inclui na chamada ao LLM só as mensagens mais recentes
   dentro do limite, sem repassar o histórico inteiro sem limite
+
+#### Scenario: Histórico que ultrapassa o limiar de interações é resumido em vez de descartado
+- **WHEN** o número de interações (turnos de usuário) acumuladas no mesmo
+  `contextId` ultrapassa o limiar global configurado para resumo
+- **THEN** a chamada ao LLM para o turno corrente inclui um resumo
+  condensado da porção mais antiga da conversa em vez do histórico cru
+  correspondente a ela, junto com os turnos mais recentes preservados sem
+  resumir
+
+#### Scenario: Resumo é recalculado de forma incremental, não do zero a cada gatilho
+- **WHEN** o limiar de interações é cruzado mais de uma vez ao longo de uma
+  mesma conversa no mesmo `contextId`
+- **THEN** cada novo resumo é produzido a partir do resumo anterior somado
+  aos turnos novos desde então, sem reenviar ao LLM os turnos já cobertos
+  por um resumo anterior
+
+#### Scenario: Falha na chamada de resumo não impede o turno do usuário de ser processado
+- **WHEN** o limiar de interações é cruzado e a chamada ao LLM para gerar o
+  resumo falha (ex.: provider indisponível)
+- **THEN** o worker segue processando o turno corrente do usuário usando o
+  histórico não resumido daquele momento, sem transicionar a task para
+  `failed` por causa exclusivamente dessa falha, e tenta resumir novamente
+  no próximo gatilho
 
 #### Scenario: Tasks failed ou rejected no mesmo contextId não entram no histórico
 - **WHEN** uma task anterior no mesmo `contextId` terminou `failed` ou
