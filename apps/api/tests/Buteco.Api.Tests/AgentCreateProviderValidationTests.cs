@@ -22,8 +22,9 @@ public class AgentCreateProviderValidationTests(ApiFactoryFixture factory) : ICl
     [Fact]
     public async Task CreateAgent_WithProviderNotConfigured_ReturnsValidationProblem()
     {
-        // Nem Anthropic nem Gemini têm variável de ambiente configurada em
-        // appsettings.Development.json — rejeitado independentemente do model.
+        // Nem Anthropic nem Gemini estão configurados (ApiKey limpa
+        // explicitamente por ApiFactoryFixture) — rejeitado independentemente
+        // do model.
         var request = new CreateAgentRequest("Atendente", "Instruções.", "anthropic", "claude-opus-5");
 
         var response = await _client.PostAsJsonAsync("/agents", request);

@@ -62,6 +62,21 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.ToTable("a2a_tasks", (string)null);
                 });
 
+            modelBuilder.Entity("Buteco.Api.AgentMcpBindings.Entities.AgentMcpServer", b =>
+                {
+                    b.Property<Guid>("AgentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("McpServerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("AgentId", "McpServerId");
+
+                    b.HasIndex("McpServerId");
+
+                    b.ToTable("agent_mcp_servers", (string)null);
+                });
+
             modelBuilder.Entity("Buteco.Api.Agents.Entities.Agent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -98,11 +113,67 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.ToTable("agents", (string)null);
                 });
 
+            modelBuilder.Entity("Buteco.Api.McpServers.Entities.McpServer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("EncryptedCredential")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("mcp_servers", (string)null);
+                });
+
             modelBuilder.Entity("Buteco.Api.A2A.A2ATaskRecord", b =>
                 {
                     b.HasOne("Buteco.Api.Agents.Entities.Agent", null)
                         .WithMany()
                         .HasForeignKey("AgentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Api.AgentMcpBindings.Entities.AgentMcpServer", b =>
+                {
+                    b.HasOne("Buteco.Api.Agents.Entities.Agent", null)
+                        .WithMany()
+                        .HasForeignKey("AgentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Buteco.Api.McpServers.Entities.McpServer", null)
+                        .WithMany()
+                        .HasForeignKey("McpServerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

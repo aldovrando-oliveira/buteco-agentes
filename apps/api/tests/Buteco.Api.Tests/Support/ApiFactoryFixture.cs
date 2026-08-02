@@ -2,6 +2,7 @@ using Buteco.Api.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 
@@ -17,6 +18,17 @@ public sealed class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLi
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // Garante "só openai configurado" como precondição dos testes,
+        // independente do que appsettings.Development.json tiver localmente
+        // (esse arquivo é ajustado livremente por quem desenvolve, para uso
+        // manual da API — não deveria ser pré-requisito de nenhum teste).
+        builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Anthropic:ApiKey"] = string.Empty,
+                ["Gemini:ApiKey"] = string.Empty,
+            }));
+
         // Program.cs já registrou AppDbContext (AddInfrastructure) apontando para a
         // connection string do appsettings.Development.json. Substituímos aqui, depois
         // que os serviços da aplicação já foram registrados, para garantir que os testes

@@ -1,7 +1,11 @@
 using global::A2A.AspNetCore;
 using Buteco.Api.A2A;
 using Buteco.Api.Agents.Endpoints;
+using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.McpServers.Connectivity;
+using Buteco.Api.McpServers.Endpoints;
+using Buteco.Api.McpServers.Security;
 using Buteco.Api.Messaging;
 using Buteco.Api.Options;
 using Buteco.Api.Providers;
@@ -17,9 +21,13 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddMediator(options => options.ServiceLifetime = ServiceLifetime.Scoped);
 
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
+builder.Services.Configure<McpCryptoOptions>(builder.Configuration.GetSection(McpCryptoOptions.SectionName));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
 builder.Services.AddSingleton<ProviderCatalogService>();
+builder.Services.AddSingleton<IMcpCredentialCipher, AesGcmMcpCredentialCipher>();
+builder.Services.AddHttpClient(McpConnectionTester.HttpClientName);
+builder.Services.AddSingleton<IMcpConnectionTester, McpConnectionTester>();
 builder.Services.AddSingleton<AgentA2AServerRegistry>();
 builder.Services.AddSingleton<IAgentA2AServerRegistry>(sp => sp.GetRequiredService<AgentA2AServerRegistry>());
 builder.Services.AddSingleton<RoutingA2ARequestHandler>();
@@ -36,6 +44,8 @@ app.UseCors();
 app.MapHealthChecks("/health");
 app.MapAgentEndpoints();
 app.MapProviderEndpoints();
+app.MapMcpServerEndpoints();
+app.MapAgentMcpBindingEndpoints();
 app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a");
 
 app.Run();

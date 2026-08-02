@@ -30,6 +30,6 @@ public sealed class CreateAgentCommandHandler(
         // responder sem precisar de uma consulta extra ao banco (ver RoutingA2ARequestHandler).
         registry.Register(agent.Id);
 
-        return CreateAgentResult.Success(AgentResponse.FromEntity(agent));
+        return CreateAgentResult.Success(AgentResponse.FromEntity(agent, []));
     }
 }

@@ -1,3 +1,4 @@
+using Buteco.Api.AgentMcpBindings;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
 using Mediator;
@@ -13,6 +14,13 @@ public sealed class GetAgentByIdQueryHandler(AppDbContext dbContext) : IQueryHan
             .AsNoTracking()
             .FirstOrDefaultAsync(agent => agent.Id == query.Id, cancellationToken);
 
-        return agent is null ? null : AgentResponse.FromEntity(agent);
+        if (agent is null)
+        {
+            return null;
+        }
+
+        var mcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
+
+        return AgentResponse.FromEntity(agent, mcpServers);
     }
 }

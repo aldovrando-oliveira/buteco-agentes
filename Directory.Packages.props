@@ -15,6 +15,9 @@
     <PackageVersion Include="Anthropic" Version="12.39.0" />
     <PackageVersion Include="Google.GenAI" Version="1.15.0" />
 
+    <!-- MCP client (apps/api, só para o endpoint de teste de configuração) -->
+    <PackageVersion Include="ModelContextProtocol.Core" Version="2.0.0" />
+
     <!-- libs/ProviderCatalog -->
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />

@@ -9,10 +9,12 @@ using Testcontainers.PostgreSql;
 namespace Buteco.Api.Tests.Support;
 
 /// <summary>
-/// Igual a <see cref="ApiFactoryFixture"/>, mas limpando
-/// <c>OpenAI:ApiKey</c> — o único provedor configurado por padrão em
-/// <c>appsettings.Development.json</c> — para exercitar o caso de
-/// <c>GET /providers</c> com nenhum provedor disponível.
+/// Igual a <see cref="ApiFactoryFixture"/>, mas limpando explicitamente a
+/// <c>ApiKey</c> dos três provedores — independente do que
+/// <c>appsettings.Development.json</c> tiver localmente (esse arquivo é
+/// ajustado livremente por quem desenvolve, não deveria ser pré-requisito
+/// de teste) — para exercitar o caso de <c>GET /providers</c> com nenhum
+/// provedor disponível.
 /// </summary>
 public sealed class NoProvidersConfiguredFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
@@ -25,7 +27,12 @@ public sealed class NoProvidersConfiguredFixture : WebApplicationFactory<Program
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) =>
-            config.AddInMemoryCollection(new Dictionary<string, string?> { ["OpenAI:ApiKey"] = string.Empty }));
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["OpenAI:ApiKey"] = string.Empty,
+                ["Anthropic:ApiKey"] = string.Empty,
+                ["Gemini:ApiKey"] = string.Empty,
+            }));
 
         builder.ConfigureServices(services =>
         {

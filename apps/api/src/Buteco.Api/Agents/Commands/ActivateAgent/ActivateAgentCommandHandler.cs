@@ -1,3 +1,4 @@
+using Buteco.Api.AgentMcpBindings;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
 using Mediator;
@@ -20,6 +21,8 @@ public sealed class ActivateAgentCommandHandler(AppDbContext dbContext) : IComma
         agent.Activate();
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return AgentResponse.FromEntity(agent);
+        var mcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
+
+        return AgentResponse.FromEntity(agent, mcpServers);
     }
 }

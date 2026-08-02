@@ -12,7 +12,8 @@ public class ProviderEndpointsTests(ApiFactoryFixture factory) : IClassFixture<A
     [Fact]
     public async Task ListProviders_ProviderWithApiKeyConfigured_AppearsWithItsModels()
     {
-        // appsettings.Development.json configura OpenAI:ApiKey ("changeme") por padrão.
+        // OpenAI:ApiKey vem configurada de appsettings.Development.json (não
+        // é limpa por ApiFactoryFixture, ao contrário de Anthropic/Gemini).
         var response = await _client.GetAsync("/providers");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -26,7 +27,9 @@ public class ProviderEndpointsTests(ApiFactoryFixture factory) : IClassFixture<A
     [Fact]
     public async Task ListProviders_ProviderWithoutApiKeyConfigured_DoesNotAppear()
     {
-        // Nem Anthropic nem Gemini têm seção configurada em appsettings.Development.json.
+        // Nem Anthropic nem Gemini estão configurados (ApiKey limpa
+        // explicitamente por ApiFactoryFixture, independente do que
+        // appsettings.Development.json tiver localmente).
         var response = await _client.GetAsync("/providers");
 
         var providers = await response.Content.ReadFromJsonAsync<List<ProviderResponse>>();

@@ -1,4 +1,5 @@
 using Buteco.Api.Agents.Entities;
+using Buteco.Api.McpServers.Responses;
 
 namespace Buteco.Api.Agents.Responses;
 
@@ -10,8 +11,9 @@ public record AgentResponse(
     string? Provider,
     string? Model,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<McpServerSummaryResponse> McpServers)
 {
-    public static AgentResponse FromEntity(Agent agent) =>
-        new(agent.Id, agent.Name, agent.Instructions, agent.IsActive, agent.Provider, agent.Model, agent.CreatedAt, agent.UpdatedAt);
+    public static AgentResponse FromEntity(Agent agent, IReadOnlyList<McpServerSummaryResponse> mcpServers) =>
+        new(agent.Id, agent.Name, agent.Instructions, agent.IsActive, agent.Provider, agent.Model, agent.CreatedAt, agent.UpdatedAt, mcpServers);
 }
