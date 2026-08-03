@@ -83,6 +83,12 @@ export function AppShell() {
           label="Agentes"
           active={location.pathname.startsWith('/agents')}
         />
+        <NavLink
+          component={Link}
+          to="/mcp-servers"
+          label="Servidores MCP"
+          active={location.pathname.startsWith('/mcp-servers')}
+        />
       </MantineAppShell.Navbar>
 
       <MantineAppShell.Main>
