@@ -1,5 +1,6 @@
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Options;
 using Buteco.Workers.Tests.Support;
@@ -28,6 +29,7 @@ public class WorkerTests(WorkerInfrastructureFixture fixture) : IClassFixture<Wo
         });
 
         builder.Services.AddSingleton(new Mock<IChatClientResolver>().Object);
+        builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

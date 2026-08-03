@@ -17,6 +17,8 @@
     <PackageReference Include="Anthropic" />
     <PackageReference Include="Google.GenAI" />
     <PackageReference Include="RabbitMQ.Client" />
+    <PackageReference Include="ModelContextProtocol.Core" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
   </ItemGroup>
 
   <ItemGroup>

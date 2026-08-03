@@ -3,6 +3,7 @@ using global::A2A;
 using Buteco.Workers.A2A;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Options;
 using Buteco.Workers.Tests.Support;
@@ -225,6 +226,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         // AnthropicOptions/GeminiOptions nunca configurados aqui de propósito —
         // é exatamente o ambiente "chave ausente" que este teste exercita.
         builder.Services.AddSingleton<IChatClientResolver, ChatClientResolver>();
+        builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 
@@ -249,6 +251,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         var resolverMock = new Mock<IChatClientResolver>();
         resolverMock.Setup(resolver => resolver.Resolve(It.IsAny<string>(), It.IsAny<string>())).Returns(chatClient);
         builder.Services.AddSingleton(resolverMock.Object);
+        builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

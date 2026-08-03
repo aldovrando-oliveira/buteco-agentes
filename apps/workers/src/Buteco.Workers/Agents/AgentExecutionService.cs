@@ -2,6 +2,7 @@ using System.Text.Json;
 using global::A2A;
 using Buteco.Workers.A2A;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
@@ -15,6 +16,7 @@ namespace Buteco.Workers.Agents;
 public sealed class AgentExecutionService(
     IServiceScopeFactory scopeFactory,
     IChatClientResolver chatClientResolver,
+    IMcpToolSetResolver mcpToolSetResolver,
     ILogger<AgentExecutionService> logger)
 {
     // Teto de segurança, não um limiar concorrente com
@@ -115,10 +117,18 @@ public sealed class AgentExecutionService(
             // ignora — se ela falhar, o resolver/aiAgent lançará e cairá no catch
             // abaixo, terminando a task como failed (Decision 5).
             var chatClient = chatClientResolver.Resolve(agent.Provider!, agent.Model!);
+
+            // Precisa ficar vivo durante todo o RunAsync abaixo, não só
+            // durante a resolução — cada AITool devolvido encapsula uma
+            // conexão MCP viva (design.md da change apps-workers-execucao-mcp,
+            // Decision 4). await using cobre tanto o caminho de sucesso
+            // quanto uma exceção propagando para o catch abaixo.
+            await using var toolSet = await mcpToolSetResolver.ResolveAsync(dbContext, message.AgentId, cancellationToken);
+
             var aiAgent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
             {
                 Name = agent.Name,
-                ChatOptions = new ChatOptions { Instructions = agent.Instructions },
+                ChatOptions = new ChatOptions { Instructions = agent.Instructions, Tools = toolSet.Tools.ToList() },
                 ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
                 {
                     ChatReducer = new RecentMessageChatReducer(MaxHistoryMessages),
