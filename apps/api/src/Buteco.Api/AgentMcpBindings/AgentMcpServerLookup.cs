@@ -18,9 +18,9 @@ public static class AgentMcpServerLookup
         return await dbContext.AgentMcpServers
             .AsNoTracking()
             .Where(binding => binding.AgentId == agentId)
-            .Join(dbContext.McpServers, binding => binding.McpServerId, mcpServer => mcpServer.Id, (_, mcpServer) => mcpServer)
-            .OrderBy(mcpServer => mcpServer.Name)
-            .Select(mcpServer => McpServerSummaryResponse.FromEntity(mcpServer))
+            .Join(dbContext.McpServers, binding => binding.McpServerId, mcpServer => mcpServer.Id, (binding, mcpServer) => new { binding.AllowedTools, McpServer = mcpServer })
+            .OrderBy(joined => joined.McpServer.Name)
+            .Select(joined => McpServerSummaryResponse.FromEntity(joined.McpServer, joined.AllowedTools))
             .ToListAsync(cancellationToken);
     }
 }

@@ -1,13 +1,19 @@
+using System.Security.Cryptography;
 using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.McpServers.Connectivity;
+using Buteco.Api.McpServers.Entities;
+using Buteco.Api.McpServers.Security;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
 namespace Buteco.Api.AgentMcpBindings.Commands.ReplaceAgentMcpServers;
 
-public sealed class ReplaceAgentMcpServersCommandHandler(AppDbContext dbContext)
-    : ICommandHandler<ReplaceAgentMcpServersCommand, ReplaceAgentMcpServersResult>
+public sealed class ReplaceAgentMcpServersCommandHandler(
+    AppDbContext dbContext,
+    IMcpCredentialCipher credentialCipher,
+    IMcpConnectionTester connectionTester) : ICommandHandler<ReplaceAgentMcpServersCommand, ReplaceAgentMcpServersResult>
 {
     public async ValueTask<ReplaceAgentMcpServersResult> Handle(ReplaceAgentMcpServersCommand command, CancellationToken cancellationToken)
     {
@@ -19,17 +25,52 @@ public sealed class ReplaceAgentMcpServersCommandHandler(AppDbContext dbContext)
             return ReplaceAgentMcpServersResult.AgentNotFound();
         }
 
-        var requestedIds = command.McpServerIds.Distinct().ToList();
+        // Último a aparecer no payload vence, caso o mesmo McpServerId seja
+        // referenciado mais de uma vez (mesma tolerância que o Distinct()
+        // aplicado ao shape anterior, agora sobre um objeto composto).
+        var requestedBindings = command.Bindings
+            .GroupBy(binding => binding.McpServerId)
+            .Select(group => group.Last())
+            .ToList();
 
-        var existingMcpServerIds = await dbContext.McpServers
+        var requestedIds = requestedBindings.Select(binding => binding.McpServerId).ToList();
+
+        var mcpServers = await dbContext.McpServers
             .Where(mcpServer => requestedIds.Contains(mcpServer.Id))
-            .Select(mcpServer => mcpServer.Id)
             .ToListAsync(cancellationToken);
 
-        var invalidIds = requestedIds.Except(existingMcpServerIds).ToList();
+        var invalidIds = requestedIds.Except(mcpServers.Select(mcpServer => mcpServer.Id)).ToList();
         if (invalidIds.Count > 0)
         {
             return ReplaceAgentMcpServersResult.InvalidIds(invalidIds);
+        }
+
+        var mcpServersById = mcpServers.ToDictionary(mcpServer => mcpServer.Id);
+
+        // Validação ao vivo (Decision 2 do design.md): só conecta ao
+        // McpServer quando há alguma tool para validar — allowedTools vazio
+        // não exige handshake nenhum (Decision 4: vínculo com zero tools é
+        // válido por si só, sem nada a checar contra o servidor).
+        foreach (var binding in requestedBindings)
+        {
+            if (binding.AllowedTools.Count == 0)
+            {
+                continue;
+            }
+
+            var mcpServer = mcpServersById[binding.McpServerId];
+            var discovery = await DiscoverToolsAsync(mcpServer, cancellationToken);
+
+            if (discovery.Failure is not null)
+            {
+                return ReplaceAgentMcpServersResult.HandshakeFailed(discovery.Failure);
+            }
+
+            var rejectedTools = binding.AllowedTools.Where(tool => !discovery.AvailableToolNames!.Contains(tool)).ToList();
+            if (rejectedTools.Count > 0)
+            {
+                return ReplaceAgentMcpServersResult.InvalidToolsFound([new InvalidMcpServerTool(mcpServer.Id, rejectedTools)]);
+            }
         }
 
         var currentBindings = await dbContext.AgentMcpServers
@@ -37,15 +78,42 @@ public sealed class ReplaceAgentMcpServersCommandHandler(AppDbContext dbContext)
             .ToListAsync(cancellationToken);
         dbContext.AgentMcpServers.RemoveRange(currentBindings);
 
-        foreach (var mcpServerId in requestedIds)
+        foreach (var binding in requestedBindings)
         {
-            dbContext.AgentMcpServers.Add(new AgentMcpServer(command.AgentId, mcpServerId));
+            dbContext.AgentMcpServers.Add(new AgentMcpServer(command.AgentId, binding.McpServerId, binding.AllowedTools));
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var mcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
+        var linkedMcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
 
-        return ReplaceAgentMcpServersResult.Success(AgentResponse.FromEntity(agent, mcpServers));
+        return ReplaceAgentMcpServersResult.Success(AgentResponse.FromEntity(agent, linkedMcpServers));
+    }
+
+    private async Task<(McpServerHandshakeFailure? Failure, IReadOnlyList<string>? AvailableToolNames)> DiscoverToolsAsync(McpServer mcpServer, CancellationToken cancellationToken)
+    {
+        string? credential = null;
+        if (mcpServer.AuthType != McpServerAuthType.None)
+        {
+            try
+            {
+                credential = credentialCipher.Decrypt(mcpServer.EncryptedCredential!);
+            }
+            catch (CryptographicException)
+            {
+                var failure = new McpServerHandshakeFailure(
+                    mcpServer.Id,
+                    McpConnectionTestFailureReason.CredentialDecryptionFailed,
+                    "Não foi possível decifrar a credencial persistida com a chave de criptografia atualmente configurada.");
+
+                return (failure, null);
+            }
+        }
+
+        var discovery = await connectionTester.ListToolsAsync(mcpServer.Url, mcpServer.AuthType, credential, cancellationToken);
+
+        return discovery.Success
+            ? (null, discovery.Tools!.Select(tool => tool.Name).ToList())
+            : (new McpServerHandshakeFailure(mcpServer.Id, discovery.FailureReason!.Value, discovery.Message!), null);
     }
 }

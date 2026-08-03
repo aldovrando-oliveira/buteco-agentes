@@ -19,7 +19,7 @@ public sealed class ListAgentsQueryHandler(AppDbContext dbContext) : IQueryHandl
         // agente (mesmo espírito de AgentMcpServerLookup, mas em lote).
         var bindings = await dbContext.AgentMcpServers
             .AsNoTracking()
-            .Join(dbContext.McpServers, binding => binding.McpServerId, mcpServer => mcpServer.Id, (binding, mcpServer) => new { binding.AgentId, McpServer = mcpServer })
+            .Join(dbContext.McpServers, binding => binding.McpServerId, mcpServer => mcpServer.Id, (binding, mcpServer) => new { binding.AgentId, binding.AllowedTools, McpServer = mcpServer })
             .ToListAsync(cancellationToken);
 
         var mcpServersByAgentId = bindings
@@ -28,7 +28,7 @@ public sealed class ListAgentsQueryHandler(AppDbContext dbContext) : IQueryHandl
                 group => group.Key,
                 group => (IReadOnlyList<McpServerSummaryResponse>)group
                     .OrderBy(binding => binding.McpServer.Name)
-                    .Select(binding => McpServerSummaryResponse.FromEntity(binding.McpServer))
+                    .Select(binding => McpServerSummaryResponse.FromEntity(binding.McpServer, binding.AllowedTools))
                     .ToList());
 
         return agents

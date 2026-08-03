@@ -29,6 +29,10 @@ public class AgentMcpBindingEndpointsTests(ApiFactoryFixture factory) : IClassFi
         Assert.Single(updated!.McpServers);
         Assert.Equal(mcpServer.Id, updated.McpServers[0].Id);
         Assert.Equal(mcpServer.Name, updated.McpServers[0].Name);
+        // allowedTools: [] é um vínculo válido (Decision 3 do design.md da
+        // change backend-mcp-selecao-tools) — estes testes não exercitam
+        // seleção de tools, só o gerenciamento do vínculo em si.
+        Assert.Empty(updated.McpServers[0].AllowedTools);
     }
 
     [Fact]
@@ -188,8 +192,15 @@ public class AgentMcpBindingEndpointsTests(ApiFactoryFixture factory) : IClassFi
         Assert.Empty(listed.McpServers);
     }
 
+    // allowedTools vazio em todos os vínculos — estes testes cobrem o
+    // gerenciamento do vínculo em si (herdados da change
+    // backend-mcp-catalogo-vinculo), não a seleção de tools. allowedTools
+    // vazio não exige handshake de validação (ver Decision 2 do design.md),
+    // então este fixture não precisa simular um servidor MCP real.
     private Task<HttpResponseMessage> PutMcpServersAsync(Guid agentId, IReadOnlyList<Guid> mcpServerIds) =>
-        _client.PutAsJsonAsync($"/agents/{agentId}/mcp-servers", new ReplaceAgentMcpServersRequest(mcpServerIds));
+        _client.PutAsJsonAsync(
+            $"/agents/{agentId}/mcp-servers",
+            new ReplaceAgentMcpServersRequest(mcpServerIds.Select(id => new AgentMcpServerBindingRequest(id, [])).ToList()));
 
     private async Task<AgentResponse> CreateAgentAsync(string name)
     {

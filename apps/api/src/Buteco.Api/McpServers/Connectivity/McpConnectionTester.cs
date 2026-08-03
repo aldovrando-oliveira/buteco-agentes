@@ -32,36 +32,11 @@ public sealed class McpConnectionTester(IHttpClientFactory httpClientFactory) : 
 
     public async Task<McpConnectionTestResult> TestAsync(string url, McpServerAuthType authType, string? credential, CancellationToken cancellationToken)
     {
-        var transportOptions = new HttpClientTransportOptions
-        {
-            Endpoint = new Uri(url),
-            Name = "mcp-connection-test",
-            // Teste pontual: não precisa do stream GET não solicitado nem de
-            // encerrar sessão no dispose (evita uma requisição DELETE extra
-            // que não importa para o resultado do teste).
-            EnableStandaloneGetStream = false,
-            OwnsSession = false,
-        };
-
-        if (authType == McpServerAuthType.BearerToken)
-        {
-            transportOptions.AdditionalHeaders = new Dictionary<string, string>
-            {
-                ["Authorization"] = $"Bearer {credential}",
-            };
-        }
-
-        var httpClient = httpClientFactory.CreateClient(HttpClientName);
-        await using var transport = new HttpClientTransport(transportOptions, httpClient, ownsHttpClient: false);
-
-        var clientOptions = new McpClientOptions
-        {
-            ProtocolVersion = InitializeHandshakeProtocolVersion,
-        };
+        await using var transport = BuildTransport(url, authType, credential);
 
         try
         {
-            await using var client = await McpClient.CreateAsync(transport, clientOptions, cancellationToken: cancellationToken);
+            await using var client = await McpClient.CreateAsync(transport, BuildClientOptions(), cancellationToken: cancellationToken);
             return McpConnectionTestResult.Successful();
         }
         catch (HttpRequestException exception)
@@ -75,4 +50,62 @@ public sealed class McpConnectionTester(IHttpClientFactory httpClientFactory) : 
             return McpConnectionTestResult.Failed(McpConnectionTestFailureReason.Unknown, $"Falha inesperada ao testar o servidor MCP: {exception.Message}");
         }
     }
+
+    public async Task<McpToolDiscoveryResult> ListToolsAsync(string url, McpServerAuthType authType, string? credential, CancellationToken cancellationToken)
+    {
+        await using var transport = BuildTransport(url, authType, credential);
+
+        try
+        {
+            await using var client = await McpClient.CreateAsync(transport, BuildClientOptions(), cancellationToken: cancellationToken);
+            var tools = await client.ListToolsAsync(cancellationToken: cancellationToken);
+
+            return McpToolDiscoveryResult.Successful(tools
+                .Select(tool => new McpToolDescriptor(tool.Name, tool.Description ?? string.Empty))
+                .ToList());
+        }
+        catch (HttpRequestException exception)
+        {
+            return exception.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+                ? McpToolDiscoveryResult.Failed(McpConnectionTestFailureReason.CredentialRejected, "O servidor MCP rejeitou a credencial informada.")
+                : McpToolDiscoveryResult.Failed(McpConnectionTestFailureReason.HostUnreachable, $"Não foi possível conectar ao servidor MCP: {exception.Message}");
+        }
+        catch (Exception exception)
+        {
+            return McpToolDiscoveryResult.Failed(McpConnectionTestFailureReason.Unknown, $"Falha inesperada ao listar as tools do servidor MCP: {exception.Message}");
+        }
+    }
+
+    // Construção do transporte compartilhada entre TestAsync e ListToolsAsync
+    // (Decision 3 do design.md da change backend-mcp-selecao-tools) — evita
+    // duas implementações paralelas da mesma lógica de conexão MCP.
+    private HttpClientTransport BuildTransport(string url, McpServerAuthType authType, string? credential)
+    {
+        var transportOptions = new HttpClientTransportOptions
+        {
+            Endpoint = new Uri(url),
+            Name = "mcp-connection-test",
+            // Teste pontual: não precisa do stream GET não solicitado nem de
+            // encerrar sessão no dispose (evita uma requisição DELETE extra
+            // que não importa para o resultado do teste/descoberta).
+            EnableStandaloneGetStream = false,
+            OwnsSession = false,
+        };
+
+        if (authType == McpServerAuthType.BearerToken)
+        {
+            transportOptions.AdditionalHeaders = new Dictionary<string, string>
+            {
+                ["Authorization"] = $"Bearer {credential}",
+            };
+        }
+
+        var httpClient = httpClientFactory.CreateClient(HttpClientName);
+        return new HttpClientTransport(transportOptions, httpClient, ownsHttpClient: false);
+    }
+
+    private static McpClientOptions BuildClientOptions() => new()
+    {
+        ProtocolVersion = InitializeHandshakeProtocolVersion,
+    };
 }

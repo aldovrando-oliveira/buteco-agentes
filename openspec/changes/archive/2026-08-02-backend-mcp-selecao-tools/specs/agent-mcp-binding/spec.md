@@ -1,10 +1,4 @@
-# agent-mcp-binding Specification
-
-## Purpose
-
-TBD - defined by change backend-mcp-catalogo-vinculo. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Substituição do conjunto de servidores MCP vinculados a um agente
 O sistema SHALL permitir, via `apps/api`, definir o conjunto completo de
@@ -110,24 +104,3 @@ independente.
 - **THEN** cada agente reflete exatamente o `allowedTools` que lhe foi
   atribuído, sem que a atualização de um agente altere o `allowedTools` do
   outro para o mesmo servidor
-
-### Requirement: Mesmo agente vinculado a múltiplos servidores MCP
-O sistema SHALL permitir que um mesmo agente tenha mais de um servidor MCP
-vinculado simultaneamente.
-
-#### Scenario: Um agente vinculado a dois servidores MCP diferentes
-- **WHEN** um cliente envia `PUT /agents/{id}/mcp-servers` com uma lista
-  contendo dois `mcpServerId` diferentes
-- **THEN** a API responde com HTTP 200 e o agente passa a ter os dois
-  servidores MCP vinculados
-
-### Requirement: Persistência durável do vínculo agente-MCP
-O sistema SHALL persistir o vínculo entre agentes e servidores MCP em
-PostgreSQL, sem uso de armazenamento em memória, garantindo que os dados
-sobrevivam a reinícios da aplicação.
-
-#### Scenario: Vínculo sobrevive a restart da API
-- **WHEN** um agente é vinculado a um servidor MCP e o processo de
-  `apps/api` é reiniciado
-- **THEN** uma consulta subsequente que retorne os servidores MCP vinculados
-  a esse agente continua refletindo o mesmo vínculo

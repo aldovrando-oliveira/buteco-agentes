@@ -1,3 +1,3 @@
 namespace Buteco.Api.AgentMcpBindings.Requests;
 
-public record ReplaceAgentMcpServersRequest(IReadOnlyList<Guid>? McpServerIds);
+public record ReplaceAgentMcpServersRequest(IReadOnlyList<AgentMcpServerBindingRequest>? McpServers);

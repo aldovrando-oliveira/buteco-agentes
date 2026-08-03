@@ -8,6 +8,7 @@ using Buteco.Api.McpServers.Connectivity;
 using Buteco.Api.McpServers.Entities;
 using Buteco.Api.McpServers.Queries.GetMcpServerById;
 using Buteco.Api.McpServers.Queries.ListMcpServers;
+using Buteco.Api.McpServers.Queries.ListMcpServerTools;
 using Buteco.Api.McpServers.Requests;
 using Buteco.Api.McpServers.Responses;
 using Mediator;
@@ -24,6 +25,7 @@ public static class McpServerEndpoints
         group.MapPost("/", CreateMcpServerAsync);
         group.MapGet("/", ListMcpServersAsync);
         group.MapGet("/{id:guid}", GetMcpServerByIdAsync);
+        group.MapGet("/{id:guid}/tools", ListMcpServerToolsAsync);
         group.MapPut("/{id:guid}", UpdateMcpServerAsync);
         group.MapPost("/{id:guid}/activate", ActivateMcpServerAsync);
         group.MapPost("/{id:guid}/deactivate", DeactivateMcpServerAsync);
@@ -74,6 +76,18 @@ public static class McpServerEndpoints
         return mcpServer is null
             ? TypedResults.NotFound()
             : TypedResults.Ok(mcpServer);
+    }
+
+    private static async Task<Results<Ok<McpServerToolsResponse>, NotFound>> ListMcpServerToolsAsync(
+        Guid id,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ListMcpServerToolsQuery(id), cancellationToken);
+
+        return result.Found
+            ? TypedResults.Ok(result.Result!)
+            : TypedResults.NotFound();
     }
 
     private static async Task<Results<Ok<McpServerResponse>, NotFound, ValidationProblem>> UpdateMcpServerAsync(

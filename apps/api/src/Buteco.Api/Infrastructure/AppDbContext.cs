@@ -1,8 +1,10 @@
+using System.Text.Json;
 using Buteco.Api.A2A;
 using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Entities;
 using Buteco.Api.McpServers.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Buteco.Api.Infrastructure;
 
@@ -66,6 +68,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(binding => new { binding.AgentId, binding.McpServerId });
             entity.HasOne<Agent>().WithMany().HasForeignKey(binding => binding.AgentId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<McpServer>().WithMany().HasForeignKey(binding => binding.McpServerId).OnDelete(DeleteBehavior.Cascade);
+
+            // Coluna jsonb (Decision 1 do design.md da change
+            // backend-mcp-selecao-tools) — sem tabela filha, tools não são um
+            // catálogo relacional persistido em lugar nenhum. ValueComparer
+            // explícito porque IReadOnlyList<string> não tem igualdade
+            // estrutural por padrão, necessário para o change tracking do EF
+            // Core detectar corretamente quando o conjunto de tools mudou.
+            var allowedToolsProperty = entity.Property(binding => binding.AllowedTools)
+                .HasColumnName("allowed_tools")
+                .HasColumnType("jsonb")
+                .IsRequired()
+                .HasDefaultValueSql("'[]'::jsonb")
+                .HasConversion(
+                    tools => JsonSerializer.Serialize(tools, (JsonSerializerOptions?)null),
+                    json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>());
+
+            allowedToolsProperty.Metadata.SetValueComparer(new ValueComparer<IReadOnlyList<string>>(
+                (left, right) => (left ?? new List<string>()).SequenceEqual(right ?? new List<string>()),
+                tools => tools.Aggregate(0, (hash, tool) => HashCode.Combine(hash, tool.GetHashCode())),
+                tools => tools.ToList()));
         });
     }
 }
