@@ -11,6 +11,7 @@ ativar/desativar) não é coberto aqui.
 ## Índice
 
 - [O endpoint](#o-endpoint)
+- [Descoberta do agente via AgentCard](#descoberta-do-agente-via-agentcard)
 - [A regra mais importante: erro não é HTTP 4xx/5xx](#a-regra-mais-importante-erro-não-é-http-4xx5xx)
 - [Método `SendMessage`](#método-sendmessage)
 - [Método `GetTask`](#método-gettask)
@@ -48,7 +49,59 @@ Este endpoint implementa o protocolo [A2A](https://a2a-protocol.org/latest/)
 na íntegra (é a SDK oficial `A2A.AspNetCore` quem expõe a rota), mas o
 Buteco Agents só dá suporte real a dois métodos: **`SendMessage`** e
 **`GetTask`**. Outros métodos do protocolo (streaming, cancelamento, listar
-tasks, push notification) não fazem parte do contrato suportado — não use.
+tasks, push notification, **`GetExtendedAgentCard`**) não fazem parte do
+contrato suportado — não use. Para descobrir metadados do agente, use o
+endpoint HTTP dedicado abaixo, não `GetExtendedAgentCard` via JSON-RPC.
+
+## Descoberta do agente via AgentCard
+
+```
+GET /agents/{id}/.well-known/agent-card.json
+```
+
+Retorna o [`AgentCard`](https://a2a-protocol.org/latest/) do agente — nome,
+descrição, skills e capacidades — para um cliente A2A decidir se/como
+invocar o agente **antes** de enviar a primeira mensagem. Sempre `200 OK`
+com o card se `{id}` corresponde a um agente cadastrado, **mesmo que o
+agente esteja inativo ou sem `provider`/`model` configurados** — descoberta
+de metadado é independente de garantia de execução (o `SendMessage` para um
+agente nesse estado ainda seria rejeitado, ver
+[Estados da Task](#estados-da-task-e-como-tratar-cada-um)). Só `404` quando
+`{id}` não corresponde a nenhum agente.
+
+O card reflete o estado atual do agente a cada requisição — sem cache. Uma
+edição via `PUT /agents/{id}` (nome, descrição, skills) aparece na próxima
+consulta ao card, sem exigir reinício de nada.
+
+### Exemplo de resposta
+
+```bash
+curl http://localhost:5017/agents/<agentId>/.well-known/agent-card.json
+```
+
+```json
+{
+  "name": "Atendente de Suporte",
+  "description": "Responde dúvidas de clientes.",
+  "version": "1.0.0",
+  "supportedInterfaces": [
+    { "url": "http://localhost:5017/agents/<agentId>/a2a", "protocolBinding": "JSONRPC", "protocolVersion": "1.0" }
+  ],
+  "capabilities": { "streaming": false, "pushNotifications": false },
+  "skills": [
+    { "id": "consulta-cep", "name": "Consulta CEP", "description": "Consulta endereço a partir do CEP.", "tags": [] }
+  ],
+  "defaultInputModes": ["text/plain"],
+  "defaultOutputModes": ["text/plain"]
+}
+```
+
+`capabilities.streaming` e `capabilities.pushNotifications` são sempre
+`false` — nenhum dos dois é suportado por este sistema (ver seção anterior).
+`skills[].id` é gerado a partir do nome da skill (slug determinístico) e é
+estável entre chamadas, mas **não** é validado como único no cadastro do
+agente — duas skills com nomes que gerem o mesmo slug recebem um sufixo
+numérico para permanecerem distintas.
 
 ## A regra mais importante: erro não é HTTP 4xx/5xx
 

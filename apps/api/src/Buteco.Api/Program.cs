@@ -22,6 +22,7 @@ builder.Services.AddMediator(options => options.ServiceLifetime = ServiceLifetim
 
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
 builder.Services.Configure<McpCryptoOptions>(builder.Configuration.GetSection(McpCryptoOptions.SectionName));
+builder.Services.Configure<PublicUrlOptions>(builder.Configuration.GetSection(PublicUrlOptions.SectionName));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
 builder.Services.AddSingleton<ProviderCatalogService>();
@@ -47,6 +48,7 @@ app.MapProviderEndpoints();
 app.MapMcpServerEndpoints();
 app.MapAgentMcpBindingEndpoints();
 app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a");
+app.MapAgentCardEndpoint();
 
 app.Run();
 
