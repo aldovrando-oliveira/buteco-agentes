@@ -17,19 +17,6 @@ public sealed class McpConnectionTester(IHttpClientFactory httpClientFactory) : 
 {
     public const string HttpClientName = "McpConnectionTester";
 
-    // "2025-11-25" é a última revisão do protocolo MCP que ainda usa o
-    // handshake `initialize` clássico (a revisão seguinte, 2026-07-28,
-    // substituiu isso por um mecanismo de metadata por-requisição). Fixar
-    // essa versão força o SDK a sempre fazer o handshake `initialize` de
-    // forma determinística — documentado pelo próprio SDK como o efeito de
-    // configurar McpClientOptions.ProtocolVersion para uma versão que ainda
-    // suporta sessões Streamable HTTP — em vez de primeiro sondar a versão
-    // mais nova (`server/discover`) e só cair para `initialize` se o
-    // servidor não suportar. Adequado aqui porque este teste é uma
-    // verificação pontual de conectividade/credencial, não uma sessão
-    // MCP de longa duração que precisaria da revisão mais recente.
-    private const string InitializeHandshakeProtocolVersion = "2025-11-25";
-
     public async Task<McpConnectionTestResult> TestAsync(string url, McpServerAuthType authType, string? credential, CancellationToken cancellationToken)
     {
         await using var transport = BuildTransport(url, authType, credential);
@@ -104,8 +91,19 @@ public sealed class McpConnectionTester(IHttpClientFactory httpClientFactory) : 
         return new HttpClientTransport(transportOptions, httpClient, ownsHttpClient: false);
     }
 
-    private static McpClientOptions BuildClientOptions() => new()
-    {
-        ProtocolVersion = InitializeHandshakeProtocolVersion,
-    };
+    // Bug em produção: fixar McpClientOptions.ProtocolVersion (ex.:
+    // "2025-11-25") faz o SDK pedir exatamente essa versão e recusar
+    // downgrade — documentado pelo próprio SDK: "the client requests
+    // exactly this version and refuses to downgrade below it, throwing an
+    // McpException instead of falling back". Servidores MCP reais e
+    // amplamente usados ainda falam revisões mais antigas (ex.:
+    // "2025-06-18"), então fixar qualquer versão única rejeita, na prática,
+    // qualquer servidor de terceiros que não fale exatamente essa versão —
+    // inviável para testar/conectar a um McpServer arbitrário cuja versão
+    // de protocolo não se controla. Deixar ProtocolVersion nulo (default)
+    // habilita o fallback automático do próprio SDK: sonda com
+    // `server/discover` (revisão mais nova) e cai para o handshake
+    // `initialize` clássico, negociando a versão que o servidor de fato
+    // oferece, em vez de falhar.
+    private static McpClientOptions BuildClientOptions() => new();
 }

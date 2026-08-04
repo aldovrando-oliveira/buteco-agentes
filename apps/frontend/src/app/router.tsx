@@ -4,6 +4,7 @@ import { AgentListPage } from '../features/agents/pages/AgentListPage';
 import { AgentCreatePage } from '../features/agents/pages/AgentCreatePage';
 import { AgentDetailPage } from '../features/agents/pages/AgentDetailPage';
 import { AgentEditPage } from '../features/agents/pages/AgentEditPage';
+import { AgentMcpServersPage } from '../features/agents/pages/AgentMcpServersPage';
 import { McpServerListPage } from '../features/mcp-servers/pages/McpServerListPage';
 import { McpServerCreatePage } from '../features/mcp-servers/pages/McpServerCreatePage';
 import { McpServerDetailPage } from '../features/mcp-servers/pages/McpServerDetailPage';
@@ -20,6 +21,7 @@ export function AppRouter() {
             <Route path="new" element={<AgentCreatePage />} />
             <Route path=":id" element={<AgentDetailPage />} />
             <Route path=":id/edit" element={<AgentEditPage />} />
+            <Route path=":id/mcp-servers" element={<AgentMcpServersPage />} />
           </Route>
           <Route path="mcp-servers">
             <Route index element={<McpServerListPage />} />

@@ -30,6 +30,29 @@ public class McpConnectionTestEndpointsTests(McpConnectionTestFixture factory) :
     }
 
     [Fact]
+    public async Task TestUnsavedConfig_ServerSpeaksOlderProtocolVersion_ReturnsSuccess()
+    {
+        // Regressão: bug reportado em produção — um servidor MCP real que
+        // fala uma revisão anterior do protocolo (aqui, "2025-06-18", ainda
+        // amplamente usada) falhava com "Server protocol version mismatch"
+        // quando McpClientOptions.ProtocolVersion vinha fixado em
+        // "2025-11-25" (ver McpConnectionTester.BuildClientOptions).
+        factory.McpServerHandler.SimulateUnreachable = false;
+        factory.McpServerHandler.RequiredBearerToken = null;
+        factory.McpServerHandler.InitializeProtocolVersion = "2025-06-18";
+
+        var request = new TestMcpServerConfigRequest("https://mcp.example.com", "None", null);
+        var response = await _client.PostAsJsonAsync("/mcp-servers/test", request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<McpConnectionTestResult>();
+        Assert.True(result!.Success);
+        Assert.Null(result.FailureReason);
+
+        factory.McpServerHandler.InitializeProtocolVersion = "2025-11-25";
+    }
+
+    [Fact]
     public async Task TestUnsavedConfig_HostUnreachable_ReturnsFailureWithHostUnreachableReason()
     {
         factory.McpServerHandler.SimulateUnreachable = true;

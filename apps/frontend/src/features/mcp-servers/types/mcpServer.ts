@@ -35,3 +35,15 @@ export interface McpConnectionTestResult {
   failureReason: McpConnectionTestFailureReason | null;
   message: string | null;
 }
+
+export interface McpServerTool {
+  name: string;
+  description: string;
+}
+
+export interface McpServerToolsResult {
+  success: boolean;
+  tools: McpServerTool[] | null;
+  failureReason: McpConnectionTestFailureReason | null;
+  message: string | null;
+}

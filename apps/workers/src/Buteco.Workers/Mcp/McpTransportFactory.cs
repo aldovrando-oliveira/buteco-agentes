@@ -20,10 +20,6 @@ public sealed class McpTransportFactory(IHttpClientFactory httpClientFactory)
 {
     public const string HttpClientName = "McpToolExecution";
 
-    // Mesmo motivo de McpConnectionTester: força o SDK a sempre fazer o
-    // handshake `initialize` de forma determinística.
-    private const string ProtocolVersion = "2025-11-25";
-
     public HttpClientTransport BuildTransport(string url, McpServerAuthType authType, string? credential, string transportName)
     {
         var transportOptions = new HttpClientTransportOptions
@@ -45,8 +41,17 @@ public sealed class McpTransportFactory(IHttpClientFactory httpClientFactory)
         return new HttpClientTransport(transportOptions, httpClient, ownsHttpClient: false);
     }
 
-    public static McpClientOptions BuildClientOptions() => new()
-    {
-        ProtocolVersion = ProtocolVersion,
-    };
+    // Bug em produção: fixar McpClientOptions.ProtocolVersion (ex.:
+    // "2025-11-25") faz o SDK pedir exatamente essa versão e recusar
+    // downgrade — documentado pelo próprio SDK: "the client requests
+    // exactly this version and refuses to downgrade below it, throwing an
+    // McpException instead of falling back" (ver mesmo comentário em
+    // apps/api/.../McpConnectionTester.cs, não reaproveitado — isolamento
+    // entre apps). Um McpServer real vinculado a um agente pode falar
+    // qualquer revisão suportada (ex.: "2025-06-18"), então fixar uma
+    // versão única quebrava a execução de tool para qualquer servidor que
+    // não falasse exatamente a versão fixada. Deixar ProtocolVersion nulo
+    // habilita o fallback automático do SDK (sonda `server/discover`, cai
+    // para `initialize` negociando a versão real do servidor).
+    public static McpClientOptions BuildClientOptions() => new();
 }

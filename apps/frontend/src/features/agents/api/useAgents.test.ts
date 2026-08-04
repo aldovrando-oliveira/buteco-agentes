@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement, type PropsWithChildren } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useAgentQuery, useAgentsQuery, useCreateAgentMutation } from './useAgents';
+import {
+  useAgentQuery,
+  useAgentsQuery,
+  useCreateAgentMutation,
+  useReplaceAgentMcpServersMutation,
+} from './useAgents';
+import { ApiError } from './agentsApi';
 import type { Agent } from '../types/agent';
 
 const agent: Agent = {
@@ -14,6 +20,7 @@ const agent: Agent = {
   model: 'gpt-5.6-sol',
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
+  mcpServers: [],
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -120,5 +127,82 @@ describe('useCreateAgentMutation', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as { status?: number })?.status).toBe(400);
     expect(queryClient.getQueryData(['agents', agent.id])).toBeUndefined();
+  });
+});
+
+describe('useReplaceAgentMcpServersMutation', () => {
+  it('envia o body envelopado ({ mcpServers: [...] }) e, em sucesso, popula o cache do detalhe e invalida a lista', async () => {
+    const updated: Agent = {
+      ...agent,
+      mcpServers: [{ id: 'mcp-1', name: 'Zendesk MCP', allowedTools: ['read'] }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(updated));
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const { result } = renderHook(() => useReplaceAgentMcpServersMutation(agent.id), {
+      wrapper: Wrapper,
+    });
+
+    result.current.mutate([{ mcpServerId: 'mcp-1', allowedTools: ['read'] }]);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/agents/${agent.id}/mcp-servers`),
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ mcpServers: [{ mcpServerId: 'mcp-1', allowedTools: ['read'] }] }),
+      }),
+    );
+    expect(queryClient.getQueryData(['agents', agent.id])).toEqual(updated);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['agents'] });
+  });
+
+  it('envia mcpServers: [] quando todos os servidores são desmarcados', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(agent));
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useReplaceAgentMcpServersMutation(agent.id), {
+      wrapper: Wrapper,
+    });
+
+    result.current.mutate([]);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/agents/${agent.id}/mcp-servers`),
+      expect.objectContaining({ body: JSON.stringify({ mcpServers: [] }) }),
+    );
+  });
+
+  it('em um 502 (falha de handshake), expõe error.problem.title e error.problem.detail identificando o servidor culpado', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          {
+            title: 'Não foi possível validar as tools do servidor MCP mcp-1.',
+            detail: 'Host inalcançável durante o handshake de validação.',
+            status: 502,
+          },
+          502,
+        ),
+      ),
+    );
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useReplaceAgentMcpServersMutation(agent.id), {
+      wrapper: Wrapper,
+    });
+
+    result.current.mutate([{ mcpServerId: 'mcp-1', allowedTools: ['read'] }]);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    const error = result.current.error as ApiError;
+    expect(error.status).toBe(502);
+    expect(error.problem?.title).toBe('Não foi possível validar as tools do servidor MCP mcp-1.');
+    expect(error.problem?.detail).toBe('Host inalcançável durante o handshake de validação.');
   });
 });

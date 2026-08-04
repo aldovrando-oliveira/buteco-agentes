@@ -14,6 +14,7 @@ const baseAgent: Agent = {
   model: 'gpt-5.6-sol',
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
+  mcpServers: [],
 };
 
 function renderCard(instructions: string) {
@@ -86,5 +87,30 @@ describe('AgentDetailCard', () => {
     renderCard('Instruções curtas.');
 
     expect(screen.queryByText('Precisa de reconfiguração')).not.toBeInTheDocument();
+  });
+
+  it('exibe os nomes dos servidores MCP vinculados no resumo', () => {
+    render(
+      <MantineProvider theme={theme}>
+        <AgentDetailCard
+          agent={{
+            ...baseAgent,
+            mcpServers: [
+              { id: 'a', name: 'Zendesk MCP', allowedTools: ['read'] },
+              { id: 'b', name: 'Slack MCP', allowedTools: [] },
+            ],
+          }}
+        />
+      </MantineProvider>,
+    );
+
+    expect(screen.getByText(/Zendesk MCP/)).toBeInTheDocument();
+    expect(screen.getByText(/Slack MCP/)).toBeInTheDocument();
+  });
+
+  it('indica ausência de vínculo quando nenhum servidor MCP está vinculado', () => {
+    renderCard('Instruções curtas.');
+
+    expect(screen.getByText(/nenhum servidor MCP vinculado/)).toBeInTheDocument();
   });
 });

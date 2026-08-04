@@ -1,3 +1,9 @@
+export interface AgentMcpServerSummary {
+  id: string;
+  name: string;
+  allowedTools: string[];
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -7,6 +13,12 @@ export interface Agent {
   model: string | null;
   createdAt: string;
   updatedAt: string;
+  mcpServers: AgentMcpServerSummary[];
+}
+
+export interface AgentMcpServerBinding {
+  mcpServerId: string;
+  allowedTools: string[];
 }
 
 export interface CreateAgentInput {

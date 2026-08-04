@@ -8,6 +8,7 @@ import {
   useDeactivateMcpServerMutation,
   useMcpServerQuery,
   useMcpServersQuery,
+  useMcpServerToolsQuery,
   useTestSavedMcpServerConnectionMutation,
   useTestUnsavedMcpServerConnectionMutation,
   useUpdateMcpServerMutation,
@@ -267,5 +268,78 @@ describe('useTestSavedMcpServerConnectionMutation', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as { status?: number })?.status).toBe(404);
+  });
+});
+
+describe('useMcpServerToolsQuery', () => {
+  it('não dispara a chamada quando enabled é false', () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        success: true,
+        tools: [{ name: 'read', description: 'Lê dados' }],
+        failureReason: null,
+        message: null,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useMcpServerToolsQuery(mcpServer.id, { enabled: false }), {
+      wrapper: Wrapper,
+    });
+
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('dispara a chamada e retorna as tools quando enabled é true', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          success: true,
+          tools: [{ name: 'read', description: 'Lê dados' }],
+          failureReason: null,
+          message: null,
+        }),
+      ),
+    );
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useMcpServerToolsQuery(mcpServer.id, { enabled: true }), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({
+      success: true,
+      tools: [{ name: 'read', description: 'Lê dados' }],
+      failureReason: null,
+      message: null,
+    });
+  });
+
+  it('expõe success: false como dado normal, não como isError, quando a descoberta falha', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          success: false,
+          tools: null,
+          failureReason: 'HostUnreachable',
+          message: 'Não foi possível conectar ao host informado.',
+        }),
+      ),
+    );
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useMcpServerToolsQuery(mcpServer.id, { enabled: true }), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.isError).toBe(false);
+    expect(result.current.data?.success).toBe(false);
+    expect(result.current.data?.message).toBe('Não foi possível conectar ao host informado.');
   });
 });

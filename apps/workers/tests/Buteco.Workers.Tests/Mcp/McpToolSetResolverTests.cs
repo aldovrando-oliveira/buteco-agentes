@@ -43,7 +43,37 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
         await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
 
         var tool = Assert.Single(toolSet.Tools);
-        Assert.Equal("Servidor A__search", tool.Name);
+        Assert.Equal("Servidor_A__search", tool.Name);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_McpServerSpeaksOlderProtocolVersion_ToolIsStillResolved()
+    {
+        // Regressão: bug reportado em produção — um McpServer real que fala
+        // uma revisão anterior do protocolo (aqui, "2025-06-18", ainda
+        // amplamente usada) fazia a resolução de tools falhar com
+        // "Server protocol version mismatch" quando McpClientOptions
+        // .ProtocolVersion vinha fixado em "2025-11-25" (ver
+        // McpTransportFactory.BuildClientOptions) — degradaria o servidor
+        // inteiro para fora do conjunto de tools de toda execução do agente.
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+        var serverUrl = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(serverUrl, new FakeMcpServerConfig
+        {
+            AvailableTools = [new FakeMcpTool("search")],
+            InitializeProtocolVersion = "2025-06-18",
+        });
+
+        var mcpServerId = await SeedMcpServerAsync("Servidor A", serverUrl);
+        await SeedAgentMcpServerAsync(agentId, mcpServerId, ["search"]);
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        var tool = Assert.Single(toolSet.Tools);
+        Assert.Equal("Servidor_A__search", tool.Name);
     }
 
     [Fact]
@@ -88,7 +118,7 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
         await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
 
         var tool = Assert.Single(toolSet.Tools);
-        Assert.Equal("Servidor A__search", tool.Name);
+        Assert.Equal("Servidor_A__search", tool.Name);
     }
 
     [Fact]
@@ -171,7 +201,7 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
         await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
 
         var tool = Assert.Single(toolSet.Tools);
-        Assert.Equal("Servidor Alcançável__search", tool.Name);
+        Assert.Equal("Servidor_Alcan__vel__search", tool.Name);
     }
 
     [Fact]
@@ -222,7 +252,7 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
         await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
 
         var tool = Assert.Single(toolSet.Tools);
-        Assert.Equal("Servidor OK__search", tool.Name);
+        Assert.Equal("Servidor_OK__search", tool.Name);
         Assert.Equal(0, handler.CountRequests(badCredentialUrl, "initialize"));
     }
 
@@ -254,11 +284,11 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
         await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
 
         Assert.Equal(2, toolSet.Tools.Count);
-        Assert.Contains(toolSet.Tools, tool => tool.Name == "Servidor A__search");
-        Assert.Contains(toolSet.Tools, tool => tool.Name == "Servidor B__search");
+        Assert.Contains(toolSet.Tools, tool => tool.Name == "Servidor_A__search");
+        Assert.Contains(toolSet.Tools, tool => tool.Name == "Servidor_B__search");
 
-        var toolA = Assert.IsAssignableFrom<AIFunction>(toolSet.Tools.Single(tool => tool.Name == "Servidor A__search"));
-        var toolB = Assert.IsAssignableFrom<AIFunction>(toolSet.Tools.Single(tool => tool.Name == "Servidor B__search"));
+        var toolA = Assert.IsAssignableFrom<AIFunction>(toolSet.Tools.Single(tool => tool.Name == "Servidor_A__search"));
+        var toolB = Assert.IsAssignableFrom<AIFunction>(toolSet.Tools.Single(tool => tool.Name == "Servidor_B__search"));
 
         var resultA = await toolA.InvokeAsync(new AIFunctionArguments(), CancellationToken.None);
         var resultB = await toolB.InvokeAsync(new AIFunctionArguments(), CancellationToken.None);
@@ -267,6 +297,57 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
         // do nome original idêntico ("search") nos dois.
         Assert.Contains("resultado do servidor A", resultA?.ToString());
         Assert.Contains("resultado do servidor B", resultB?.ToString());
+    }
+
+    [Fact]
+    public async Task ResolveAsync_McpServerNameWithSpace_IsSanitizedToValidProviderFunctionName()
+    {
+        // Regressão: bug reportado em produção — um McpServer chamado
+        // "Zendesk MCP" (espaço, nome cadastrado livremente via apps/api)
+        // fazia toda chamada ao Gemini falhar com
+        // "Invalid function name" (function_declarations[i].name), porque o
+        // espaço não sanitizado ia parar direto no nome exposto ao LLM.
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+        var serverUrl = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(serverUrl, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("read")] });
+
+        var mcpServerId = await SeedMcpServerAsync("Zendesk MCP", serverUrl);
+        await SeedAgentMcpServerAsync(agentId, mcpServerId, ["read"]);
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        var tool = Assert.Single(toolSet.Tools);
+        Assert.Equal("Zendesk_MCP__read", tool.Name);
+    }
+
+    [Theory]
+    [InlineData("Slack: Support & Ops")]
+    [InlineData("123 API")]
+    [InlineData("Servidor Alcançável")]
+    public async Task ResolveAsync_McpServerNameWithCharactersOutsideSafeCharset_ProducesNameValidForAllSupportedProviders(
+        string serverName)
+    {
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+        var serverUrl = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(serverUrl, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("run")] });
+
+        var mcpServerId = await SeedMcpServerAsync(serverName, serverUrl);
+        await SeedAgentMcpServerAsync(agentId, mcpServerId, ["run"]);
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        var tool = Assert.Single(toolSet.Tools);
+        // Interseção das regras de nome de function/tool dos três provedores
+        // suportados (ChatClientResolver: OpenAI, Anthropic, Gemini) — a
+        // OpenAI é a mais restritiva: só [a-zA-Z0-9_-], começando por
+        // letra/underscore, máximo 64 caracteres.
+        Assert.Matches("^[A-Za-z_][A-Za-z0-9_-]{0,63}$", tool.Name);
     }
 
     [Fact]

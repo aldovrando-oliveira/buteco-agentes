@@ -2,6 +2,7 @@ import type {
   CreateMcpServerInput,
   McpConnectionTestResult,
   McpServer,
+  McpServerToolsResult,
   TestMcpServerConfigInput,
   UpdateMcpServerInput,
 } from '../types/mcpServer';
@@ -90,4 +91,8 @@ export function testUnsavedMcpServerConnection(
 
 export function testSavedMcpServerConnection(id: string): Promise<McpConnectionTestResult> {
   return request<McpConnectionTestResult>(`/mcp-servers/${id}/test`, { method: 'POST' });
+}
+
+export function listMcpServerTools(id: string): Promise<McpServerToolsResult> {
+  return request<McpServerToolsResult>(`/mcp-servers/${id}/tools`);
 }

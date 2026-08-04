@@ -1,7 +1,8 @@
-import type { Agent, CreateAgentInput, UpdateAgentInput } from '../types/agent';
+import type { Agent, AgentMcpServerBinding, CreateAgentInput, UpdateAgentInput } from '../types/agent';
 
 export interface ValidationProblemDetails {
   title?: string;
+  detail?: string;
   status?: number;
   errors?: Record<string, string[]>;
 }
@@ -75,4 +76,14 @@ export function activateAgent(id: string): Promise<Agent> {
 
 export function deactivateAgent(id: string): Promise<Agent> {
   return request<Agent>(`/agents/${id}/deactivate`, { method: 'POST' });
+}
+
+export function replaceAgentMcpServers(
+  agentId: string,
+  bindings: AgentMcpServerBinding[],
+): Promise<Agent> {
+  return request<Agent>(`/agents/${agentId}/mcp-servers`, {
+    method: 'PUT',
+    body: JSON.stringify({ mcpServers: bindings }),
+  });
 }

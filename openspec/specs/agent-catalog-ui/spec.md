@@ -112,25 +112,28 @@ O sistema SHALL prover, em `apps/frontend`, uma página que exibe os dados
 completos de um agente consumindo `GET /agents/{id}`, incluindo seu estado
 (`isActive`), o provider e o model configurados, um indicador de que o
 agente precisa de reconfiguração quando o provider ou o model estão
-ausentes, com um link para editar o agente e uma ação para ativá-lo ou
-desativá-lo. O bloco com o link de edição e a ação de ativar/desativar
-SHALL ser exibido antes, na ordem do documento, dos dados do agente (nome,
-instruções, datas de criação e atualização). O campo de instruções SHALL
-ser renderizado interpretando sua sintaxe markdown (títulos, listas,
-negrito, tabelas, texto riscado, `---` como separador) como formatação
-real, dentro de um container que usa o espaço vertical disponível da
-viewport (sem exceder esse espaço) e que nunca fica menor que uma altura
-mínima utilizável, com rolagem interna própria quando o conteúdo excede o
-espaço disponível — de forma que um conteúdo de instruções longo não faça
-a página inteira crescer indefinidamente, nem fique menor do que o
-necessário para ser lido confortavelmente.
+ausentes, um resumo dos servidores MCP vinculados ao agente
+(`agent.mcpServers`), com um link para editar o agente, um link para a
+página de gestão do vínculo com servidores MCP (`/agents/{id}/mcp-servers`)
+e uma ação para ativá-lo ou desativá-lo. O bloco com o link de edição e a
+ação de ativar/desativar SHALL ser exibido antes, na ordem do documento,
+dos dados do agente (nome, instruções, datas de criação e atualização). O
+campo de instruções SHALL ser renderizado interpretando sua sintaxe
+markdown (títulos, listas, negrito, tabelas, texto riscado, `---` como
+separador) como formatação real, dentro de um container que usa o espaço
+vertical disponível da viewport (sem exceder esse espaço) e que nunca fica
+menor que uma altura mínima utilizável, com rolagem interna própria quando
+o conteúdo excede o espaço disponível — de forma que um conteúdo de
+instruções longo não faça a página inteira crescer indefinidamente, nem
+fique menor do que o necessário para ser lido confortavelmente.
 
 #### Scenario: Detalhe carregado com sucesso
 - **WHEN** o usuário acessa a página de detalhe de um agente existente
 - **THEN** a interface exibe nome, instruções, as datas de criação e
   atualização, um indicador do estado (`isActive`) do agente, o provider e
-  o model configurados, um link para editar o agente e uma ação para
-  ativá-lo ou desativá-lo
+  o model configurados, um resumo dos servidores MCP vinculados, um link
+  para editar o agente, um link para a página de gestão do vínculo com
+  servidores MCP e uma ação para ativá-lo ou desativá-lo
 
 #### Scenario: Agente inexistente
 - **WHEN** o usuário acessa a página de detalhe de um id que não
@@ -184,6 +187,21 @@ necessário para ser lido confortavelmente.
 #### Scenario: Indicador de reconfiguração ausente quando provider e model configurados
 - **WHEN** o agente exibido tem `provider` e `model` preenchidos
 - **THEN** a interface não exibe o indicador de reconfiguração
+
+#### Scenario: Resumo lista os nomes dos servidores MCP vinculados
+- **WHEN** o agente exibido tem um ou mais servidores em `mcpServers`
+- **THEN** a interface exibe o nome de cada servidor MCP vinculado no
+  resumo da página de detalhe
+
+#### Scenario: Resumo indica ausência de vínculo quando nenhum servidor MCP está vinculado
+- **WHEN** o agente exibido tem `mcpServers` vazio
+- **THEN** a interface exibe uma indicação de que nenhum servidor MCP está
+  vinculado, em vez de uma lista vazia sem explicação
+
+#### Scenario: Link para a página de gestão do vínculo sempre presente
+- **WHEN** a página de detalhe de um agente é renderizada, com ou sem
+  servidores MCP vinculados
+- **THEN** a interface exibe um link para `/agents/{id}/mcp-servers`
 
 ### Requirement: Edição de agente pela interface
 O sistema SHALL prover, em `apps/frontend`, um formulário para editar o

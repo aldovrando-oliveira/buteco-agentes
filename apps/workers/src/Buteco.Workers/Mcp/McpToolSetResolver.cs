@@ -1,3 +1,4 @@
+using System.Text;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp.Entities;
 using Buteco.Workers.Mcp.Security;
@@ -17,6 +18,20 @@ public sealed class McpToolSetResolver(
     // incondicionalmente a toda tool resolvida, não só quando uma colisão é
     // detectada entre servidores diferentes vinculados ao mesmo agente.
     private const string ToolNameSeparator = "__";
+
+    // Bug em produção: McpServer.Name é texto livre (sem validação de
+    // formato em apps/api) e alimentava sem sanitização o nome exposto ao
+    // LLM via WithName — um nome como "Zendesk MCP" (com espaço) violava a
+    // regra de nome de function declaration do Gemini
+    // ("^[a-zA-Z_][a-zA-Z0-9_.:-]{0,127}$") e a chamada falhava 100% das
+    // vezes para qualquer McpServer com caractere fora desse conjunto no
+    // nome. O resolver não sabe qual provedor o agente usa (Decision 7 do
+    // design.md da change backend-multi-provedor-llm resolve o
+    // IChatClient só depois, em ChatClientResolver), então o nome
+    // sanitizado precisa satisfazer o mais restritivo dos três provedores
+    // suportados incondicionalmente — que é a OpenAI: só
+    // [a-zA-Z0-9_-], máximo 64 caracteres.
+    private const int MaxToolNameLength = 64;
 
     public async Task<McpToolSet> ResolveAsync(AppDbContext dbContext, Guid agentId, CancellationToken cancellationToken)
     {
@@ -80,7 +95,7 @@ public sealed class McpToolSetResolver(
                     // tratamento especial (design.md, Decision 2).
                     if (allowedToolNames.Contains(tool.Name))
                     {
-                        tools.Add(tool.WithName($"{server.Name}{ToolNameSeparator}{tool.Name}"));
+                        tools.Add(tool.WithName(BuildSafeToolName(server.Name, tool.Name)));
                     }
                 }
             }
@@ -95,5 +110,24 @@ public sealed class McpToolSetResolver(
         }
 
         return new McpToolSet(tools, connections);
+    }
+
+    private static string BuildSafeToolName(string serverName, string toolName)
+    {
+        var composite = $"{serverName}{ToolNameSeparator}{toolName}";
+        var sanitized = new StringBuilder(composite.Length);
+        foreach (var character in composite)
+        {
+            sanitized.Append(char.IsAsciiLetterOrDigit(character) || character is '_' or '-' ? character : '_');
+        }
+
+        if (sanitized.Length == 0 || !(char.IsAsciiLetter(sanitized[0]) || sanitized[0] == '_'))
+        {
+            sanitized.Insert(0, '_');
+        }
+
+        return sanitized.Length > MaxToolNameLength
+            ? sanitized.ToString(0, MaxToolNameLength)
+            : sanitized.ToString();
     }
 }

@@ -5,9 +5,10 @@ import {
   deactivateAgent,
   getAgent,
   listAgents,
+  replaceAgentMcpServers,
   updateAgent,
 } from './agentsApi';
-import type { Agent, CreateAgentInput, UpdateAgentInput } from '../types/agent';
+import type { Agent, AgentMcpServerBinding, CreateAgentInput, UpdateAgentInput } from '../types/agent';
 
 export function useAgentsQuery() {
   return useQuery({ queryKey: ['agents'], queryFn: listAgents });
@@ -58,6 +59,18 @@ export function useDeactivateAgentMutation() {
 
   return useMutation({
     mutationFn: (id: string) => deactivateAgent(id),
+    onSuccess: (updated: Agent) => {
+      queryClient.setQueryData(['agents', updated.id], updated);
+      void queryClient.invalidateQueries({ queryKey: ['agents'] });
+    },
+  });
+}
+
+export function useReplaceAgentMcpServersMutation(agentId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bindings: AgentMcpServerBinding[]) => replaceAgentMcpServers(agentId, bindings),
     onSuccess: (updated: Agent) => {
       queryClient.setQueryData(['agents', updated.id], updated);
       void queryClient.invalidateQueries({ queryKey: ['agents'] });

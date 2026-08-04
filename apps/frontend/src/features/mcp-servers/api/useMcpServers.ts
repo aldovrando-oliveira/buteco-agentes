@@ -5,6 +5,7 @@ import {
   deactivateMcpServer,
   getMcpServer,
   listMcpServers,
+  listMcpServerTools,
   testSavedMcpServerConnection,
   testUnsavedMcpServerConnection,
   updateMcpServer,
@@ -82,5 +83,17 @@ export function useTestUnsavedMcpServerConnectionMutation() {
 export function useTestSavedMcpServerConnectionMutation() {
   return useMutation({
     mutationFn: (id: string) => testSavedMcpServerConnection(id),
+  });
+}
+
+export function useMcpServerToolsQuery(mcpServerId: string, options: { enabled: boolean }) {
+  return useQuery({
+    queryKey: ['mcp-servers', mcpServerId, 'tools'],
+    queryFn: () => listMcpServerTools(mcpServerId),
+    enabled: options.enabled,
+    // Decision 3 do design.md: sem isso, reabrir um servidor já descoberto
+    // dispararia um refetch em background (staleTime padrão é 0). O
+    // resultado só deve mudar via retry manual (refetch()).
+    staleTime: Infinity,
   });
 }

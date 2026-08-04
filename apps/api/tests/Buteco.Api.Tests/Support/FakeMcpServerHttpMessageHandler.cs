@@ -36,6 +36,13 @@ public sealed class FakeMcpServerHttpMessageHandler : HttpMessageHandler
 
     public IReadOnlyList<FakeMcpTool> AvailableTools { get; set; } = [];
 
+    // Configurável para reproduzir servidores MCP reais que falam uma
+    // revisão de protocolo diferente da mais recente (ex.: "2025-06-18") —
+    // regressão do bug em que McpClientOptions.ProtocolVersion fixo fazia o
+    // SDK rejeitar qualquer servidor que não respondesse com essa versão
+    // exata (ver McpConnectionTester.BuildClientOptions).
+    public string InitializeProtocolVersion { get; set; } = "2025-11-25";
+
     public int RequestCount { get; private set; }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -64,11 +71,27 @@ public sealed class FakeMcpServerHttpMessageHandler : HttpMessageHandler
         var root = document.RootElement;
         var method = root.TryGetProperty("method", out var methodProperty) ? methodProperty.GetString() : null;
 
+        if (method == "server/discover")
+        {
+            // Simula um servidor que ainda não implementa a revisão
+            // 2026-07-28 do protocolo (a maioria dos servidores MCP reais,
+            // hoje) — erro JSON-RPC "Method not found" padrão, que faz o SDK
+            // cair para o handshake `initialize` clássico (McpClientOptions
+            // .ProtocolVersion nulo, ver McpConnectionTester.BuildClientOptions).
+            var id = root.GetProperty("id").GetRawText();
+            var responseJson = "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":-32601,\"message\":\"Method not found\"}}";
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(responseJson, Encoding.UTF8, "application/json"),
+            };
+        }
+
         if (method == "initialize")
         {
             var id = root.GetProperty("id").GetRawText();
             var responseJson = "{\"jsonrpc\":\"2.0\",\"id\":" + id
-                + ",\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"serverInfo\":{\"name\":\"fake-mcp-server\",\"version\":\"1.0.0\"}}}";
+                + ",\"result\":{\"protocolVersion\":" + JsonSerializer.Serialize(InitializeProtocolVersion) + ",\"capabilities\":{},\"serverInfo\":{\"name\":\"fake-mcp-server\",\"version\":\"1.0.0\"}}}";
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {

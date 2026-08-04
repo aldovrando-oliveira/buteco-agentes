@@ -80,6 +80,9 @@ export function AgentDetailPage() {
         <Button component={Link} to={`/agents/${data.id}/edit`} variant="default">
           Editar
         </Button>
+        <Button component={Link} to={`/agents/${data.id}/mcp-servers`} variant="default">
+          Gerenciar servidores MCP
+        </Button>
         {data.isActive ? (
           <Button color="red" variant="outline" onClick={openConfirm}>
             Desativar

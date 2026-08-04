@@ -25,6 +25,12 @@ export function AgentDetailCard({ agent }: AgentDetailCardProps) {
         <Text size="sm" c="dimmed">
           Provider: {agent.provider ?? '—'} · Model: {agent.model ?? '—'}
         </Text>
+        <Text size="sm" c="dimmed">
+          Servidores MCP vinculados:{' '}
+          {agent.mcpServers.length > 0
+            ? agent.mcpServers.map((mcpServer) => mcpServer.name).join(', ')
+            : 'nenhum servidor MCP vinculado'}
+        </Text>
         <ScrollArea h="calc(100vh - 320px)" mih={220} data-testid="instructions-scroll-area">
           <Typography>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{agent.instructions}</ReactMarkdown>

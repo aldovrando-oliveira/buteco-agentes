@@ -34,6 +34,7 @@ const activeAgent: Agent = {
   model: 'gpt-5.6-sol',
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
+  mcpServers: [],
 };
 
 const inactiveAgent: Agent = { ...activeAgent, isActive: false };
@@ -75,6 +76,16 @@ describe('AgentDetailPage', () => {
     );
     expect(screen.getByRole('button', { name: /desativar/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^ativar$/i })).not.toBeInTheDocument();
+  });
+
+  it('exibe o link para a página de gestão de servidores MCP', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+    renderPage(activeAgent.id);
+
+    expect(
+      await screen.findByRole('link', { name: /gerenciar servidores mcp/i }),
+    ).toHaveAttribute('href', `/agents/${activeAgent.id}/mcp-servers`);
   });
 
   it('exibe o bloco de ações (Editar, Ativar/Desativar) antes dos dados do agente na ordem do DOM', async () => {
