@@ -2,6 +2,7 @@ using Buteco.Api.Agents.Commands.ActivateAgent;
 using Buteco.Api.Agents.Commands.CreateAgent;
 using Buteco.Api.Agents.Commands.DeactivateAgent;
 using Buteco.Api.Agents.Commands.UpdateAgent;
+using Buteco.Api.Agents.Entities;
 using Buteco.Api.Agents.Queries.GetAgentById;
 using Buteco.Api.Agents.Queries.ListAgents;
 using Buteco.Api.Agents.Requests;
@@ -33,13 +34,13 @@ public static class AgentEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var shapeErrors = ValidateShape(request.Name, request.Instructions, request.Provider, request.Model);
+        var shapeErrors = ValidateShape(request.Name, request.Instructions, request.Provider, request.Model, request.Skills);
         if (shapeErrors is not null)
         {
             return TypedResults.ValidationProblem(shapeErrors);
         }
 
-        var command = new CreateAgentCommand(request.Name!, request.Instructions!, request.Provider!, request.Model!);
+        var command = new CreateAgentCommand(request.Name!, request.Instructions!, request.Provider!, request.Model!, request.Description, ToSkills(request.Skills));
         var result = await mediator.Send(command, cancellationToken);
 
         return result.Validation switch
@@ -76,13 +77,13 @@ public static class AgentEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var shapeErrors = ValidateShape(request.Name, request.Instructions, request.Provider, request.Model);
+        var shapeErrors = ValidateShape(request.Name, request.Instructions, request.Provider, request.Model, request.Skills);
         if (shapeErrors is not null)
         {
             return TypedResults.ValidationProblem(shapeErrors);
         }
 
-        var command = new UpdateAgentCommand(id, request.Name!, request.Instructions!, request.Provider!, request.Model!);
+        var command = new UpdateAgentCommand(id, request.Name!, request.Instructions!, request.Provider!, request.Model!, request.Description, ToSkills(request.Skills));
         var result = await mediator.Send(command, cancellationToken);
 
         if (!result.Found)
@@ -97,7 +98,12 @@ public static class AgentEndpoints
         };
     }
 
-    private static Dictionary<string, string[]>? ValidateShape(string? name, string? instructions, string? provider, string? model)
+    private static Dictionary<string, string[]>? ValidateShape(
+        string? name,
+        string? instructions,
+        string? provider,
+        string? model,
+        IReadOnlyList<SkillRequest>? skills)
     {
         var errors = new Dictionary<string, string[]>();
 
@@ -121,8 +127,22 @@ public static class AgentEndpoints
             errors["model"] = ["O modelo do agente é obrigatório."];
         }
 
+        if (skills is not null)
+        {
+            for (var index = 0; index < skills.Count; index++)
+            {
+                if (string.IsNullOrWhiteSpace(skills[index].Name))
+                {
+                    errors[$"skills[{index}].name"] = ["O nome da skill é obrigatório."];
+                }
+            }
+        }
+
         return errors.Count > 0 ? errors : null;
     }
+
+    private static IReadOnlyList<Skill> ToSkills(IReadOnlyList<SkillRequest>? skills) =>
+        skills?.Select(skill => new Skill(skill.Name!, skill.Description)).ToList() ?? [];
 
     private static Dictionary<string, string[]> BuildProviderValidationErrors(ProviderValidationOutcome validation) => validation switch
     {

@@ -1,5 +1,6 @@
 using Buteco.Api.A2A;
 using Buteco.Api.Agents.Commands.CreateAgent;
+using Buteco.Api.Agents.Entities;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Providers;
 using Microsoft.EntityFrameworkCore;
@@ -38,7 +39,7 @@ public class CreateAgentCommandHandlerTests
         var registryMock = new Mock<IAgentA2AServerRegistry>();
         var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService());
 
-        var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", Provider, Model);
+        var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", Provider, Model, null, []);
 
         var result = await handler.Handle(command, CancellationToken.None);
 
@@ -64,7 +65,7 @@ public class CreateAgentCommandHandlerTests
         var registryMock = new Mock<IAgentA2AServerRegistry>();
         var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService());
 
-        var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", "anthropic", "claude-opus-5");
+        var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", "anthropic", "claude-opus-5", null, []);
 
         var result = await handler.Handle(command, CancellationToken.None);
 
@@ -72,5 +73,47 @@ public class CreateAgentCommandHandlerTests
         Assert.Null(result.Agent);
         Assert.False(await dbContext.Agents.AnyAsync());
         registryMock.Verify(registry => registry.Register(It.IsAny<Guid>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Handle_WithDescriptionAndSkills_PersistsThem()
+    {
+        await using var dbContext = CreateInMemoryDbContext();
+        var registryMock = new Mock<IAgentA2AServerRegistry>();
+        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService());
+
+        var skills = new List<Skill> { new("Atendimento", "Responde dúvidas de clientes"), new("Vendas", null) };
+        var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", Provider, Model, "Agente de atendimento geral.", skills);
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        Assert.Equal(ProviderValidationOutcome.Valid, result.Validation);
+        var response = result.Agent!;
+        Assert.Equal("Agente de atendimento geral.", response.Description);
+        Assert.Equal(skills.Select(skill => skill.Name), response.Skills.Select(skill => skill.Name));
+
+        var persisted = await dbContext.Agents.AsNoTracking().SingleAsync(agent => agent.Id == response.Id);
+        Assert.Equal("Agente de atendimento geral.", persisted.Description);
+        Assert.Equal(skills, persisted.Skills);
+    }
+
+    [Fact]
+    public async Task Handle_WithoutDescriptionOrSkills_UsesDefaults()
+    {
+        await using var dbContext = CreateInMemoryDbContext();
+        var registryMock = new Mock<IAgentA2AServerRegistry>();
+        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService());
+
+        var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", Provider, Model, null, []);
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        var response = result.Agent!;
+        Assert.Null(response.Description);
+        Assert.Empty(response.Skills);
+
+        var persisted = await dbContext.Agents.AsNoTracking().SingleAsync(agent => agent.Id == response.Id);
+        Assert.Null(persisted.Description);
+        Assert.Empty(persisted.Skills);
     }
 }

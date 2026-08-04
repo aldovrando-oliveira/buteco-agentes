@@ -1,10 +1,4 @@
-# agent-catalog Specification
-
-## Purpose
-
-TBD - defined by change backend-agente-a2a-mvp. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Cadastro de agente
 O sistema SHALL permitir, via `apps/api`, cadastrar um agente informando
@@ -201,48 +195,3 @@ persistido (replace completo, sem merge).
   `skills` cujo `name` é vazio ou ausente
 - **THEN** a API responde com erro de validação (HTTP 400) identificando
   o item inválido e não altera o registro existente
-
-### Requirement: Ativação e desativação de agente
-O sistema SHALL permitir, via `apps/api`, ativar e desativar um agente
-cadastrado por meio de um campo de estado (`isActive`), sem excluir o
-registro do agente (nem exclusão definitiva, nem soft delete). As
-operações SHALL ser idempotentes.
-
-#### Scenario: Desativar agente ativo
-- **WHEN** um cliente envia `POST /agents/{id}/deactivate` para um agente
-  atualmente ativo
-- **THEN** a API responde com HTTP 200 e o agente atualizado com
-  `isActive: false`
-
-#### Scenario: Desativar agente já inativo é idempotente
-- **WHEN** um cliente envia `POST /agents/{id}/deactivate` para um agente
-  que já está `isActive: false`
-- **THEN** a API responde com HTTP 200 e o agente com `isActive: false`,
-  sem erro
-
-#### Scenario: Ativar agente inativo
-- **WHEN** um cliente envia `POST /agents/{id}/activate` para um agente
-  atualmente inativo
-- **THEN** a API responde com HTTP 200 e o agente atualizado com
-  `isActive: true`
-
-#### Scenario: Ativar agente já ativo é idempotente
-- **WHEN** um cliente envia `POST /agents/{id}/activate` para um agente
-  que já está `isActive: true`
-- **THEN** a API responde com HTTP 200 e o agente com `isActive: true`,
-  sem erro
-
-#### Scenario: Ativar ou desativar agente inexistente retorna 404
-- **WHEN** um cliente envia `POST /agents/{id}/activate` ou
-  `POST /agents/{id}/deactivate` para um id que não existe
-- **THEN** a API responde com HTTP 404
-
-### Requirement: Persistência durável do catálogo de agentes
-O sistema SHALL persistir o catálogo de agentes em PostgreSQL, sem uso de
-armazenamento em memória, garantindo que os dados sobrevivam a reinícios da
-aplicação.
-
-#### Scenario: Agente cadastrado sobrevive a restart da API
-- **WHEN** um agente é cadastrado e o processo de `apps/api` é reiniciado
-- **THEN** uma consulta subsequente a `GET /agents/{id}` continua
-  retornando o agente com os mesmos dados

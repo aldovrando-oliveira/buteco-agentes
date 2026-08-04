@@ -20,7 +20,7 @@ public sealed class CreateAgentCommandHandler(
             return CreateAgentResult.Failed(validation);
         }
 
-        var agent = new Agent(command.Name, command.Instructions, command.Provider, command.Model);
+        var agent = new Agent(command.Name, command.Instructions, command.Provider, command.Model, command.Description, command.Skills);
 
         dbContext.Agents.Add(agent);
         await dbContext.SaveChangesAsync(cancellationToken);

@@ -10,10 +10,23 @@ public record AgentResponse(
     bool IsActive,
     string? Provider,
     string? Model,
+    string? Description,
+    IReadOnlyList<SkillResponse> Skills,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<McpServerSummaryResponse> McpServers)
 {
     public static AgentResponse FromEntity(Agent agent, IReadOnlyList<McpServerSummaryResponse> mcpServers) =>
-        new(agent.Id, agent.Name, agent.Instructions, agent.IsActive, agent.Provider, agent.Model, agent.CreatedAt, agent.UpdatedAt, mcpServers);
+        new(
+            agent.Id,
+            agent.Name,
+            agent.Instructions,
+            agent.IsActive,
+            agent.Provider,
+            agent.Model,
+            agent.Description,
+            agent.Skills.Select(SkillResponse.FromEntity).ToList(),
+            agent.CreatedAt,
+            agent.UpdatedAt,
+            mcpServers);
 }

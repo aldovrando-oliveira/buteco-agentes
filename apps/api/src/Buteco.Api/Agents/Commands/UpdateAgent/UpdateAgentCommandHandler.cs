@@ -27,7 +27,7 @@ public sealed class UpdateAgentCommandHandler(
             return UpdateAgentResult.ValidationFailed(validation);
         }
 
-        agent.UpdateDetails(command.Name, command.Instructions, command.Provider, command.Model);
+        agent.UpdateDetails(command.Name, command.Instructions, command.Provider, command.Model, command.Description, command.Skills);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var mcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);

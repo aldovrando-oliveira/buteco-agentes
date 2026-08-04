@@ -45,6 +45,83 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
     }
 
     [Fact]
+    public async Task CreateAgent_WithDescriptionAndSkills_ReturnsThemAsSent()
+    {
+        var skills = new List<SkillRequest> { new("Atendimento", "Responde dúvidas de clientes"), new("Vendas", null) };
+        var request = new CreateAgentRequest("Atendente", "Você é um atendente simpático.", Provider, Model, "Agente de atendimento geral.", skills);
+
+        var response = await _client.PostAsJsonAsync("/agents", request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var agent = await response.Content.ReadFromJsonAsync<AgentResponse>();
+        Assert.Equal("Agente de atendimento geral.", agent!.Description);
+        Assert.Equal(skills.Select(skill => skill.Name), agent.Skills.Select(skill => skill.Name));
+        Assert.Equal(skills.Select(skill => skill.Description), agent.Skills.Select(skill => skill.Description));
+    }
+
+    [Fact]
+    public async Task CreateAgent_WithoutDescriptionOrSkills_UsesDefaults()
+    {
+        var request = new CreateAgentRequest("Atendente", "Você é um atendente simpático.", Provider, Model);
+
+        var response = await _client.PostAsJsonAsync("/agents", request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var agent = await response.Content.ReadFromJsonAsync<AgentResponse>();
+        Assert.Null(agent!.Description);
+        Assert.Empty(agent.Skills);
+    }
+
+    [Fact]
+    public async Task CreateAgent_WithSkillWithoutName_ReturnsValidationProblem()
+    {
+        var skills = new List<SkillRequest> { new(null, "Descrição sem nome") };
+        var request = new CreateAgentRequest("Atendente Skill Inválida", "Você é um atendente simpático.", Provider, Model, null, skills);
+
+        var response = await _client.PostAsJsonAsync("/agents", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var listResponse = await _client.GetAsync("/agents");
+        var agents = await listResponse.Content.ReadFromJsonAsync<List<AgentResponse>>();
+        Assert.DoesNotContain(agents!, agent => agent.Name == "Atendente Skill Inválida");
+    }
+
+    [Fact]
+    public async Task UpdateAgent_ReplacesEntireSkillSet()
+    {
+        var skills = new List<SkillRequest> { new("Atendimento", null) };
+        var createRequest = new CreateAgentRequest("Atendente", "Instruções originais.", Provider, Model, null, skills);
+        var createResponse = await _client.PostAsJsonAsync("/agents", createRequest);
+        var created = await createResponse.Content.ReadFromJsonAsync<AgentResponse>();
+
+        var newSkills = new List<SkillRequest> { new("Vendas", "Fecha negócios"), new("Suporte", null) };
+        var updateRequest = new UpdateAgentRequest("Atendente", "Instruções originais.", Provider, Model, null, newSkills);
+        var updateResponse = await _client.PutAsJsonAsync($"/agents/{created!.Id}", updateRequest);
+
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<AgentResponse>();
+        Assert.Equal(newSkills.Select(skill => skill.Name), updated!.Skills.Select(skill => skill.Name));
+        Assert.DoesNotContain(updated.Skills, skill => skill.Name == "Atendimento");
+    }
+
+    [Fact]
+    public async Task UpdateAgent_WithSkillWithoutName_ReturnsValidationProblem()
+    {
+        var created = await CreateAgentAsync("Atendente", "Instruções originais.");
+
+        var skills = new List<SkillRequest> { new("", "Descrição sem nome") };
+        var request = new UpdateAgentRequest("Atendente", "Instruções originais.", Provider, Model, null, skills);
+        var response = await _client.PutAsJsonAsync($"/agents/{created.Id}", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var getResponse = await _client.GetAsync($"/agents/{created.Id}");
+        var agent = await getResponse.Content.ReadFromJsonAsync<AgentResponse>();
+        Assert.Empty(agent!.Skills);
+    }
+
+    [Fact]
     public async Task ListAgents_IncludesPreviouslyCreatedAgent()
     {
         var request = new CreateAgentRequest("Suporte", "Você resolve dúvidas de suporte.", Provider, Model);
@@ -108,6 +185,32 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
         var legacy = agents!.Single(a => a.Id == legacyAgentId);
         Assert.Null(legacy.Provider);
         Assert.Null(legacy.Model);
+    }
+
+    [Fact]
+    public async Task GetAgentById_LegacyAgentWithoutDescriptionOrSkills_ReturnsNullAndEmptyList()
+    {
+        var legacyAgentId = await SeedLegacyAgentWithoutDescriptionOrSkillsAsync();
+
+        var response = await _client.GetAsync($"/agents/{legacyAgentId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var agent = await response.Content.ReadFromJsonAsync<AgentResponse>();
+        Assert.Null(agent!.Description);
+        Assert.Empty(agent.Skills);
+    }
+
+    [Fact]
+    public async Task ListAgents_IncludesLegacyAgentWithNullDescriptionAndEmptySkills()
+    {
+        var legacyAgentId = await SeedLegacyAgentWithoutDescriptionOrSkillsAsync();
+
+        var response = await _client.GetAsync("/agents");
+
+        var agents = await response.Content.ReadFromJsonAsync<List<AgentResponse>>();
+        var legacy = agents!.Single(a => a.Id == legacyAgentId);
+        Assert.Null(legacy.Description);
+        Assert.Empty(legacy.Skills);
     }
 
     [Fact]
@@ -243,6 +346,32 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
             $"""
              INSERT INTO agents ("Id", "Name", "Instructions", "IsActive", "CreatedAt", "UpdatedAt")
              VALUES ({agentId}, {"Legado"}, {"Instruções legadas."}, {true}, {now}, {now})
+             """);
+
+        return agentId;
+    }
+
+    private async Task<Guid> SeedLegacyAgentWithoutDescriptionOrSkillsAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var agentId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        // Simula um agente cadastrado antes desta capacidade existir — mesmo
+        // estado produzido pela migration AddAgentDescriptionAndSkills para
+        // linhas já existentes (mesma técnica de
+        // SeedLegacyAgentWithoutProviderOrModelAsync): não referencia
+        // "Description"/"skills" no INSERT, deixando o DEFAULT da coluna
+        // preencher. Passa pelo caminho real de serialização
+        // (HasConversion/ValueComparer em AppDbContext) via GET de verdade —
+        // diferente de AgentDescriptionAndSkillsMigrationTests, que cobre só
+        // o schema.
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             INSERT INTO agents ("Id", "Name", "Instructions", "IsActive", "Provider", "Model", "CreatedAt", "UpdatedAt")
+             VALUES ({agentId}, {"Legado Sem Description"}, {"Instruções legadas."}, {true}, {Provider}, {Model}, {now}, {now})
              """);
 
         return agentId;

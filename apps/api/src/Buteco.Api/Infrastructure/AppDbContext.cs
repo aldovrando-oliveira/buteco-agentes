@@ -29,8 +29,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(agent => agent.IsActive).IsRequired().HasDefaultValue(true);
             entity.Property(agent => agent.Provider).IsRequired(false);
             entity.Property(agent => agent.Model).IsRequired(false);
+            entity.Property(agent => agent.Description).IsRequired(false);
             entity.Property(agent => agent.CreatedAt).IsRequired();
             entity.Property(agent => agent.UpdatedAt).IsRequired();
+
+            // Coluna jsonb (Decision 1 do design.md da change
+            // backend-agente-description-skills) — mesmo padrão de
+            // AgentMcpServer.AllowedTools: sem tabela filha, Skill não é um
+            // catálogo relacional persistido em lugar nenhum. ValueComparer
+            // explícito porque IReadOnlyList<Skill> não tem igualdade
+            // estrutural por padrão no change tracking do EF Core (apesar de
+            // Skill em si, como record, ter igualdade estrutural elemento a
+            // elemento).
+            var skillsProperty = entity.Property(agent => agent.Skills)
+                .HasColumnName("skills")
+                .HasColumnType("jsonb")
+                .IsRequired()
+                .HasDefaultValueSql("'[]'::jsonb")
+                .HasConversion(
+                    skills => JsonSerializer.Serialize(skills, (JsonSerializerOptions?)null),
+                    json => JsonSerializer.Deserialize<List<Skill>>(json, (JsonSerializerOptions?)null) ?? new List<Skill>());
+
+            skillsProperty.Metadata.SetValueComparer(new ValueComparer<IReadOnlyList<Skill>>(
+                (left, right) => (left ?? new List<Skill>()).SequenceEqual(right ?? new List<Skill>()),
+                skills => skills.Aggregate(0, (hash, skill) => HashCode.Combine(hash, skill.GetHashCode())),
+                skills => skills.ToList()));
         });
 
         modelBuilder.Entity<A2ATaskRecord>(entity =>

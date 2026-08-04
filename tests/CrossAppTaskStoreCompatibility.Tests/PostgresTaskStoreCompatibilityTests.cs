@@ -92,7 +92,7 @@ public class PostgresTaskStoreCompatibilityTests : IAsyncLifetime
         using var scope = _apiScopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApiDbContext>();
 
-        var agent = new ApiAgent("Agente de teste cruzado", "Instruções de teste.", "openai", "gpt-5.6-sol");
+        var agent = new ApiAgent("Agente de teste cruzado", "Instruções de teste.", "openai", "gpt-5.6-sol", null, []);
         dbContext.Agents.Add(agent);
         await dbContext.SaveChangesAsync();
 
