@@ -31,8 +31,28 @@ public sealed class ListAgentsQueryHandler(AppDbContext dbContext) : IQueryHandl
                     .Select(binding => McpServerSummaryResponse.FromEntity(binding.McpServer, binding.AllowedTools))
                     .ToList());
 
+        // Mesmo espírito do lote acima, agora para delegações de saída
+        // (AgentDelegationLookup faz o equivalente por agente, mas em lote
+        // aqui evita N+1 para a listagem inteira).
+        var delegations = await dbContext.AgentDelegations
+            .AsNoTracking()
+            .Join(dbContext.Agents, delegation => delegation.TargetAgentId, agent => agent.Id, (delegation, agent) => new { delegation.SourceAgentId, TargetAgent = agent })
+            .ToListAsync(cancellationToken);
+
+        var delegatesToBySourceAgentId = delegations
+            .GroupBy(delegation => delegation.SourceAgentId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<AgentSummaryResponse>)group
+                    .OrderBy(delegation => delegation.TargetAgent.Name)
+                    .Select(delegation => AgentSummaryResponse.FromEntity(delegation.TargetAgent))
+                    .ToList());
+
         return agents
-            .Select(agent => AgentResponse.FromEntity(agent, mcpServersByAgentId.GetValueOrDefault(agent.Id, [])))
+            .Select(agent => AgentResponse.FromEntity(
+                agent,
+                mcpServersByAgentId.GetValueOrDefault(agent.Id, []),
+                delegatesToBySourceAgentId.GetValueOrDefault(agent.Id, [])))
             .ToList();
     }
 }

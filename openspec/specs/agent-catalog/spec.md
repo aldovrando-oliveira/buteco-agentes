@@ -63,14 +63,16 @@ não vazio.
 O sistema SHALL permitir, via `apps/api`, listar todos os agentes
 cadastrados, incluindo agentes inativos e agentes sem `provider`/`model`
 configurados. Cada agente na lista SHALL incluir o conjunto de servidores
-MCP atualmente vinculados a ele, além de `description` e `skills`.
+MCP atualmente vinculados a ele, o conjunto de agentes para os quais ele
+delega (`delegatesTo`), além de `description` e `skills`.
 
 #### Scenario: Lista retorna todos os agentes cadastrados
 - **WHEN** um cliente envia `GET /agents` e existem agentes cadastrados
 - **THEN** a API responde com a lista de todos os agentes, incluindo id,
   nome, instruções, `provider`, `model`, `description`, `skills`, o campo
-  `isActive` e o conjunto de servidores MCP vinculados (`mcpServers`,
-  cada item com id e nome) de cada um
+  `isActive`, o conjunto de servidores MCP vinculados (`mcpServers`, cada
+  item com id e nome) e o conjunto de agentes para os quais delega
+  (`delegatesTo`, cada item com id e nome) de cada um
 
 #### Scenario: Lista inclui agentes inativos
 - **WHEN** um cliente envia `GET /agents` e existe pelo menos um agente
@@ -100,19 +102,27 @@ MCP atualmente vinculados a ele, além de `description` e `skills`.
   `description` nulo e `skills` como uma lista vazia, sem filtro
   escondendo esse agente
 
+#### Scenario: Lista inclui agente sem nenhuma delegação de saída
+- **WHEN** um cliente envia `GET /agents` e existe pelo menos um agente
+  que não delega para nenhum outro agente
+- **THEN** a API inclui esse agente na resposta com `delegatesTo` como uma
+  lista vazia, não nula
+
 ### Requirement: Consulta de agente por id
 O sistema SHALL permitir, via `apps/api`, consultar um agente específico
 pelo seu identificador, incluindo agentes inativos e agentes sem
 `provider`/`model` configurados. A resposta SHALL incluir o conjunto de
-servidores MCP atualmente vinculados a esse agente, além de `description`
-e `skills`.
+servidores MCP atualmente vinculados a esse agente, o conjunto de agentes
+para os quais ele delega (`delegatesTo`), além de `description` e
+`skills`.
 
 #### Scenario: Consulta de agente existente retorna dados completos
 - **WHEN** um cliente envia `GET /agents/{id}` para um id existente
 - **THEN** a API responde com HTTP 200 e os dados completos do agente,
   incluindo os campos `isActive`, `provider`, `model`, `description`,
-  `skills` e `mcpServers` (cada item com id e nome dos servidores MCP
-  vinculados)
+  `skills`, `mcpServers` (cada item com id e nome dos servidores MCP
+  vinculados) e `delegatesTo` (cada item com id e nome dos agentes para os
+  quais delega)
 
 #### Scenario: Consulta de agente inexistente retorna 404
 - **WHEN** um cliente envia `GET /agents/{id}` para um id que não existe
@@ -141,6 +151,12 @@ e `skills`.
   antes desta capacidade existir, sem `description`/`skills` definidos
 - **THEN** a API responde com HTTP 200, `description` nulo e `skills`
   como uma lista vazia, sem tratar isso como não encontrado ou como erro
+
+#### Scenario: Consulta de agente sem nenhuma delegação de saída
+- **WHEN** um cliente envia `GET /agents/{id}` para um agente que não
+  delega para nenhum outro agente
+- **THEN** a API responde com HTTP 200 e `delegatesTo` como uma lista
+  vazia, não nula
 
 ### Requirement: Atualização de agente
 O sistema SHALL permitir, via `apps/api`, atualizar nome, instruções,

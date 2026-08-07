@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Buteco.Api.AgentDelegations;
 using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
@@ -86,8 +87,9 @@ public sealed class ReplaceAgentMcpServersCommandHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var linkedMcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
+        var delegatesTo = await AgentDelegationLookup.GetDelegateTargetsAsync(dbContext, agent.Id, cancellationToken);
 
-        return ReplaceAgentMcpServersResult.Success(AgentResponse.FromEntity(agent, linkedMcpServers));
+        return ReplaceAgentMcpServersResult.Success(AgentResponse.FromEntity(agent, linkedMcpServers, delegatesTo));
     }
 
     private async Task<(McpServerHandshakeFailure? Failure, IReadOnlyList<string>? AvailableToolNames)> DiscoverToolsAsync(McpServer mcpServer, CancellationToken cancellationToken)

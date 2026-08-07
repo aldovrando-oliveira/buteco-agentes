@@ -1,6 +1,7 @@
 using global::A2A.AspNetCore;
 using Buteco.Api.A2A;
 using Buteco.Api.Agents.Endpoints;
+using Buteco.Api.AgentDelegations.Endpoints;
 using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.McpServers.Connectivity;
@@ -47,6 +48,7 @@ app.MapAgentEndpoints();
 app.MapProviderEndpoints();
 app.MapMcpServerEndpoints();
 app.MapAgentMcpBindingEndpoints();
+app.MapAgentDelegationEndpoints();
 app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a");
 app.MapAgentCardEndpoint();
 

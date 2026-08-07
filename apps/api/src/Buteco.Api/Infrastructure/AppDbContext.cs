@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Buteco.Api.A2A;
+using Buteco.Api.AgentDelegations.Entities;
 using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Entities;
 using Buteco.Api.McpServers.Entities;
@@ -17,6 +18,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<McpServer> McpServers => Set<McpServer>();
 
     public DbSet<AgentMcpServer> AgentMcpServers => Set<AgentMcpServer>();
+
+    public DbSet<AgentDelegation> AgentDelegations => Set<AgentDelegation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -111,6 +114,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 (left, right) => (left ?? new List<string>()).SequenceEqual(right ?? new List<string>()),
                 tools => tools.Aggregate(0, (hash, tool) => HashCode.Combine(hash, tool.GetHashCode())),
                 tools => tools.ToList()));
+        });
+
+        modelBuilder.Entity<AgentDelegation>(entity =>
+        {
+            entity.ToTable("agent_delegations");
+            entity.HasKey(delegation => new { delegation.SourceAgentId, delegation.TargetAgentId });
+            entity.HasOne<Agent>().WithMany().HasForeignKey(delegation => delegation.SourceAgentId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Agent>().WithMany().HasForeignKey(delegation => delegation.TargetAgentId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

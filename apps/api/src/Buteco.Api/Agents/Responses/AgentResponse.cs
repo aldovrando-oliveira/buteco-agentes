@@ -14,9 +14,10 @@ public record AgentResponse(
     IReadOnlyList<SkillResponse> Skills,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    IReadOnlyList<McpServerSummaryResponse> McpServers)
+    IReadOnlyList<McpServerSummaryResponse> McpServers,
+    IReadOnlyList<AgentSummaryResponse> DelegatesTo)
 {
-    public static AgentResponse FromEntity(Agent agent, IReadOnlyList<McpServerSummaryResponse> mcpServers) =>
+    public static AgentResponse FromEntity(Agent agent, IReadOnlyList<McpServerSummaryResponse> mcpServers, IReadOnlyList<AgentSummaryResponse> delegatesTo) =>
         new(
             agent.Id,
             agent.Name,
@@ -28,5 +29,6 @@ public record AgentResponse(
             agent.Skills.Select(SkillResponse.FromEntity).ToList(),
             agent.CreatedAt,
             agent.UpdatedAt,
-            mcpServers);
+            mcpServers,
+            delegatesTo);
 }

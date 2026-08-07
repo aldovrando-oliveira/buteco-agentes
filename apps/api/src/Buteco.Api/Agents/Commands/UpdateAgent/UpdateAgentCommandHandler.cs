@@ -1,3 +1,4 @@
+using Buteco.Api.AgentDelegations;
 using Buteco.Api.AgentMcpBindings;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
@@ -31,7 +32,8 @@ public sealed class UpdateAgentCommandHandler(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var mcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
+        var delegatesTo = await AgentDelegationLookup.GetDelegateTargetsAsync(dbContext, agent.Id, cancellationToken);
 
-        return UpdateAgentResult.Success(AgentResponse.FromEntity(agent, mcpServers));
+        return UpdateAgentResult.Success(AgentResponse.FromEntity(agent, mcpServers, delegatesTo));
     }
 }
