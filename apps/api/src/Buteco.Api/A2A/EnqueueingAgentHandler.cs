@@ -57,7 +57,7 @@ public sealed class EnqueueingAgentHandler(
             await eventQueue.EnqueueMessageAsync(context.Message, cancellationToken);
         }
 
-        var message = new TaskJobMessage(context.TaskId, agentId, context.ContextId);
+        var message = new TaskJobMessage(context.TaskId, agentId, context.ContextId, context.Configuration?.PushNotificationConfig);
         await taskJobPublisher.PublishAsync(message, cancellationToken);
     }
 

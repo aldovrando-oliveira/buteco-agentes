@@ -50,12 +50,64 @@ public class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IClassFixt
         Assert.Equal(agentId, publishedMessage.AgentId);
         Assert.Equal(contextId, publishedMessage.ContextId);
 
+        // Regressão: SendMessage sem configuration.pushNotificationConfig
+        // continua publicando normalmente, sem nenhum config anexado.
+        Assert.Null(publishedMessage.PushNotificationConfig);
+
         var getPayload = new { jsonrpc = "2.0", id = 2, method = "GetTask", @params = new { id = taskId } };
         var getResponse = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", getPayload);
         var getBody = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.False(getBody.TryGetProperty("error", out _));
         Assert.Equal("TASK_STATE_SUBMITTED", getBody.GetProperty("result").GetProperty("status").GetProperty("state").GetString());
+    }
+
+    [Fact]
+    public async Task SendMessage_WithPushNotificationConfig_PropagatesConfigInPublishedJobMessage()
+    {
+        var agentId = await CreateAgentAsync();
+
+        var messageId = Guid.NewGuid().ToString("N");
+        var sendPayload = new
+        {
+            jsonrpc = "2.0",
+            id = 1,
+            method = "SendMessage",
+            @params = new
+            {
+                message = new
+                {
+                    role = "ROLE_USER",
+                    parts = new[] { new { text = "Olá, tudo bem?" } },
+                    messageId,
+                },
+                configuration = new
+                {
+                    pushNotificationConfig = new
+                    {
+                        url = "https://cliente.example.com/webhooks/a2a",
+                        authentication = new { scheme = "Bearer", credentials = "auth-credential" },
+                        token = "webhook-token",
+                    },
+                },
+            },
+        };
+
+        var sendResponse = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", sendPayload);
+        Assert.Equal(HttpStatusCode.OK, sendResponse.StatusCode);
+
+        var sendBody = await sendResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(sendBody.TryGetProperty("error", out _));
+        var taskId = sendBody.GetProperty("result").GetProperty("task").GetProperty("id").GetString()!;
+
+        var publishedMessage = await ReadJobMessageFromQueueAsync();
+        Assert.NotNull(publishedMessage);
+        Assert.Equal(taskId, publishedMessage!.TaskId);
+        Assert.NotNull(publishedMessage.PushNotificationConfig);
+        Assert.Equal("https://cliente.example.com/webhooks/a2a", publishedMessage.PushNotificationConfig!.Url);
+        Assert.Equal("Bearer", publishedMessage.PushNotificationConfig.Authentication?.Scheme);
+        Assert.Equal("auth-credential", publishedMessage.PushNotificationConfig.Authentication?.Credentials);
+        Assert.Equal("webhook-token", publishedMessage.PushNotificationConfig.Token);
     }
 
     [Fact]

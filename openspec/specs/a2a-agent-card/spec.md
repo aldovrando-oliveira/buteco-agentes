@@ -67,14 +67,13 @@ o valor de origem for nulo.
 - **THEN** o `AgentCard` retornado tem `Skills` como lista vazia, sem erro
 
 ### Requirement: Capabilities do card refletem funcionalidade real
-O sistema SHALL declarar `Capabilities.Streaming` e
-`Capabilities.PushNotifications` como `false` em todo `AgentCard`
-retornado.
+O sistema SHALL declarar `Capabilities.Streaming` como `false` e
+`Capabilities.PushNotifications` como `true` em todo `AgentCard` retornado.
 
-#### Scenario: Streaming e push notifications sempre false
+#### Scenario: Streaming continua false, push notifications passa a true
 - **WHEN** o card de qualquer agente é consultado
-- **THEN** `Capabilities.Streaming` e `Capabilities.PushNotifications` são
-  ambos `false` no corpo da resposta
+- **THEN** `Capabilities.Streaming` é `false` e `Capabilities.PushNotifications`
+  é `true` no corpo da resposta
 
 ### Requirement: Card exposto independente do estado operacional do agente
 O sistema SHALL retornar o `AgentCard` com `200 OK` para qualquer agente

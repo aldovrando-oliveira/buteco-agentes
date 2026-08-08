@@ -59,7 +59,7 @@ public static class AgentCardEndpoints
             // ver Decision 3 do design.md. Não confundir com Agent.Provider
             // (vendor de LLM), que não tem nenhuma relação com este campo.
             Provider = null,
-            Capabilities = new AgentCapabilities { Streaming = false, PushNotifications = false },
+            Capabilities = new AgentCapabilities { Streaming = false, PushNotifications = true },
             Skills = AgentSkillMapper.MapSkills(agent.Skills).ToList(),
             DefaultInputModes = ["text/plain"],
             DefaultOutputModes = ["text/plain"],

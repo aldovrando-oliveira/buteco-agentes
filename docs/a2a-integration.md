@@ -14,6 +14,7 @@ ativar/desativar) não é coberto aqui.
 - [Descoberta do agente via AgentCard](#descoberta-do-agente-via-agentcard)
 - [A regra mais importante: erro não é HTTP 4xx/5xx](#a-regra-mais-importante-erro-não-é-http-4xx5xx)
 - [Método `SendMessage`](#método-sendmessage)
+- [Push Notification (Webhook)](#push-notification-webhook)
 - [Método `GetTask`](#método-gettask)
 - [Onde está a resposta do agente](#onde-está-a-resposta-do-agente)
 - [Enumeradores](#enumeradores)
@@ -48,10 +49,14 @@ Content-Type: application/json
 Este endpoint implementa o protocolo [A2A](https://a2a-protocol.org/latest/)
 na íntegra (é a SDK oficial `A2A.AspNetCore` quem expõe a rota), mas o
 Buteco Agents só dá suporte real a dois métodos: **`SendMessage`** e
-**`GetTask`**. Outros métodos do protocolo (streaming, cancelamento, listar
-tasks, push notification, **`GetExtendedAgentCard`**) não fazem parte do
-contrato suportado — não use. Para descobrir metadados do agente, use o
-endpoint HTTP dedicado abaixo, não `GetExtendedAgentCard` via JSON-RPC.
+**`GetTask`** — mais o registro de push notification (webhook), que não é
+um método à parte: é um campo opcional dentro do próprio `SendMessage` (ver
+[Push Notification (Webhook)](#push-notification-webhook)). Outros métodos
+do protocolo (streaming, cancelamento, listar tasks, os métodos JSON-RPC
+dedicados de gestão de push notification config — `CreateTaskPushNotificationConfig`
+e afins —, **`GetExtendedAgentCard`**) não fazem parte do contrato
+suportado — não use. Para descobrir metadados do agente, use o endpoint
+HTTP dedicado abaixo, não `GetExtendedAgentCard` via JSON-RPC.
 
 ## Descoberta do agente via AgentCard
 
@@ -87,7 +92,7 @@ curl http://localhost:5017/agents/<agentId>/.well-known/agent-card.json
   "supportedInterfaces": [
     { "url": "http://localhost:5017/agents/<agentId>/a2a", "protocolBinding": "JSONRPC", "protocolVersion": "1.0" }
   ],
-  "capabilities": { "streaming": false, "pushNotifications": false },
+  "capabilities": { "streaming": false, "pushNotifications": true },
   "skills": [
     { "id": "consulta-cep", "name": "Consulta CEP", "description": "Consulta endereço a partir do CEP.", "tags": [] }
   ],
@@ -96,8 +101,10 @@ curl http://localhost:5017/agents/<agentId>/.well-known/agent-card.json
 }
 ```
 
-`capabilities.streaming` e `capabilities.pushNotifications` são sempre
-`false` — nenhum dos dois é suportado por este sistema (ver seção anterior).
+`capabilities.streaming` é sempre `false` — não suportado por este sistema.
+`capabilities.pushNotifications` é sempre `true` — ver
+[Push Notification (Webhook)](#push-notification-webhook) para como
+registrar.
 `skills[].id` é gerado a partir do nome da skill (slug determinístico) e é
 estável entre chamadas, mas **não** é validado como único no cadastro do
 agente — duas skills com nomes que gerem o mesmo slug recebem um sufixo
@@ -131,7 +138,7 @@ responder**.
 | Propriedade | Tipo | Obrigatório | Descrição |
 | --- | --- | --- | --- |
 | `message` | `Message` | Sim | A mensagem do usuário. Ver abaixo. |
-| `configuration` | objeto | Não | Existe no protocolo (histórico, push notification, modos de saída aceitos), mas o Buteco Agents ignora — a task sempre roda de forma assíncrona e a config de push notification não tem efeito aqui. Omita. |
+| `configuration` | objeto | Não | Só `configuration.pushNotificationConfig` tem efeito (ver [Push Notification (Webhook)](#push-notification-webhook)) — os demais campos do protocolo aqui (histórico, modos de saída aceitos) são ignorados; a task sempre roda de forma assíncrona independente do que for enviado. |
 | `metadata` | objeto | Não | Repassado sem uso interno. |
 
 ### `message`
@@ -181,11 +188,83 @@ curl -X POST http://localhost:5017/agents/<agentId>/a2a \
 Guarde `result.task.id` (para consultar via `GetTask`) e
 `result.task.contextId` (para continuar a conversa depois).
 
+## Push Notification (Webhook)
+
+Alternativa a fazer polling em `GetTask`: registre um
+`pushNotificationConfig` junto do `SendMessage` que cria a task, e o
+Buteco Agents chama a URL informada quando a task terminar (`completed` ou
+`failed`), sem você precisar consultar `GetTask` repetidamente.
+
+### Como registrar
+
+Inclua `configuration.pushNotificationConfig` no mesmo `SendMessage` que
+cria a task — não existe (nem é necessária) uma chamada JSON-RPC separada
+para registrar o webhook depois de a task já existir.
+
+| Propriedade | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `url` | `string` | Sim | URL que recebe o `POST` de notificação quando a task terminar. |
+| `authentication` | objeto `{ scheme, credentials }` | Não | Se informado, a chamada de notificação inclui o header `Authorization: {scheme} {credentials}`. |
+| `token` | `string` | Não | Se informado, a chamada de notificação inclui o header `X-A2A-Notification-Token: {token}` — use para validar que a chamada recebida veio do Buteco Agents. |
+
+`authentication` e `token` podem ser usados juntos ou isoladamente; nenhum
+dos dois é obrigatório.
+
+### Exemplo de requisição
+
+```bash
+curl -X POST http://localhost:5017/agents/<agentId>/a2a \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "SendMessage",
+    "params": {
+      "message": {
+        "role": "ROLE_USER",
+        "parts": [{ "text": "Olá, tudo bem?" }],
+        "messageId": "b6f1e2b1-3e6b-4b8b-9b0e-2f6a2c9b7a10"
+      },
+      "configuration": {
+        "pushNotificationConfig": {
+          "url": "https://seu-servico.example.com/webhooks/a2a",
+          "token": "um-segredo-que-só-você-conhece"
+        }
+      }
+    }
+  }'
+```
+
+### O que o webhook recebe
+
+Um `POST` com a task completa como corpo — mesmo shape que `GetTask`
+retornaria, já com `status.state` em `TASK_STATE_COMPLETED` ou
+`TASK_STATE_FAILED` e `artifacts` presentes quando aplicável (ver
+[Onde está a resposta do agente](#onde-está-a-resposta-do-agente)).
+
+### Comportamento e limitações
+
+- Só dispara para `completed`/`failed` — uma task `rejected` (agente
+  inativo, sem `provider`/`model` configurados) nunca chega a processar o
+  push config de verdade e nunca dispara webhook.
+- **Best-effort, sem retry**: se a URL registrada estiver fora do ar,
+  responder erro, ou não responder dentro de um timeout curto, o Buteco
+  Agents desiste silenciosamente — a task já está `completed`/`failed`
+  no store independente do resultado dessa chamada. Se a confiabilidade da
+  notificação for crítica para o seu caso de uso, continue fazendo
+  `GetTask` como plano B (ex.: um polling esparso de segurança).
+- Sem mitigação de SSRF nesta versão — não há allowlist de domínio nem
+  bloqueio de IP privado/loopback na URL registrada.
+- Os métodos JSON-RPC dedicados do protocolo para gerenciar push
+  notification config depois de criada a task não são suportados —
+  registre sempre junto do `SendMessage` inicial.
+
 ## Método `GetTask`
 
-Consulta o estado atual de uma task — é a **única** forma de saber se o
-agente já respondeu (não há streaming nem push notification). Chame
-repetidamente até receber um estado terminal.
+Consulta o estado atual de uma task. Se você não registrou um
+`pushNotificationConfig` (ver seção anterior), é a única forma de saber se
+o agente já respondeu — não há streaming. Chame repetidamente até receber
+um estado terminal.
 
 ### `params`
 

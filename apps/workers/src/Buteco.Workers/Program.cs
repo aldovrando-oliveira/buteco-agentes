@@ -4,6 +4,7 @@ using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Mcp.Security;
 using Buteco.Workers.Messaging;
+using Buteco.Workers.Notifications;
 using Buteco.Workers.Options;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -29,6 +30,12 @@ builder.Services.AddSingleton<IMcpToolSetResolver, McpToolSetResolver>();
 
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
 builder.Services.AddSingleton<IAgentDelegationToolSetResolver, AgentDelegationToolSetResolver>();
+
+// Timeout curto e fixo (design.md, Decision 3) — primeiro HttpClient nomeado
+// do projeto com Timeout customizado, aditivo, sem afetar o cliente MCP.
+builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddSingleton<PushNotificationSender>();
 
 // Singleton porque é injetado no TaskJobConsumer (BackgroundService, singleton) —
 // AgentExecutionService não segura estado escopado diretamente, abre um

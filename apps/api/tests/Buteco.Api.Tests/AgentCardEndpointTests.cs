@@ -139,7 +139,7 @@ public class AgentCardEndpointTests(A2ATaskLifecycleFixture fixture) : IClassFix
 
         var capabilities = firstCard.GetProperty("capabilities");
         Assert.False(capabilities.GetProperty("streaming").GetBoolean());
-        Assert.False(capabilities.GetProperty("pushNotifications").GetBoolean());
+        Assert.True(capabilities.GetProperty("pushNotifications").GetBoolean());
 
         var supportedInterface = Assert.Single(firstCard.GetProperty("supportedInterfaces").EnumerateArray());
         Assert.Equal($"http://localhost:5017/agents/{agentId}/a2a", supportedInterface.GetProperty("url").GetString());

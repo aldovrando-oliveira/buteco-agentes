@@ -33,6 +33,49 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
     }
 
     [Fact]
+    public async Task SendMessage_WithPushNotificationConfig_ForInactiveAgent_NeverPublishesJobOrCallsWebhook()
+    {
+        // Cobre specs/a2a-push-notifications/spec.md, Scenario "Task rejeitada
+        // nunca dispara o webhook" — rejeição síncrona em EnqueueingAgentHandler
+        // acontece antes de qualquer TaskJobMessage existir, então mesmo com
+        // pushNotificationConfig registrado, nada chega a apps/workers (nada
+        // que poderia disparar o webhook é sequer publicado).
+        var agentId = await CreateAgentAsync();
+        await DeactivateAgentAsync(agentId);
+
+        var messageId = Guid.NewGuid().ToString("N");
+        var payload = new
+        {
+            jsonrpc = "2.0",
+            id = 1,
+            method = "SendMessage",
+            @params = new
+            {
+                message = new
+                {
+                    role = "ROLE_USER",
+                    parts = new[] { new { text = "Olá, tudo bem?" } },
+                    messageId,
+                },
+                configuration = new
+                {
+                    pushNotificationConfig = new { url = "https://cliente.example.com/webhooks/a2a" },
+                },
+            },
+        };
+
+        var response = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(
+            "TASK_STATE_REJECTED",
+            body.GetProperty("result").GetProperty("task").GetProperty("status").GetProperty("state").GetString());
+
+        Assert.Empty(fixture.TaskJobPublisher.PublishedMessages);
+    }
+
+    [Fact]
     public async Task SendMessage_AfterReactivation_PublishesNormally()
     {
         var agentId = await CreateAgentAsync();

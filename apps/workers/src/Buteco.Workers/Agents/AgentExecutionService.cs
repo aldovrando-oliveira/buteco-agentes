@@ -5,6 +5,7 @@ using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
+using Buteco.Workers.Notifications;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Compaction;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,7 @@ public sealed class AgentExecutionService(
     IChatClientResolver chatClientResolver,
     IMcpToolSetResolver mcpToolSetResolver,
     IAgentDelegationToolSetResolver delegationToolSetResolver,
+    PushNotificationSender pushNotificationSender,
     ILogger<AgentExecutionService> logger)
 {
     // Teto de segurança, não um limiar concorrente com
@@ -203,7 +205,7 @@ public sealed class AgentExecutionService(
 
             var parts = new List<Part> { Part.FromText(response.Text) };
 
-            await ApplyStepAsync(
+            var savedTask = await ApplyStepAsync(
                 taskStore,
                 message.TaskId,
                 message.ContextId,
@@ -214,22 +216,41 @@ public sealed class AgentExecutionService(
                     await updater.CompleteAsync(cancellationToken: cancellationToken);
                 },
                 cancellationToken,
-                completedTask => completedTask.Metadata = new Dictionary<string, JsonElement>
-                {
-                    [ConversationSessionMetadataKey] = conversationSessionValue,
-                });
+                completedTask => completedTask.Metadata = BuildTerminalMetadata(conversationSessionValue, message.PushNotificationConfig));
+
+            await SendPushNotificationIfConfiguredAsync(message, savedTask, cancellationToken);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Falha ao executar o agente {AgentId} para a task {TaskId}", message.AgentId, message.TaskId);
 
-            await ApplyStepAsync(
+            var savedTask = await ApplyStepAsync(
                 taskStore,
                 message.TaskId,
                 message.ContextId,
                 task,
                 updater => updater.FailAsync(cancellationToken: cancellationToken),
-                cancellationToken);
+                cancellationToken,
+                message.PushNotificationConfig is not null
+                    ? failedTask => failedTask.Metadata = BuildTerminalMetadata(conversationSessionValue: null, message.PushNotificationConfig)
+                    : null);
+
+            await SendPushNotificationIfConfiguredAsync(message, savedTask, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Dispara o webhook (design.md, Decision 2) só quando a mensagem trouxe
+    /// um <c>PushNotificationConfig</c> — a task já está persistida com seu
+    /// estado terminal real (<paramref name="task"/> é o retorno de
+    /// <see cref="ApplyStepAsync"/>, chamado depois do <c>SaveTaskAsync</c>)
+    /// antes desta chamada começar.
+    /// </summary>
+    private async Task SendPushNotificationIfConfiguredAsync(TaskJobMessage message, AgentTask? task, CancellationToken cancellationToken)
+    {
+        if (message.PushNotificationConfig is not null && task is not null)
+        {
+            await pushNotificationSender.SendAsync(message.PushNotificationConfig, task, cancellationToken);
         }
     }
 
@@ -293,6 +314,30 @@ public sealed class AgentExecutionService(
     {
         var lastUserMessage = task.History?.LastOrDefault(m => m.Role == Role.User);
         return lastUserMessage?.Parts.FirstOrDefault(part => part.Text is not null)?.Text ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Monta o Metadata gravado numa transição terminal (completed/failed) —
+    /// <c>conversationSession</c> só no caminho de sucesso (sessão só existe
+    /// quando o LLM respondeu), <c>pushNotificationConfig</c> em qualquer um
+    /// dos dois quando presente na mensagem (design.md, Decision 1).
+    /// </summary>
+    private static Dictionary<string, JsonElement> BuildTerminalMetadata(
+        JsonElement? conversationSessionValue, PushNotificationConfig? pushNotificationConfig)
+    {
+        var metadata = new Dictionary<string, JsonElement>();
+
+        if (conversationSessionValue is not null)
+        {
+            metadata[ConversationSessionMetadataKey] = conversationSessionValue.Value;
+        }
+
+        if (pushNotificationConfig is not null)
+        {
+            metadata[PushNotificationConfigCodec.MetadataKey] = PushNotificationConfigCodec.Encode(pushNotificationConfig);
+        }
+
+        return metadata;
     }
 
     private static async Task<AgentTask?> ApplyStepAsync(
