@@ -12,6 +12,8 @@ public class Agent
 
     public string Instructions { get; private set; } = null!;
 
+    public bool IsActive { get; private set; }
+
     // Nullable: agentes cadastrados antes desta capacidade existir (ou nunca
     // reconfigurados) não têm valor para nenhum dos dois. apps/api já rejeita
     // SendMessage nesse caso antes de publicar o job (EnqueueingAgentHandler),

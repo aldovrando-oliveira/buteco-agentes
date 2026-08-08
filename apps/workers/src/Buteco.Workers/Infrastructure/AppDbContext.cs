@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Buteco.Workers.A2A;
+using Buteco.Workers.AgentDelegations.Entities;
 using Buteco.Workers.Agents.Entities;
 using Buteco.Workers.Mcp.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<AgentMcpServer> AgentMcpServers => Set<AgentMcpServer>();
 
+    public DbSet<AgentDelegation> AgentDelegations => Set<AgentDelegation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Agent>(entity =>
@@ -33,6 +36,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(agent => agent.Id);
             entity.Property(agent => agent.Name).IsRequired();
             entity.Property(agent => agent.Instructions).IsRequired();
+            entity.Property(agent => agent.IsActive).IsRequired().HasDefaultValue(true);
             entity.Property(agent => agent.Provider).IsRequired(false);
             entity.Property(agent => agent.Model).IsRequired(false);
             entity.Property(agent => agent.CreatedAt).IsRequired();
@@ -92,6 +96,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 (left, right) => (left ?? new List<string>()).SequenceEqual(right ?? new List<string>()),
                 tools => tools.Aggregate(0, (hash, tool) => HashCode.Combine(hash, tool.GetHashCode())),
                 tools => tools.ToList()));
+        });
+
+        modelBuilder.Entity<AgentDelegation>(entity =>
+        {
+            entity.ToTable("agent_delegations");
+            entity.HasKey(delegation => new { delegation.SourceAgentId, delegation.TargetAgentId });
+            entity.HasOne<Agent>().WithMany().HasForeignKey(delegation => delegation.SourceAgentId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Agent>().WithMany().HasForeignKey(delegation => delegation.TargetAgentId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

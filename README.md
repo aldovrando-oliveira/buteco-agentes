@@ -158,6 +158,17 @@ Esperado: log `Worker starting at: ...` no console, e (com um job na fila)
 logs de transição de estado da task. `Ctrl+C` para encerrar (loga
 `Worker stopping at: ...`).
 
+**Delegação entre agentes exige ≥ 2 instâncias de `apps/workers` rodando
+ao mesmo tempo.** O consumidor RabbitMQ processa no máximo uma mensagem
+não confirmada por instância (`prefetchCount: 1`); se um agente delega
+para outro (tool de delegação, ver
+`openspec/changes/apps-workers-delegacao-execucao`) e só há uma
+instância ativa, ela fica esperando a task delegada terminar sem nunca
+poder consumi-la ela mesma — a delegação sempre expira pelo timeout
+(120s) em vez de completar. Para testar esse fluxo localmente, rode um
+segundo `dotnet run --project src/Buteco.Workers` em outro terminal
+(mesma configuração, sem nenhum ajuste adicional).
+
 ### apps/frontend
 
 ```bash

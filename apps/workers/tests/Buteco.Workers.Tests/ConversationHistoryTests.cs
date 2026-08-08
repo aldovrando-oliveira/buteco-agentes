@@ -1,6 +1,7 @@
 using System.Text.Json;
 using global::A2A;
 using Buteco.Workers.A2A;
+using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
@@ -246,6 +247,7 @@ public class ConversationHistoryTests(WorkerInfrastructureFixture fixture) : ICl
         resolverMock.Setup(resolver => resolver.Resolve(It.IsAny<string>(), It.IsAny<string>())).Returns(chatClient);
         builder.Services.AddSingleton(resolverMock.Object);
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
+        builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

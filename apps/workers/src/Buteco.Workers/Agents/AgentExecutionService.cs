@@ -1,6 +1,7 @@
 using System.Text.Json;
 using global::A2A;
 using Buteco.Workers.A2A;
+using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
@@ -17,6 +18,7 @@ public sealed class AgentExecutionService(
     IServiceScopeFactory scopeFactory,
     IChatClientResolver chatClientResolver,
     IMcpToolSetResolver mcpToolSetResolver,
+    IAgentDelegationToolSetResolver delegationToolSetResolver,
     ILogger<AgentExecutionService> logger)
 {
     // Teto de segurança, não um limiar concorrente com
@@ -43,6 +45,14 @@ public sealed class AgentExecutionService(
     private const int SummarizationTurnThreshold = 10;
 
     private const string ConversationSessionMetadataKey = "conversationSession";
+
+    // Teto de saltos de delegação numa mesma cadeia desde a mensagem
+    // original — constante global, não configurável por agente (non-goal
+    // explícito, ver design.md da change apps-workers-delegacao-execucao,
+    // Decision 6), mesmo estilo de MaxHistoryMessages/SummarizationTurnThreshold
+    // acima. Cada nível a mais na cadeia ocupa mais uma instância de
+    // apps/workers presa em espera (ver Decision 1 daquele design.md).
+    private const int DelegationDepthLimit = 5;
 
     // Ver design.md, Decisão 9: absorve a corrida entre o publish no RabbitMQ
     // e o commit do SaveTaskAsync do evento "submitted" em apps/api.
@@ -82,6 +92,32 @@ public sealed class AgentExecutionService(
         if (task is null)
         {
             logger.LogError("Task {TaskId} não encontrada no store (ou sem mensagem do usuário) após retries", message.TaskId);
+            return;
+        }
+
+        // Controle de profundidade da cadeia de delegação (design.md,
+        // Decisão 6): checado antes de StartWorkAsync/do lock consultivo —
+        // uma task além do teto nunca chega a rodar o LLM. Rejeitada (não
+        // failed) para não passar pelo tratamento de erro genérico do catch
+        // abaixo — mesmo estado terminal já usado para "agente inativo"/
+        // "sem provider" em EnqueueingAgentHandler, que a tool de delegação
+        // que está esperando (Decisão 8) já trata como qualquer outra
+        // falha graciosa, sem código especial para profundidade.
+        var delegationDepth = DelegationDepth.Read(task);
+        if (delegationDepth > DelegationDepthLimit)
+        {
+            logger.LogWarning(
+                "Task {TaskId} excede a profundidade máxima de delegação ({Limit}) — rejeitada.",
+                message.TaskId,
+                DelegationDepthLimit);
+
+            await ApplyStepAsync(
+                taskStore,
+                message.TaskId,
+                message.ContextId,
+                task,
+                updater => updater.RejectAsync(cancellationToken: cancellationToken),
+                cancellationToken);
             return;
         }
 
@@ -125,10 +161,15 @@ public sealed class AgentExecutionService(
             // quanto uma exceção propagando para o catch abaixo.
             await using var toolSet = await mcpToolSetResolver.ResolveAsync(dbContext, message.AgentId, cancellationToken);
 
+            // Sem conexão externa viva por trás (diferente de McpToolSet) —
+            // não precisa de await using, ver design.md, Decision 10.
+            var delegationTools = await delegationToolSetResolver.ResolveAsync(
+                dbContext, agent, message.ContextId, delegationDepth, cancellationToken);
+
             var aiAgent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
             {
                 Name = agent.Name,
-                ChatOptions = new ChatOptions { Instructions = agent.Instructions, Tools = toolSet.Tools.ToList() },
+                ChatOptions = new ChatOptions { Instructions = agent.Instructions, Tools = toolSet.Tools.Concat(delegationTools).ToList() },
                 ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
                 {
                     ChatReducer = new RecentMessageChatReducer(MaxHistoryMessages),

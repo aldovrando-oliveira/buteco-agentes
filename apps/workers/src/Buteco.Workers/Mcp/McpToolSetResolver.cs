@@ -1,4 +1,3 @@
-using System.Text;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp.Entities;
 using Buteco.Workers.Mcp.Security;
@@ -29,9 +28,9 @@ public sealed class McpToolSetResolver(
     // design.md da change backend-multi-provedor-llm resolve o
     // IChatClient só depois, em ChatClientResolver), então o nome
     // sanitizado precisa satisfazer o mais restritivo dos três provedores
-    // suportados incondicionalmente — que é a OpenAI: só
-    // [a-zA-Z0-9_-], máximo 64 caracteres.
-    private const int MaxToolNameLength = 64;
+    // suportados incondicionalmente — sanitização em ToolNameSanitizer,
+    // reaproveitada também pela resolução de tools de delegação (ver
+    // design.md da change apps-workers-delegacao-execucao, Decision 9).
 
     public async Task<McpToolSet> ResolveAsync(AppDbContext dbContext, Guid agentId, CancellationToken cancellationToken)
     {
@@ -112,22 +111,6 @@ public sealed class McpToolSetResolver(
         return new McpToolSet(tools, connections);
     }
 
-    private static string BuildSafeToolName(string serverName, string toolName)
-    {
-        var composite = $"{serverName}{ToolNameSeparator}{toolName}";
-        var sanitized = new StringBuilder(composite.Length);
-        foreach (var character in composite)
-        {
-            sanitized.Append(char.IsAsciiLetterOrDigit(character) || character is '_' or '-' ? character : '_');
-        }
-
-        if (sanitized.Length == 0 || !(char.IsAsciiLetter(sanitized[0]) || sanitized[0] == '_'))
-        {
-            sanitized.Insert(0, '_');
-        }
-
-        return sanitized.Length > MaxToolNameLength
-            ? sanitized.ToString(0, MaxToolNameLength)
-            : sanitized.ToString();
-    }
+    private static string BuildSafeToolName(string serverName, string toolName) =>
+        ToolNameSanitizer.Sanitize($"{serverName}{ToolNameSeparator}{toolName}");
 }

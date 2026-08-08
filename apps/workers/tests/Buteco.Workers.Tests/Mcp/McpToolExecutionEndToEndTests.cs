@@ -1,6 +1,7 @@
 using System.Text.Json;
 using global::A2A;
 using Buteco.Workers.A2A;
+using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
@@ -250,6 +251,7 @@ public class McpToolExecutionEndToEndTests(WorkerInfrastructureFixture fixture) 
             .ConfigurePrimaryHttpMessageHandler(() => mcpHandler);
         builder.Services.AddSingleton<McpTransportFactory>();
         builder.Services.AddSingleton<IMcpToolSetResolver, McpToolSetResolver>();
+        builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
 
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
