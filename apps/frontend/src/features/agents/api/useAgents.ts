@@ -5,6 +5,7 @@ import {
   deactivateAgent,
   getAgent,
   listAgents,
+  replaceAgentDelegations,
   replaceAgentMcpServers,
   updateAgent,
 } from './agentsApi';
@@ -71,6 +72,18 @@ export function useReplaceAgentMcpServersMutation(agentId: string) {
 
   return useMutation({
     mutationFn: (bindings: AgentMcpServerBinding[]) => replaceAgentMcpServers(agentId, bindings),
+    onSuccess: (updated: Agent) => {
+      queryClient.setQueryData(['agents', updated.id], updated);
+      void queryClient.invalidateQueries({ queryKey: ['agents'] });
+    },
+  });
+}
+
+export function useReplaceAgentDelegationsMutation(agentId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (targetAgentIds: string[]) => replaceAgentDelegations(agentId, targetAgentIds),
     onSuccess: (updated: Agent) => {
       queryClient.setQueryData(['agents', updated.id], updated);
       void queryClient.invalidateQueries({ queryKey: ['agents'] });

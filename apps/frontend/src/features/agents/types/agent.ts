@@ -4,6 +4,11 @@ export interface AgentMcpServerSummary {
   allowedTools: string[];
 }
 
+export interface AgentSummaryReference {
+  id: string;
+  name: string;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -14,6 +19,7 @@ export interface Agent {
   createdAt: string;
   updatedAt: string;
   mcpServers: AgentMcpServerSummary[];
+  delegatesTo: AgentSummaryReference[];
 }
 
 export interface AgentMcpServerBinding {

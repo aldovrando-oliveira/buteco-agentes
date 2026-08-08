@@ -6,6 +6,7 @@ import {
   useAgentQuery,
   useAgentsQuery,
   useCreateAgentMutation,
+  useReplaceAgentDelegationsMutation,
   useReplaceAgentMcpServersMutation,
 } from './useAgents';
 import { ApiError } from './agentsApi';
@@ -21,6 +22,7 @@ const agent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  delegatesTo: [],
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -204,5 +206,77 @@ describe('useReplaceAgentMcpServersMutation', () => {
     expect(error.status).toBe(502);
     expect(error.problem?.title).toBe('Não foi possível validar as tools do servidor MCP mcp-1.');
     expect(error.problem?.detail).toBe('Host inalcançável durante o handshake de validação.');
+  });
+});
+
+describe('useReplaceAgentDelegationsMutation', () => {
+  it('envia o body { targetAgentIds: [...] } e, em sucesso, popula o cache do detalhe e invalida a lista', async () => {
+    const targetAgent: Agent = { ...agent, id: '22222222-2222-2222-2222-222222222222' };
+    const updated: Agent = {
+      ...agent,
+      delegatesTo: [{ id: targetAgent.id, name: targetAgent.name }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(updated));
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const { result } = renderHook(() => useReplaceAgentDelegationsMutation(agent.id), {
+      wrapper: Wrapper,
+    });
+
+    result.current.mutate([targetAgent.id]);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/agents/${agent.id}/delegations`),
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ targetAgentIds: [targetAgent.id] }),
+      }),
+    );
+    expect(queryClient.getQueryData(['agents', agent.id])).toEqual(updated);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['agents'] });
+  });
+
+  it('envia targetAgentIds: [] quando todos os agentes são desmarcados', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(agent));
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useReplaceAgentDelegationsMutation(agent.id), {
+      wrapper: Wrapper,
+    });
+
+    result.current.mutate([]);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/agents/${agent.id}/delegations`),
+      expect.objectContaining({ body: JSON.stringify({ targetAgentIds: [] }) }),
+    );
+  });
+
+  it('em erro, expõe o ApiError sem popular o cache', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          { title: 'Validação falhou', status: 400, errors: { targetAgentIds: ['inválido'] } },
+          400,
+        ),
+      ),
+    );
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useReplaceAgentDelegationsMutation(agent.id), {
+      wrapper: Wrapper,
+    });
+
+    result.current.mutate([agent.id]);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    const error = result.current.error as ApiError;
+    expect(error.status).toBe(400);
   });
 });

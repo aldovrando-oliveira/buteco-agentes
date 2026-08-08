@@ -5,14 +5,17 @@ import { Link, useParams } from 'react-router';
 import {
   useActivateAgentMutation,
   useAgentQuery,
+  useAgentsQuery,
   useDeactivateAgentMutation,
 } from '../api/useAgents';
+import { AgentDelegationsSection } from '../components/AgentDelegationsSection';
 import { AgentDetailCard } from '../components/AgentDetailCard';
 import { ApiError } from '../api/agentsApi';
 
 export function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, error } = useAgentQuery(id!);
+  const agentsQuery = useAgentsQuery();
   const activateMutation = useActivateAgentMutation();
   const deactivateMutation = useDeactivateAgentMutation();
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
@@ -57,7 +60,7 @@ export function AgentDetailPage() {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || agentsQuery.isLoading) {
     return (
       <Group>
         <Loader size="sm" />
@@ -99,6 +102,14 @@ export function AgentDetailPage() {
         )}
       </Group>
       <AgentDetailCard agent={data} />
+
+      {agentsQuery.isError ? (
+        <Alert color="red" mt="md">
+          Não foi possível carregar o catálogo de agentes para gerenciar delegações.
+        </Alert>
+      ) : (
+        <AgentDelegationsSection agent={data} agentsCatalog={agentsQuery.data ?? []} />
+      )}
 
       <Modal opened={confirmOpened} onClose={closeConfirm} title="Confirmar desativação">
         <Text size="sm">

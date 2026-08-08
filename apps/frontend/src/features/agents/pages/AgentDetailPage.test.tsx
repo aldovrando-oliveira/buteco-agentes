@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MantineProvider } from '@mantine/core';
@@ -7,7 +7,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { notifications } from '@mantine/notifications';
 import { theme } from '../../../theme';
 import { AgentDetailPage } from './AgentDetailPage';
-import { ApiError, activateAgent, deactivateAgent, getAgent } from '../api/agentsApi';
+import { ApiError, activateAgent, deactivateAgent, getAgent, listAgents } from '../api/agentsApi';
 import type { Agent } from '../types/agent';
 
 vi.mock('../api/agentsApi', async (importOriginal) => {
@@ -15,6 +15,7 @@ vi.mock('../api/agentsApi', async (importOriginal) => {
   return {
     ...actual,
     getAgent: vi.fn(),
+    listAgents: vi.fn(),
     activateAgent: vi.fn(),
     deactivateAgent: vi.fn(),
   };
@@ -35,6 +36,7 @@ const activeAgent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  delegatesTo: [],
 };
 
 const inactiveAgent: Agent = { ...activeAgent, isActive: false };
@@ -57,6 +59,8 @@ function renderPage(id: string) {
 describe('AgentDetailPage', () => {
   beforeEach(() => {
     vi.mocked(getAgent).mockReset();
+    vi.mocked(listAgents).mockReset();
+    vi.mocked(listAgents).mockResolvedValue([activeAgent]);
     vi.mocked(activateAgent).mockReset();
     vi.mocked(deactivateAgent).mockReset();
     vi.mocked(notifications.show).mockReset();
@@ -155,8 +159,8 @@ describe('AgentDetailPage', () => {
     renderPage(activeAgent.id);
 
     await user.click(await screen.findByRole('button', { name: /desativar/i }));
-    await screen.findByRole('dialog');
-    await user.click(screen.getByRole('button', { name: /cancelar/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /cancelar/i }));
 
     expect(deactivateAgent).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -196,5 +200,29 @@ describe('AgentDetailPage', () => {
       expect(notifications.show).toHaveBeenCalledWith(expect.objectContaining({ color: 'red' })),
     );
     expect(screen.getByText('Ativo')).toBeInTheDocument();
+  });
+
+  it('exibe a seção de delegações posicionada depois do card de detalhe', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+    vi.mocked(listAgents).mockResolvedValue([activeAgent]);
+
+    renderPage(activeAgent.id);
+
+    const nameHeading = await screen.findByRole('heading', { name: activeAgent.name });
+    const delegationsHeading = await screen.findByRole('heading', { name: /delegações de saída/i });
+
+    expect(
+      nameHeading.compareDocumentPosition(delegationsHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('quando o catálogo de agentes tem apenas o próprio agente, a página renderiza normalmente sem opções de delegação', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+    vi.mocked(listAgents).mockResolvedValue([activeAgent]);
+
+    renderPage(activeAgent.id);
+
+    expect(await screen.findByRole('heading', { name: /delegações de saída/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /salvar delegações/i })).toBeInTheDocument();
   });
 });

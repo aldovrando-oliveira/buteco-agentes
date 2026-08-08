@@ -15,6 +15,7 @@ const baseAgent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  delegatesTo: [],
 };
 
 function renderCard(instructions: string) {

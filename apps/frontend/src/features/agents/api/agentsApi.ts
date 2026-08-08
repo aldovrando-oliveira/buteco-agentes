@@ -87,3 +87,13 @@ export function replaceAgentMcpServers(
     body: JSON.stringify({ mcpServers: bindings }),
   });
 }
+
+export function replaceAgentDelegations(
+  agentId: string,
+  targetAgentIds: string[],
+): Promise<Agent> {
+  return request<Agent>(`/agents/${agentId}/delegations`, {
+    method: 'PUT',
+    body: JSON.stringify({ targetAgentIds }),
+  });
+}
