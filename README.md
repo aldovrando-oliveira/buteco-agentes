@@ -15,7 +15,7 @@ decisões — `libs/ProviderCatalog` é o primeiro caso real, ver
 | `apps/api` | .NET 10, ASP.NET Core Web API. CRUD de agentes (EF Core/Postgres, com `provider`/`model` por agente) e endpoint A2A por agente (`/agents/{id}/a2a`, via `A2A`/`A2A.AspNetCore`). Expõe `GET /providers` (provedores de LLM disponíveis por configuração de ambiente). Nunca chama o LLM — só persiste a task e publica um job no RabbitMQ |
 | `apps/workers` | .NET 10, Worker Service. Consome o RabbitMQ, monta o agente (`Microsoft.Agents.AI`) com o system prompt cadastrado, resolve o `IChatClient` do provedor do agente (OpenAI via `Microsoft.Extensions.AI.OpenAI`, Anthropic via `Anthropic`, Gemini via `Google.GenAI`) e escreve o resultado de volta no Postgres |
 | `apps/frontend` | Vite + React 19 + TypeScript + Mantine 9 (ESLint + Prettier) — ainda não consome o backend |
-| `apps/inbox` | .NET 10, ASP.NET Core Web API. Host HTTP que vai receber webhooks de canais externos (ChatWoot, Waha, e futuros adapters). Por enquanto, só scaffold — nenhuma lógica de canal, catálogo ou persistência ainda |
+| `apps/inbox` | .NET 10, ASP.NET Core Web API. Host HTTP que vai receber webhooks de canais externos (ChatWoot, Waha, e futuros adapters). Hoje: catálogo de canais de entrada (WhatsApp, Telegram) — CRUD (EF Core/Postgres, banco próprio `buteco_inbox`, sem tabelas em comum com `apps/api`/`apps/workers`), credenciais criptografadas (AES-GCM, mesmo padrão de McpServer), `AgentId` validado via HTTP contra `apps/api`. Ainda sem orquestrador, CRM (Contact/Session) ou adapter real de canal |
 
 RabbitMQ é o broker entre `apps/api` e `apps/workers`. PostgreSQL + EF Core
 para o catálogo de agentes e para o store durável de tasks/eventos do
@@ -49,8 +49,8 @@ apps/
   frontend/               # Vite + React + TS + Mantine
     src/
     package.json
-  inbox/                  # ASP.NET Core Web API (scaffold — sem lógica de
-                           # canal/catálogo/persistência ainda)
+  inbox/                  # ASP.NET Core Web API — catálogo de canais de
+                           # entrada (WhatsApp, Telegram), banco próprio
     Inbox.sln
     src/Buteco.Inbox/
     tests/Buteco.Inbox.Tests/
@@ -188,24 +188,58 @@ Abra `http://localhost:5173`. Deve renderizar o `AppShell` (header + navbar +
 
 ### apps/inbox
 
+Antes de rodar pela primeira vez, aplique a migration (banco próprio,
+`buteco_inbox` — sem tabelas em comum com `apps/api`/`apps/workers`, ver
+`design.md` da change `inbox-catalogo-canais`; `dotnet ef database update`
+cria o banco automaticamente se ele ainda não existir no mesmo servidor
+Postgres do `docker-compose.yml`):
+
+```bash
+cd apps/inbox/src/Buteco.Inbox
+dotnet ef database update
+```
+
 ```bash
 cd apps/inbox
 dotnet run --project src/Buteco.Inbox
 ```
 
-Ainda só scaffold — sem lógica de canal, catálogo ou persistência.
+Lê `ConnectionStrings:Postgres`, `Inbox:CredentialEncryptionKey` e
+`Api:BaseUrl` via `appsettings.Development.json` (defaults de dev, mesmos
+do `.env.example`) ou variáveis de ambiente
+(`ConnectionStrings__Postgres`, `Inbox__CredentialEncryptionKey`,
+`Api__BaseUrl`) — nunca hardcoded. `Api:BaseUrl` deve apontar para onde
+`apps/api` está escutando (`http://localhost:5017` em dev) — usado para
+validar, via `GET /agents/{id}`, o `agentId` de cada canal cadastrado.
 
 ```bash
 curl -i http://localhost:5027/health
+
+# cadastrar um canal — agentId precisa existir em apps/api (GET /agents/{id});
+# apps/api precisa estar rodando, senão o cadastro é rejeitado (fail-fast)
+curl -X POST http://localhost:5027/channels \
+  -H "Content-Type: application/json" \
+  -d '{"channelType":"WhatsApp","name":"Suporte","credential":"token-do-whatsapp","agentId":"<id de um agente existente em apps/api>"}'
+
+# listar/consultar canais — credencial nunca aparece na resposta
+curl http://localhost:5027/channels
+curl http://localhost:5027/channels/<id>
+
+# ativar/desativar (idempotente, nunca exclui o registro)
+curl -X POST http://localhost:5027/channels/<id>/deactivate
+curl -X POST http://localhost:5027/channels/<id>/activate
 ```
+
+Ainda sem orquestrador, CRM (Contact/Session) ou adapter real de canal —
+as credenciais são opacas, sem nenhuma tentativa de conexão contra a
+plataforma externa (WhatsApp/Telegram) nesta fatia.
 
 ## Como testar cada app
 
-Os testes de integração de `apps/api`, `apps/workers` e
+Os testes de integração de `apps/api`, `apps/workers`, `apps/inbox` e
 `tests/CrossAppTaskStoreCompatibility.Tests` sobem Postgres/RabbitMQ
 efêmeros via Testcontainers — não precisam do `docker compose up` da seção
-acima rodando, mas precisam de Docker/Podman disponível. `apps/inbox` não
-tem persistência ainda, então seus testes não dependem de Docker/Podman.
+acima rodando, mas precisam de Docker/Podman disponível.
 
 ```bash
 # libs/ProviderCatalog
