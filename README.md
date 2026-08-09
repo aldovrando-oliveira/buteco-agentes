@@ -15,6 +15,7 @@ decisões — `libs/ProviderCatalog` é o primeiro caso real, ver
 | `apps/api` | .NET 10, ASP.NET Core Web API. CRUD de agentes (EF Core/Postgres, com `provider`/`model` por agente) e endpoint A2A por agente (`/agents/{id}/a2a`, via `A2A`/`A2A.AspNetCore`). Expõe `GET /providers` (provedores de LLM disponíveis por configuração de ambiente). Nunca chama o LLM — só persiste a task e publica um job no RabbitMQ |
 | `apps/workers` | .NET 10, Worker Service. Consome o RabbitMQ, monta o agente (`Microsoft.Agents.AI`) com o system prompt cadastrado, resolve o `IChatClient` do provedor do agente (OpenAI via `Microsoft.Extensions.AI.OpenAI`, Anthropic via `Anthropic`, Gemini via `Google.GenAI`) e escreve o resultado de volta no Postgres |
 | `apps/frontend` | Vite + React 19 + TypeScript + Mantine 9 (ESLint + Prettier) — ainda não consome o backend |
+| `apps/inbox` | .NET 10, ASP.NET Core Web API. Host HTTP que vai receber webhooks de canais externos (ChatWoot, Waha, e futuros adapters). Por enquanto, só scaffold — nenhuma lógica de canal, catálogo ou persistência ainda |
 
 RabbitMQ é o broker entre `apps/api` e `apps/workers`. PostgreSQL + EF Core
 para o catálogo de agentes e para o store durável de tasks/eventos do
@@ -48,6 +49,11 @@ apps/
   frontend/               # Vite + React + TS + Mantine
     src/
     package.json
+  inbox/                  # ASP.NET Core Web API (scaffold — sem lógica de
+                           # canal/catálogo/persistência ainda)
+    Inbox.sln
+    src/Buteco.Inbox/
+    tests/Buteco.Inbox.Tests/
 tests/
   CrossAppTaskStoreCompatibility.Tests/  # único projeto que referencia
                                           # Buteco.Api e Buteco.Workers ao
@@ -180,12 +186,26 @@ npm run dev
 Abra `http://localhost:5173`. Deve renderizar o `AppShell` (header + navbar +
 área principal) sem erros no console do navegador.
 
+### apps/inbox
+
+```bash
+cd apps/inbox
+dotnet run --project src/Buteco.Inbox
+```
+
+Ainda só scaffold — sem lógica de canal, catálogo ou persistência.
+
+```bash
+curl -i http://localhost:5027/health
+```
+
 ## Como testar cada app
 
 Os testes de integração de `apps/api`, `apps/workers` e
 `tests/CrossAppTaskStoreCompatibility.Tests` sobem Postgres/RabbitMQ
 efêmeros via Testcontainers — não precisam do `docker compose up` da seção
-acima rodando, mas precisam de Docker/Podman disponível.
+acima rodando, mas precisam de Docker/Podman disponível. `apps/inbox` não
+tem persistência ainda, então seus testes não dependem de Docker/Podman.
 
 ```bash
 # libs/ProviderCatalog
@@ -196,6 +216,9 @@ dotnet test apps/api/Api.sln
 
 # apps/workers
 dotnet test apps/workers/Workers.sln
+
+# apps/inbox
+dotnet test apps/inbox/Inbox.sln
 
 # compatibilidade de schema entre apps/api e apps/workers
 dotnet test tests/CrossAppTaskStoreCompatibility.Tests
