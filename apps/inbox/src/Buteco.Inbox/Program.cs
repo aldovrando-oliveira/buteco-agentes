@@ -1,6 +1,8 @@
 using Buteco.Inbox.Agents;
 using Buteco.Inbox.Channels.Endpoints;
 using Buteco.Inbox.Channels.Security;
+using Buteco.Inbox.Contacts;
+using Buteco.Inbox.Contacts.Endpoints;
 using Buteco.Inbox.Infrastructure;
 using Buteco.Inbox.Options;
 
@@ -15,7 +17,15 @@ builder.Services.AddMediator(options => options.ServiceLifetime = ServiceLifetim
 
 builder.Services.Configure<InboxCryptoOptions>(builder.Configuration.GetSection(InboxCryptoOptions.SectionName));
 builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptions.SectionName));
+// Nome totalmente qualificado — colide com Microsoft.AspNetCore.Builder.SessionOptions
+// (middleware de sessão HTTP do ASP.NET Core, não usado aqui), trazido por
+// implicit usings do Sdk.Web.
+builder.Services.Configure<Buteco.Inbox.Contacts.SessionOptions>(
+    builder.Configuration.GetSection(Buteco.Inbox.Contacts.SessionOptions.SectionName));
 builder.Services.AddSingleton<IChannelCredentialCipher, AesGcmChannelCredentialCipher>();
+// Scoped, não Singleton — depende de AppDbContext, que é Scoped (mesmo
+// motivo de ServiceLifetime.Scoped no AddMediator acima).
+builder.Services.AddScoped<IContactSessionResolver, ContactSessionResolver>();
 
 var apiBaseUrl = builder.Configuration.GetSection(ApiOptions.SectionName).Get<ApiOptions>()?.BaseUrl
     ?? throw new InvalidOperationException("Api:BaseUrl não configurado.");
@@ -30,6 +40,7 @@ var app = builder.Build();
 
 app.MapHealthChecks("/health");
 app.MapChannelEndpoints();
+app.MapContactEndpoints();
 
 app.Run();
 
