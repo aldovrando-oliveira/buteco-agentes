@@ -15,7 +15,7 @@ decisões — `libs/ProviderCatalog` é o primeiro caso real, ver
 | `apps/api` | .NET 10, ASP.NET Core Web API. CRUD de agentes (EF Core/Postgres, com `provider`/`model` por agente) e endpoint A2A por agente (`/agents/{id}/a2a`, via `A2A`/`A2A.AspNetCore`). Expõe `GET /providers` (provedores de LLM disponíveis por configuração de ambiente). Nunca chama o LLM — só persiste a task e publica um job no RabbitMQ |
 | `apps/workers` | .NET 10, Worker Service. Consome o RabbitMQ, monta o agente (`Microsoft.Agents.AI`) com o system prompt cadastrado, resolve o `IChatClient` do provedor do agente (OpenAI via `Microsoft.Extensions.AI.OpenAI`, Anthropic via `Anthropic`, Gemini via `Google.GenAI`) e escreve o resultado de volta no Postgres |
 | `apps/frontend` | Vite + React 19 + TypeScript + Mantine 9 (ESLint + Prettier) — ainda não consome o backend |
-| `apps/inbox` | .NET 10, ASP.NET Core Web API. Host HTTP que vai receber webhooks de canais externos (ChatWoot, Waha, e futuros adapters). Hoje: catálogo de canais de entrada (WhatsApp, Telegram) — CRUD (EF Core/Postgres, banco próprio `buteco_inbox`, sem tabelas em comum com `apps/api`/`apps/workers`), credenciais criptografadas (AES-GCM, mesmo padrão de McpServer), `AgentId` validado via HTTP contra `apps/api`. Ainda sem orquestrador, CRM (Contact/Session) ou adapter real de canal |
+| `apps/inbox` | .NET 10, ASP.NET Core Web API. Host HTTP que vai receber webhooks de canais externos (ChatWoot, Waha, e futuros adapters). Hoje: catálogo de canais de entrada (WhatsApp, Telegram, EF Core/Postgres, banco próprio `buteco_inbox`, credenciais criptografadas AES-GCM, `AgentId` validado via HTTP contra `apps/api`), CRM próprio de Contact/Session, e o orquestrador de mensagens — debounce persistido em Postgres e primeiro round-trip real com `apps/api` como cliente A2A (`SendMessage` via `A2A.A2AClient`, resposta via push notification recebida em `POST /internal/push-notifications`). Ainda sem adapter real de canal |
 
 RabbitMQ é o broker entre `apps/api` e `apps/workers`. PostgreSQL + EF Core
 para o catálogo de agentes e para o store durável de tasks/eventos do
@@ -204,13 +204,19 @@ cd apps/inbox
 dotnet run --project src/Buteco.Inbox
 ```
 
-Lê `ConnectionStrings:Postgres`, `Inbox:CredentialEncryptionKey` e
-`Api:BaseUrl` via `appsettings.Development.json` (defaults de dev, mesmos
-do `.env.example`) ou variáveis de ambiente
-(`ConnectionStrings__Postgres`, `Inbox__CredentialEncryptionKey`,
-`Api__BaseUrl`) — nunca hardcoded. `Api:BaseUrl` deve apontar para onde
-`apps/api` está escutando (`http://localhost:5017` em dev) — usado para
-validar, via `GET /agents/{id}`, o `agentId` de cada canal cadastrado.
+Lê `ConnectionStrings:Postgres`, `Inbox:CredentialEncryptionKey`,
+`Api:BaseUrl`, `PublicUrl:BaseUrl` e `Debounce:*` via
+`appsettings.Development.json` (defaults de dev, mesmos do
+`.env.example`) ou variáveis de ambiente (`ConnectionStrings__Postgres`,
+`Inbox__CredentialEncryptionKey`, `Api__BaseUrl`,
+`PublicUrl__BaseUrl`, `Debounce__Window`, `Debounce__SweepInterval`,
+`Debounce__MaxDispatchAttempts`) — nunca hardcoded. `Api:BaseUrl` deve
+apontar para onde `apps/api` está escutando (`http://localhost:5017` em
+dev) — usado para validar `AgentId` de canal (`GET /agents/{id}`) e para
+o cliente A2A (`POST /agents/{id}/a2a`). `PublicUrl:BaseUrl` deve ser a
+URL pela qual este processo é alcançável a partir de `apps/api`/
+`apps/workers` (`http://localhost:5027` em dev) — usada no
+`pushNotificationConfig.url` enviado em cada `SendMessage`.
 
 ```bash
 curl -i http://localhost:5027/health
@@ -230,16 +236,22 @@ curl -X POST http://localhost:5027/channels/<id>/deactivate
 curl -X POST http://localhost:5027/channels/<id>/activate
 ```
 
-Ainda sem orquestrador, CRM (Contact/Session) ou adapter real de canal —
-as credenciais são opacas, sem nenhuma tentativa de conexão contra a
-plataforma externa (WhatsApp/Telegram) nesta fatia.
+O orquestrador (`IInboundMessageOrchestrator`) é um serviço interno, sem
+endpoint HTTP — consumido diretamente por código (testes hoje, adapters
+reais de canal depois). Mensagens bufferizadas por sessão aguardam a
+janela de debounce (`Debounce:Window`, varrida periodicamente por um
+`BackgroundService`, `Debounce:SweepInterval`) antes de disparar um
+`SendMessage` real contra `apps/api`. Ainda sem adapter real de canal —
+as credenciais continuam opacas, sem nenhuma tentativa de conexão contra
+a plataforma externa (WhatsApp/Telegram) nesta fatia.
 
 ## Como testar cada app
 
-Os testes de integração de `apps/api`, `apps/workers`, `apps/inbox` e
-`tests/CrossAppTaskStoreCompatibility.Tests` sobem Postgres/RabbitMQ
-efêmeros via Testcontainers — não precisam do `docker compose up` da seção
-acima rodando, mas precisam de Docker/Podman disponível.
+Os testes de integração de `apps/api`, `apps/workers`, `apps/inbox` e dos
+dois projetos cruzados em `tests/` (`CrossAppTaskStoreCompatibility.Tests`,
+`InboxOrchestratorRoundTrip.Tests`) sobem Postgres/RabbitMQ efêmeros via
+Testcontainers — não precisam do `docker compose up` da seção acima
+rodando, mas precisam de Docker/Podman disponível.
 
 ```bash
 # libs/ProviderCatalog
@@ -256,6 +268,9 @@ dotnet test apps/inbox/Inbox.sln
 
 # compatibilidade de schema entre apps/api e apps/workers
 dotnet test tests/CrossAppTaskStoreCompatibility.Tests
+
+# round-trip completo: apps/inbox (debounce + cliente A2A) -> apps/api -> apps/workers -> push notification
+dotnet test tests/InboxOrchestratorRoundTrip.Tests
 
 # apps/frontend
 cd apps/frontend
@@ -277,8 +292,11 @@ npm run build
   processos, não um mecanismo geral de código compartilhado. Outra exceção,
   de natureza diferente, é `tests/CrossAppTaskStoreCompatibility.Tests`,
   que referencia `Buteco.Api` e `Buteco.Workers` de propósito só para
-  verificar compatibilidade de schema — nenhum dos dois apps o referencia
-  de volta, e ele nunca é publicado com nenhum dos dois.
+  verificar compatibilidade de schema, e `tests/InboxOrchestratorRoundTrip.Tests`,
+  que referencia os três apps (`Buteco.Api`, `Buteco.Inbox`, `Buteco.Workers`)
+  de propósito só para o teste de round-trip ponta a ponta do orquestrador
+  de `apps/inbox` — em nenhum dos dois casos algum app referencia o
+  projeto de teste de volta, nem ele é publicado com nenhum deles.
 - **Central Package Management**: versões de pacotes NuGet ficam em
   `Directory.Packages.props` na raiz; os `.csproj` referenciam pacotes sem
   `Version`.

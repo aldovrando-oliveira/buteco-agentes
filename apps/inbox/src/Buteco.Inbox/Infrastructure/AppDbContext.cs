@@ -1,5 +1,6 @@
 using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Contacts.Entities;
+using Buteco.Inbox.Orchestration.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Buteco.Inbox.Infrastructure;
@@ -11,6 +12,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Contact> Contacts => Set<Contact>();
 
     public DbSet<Session> Sessions => Set<Session>();
+
+    public DbSet<PendingDispatch> PendingDispatches => Set<PendingDispatch>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,6 +68,41 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(session => session.ContactId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PendingDispatch>(entity =>
+        {
+            entity.ToTable("pending_dispatches");
+            entity.HasKey(dispatch => dispatch.Id);
+            entity.Property(dispatch => dispatch.SessionId).IsRequired();
+            entity.Property(dispatch => dispatch.Status).IsRequired().HasConversion<string>();
+            entity.Property(dispatch => dispatch.LastMessageAt).IsRequired();
+            entity.Property(dispatch => dispatch.AttemptCount).IsRequired().HasDefaultValue(0);
+
+            entity.OwnsMany(dispatch => dispatch.Messages, messages => messages.ToJson());
+
+            entity.HasOne<Session>()
+                .WithMany()
+                .HasForeignKey(dispatch => dispatch.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Só uma PendingDispatch Pending por Session — força o
+            // find-or-create de InboundMessageOrchestrator a colidir em
+            // vez de duplicar buffers concorrentes para a mesma sessão
+            // (design.md, Riscos; mesmo padrão de defesa de banco que o
+            // índice único de Contact).
+            entity.HasIndex(dispatch => dispatch.SessionId)
+                .IsUnique()
+                .HasFilter($"\"{nameof(PendingDispatch.Status)}\" = 'Pending'");
+
+            entity.HasIndex(dispatch => dispatch.TaskId);
+
+            // Propriedade shadow: a convenção do provider Npgsql detecta
+            // uint + IsRowVersion() + tipo de armazenamento "xid" e
+            // remapeia automaticamente para a coluna de sistema real
+            // "xmin" (design.md, Decisão 5 — UseXminAsConcurrencyToken()
+            // não existe na versão do provider referenciada).
+            entity.Property<uint>("Version").IsRowVersion();
         });
     }
 }

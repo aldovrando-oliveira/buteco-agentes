@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.RabbitMq" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    Único projeto do monorepo que referencia Buteco.Api, Buteco.Inbox e
+    Buteco.Workers ao mesmo tempo — de propósito, só para o teste de
+    round-trip ponta a ponta desta change (design.md, Decisão 10). Mesmo
+    espírito de tests/CrossAppTaskStoreCompatibility.Tests (que já faz o
+    mesmo entre Buteco.Api e Buteco.Workers): nenhum dos três apps referencia
+    este projeto de volta, e ele nunca é publicado/empacotado com nenhum
+    deles. Buteco.Api e Buteco.Inbox precisam de Aliases porque cada um tem
+    seu próprio tipo público `Program` (top-level statements) — sem alias,
+    os dois `Program` colidiriam nesta compilação (extern alias resolve).
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\apps\api\src\Buteco.Api\Buteco.Api.csproj">
+      <Aliases>ApiAssembly</Aliases>
+    </ProjectReference>
+    <ProjectReference Include="..\..\apps\inbox\src\Buteco.Inbox\Buteco.Inbox.csproj">
+      <Aliases>InboxAssembly</Aliases>
+    </ProjectReference>
+    <ProjectReference Include="..\..\apps\workers\src\Buteco.Workers\Buteco.Workers.csproj" />
+  </ItemGroup>
+
+</Project>

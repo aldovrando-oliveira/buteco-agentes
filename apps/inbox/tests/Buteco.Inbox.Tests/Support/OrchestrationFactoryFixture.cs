@@ -1,0 +1,77 @@
+using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Orchestration;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Testcontainers.PostgreSql;
+
+namespace Buteco.Inbox.Tests.Support;
+
+/// <summary>
+/// Mesmo mecanismo de <see cref="InboxFactoryFixture"/> (Postgres efêmero
+/// via Testcontainers, sem rede real para apps/api), mais especificamente
+/// para os testes do orquestrador: <see cref="IA2AClientFactory"/>
+/// substituído por <see cref="FakeA2AClientFactory"/>, e
+/// <c>DebounceOptions</c> com janela/intervalo de varredura curtos para os
+/// testes rodarem rápido sem abstração de relógio (nenhuma existe no
+/// projeto — mesmo padrão de <c>ContactSessionResolverTests</c>).
+/// </summary>
+public sealed class OrchestrationFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
+{
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
+        .WithDatabase("buteco_inbox_orchestration_test")
+        .WithUsername("buteco")
+        .WithPassword("buteco_test_password")
+        .Build();
+
+    public FakeA2AClientFactory A2AClientFactory { get; } = new();
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.ConfigureAppConfiguration((_, config) =>
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Inbox:CredentialEncryptionKey"] = "NtxqjqnKG3sqy52PFRh/SGk573bsE9TrDtKOsDiR8uc=",
+                ["Api:BaseUrl"] = "http://apps-api.test",
+                ["PublicUrl:BaseUrl"] = "http://apps-inbox.test",
+                ["Debounce:Window"] = "00:00:00.300",
+                ["Debounce:SweepInterval"] = "00:00:00.050",
+                ["Debounce:MaxDispatchAttempts"] = "3",
+            }));
+
+        builder.ConfigureServices(services =>
+        {
+            var dbContextDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
+            if (dbContextDescriptor is not null)
+            {
+                services.Remove(dbContextDescriptor);
+            }
+
+            services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+
+            var a2AClientFactoryDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IA2AClientFactory));
+            if (a2AClientFactoryDescriptor is not null)
+            {
+                services.Remove(a2AClientFactoryDescriptor);
+            }
+
+            services.AddSingleton<IA2AClientFactory>(A2AClientFactory);
+        });
+    }
+
+    async Task IAsyncLifetime.InitializeAsync()
+    {
+        await _postgres.StartAsync();
+
+        using var scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await dbContext.Database.MigrateAsync();
+    }
+
+    async Task IAsyncLifetime.DisposeAsync()
+    {
+        await _postgres.DisposeAsync();
+    }
+}

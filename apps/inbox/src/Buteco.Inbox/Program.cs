@@ -5,6 +5,8 @@ using Buteco.Inbox.Contacts;
 using Buteco.Inbox.Contacts.Endpoints;
 using Buteco.Inbox.Infrastructure;
 using Buteco.Inbox.Options;
+using Buteco.Inbox.Orchestration;
+using Buteco.Inbox.Orchestration.PushNotifications.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +19,8 @@ builder.Services.AddMediator(options => options.ServiceLifetime = ServiceLifetim
 
 builder.Services.Configure<InboxCryptoOptions>(builder.Configuration.GetSection(InboxCryptoOptions.SectionName));
 builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptions.SectionName));
+builder.Services.Configure<PublicUrlOptions>(builder.Configuration.GetSection(PublicUrlOptions.SectionName));
+builder.Services.Configure<DebounceOptions>(builder.Configuration.GetSection(DebounceOptions.SectionName));
 // Nome totalmente qualificado — colide com Microsoft.AspNetCore.Builder.SessionOptions
 // (middleware de sessão HTTP do ASP.NET Core, não usado aqui), trazido por
 // implicit usings do Sdk.Web.
@@ -36,11 +40,25 @@ builder.Services.AddHttpClient(AgentReferenceValidator.HttpClientName, client =>
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<IAgentReferenceValidator, AgentReferenceValidator>();
 
+// Scoped, não Singleton — depende de AppDbContext/IContactSessionResolver,
+// que são Scoped (mesmo motivo dos registros acima).
+builder.Services.AddScoped<IInboundMessageOrchestrator, InboundMessageOrchestrator>();
+
+// Sem BaseAddress fixo — A2AClientFactory monta a Uri completa por
+// AgentId (design.md, Decisão 3). Timeout curto e fixo, mesmo padrão de
+// AgentReferenceValidator.
+builder.Services.AddHttpClient(A2AClientFactory.HttpClientName)
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddSingleton<IA2AClientFactory, A2AClientFactory>();
+
+builder.Services.AddHostedService<DebounceSweepService>();
+
 var app = builder.Build();
 
 app.MapHealthChecks("/health");
 app.MapChannelEndpoints();
 app.MapContactEndpoints();
+app.MapPushNotificationEndpoints();
 
 app.Run();
 
