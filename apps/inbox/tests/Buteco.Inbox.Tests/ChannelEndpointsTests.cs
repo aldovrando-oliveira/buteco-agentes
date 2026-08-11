@@ -36,7 +36,7 @@ public class ChannelEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
         Assert.True(channel.IsActive);
 
         var publicUrlBaseUrl = factory.Services.GetRequiredService<IOptions<PublicUrlOptions>>().Value.BaseUrl;
-        Assert.Equal($"{publicUrlBaseUrl.TrimEnd('/')}/webhooks/test-channel/{channel.Id}", channel.WebhookUrl);
+        Assert.Equal($"{publicUrlBaseUrl.TrimEnd('/')}/webhooks/{channel.Id}", channel.WebhookUrl);
     }
 
     [Fact]

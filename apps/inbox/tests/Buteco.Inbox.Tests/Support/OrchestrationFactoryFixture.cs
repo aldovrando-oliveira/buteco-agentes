@@ -65,8 +65,21 @@ public sealed class OrchestrationFactoryFixture : WebApplicationFactory<Program>
     {
         await _postgres.StartAsync();
 
-        using var scope = Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        // Migra com um AppDbContext isolado, sem tocar Services — acessar
+        // Services aqui já constrói e INICIA o host (WebApplicationFactory),
+        // incluindo DebounceSweepService via AddHostedService. Com
+        // Debounce:SweepInterval em 50ms (acima), o primeiro sweep pode
+        // consultar pending_dispatches antes desta migration terminar,
+        // lançando uma exceção não tratada dentro do BackgroundService —
+        // que em .NET 8+ derruba o host inteiro (HostOptions.BackgroundServiceExceptionBehavior
+        // = StopHost por padrão), descartando o IServiceProvider antes de
+        // qualquer teste rodar. Mesmo padrão de PostgresOnlyFixture: migration
+        // via um AppDbContext próprio, options apontando direto pra
+        // connection string do Testcontainers.
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(_postgres.GetConnectionString())
+            .Options;
+        await using var dbContext = new AppDbContext(options);
         await dbContext.Database.MigrateAsync();
     }
 

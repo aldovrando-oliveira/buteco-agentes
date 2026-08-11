@@ -15,7 +15,7 @@ decisões — `libs/ProviderCatalog` é o primeiro caso real, ver
 | `apps/api` | .NET 10, ASP.NET Core Web API. CRUD de agentes (EF Core/Postgres, com `provider`/`model` por agente) e endpoint A2A por agente (`/agents/{id}/a2a`, via `A2A`/`A2A.AspNetCore`). Expõe `GET /providers` (provedores de LLM disponíveis por configuração de ambiente). Nunca chama o LLM — só persiste a task e publica um job no RabbitMQ |
 | `apps/workers` | .NET 10, Worker Service. Consome o RabbitMQ, monta o agente (`Microsoft.Agents.AI`) com o system prompt cadastrado, resolve o `IChatClient` do provedor do agente (OpenAI via `Microsoft.Extensions.AI.OpenAI`, Anthropic via `Anthropic`, Gemini via `Google.GenAI`) e escreve o resultado de volta no Postgres |
 | `apps/frontend` | Vite + React 19 + TypeScript + Mantine 9 (ESLint + Prettier) — ainda não consome o backend |
-| `apps/inbox` | .NET 10, ASP.NET Core Web API. Host HTTP que vai receber webhooks de canais externos (ChatWoot, Waha, e futuros adapters). Hoje: catálogo de canais de entrada (WhatsApp, Telegram, EF Core/Postgres, banco próprio `buteco_inbox`, credenciais criptografadas AES-GCM, `AgentId` validado via HTTP contra `apps/api`), CRM próprio de Contact/Session, e o orquestrador de mensagens — debounce persistido em Postgres e primeiro round-trip real com `apps/api` como cliente A2A (`SendMessage` via `A2A.A2AClient`, resposta via push notification recebida em `POST /internal/push-notifications`). Ainda sem adapter real de canal |
+| `apps/inbox` | .NET 10, ASP.NET Core Web API. Host HTTP que recebe webhooks de canais externos. Catálogo de canais de entrada (`ChannelType` string aberta, validada contra adapters efetivamente registrados — não mais uma lista fechada — EF Core/Postgres, banco próprio `buteco_inbox`, credenciais criptografadas AES-GCM, `AgentId` validado via HTTP contra `apps/api`), CRM próprio de Contact/Session, e o orquestrador de mensagens — debounce persistido em Postgres e round-trip real com `apps/api` como cliente A2A (`SendMessage` via `A2A.A2AClient`, resposta via push notification recebida em `POST /internal/push-notifications`, entregue de volta ao canal de origem). Primeiro adapter real: WAHA (WhatsApp HTTP API), registrado sob `ChannelType` `"waha"` — recepção de webhook (`POST /webhooks/{channelId}`) e envio (`POST /api/sendText`) |
 
 RabbitMQ é o broker entre `apps/api` e `apps/workers`. PostgreSQL + EF Core
 para o catálogo de agentes e para o store durável de tasks/eventos do
@@ -27,7 +27,7 @@ isso no `apps/frontend` (ver `openspec/changes/backend-agente-a2a-mvp/`).
 ## Estrutura
 
 ```
-docker-compose.yml        # Postgres + RabbitMQ para desenvolvimento local
+docker-compose.yml        # Postgres + RabbitMQ + WAHA para desenvolvimento local
 .env.example               # variáveis usadas pelo compose e pelos apps
 global.json                 # pina o SDK do .NET
 Directory.Build.props       # propriedades comuns aos projetos .NET
@@ -50,7 +50,7 @@ apps/
     src/
     package.json
   inbox/                  # ASP.NET Core Web API — catálogo de canais de
-                           # entrada (WhatsApp, Telegram), banco próprio
+                           # entrada e adapter WAHA, banco próprio
     Inbox.sln
     src/Buteco.Inbox/
     tests/Buteco.Inbox.Tests/
@@ -83,6 +83,9 @@ Isso sobe:
 - **Postgres** na porta `5432` (padrão), banco/usuário/senha definidos no `.env`
 - **RabbitMQ** na porta `5672` (AMQP) e `15672` (UI de management —
   `http://localhost:15672`, mesmas credenciais do `.env`)
+- **WAHA** (WhatsApp HTTP API) na porta `3000` (padrão) — usado por
+  `apps/inbox` para testar o adapter `waha`; sem sessão pré-configurada
+  (ver checklist de round-trip manual na seção `apps/inbox` abaixo)
 
 Os dados persistem em volumes nomeados entre `docker compose down`/`up`. Para
 apagar tudo: `docker compose down -v`.
@@ -221,13 +224,16 @@ URL pela qual este processo é alcançável a partir de `apps/api`/
 ```bash
 curl -i http://localhost:5027/health
 
-# cadastrar um canal — agentId precisa existir em apps/api (GET /agents/{id});
-# apps/api precisa estar rodando, senão o cadastro é rejeitado (fail-fast)
+# cadastrar um canal WAHA — credential é o JSON de WahaCredential
+# serializado como string; agentId precisa existir em apps/api
+# (GET /agents/{id}); apps/api precisa estar rodando, senão o cadastro é
+# rejeitado (fail-fast)
 curl -X POST http://localhost:5027/channels \
   -H "Content-Type: application/json" \
-  -d '{"channelType":"WhatsApp","name":"Suporte","credential":"token-do-whatsapp","agentId":"<id de um agente existente em apps/api>"}'
+  -d '{"channelType":"waha","name":"Suporte WhatsApp","credential":"{\"ServiceUrl\":\"http://localhost:3000\",\"SessionName\":\"default\",\"AuthToken\":\"<api key do WAHA>\"}","agentId":"<id de um agente existente em apps/api>"}'
 
-# listar/consultar canais — credencial nunca aparece na resposta
+# listar/consultar canais — credencial nunca aparece na resposta;
+# webhookUrl vem pronto para configurar no WAHA (ver checklist abaixo)
 curl http://localhost:5027/channels
 curl http://localhost:5027/channels/<id>
 
@@ -237,13 +243,39 @@ curl -X POST http://localhost:5027/channels/<id>/activate
 ```
 
 O orquestrador (`IInboundMessageOrchestrator`) é um serviço interno, sem
-endpoint HTTP — consumido diretamente por código (testes hoje, adapters
-reais de canal depois). Mensagens bufferizadas por sessão aguardam a
-janela de debounce (`Debounce:Window`, varrida periodicamente por um
-`BackgroundService`, `Debounce:SweepInterval`) antes de disparar um
-`SendMessage` real contra `apps/api`. Ainda sem adapter real de canal —
-as credenciais continuam opacas, sem nenhuma tentativa de conexão contra
-a plataforma externa (WhatsApp/Telegram) nesta fatia.
+endpoint HTTP próprio — consumido diretamente por código (testes) e pelos
+handlers de webhook de cada adapter (`IInboundWebhookHandler`, despachado
+pela rota genérica `POST /webhooks/{channelId}`). Mensagens bufferizadas
+por sessão aguardam a janela de debounce (`Debounce:Window`, varrida
+periodicamente por um `BackgroundService`, `Debounce:SweepInterval`) antes
+de disparar um `SendMessage` real contra `apps/api`.
+
+#### Checklist de round-trip manual com WAHA
+
+Verificação de ponta a ponta do adapter `waha` — depende de um WAHA real
+conectado a um WhatsApp de teste, por isso é manual, não automatizada
+(`openspec/changes/inbox-adapter-waha/design.md`, Decisions 3 e 6):
+
+1. Suba o WAHA: `docker compose up -d waha` (ou `docker compose up -d`
+   para tudo). Confirme com `curl -i http://localhost:3000/api/sessions`.
+2. Cadastre o canal em `apps/inbox` (`POST /channels` acima) e anote o
+   `webhookUrl` retornado (formato `http://localhost:5027/webhooks/<channelId>`).
+3. Configure a sessão no próprio WAHA, apontando o webhook para a URL do
+   passo 2 — passo manual, não automatizado por `apps/inbox` (Decision 3):
+   ```bash
+   curl -X POST http://localhost:3000/api/sessions \
+     -H "Content-Type: application/json" \
+     -d '{"name":"default","config":{"webhooks":[{"url":"<webhookUrl do passo 2>","events":["message"]}]}}'
+   ```
+4. Escaneie o QR code (`GET /api/screenshot?session=default` no WAHA, ou a
+   UI do próprio WAHA) com um WhatsApp de teste até o status da sessão
+   virar `WORKING`.
+5. Envie uma mensagem de WhatsApp real para o número conectado. Confirme
+   que uma `Session`/`PendingDispatch` foi criada em `apps/inbox` e que,
+   depois da janela de debounce, o agente responde de volta no mesmo
+   WhatsApp — round-trip completo (webhook → orquestrador → `apps/api` →
+   `apps/workers` → push notification → `WahaOutboundMessageSender` →
+   `POST /api/sendText`).
 
 ## Como testar cada app
 

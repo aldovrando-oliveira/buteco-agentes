@@ -8,9 +8,13 @@ namespace Buteco.Inbox.Contacts;
 
 public sealed class ContactSessionResolver(AppDbContext dbContext, IOptions<SessionOptions> options) : IContactSessionResolver
 {
-    public async Task<Session> FindOrCreateSessionAsync(Guid channelId, string externalId, CancellationToken cancellationToken)
+    public async Task<Session> FindOrCreateSessionAsync(
+        Guid channelId,
+        string externalId,
+        IReadOnlyDictionary<string, string> contactMetadata,
+        CancellationToken cancellationToken)
     {
-        var contact = await FindOrCreateContactAsync(channelId, externalId, cancellationToken);
+        var contact = await FindOrCreateContactAsync(channelId, externalId, contactMetadata, cancellationToken);
 
         var session = await dbContext.Sessions
             .Where(existing => existing.ContactId == contact.Id)
@@ -33,16 +37,23 @@ public sealed class ContactSessionResolver(AppDbContext dbContext, IOptions<Sess
         return session;
     }
 
-    private async Task<Contact> FindOrCreateContactAsync(Guid channelId, string externalId, CancellationToken cancellationToken)
+    private async Task<Contact> FindOrCreateContactAsync(
+        Guid channelId,
+        string externalId,
+        IReadOnlyDictionary<string, string> contactMetadata,
+        CancellationToken cancellationToken)
     {
         var existing = await dbContext.Contacts
             .FirstOrDefaultAsync(contact => contact.ChannelId == channelId && contact.ExternalId == externalId, cancellationToken);
         if (existing is not null)
         {
+            // contactMetadata desta chamada é ignorado — Contact já existe,
+            // metadado gravado só na criação (inbox-adapter-waha, design.md,
+            // Decision 8).
             return existing;
         }
 
-        var contact = new Contact(channelId, externalId);
+        var contact = new Contact(channelId, externalId, contactMetadata);
         dbContext.Contacts.Add(contact);
 
         try

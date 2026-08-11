@@ -81,7 +81,7 @@ public class CreateChannelCommandHandlerTests
         var result = await handler.Handle(command, CancellationToken.None);
 
         Assert.Equal(CreateChannelOutcome.Success, result.Outcome);
-        Assert.Equal($"{PublicUrlBaseUrl}/webhooks/{ChannelType}/{result.Channel!.Id}", result.Channel!.WebhookUrl);
+        Assert.Equal($"{PublicUrlBaseUrl}/webhooks/{result.Channel!.Id}", result.Channel!.WebhookUrl);
     }
 
     [Fact]

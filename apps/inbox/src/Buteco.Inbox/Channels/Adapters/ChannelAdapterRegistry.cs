@@ -12,4 +12,7 @@ public sealed class ChannelAdapterRegistry(IServiceProvider serviceProvider) : I
 
     public IOutboundMessageSender GetOutboundMessageSender(string channelType) =>
         serviceProvider.GetRequiredKeyedService<IOutboundMessageSender>(channelType);
+
+    public IInboundWebhookHandler? GetInboundWebhookHandler(string channelType) =>
+        serviceProvider.GetKeyedService<IInboundWebhookHandler>(channelType);
 }

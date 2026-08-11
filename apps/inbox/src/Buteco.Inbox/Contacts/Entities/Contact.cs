@@ -13,17 +13,26 @@ public class Contact
     // Channel.EncryptedCredentials.
     public string ExternalId { get; private set; } = null!;
 
+    // Dicionário genérico (não um campo específico, ex. PhoneNumber) —
+    // ponto de extensão para dado adicional de exibição/CRM que o adapter
+    // de origem capture na criação, sem amarrar o schema de Contact a um
+    // conceito de um único tipo de canal (inbox-adapter-waha, design.md,
+    // Decision 8). Gravado só na criação — mesmo tratamento imutável que
+    // ExternalId já recebe hoje, não há Update para este campo.
+    public IReadOnlyDictionary<string, string> Metadata { get; private set; } = new Dictionary<string, string>();
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     private Contact()
     {
     }
 
-    public Contact(Guid channelId, string externalId)
+    public Contact(Guid channelId, string externalId, IReadOnlyDictionary<string, string> metadata)
     {
         Id = Guid.NewGuid();
         ChannelId = channelId;
         ExternalId = externalId;
+        Metadata = metadata;
         CreatedAt = DateTimeOffset.UtcNow;
     }
 }

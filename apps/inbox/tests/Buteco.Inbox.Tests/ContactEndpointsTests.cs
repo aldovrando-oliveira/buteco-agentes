@@ -92,7 +92,7 @@ public class ContactEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
     {
         using var scope = factory.Services.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<IContactSessionResolver>();
-        return await resolver.FindOrCreateSessionAsync(channelId, externalId, CancellationToken.None);
+        return await resolver.FindOrCreateSessionAsync(channelId, externalId, new Dictionary<string, string>(), CancellationToken.None);
     }
 
     private static string UniqueExternalId() => $"+5511{Guid.NewGuid():N}"[..15];
@@ -116,7 +116,7 @@ public class ContactEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
     {
         using var scope = factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var contact = new Contact(channelId, UniqueExternalId());
+        var contact = new Contact(channelId, UniqueExternalId(), new Dictionary<string, string>());
         dbContext.Contacts.Add(contact);
         await dbContext.SaveChangesAsync();
         return contact.Id;

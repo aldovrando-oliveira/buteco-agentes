@@ -70,7 +70,7 @@ public class InboundMessageOrchestratorTests(InboxFactoryFixture factory) : ICla
     {
         using var scope = factory.Services.CreateScope();
         var orchestrator = scope.ServiceProvider.GetRequiredService<IInboundMessageOrchestrator>();
-        await orchestrator.ReceiveMessageAsync(channelId, externalId, text, DateTimeOffset.UtcNow, CancellationToken.None);
+        await orchestrator.ReceiveMessageAsync(channelId, externalId, text, DateTimeOffset.UtcNow, new Dictionary<string, string>(), CancellationToken.None);
     }
 
     private async Task<PendingDispatch?> FindPendingDispatchAsync(Guid channelId, string externalId)

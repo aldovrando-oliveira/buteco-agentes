@@ -150,7 +150,7 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
         dbContext.Channels.Add(channel);
 
         var externalId = $"+5511{Guid.NewGuid():N}"[..15];
-        var contact = new Contact(channel.Id, externalId);
+        var contact = new Contact(channel.Id, externalId, new Dictionary<string, string>());
         dbContext.Contacts.Add(contact);
 
         var session = new Session(contact.Id);

@@ -1,7 +1,9 @@
+using System.Text.Json;
 using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Contacts.Entities;
 using Buteco.Inbox.Orchestration.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Buteco.Inbox.Infrastructure;
 
@@ -36,6 +38,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(contact => contact.Id);
             entity.Property(contact => contact.ChannelId).IsRequired();
             entity.Property(contact => contact.ExternalId).IsRequired();
+
+            // jsonb, não colunas separadas — dicionário genérico e aberto
+            // (inbox-adapter-waha, design.md, Decision 8). IReadOnlyDictionary
+            // não é comparado por valor pelo EF Core por padrão; sem este
+            // ValueComparer explícito, o change tracker marcaria a
+            // propriedade como modificada mesmo sem mutação real.
+            entity.Property(contact => contact.Metadata)
+                .IsRequired()
+                .HasColumnType("jsonb")
+                .HasConversion(
+                    metadata => JsonSerializer.Serialize(metadata, (JsonSerializerOptions?)null),
+                    json => JsonSerializer.Deserialize<Dictionary<string, string>>(json, (JsonSerializerOptions?)null)!)
+                .Metadata.SetValueComparer(new ValueComparer<IReadOnlyDictionary<string, string>>(
+                    (left, right) => (left ?? new Dictionary<string, string>()).SequenceEqual(right ?? new Dictionary<string, string>()),
+                    dictionary => dictionary.Aggregate(0, (hash, pair) => HashCode.Combine(hash, pair.Key, pair.Value)),
+                    dictionary => new Dictionary<string, string>(dictionary)));
+
             entity.Property(contact => contact.CreatedAt).IsRequired();
 
             // FK real para Channel.Id — diferente de Channel.AgentId (Guid

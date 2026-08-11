@@ -68,7 +68,7 @@ public class DebounceRestartAndConcurrencyTests(PostgresOnlyFixture fixture) : I
 
             var channel = new Channel("test-channel", $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
             dbContext.Channels.Add(channel);
-            var contact = new Contact(channel.Id, $"+5511{Guid.NewGuid():N}"[..15]);
+            var contact = new Contact(channel.Id, $"+5511{Guid.NewGuid():N}"[..15], new Dictionary<string, string>());
             dbContext.Contacts.Add(contact);
             var session = new Session(contact.Id);
             dbContext.Sessions.Add(session);
@@ -139,7 +139,7 @@ public class DebounceRestartAndConcurrencyTests(PostgresOnlyFixture fixture) : I
 
         var externalId = $"+5511{Guid.NewGuid():N}"[..15];
         var orchestrator = scope.ServiceProvider.GetRequiredService<IInboundMessageOrchestrator>();
-        await orchestrator.ReceiveMessageAsync(channel.Id, externalId, text, DateTimeOffset.UtcNow, CancellationToken.None);
+        await orchestrator.ReceiveMessageAsync(channel.Id, externalId, text, DateTimeOffset.UtcNow, new Dictionary<string, string>(), CancellationToken.None);
     }
 
     private static async Task<T> PollUntilAsync<T>(Func<Task<T>> probeAsync, Func<T, bool> isDone, TimeSpan timeout)

@@ -16,9 +16,13 @@ public sealed record ChannelResponse(
     DateTimeOffset UpdatedAt,
     string WebhookUrl)
 {
-    // publicUrlBaseUrl reaproveita PublicUrlOptions já existente (design.md,
-    // Decision 4) — nunca persistido, computado a cada resposta. Nenhum
-    // endpoint é mapeado nesse path nesta fatia (design.md, Non-Goals).
+    // publicUrlBaseUrl reaproveita PublicUrlOptions já existente
+    // (inbox-adapter-contrato-catalogo, design.md, Decision 4) — nunca
+    // persistido, computado a cada resposta. Formato /webhooks/{channelId}
+    // (sem channelType na rota, inbox-adapter-waha, design.md, ajuste de
+    // convenção) — o ChannelType já está persistido no Channel resolvido
+    // por channelId e é imutável após a criação, carregá-lo também na rota
+    // seria redundante.
     public static ChannelResponse FromEntity(Channel channel, string publicUrlBaseUrl) => new(
         channel.Id,
         channel.ChannelType,
@@ -27,8 +31,8 @@ public sealed record ChannelResponse(
         channel.IsActive,
         channel.CreatedAt,
         channel.UpdatedAt,
-        BuildWebhookUrl(publicUrlBaseUrl, channel.ChannelType, channel.Id));
+        BuildWebhookUrl(publicUrlBaseUrl, channel.Id));
 
-    private static string BuildWebhookUrl(string publicUrlBaseUrl, string channelType, Guid channelId) =>
-        $"{publicUrlBaseUrl.TrimEnd('/')}/webhooks/{channelType}/{channelId}";
+    private static string BuildWebhookUrl(string publicUrlBaseUrl, Guid channelId) =>
+        $"{publicUrlBaseUrl.TrimEnd('/')}/webhooks/{channelId}";
 }

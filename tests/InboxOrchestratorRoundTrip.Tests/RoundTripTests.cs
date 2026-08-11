@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using InboxAppDbContext = InboxAssembly::Buteco.Inbox.Infrastructure.AppDbContext;
 using InboxChannel = InboxAssembly::Buteco.Inbox.Channels.Entities.Channel;
-using InboxChannelType = InboxAssembly::Buteco.Inbox.Channels.Entities.ChannelType;
 using InboxInboundMessageOrchestrator = InboxAssembly::Buteco.Inbox.Orchestration.IInboundMessageOrchestrator;
 using InboxPendingDispatch = InboxAssembly::Buteco.Inbox.Orchestration.Entities.PendingDispatch;
 
@@ -34,7 +33,7 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
         using (var scope = fixture.InboxFactory.Services.CreateScope())
         {
             var orchestrator = scope.ServiceProvider.GetRequiredService<InboxInboundMessageOrchestrator>();
-            await orchestrator.ReceiveMessageAsync(channelId, externalId, "Olá, preciso de ajuda", DateTimeOffset.UtcNow, CancellationToken.None);
+            await orchestrator.ReceiveMessageAsync(channelId, externalId, "Olá, preciso de ajuda", DateTimeOffset.UtcNow, new Dictionary<string, string>(), CancellationToken.None);
         }
 
         // Debounce disparou o SendMessage real: a PendingDispatch fica
@@ -87,7 +86,11 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
         using var scope = fixture.InboxFactory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<InboxAppDbContext>();
 
-        var channel = new InboxChannel(InboxChannelType.WhatsApp, $"Canal Round-Trip {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
+        // "test-channel" — mesmo identificador de adapter de teste usado em
+        // todo apps/inbox desde inbox-adapter-contrato-catalogo, quando
+        // ChannelType deixou de ser um enum fechado (removido) para virar
+        // string validada contra adapters registrados.
+        var channel = new InboxChannel("test-channel", $"Canal Round-Trip {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
         dbContext.Channels.Add(channel);
         await dbContext.SaveChangesAsync();
 

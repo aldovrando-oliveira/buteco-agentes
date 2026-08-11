@@ -15,9 +15,10 @@ public sealed class InboundMessageOrchestrator(
         string externalId,
         string text,
         DateTimeOffset receivedAt,
+        IReadOnlyDictionary<string, string> contactMetadata,
         CancellationToken cancellationToken)
     {
-        var session = await sessionResolver.FindOrCreateSessionAsync(channelId, externalId, cancellationToken);
+        var session = await sessionResolver.FindOrCreateSessionAsync(channelId, externalId, contactMetadata, cancellationToken);
 
         var pendingDispatch = await FindPendingAsync(session.Id, cancellationToken);
         if (pendingDispatch is not null)

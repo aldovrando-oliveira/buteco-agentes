@@ -156,7 +156,7 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
     {
         using var scope = factory.Services.CreateScope();
         var orchestrator = scope.ServiceProvider.GetRequiredService<IInboundMessageOrchestrator>();
-        await orchestrator.ReceiveMessageAsync(channelId, externalId, text, DateTimeOffset.UtcNow, CancellationToken.None);
+        await orchestrator.ReceiveMessageAsync(channelId, externalId, text, DateTimeOffset.UtcNow, new Dictionary<string, string>(), CancellationToken.None);
     }
 
     private async Task<string> ResolveContextIdAsync(Guid channelId, string externalId)

@@ -1,8 +1,10 @@
 using Buteco.Inbox.Agents;
 using Buteco.Inbox.Channels.Adapters;
 using Buteco.Inbox.Channels.Adapters.Testing;
+using Buteco.Inbox.Channels.Adapters.Waha;
 using Buteco.Inbox.Channels.Endpoints;
 using Buteco.Inbox.Channels.Security;
+using Buteco.Inbox.Channels.Webhooks.Endpoints;
 using Buteco.Inbox.Contacts;
 using Buteco.Inbox.Contacts.Endpoints;
 using Buteco.Inbox.Infrastructure;
@@ -39,9 +41,22 @@ builder.Services.AddSingleton<IChannelAdapterRegistry, ChannelAdapterRegistry>()
 // mesma chave (design.md, Decision 5).
 builder.Services.AddKeyedSingleton<IChannelConfigValidator, TestChannelConfigValidator>("test-channel");
 builder.Services.AddKeyedSingleton<IOutboundMessageSender, TestOutboundMessageSender>("test-channel");
-// Falha o startup se algum ChannelType tiver só um dos dois serviços
-// registrado (design.md, Decision 7) — precisa rodar depois de todos os
-// AddKeyedSingleton acima.
+// Terceiro contrato (inbox-adapter-waha, design.md, Decision 2) — sem ele,
+// "test-channel" ficaria incompleto e ValidateChannelAdapterRegistrations
+// abaixo derrubaria o processo no startup.
+builder.Services.AddKeyedSingleton<IInboundWebhookHandler, TestInboundWebhookHandler>("test-channel");
+// Primeiro adapter real (inbox-adapter-waha, design.md, Decisions 4/6/7).
+// WahaOutboundMessageSender usa IHttpClientFactory.CreateClient() anônimo
+// (sem nome) — já disponível pelos AddHttpClient(...) nomeados abaixo, que
+// registram os serviços core de IHttpClientFactory como efeito colateral
+// (design.md, Decision 7: BaseAddress é por credencial/canal, não fixa por
+// adapter, então não há um client nomeado dedicado a registrar aqui).
+builder.Services.AddKeyedSingleton<IChannelConfigValidator, WahaChannelConfigValidator>("waha");
+builder.Services.AddKeyedSingleton<IOutboundMessageSender, WahaOutboundMessageSender>("waha");
+builder.Services.AddKeyedSingleton<IInboundWebhookHandler, WahaInboundWebhookHandler>("waha");
+// Falha o startup se algum ChannelType não tiver os três serviços
+// registrados (design.md, Decision 2/Decision 7 de inbox-adapter-contrato-catalogo)
+// — precisa rodar depois de todos os AddKeyedSingleton acima.
 builder.Services.ValidateChannelAdapterRegistrations();
 
 var apiBaseUrl = builder.Configuration.GetSection(ApiOptions.SectionName).Get<ApiOptions>()?.BaseUrl
@@ -72,6 +87,7 @@ app.MapHealthChecks("/health");
 app.MapChannelEndpoints();
 app.MapContactEndpoints();
 app.MapPushNotificationEndpoints();
+app.MapWebhookEndpoints();
 
 app.Run();
 
