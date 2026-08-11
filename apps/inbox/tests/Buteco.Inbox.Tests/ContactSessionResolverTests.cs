@@ -131,7 +131,7 @@ public class ContactSessionResolverTests(InboxFactoryFixture factory) : IClassFi
     {
         using var scope = factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var channel = new Channel(ChannelType.WhatsApp, $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", Guid.NewGuid());
+        var channel = new Channel("test-channel", $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", Guid.NewGuid());
         dbContext.Channels.Add(channel);
         await dbContext.SaveChangesAsync();
         return channel.Id;

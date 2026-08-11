@@ -1,4 +1,6 @@
 using A2A;
+using Buteco.Inbox.Channels.Adapters;
+using Buteco.Inbox.Channels.Security;
 using Buteco.Inbox.Infrastructure;
 using Buteco.Inbox.Orchestration.Entities;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -27,6 +29,8 @@ public static class PushNotificationEndpoints
         AgentTask task,
         HttpRequest request,
         AppDbContext dbContext,
+        IChannelCredentialCipher credentialCipher,
+        IChannelAdapterRegistry adapterRegistry,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
@@ -54,9 +58,84 @@ public static class PushNotificationEndpoints
             pendingDispatch.SessionId,
             task.Status.State);
 
+        // Fecha o Non-Goal de entrega de resposta deixado em aberto em
+        // inbox-orquestrador-debounce (design.md, Decision 3): quando a
+        // task concluída carrega uma mensagem de resposta, entrega ao
+        // canal de origem antes de remover o PendingDispatch. Sem
+        // mensagem associada, não há o que entregar — comportamento
+        // idêntico ao anterior (loga e remove).
+        var responseText = ExtractResponseText(task);
+        if (responseText is not null)
+        {
+            await DeliverResponseAsync(dbContext, credentialCipher, adapterRegistry, logger, pendingDispatch, responseText, cancellationToken);
+        }
+
         dbContext.Remove(pendingDispatch);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return TypedResults.Ok();
+    }
+
+    // Partes não textuais (Raw/Url/Data) são ignoradas nesta fatia
+    // (design.md, Decision 3) — null quando não há nenhum texto a entregar.
+    private static string? ExtractResponseText(AgentTask task)
+    {
+        var parts = task.Status.Message?.Parts;
+        if (parts is null)
+        {
+            return null;
+        }
+
+        var textParts = parts.Where(part => part.Text is not null).Select(part => part.Text!).ToList();
+        return textParts.Count > 0 ? string.Join('\n', textParts) : null;
+    }
+
+    private static async Task DeliverResponseAsync(
+        AppDbContext dbContext,
+        IChannelCredentialCipher credentialCipher,
+        IChannelAdapterRegistry adapterRegistry,
+        ILogger logger,
+        PendingDispatch pendingDispatch,
+        string responseText,
+        CancellationToken cancellationToken)
+    {
+        // Mesmo join de DebounceSweepService.TryDispatchAsync
+        // (Session.ContactId → Contact.ChannelId → Channel), selecionando
+        // os campos do Channel/Contact necessários para a entrega em vez
+        // de AgentId.
+        var dispatchInfo = await (
+            from session in dbContext.Sessions
+            join contact in dbContext.Contacts on session.ContactId equals contact.Id
+            join channel in dbContext.Channels on contact.ChannelId equals channel.Id
+            where session.Id == pendingDispatch.SessionId
+            select new { channel.Id, channel.ChannelType, channel.EncryptedCredentials, contact.ExternalId }
+        ).FirstAsync(cancellationToken);
+
+        // O endpoint decifra, não o sender — simétrico a como o validador
+        // recebe texto plano antes de cifrar na entrada (design.md,
+        // Decision 3). IOutboundMessageSender não depende de
+        // IChannelCredentialCipher.
+        var outboundMessage = new OutboundMessage(
+            dispatchInfo.Id,
+            credentialCipher.Decrypt(dispatchInfo.EncryptedCredentials),
+            dispatchInfo.ExternalId,
+            responseText);
+
+        try
+        {
+            var sender = adapterRegistry.GetOutboundMessageSender(dispatchInfo.ChannelType);
+            await sender.SendAsync(outboundMessage, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // Falha do sender é só logada nesta fatia — sem retry, sem
+            // nova reapresentação do PendingDispatch, que já será
+            // removido (design.md, Decision 3, Risks).
+            logger.LogError(
+                exception,
+                "Falha ao entregar a resposta do agente ao canal {ChannelId} (tipo {ChannelType})",
+                dispatchInfo.Id,
+                dispatchInfo.ChannelType);
+        }
     }
 }

@@ -1,11 +1,14 @@
 using Buteco.Inbox.Channels.Responses;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Options;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Buteco.Inbox.Channels.Commands.DeactivateChannel;
 
-public sealed class DeactivateChannelCommandHandler(AppDbContext dbContext) : ICommandHandler<DeactivateChannelCommand, ChannelResponse?>
+public sealed class DeactivateChannelCommandHandler(AppDbContext dbContext, IOptions<PublicUrlOptions> publicUrlOptions)
+    : ICommandHandler<DeactivateChannelCommand, ChannelResponse?>
 {
     public async ValueTask<ChannelResponse?> Handle(DeactivateChannelCommand command, CancellationToken cancellationToken)
     {
@@ -20,6 +23,6 @@ public sealed class DeactivateChannelCommandHandler(AppDbContext dbContext) : IC
         channel.Deactivate();
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return ChannelResponse.FromEntity(channel);
+        return ChannelResponse.FromEntity(channel, publicUrlOptions.Value.BaseUrl);
     }
 }

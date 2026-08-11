@@ -1,4 +1,6 @@
 using Buteco.Inbox.Agents;
+using Buteco.Inbox.Channels.Adapters;
+using Buteco.Inbox.Channels.Adapters.Testing;
 using Buteco.Inbox.Channels.Endpoints;
 using Buteco.Inbox.Channels.Security;
 using Buteco.Inbox.Contacts;
@@ -30,6 +32,17 @@ builder.Services.AddSingleton<IChannelCredentialCipher, AesGcmChannelCredentialC
 // Scoped, não Singleton — depende de AppDbContext, que é Scoped (mesmo
 // motivo de ServiceLifetime.Scoped no AddMediator acima).
 builder.Services.AddScoped<IContactSessionResolver, ContactSessionResolver>();
+
+builder.Services.AddSingleton<IChannelAdapterRegistry, ChannelAdapterRegistry>();
+// Adapter de teste desta fatia (design.md, Decision 6) — nenhum WAHA/Telegram
+// real ainda. Cada módulo de adapter registra os dois serviços sob a
+// mesma chave (design.md, Decision 5).
+builder.Services.AddKeyedSingleton<IChannelConfigValidator, TestChannelConfigValidator>("test-channel");
+builder.Services.AddKeyedSingleton<IOutboundMessageSender, TestOutboundMessageSender>("test-channel");
+// Falha o startup se algum ChannelType tiver só um dos dois serviços
+// registrado (design.md, Decision 7) — precisa rodar depois de todos os
+// AddKeyedSingleton acima.
+builder.Services.ValidateChannelAdapterRegistrations();
 
 var apiBaseUrl = builder.Configuration.GetSection(ApiOptions.SectionName).Get<ApiOptions>()?.BaseUrl
     ?? throw new InvalidOperationException("Api:BaseUrl não configurado.");

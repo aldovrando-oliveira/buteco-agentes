@@ -236,7 +236,7 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
     {
         using var scope = factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var channel = new Channel(ChannelType.WhatsApp, $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
+        var channel = new Channel("test-channel", $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
         dbContext.Channels.Add(channel);
         await dbContext.SaveChangesAsync();
         return channel.Id;

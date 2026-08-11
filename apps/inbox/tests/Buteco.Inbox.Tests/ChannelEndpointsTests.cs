@@ -1,13 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
-using Buteco.Inbox.Channels.Entities;
+using Buteco.Inbox.Channels.Adapters.Testing;
 using Buteco.Inbox.Channels.Requests;
 using Buteco.Inbox.Channels.Responses;
 using Buteco.Inbox.Channels.Security;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Options;
 using Buteco.Inbox.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Buteco.Inbox.Tests;
 
@@ -21,17 +23,35 @@ public class ChannelEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
         ResetAgentApiHandler();
         var agentId = RegisterExistingAgent();
 
-        var request = new CreateChannelRequest("WhatsApp", "Canal Principal", "s3cr3t-token", agentId);
+        var request = new CreateChannelRequest("test-channel", "Canal Principal", "s3cr3t-token", agentId);
         var response = await _client.PostAsJsonAsync("/channels", request);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var channel = await response.Content.ReadFromJsonAsync<ChannelResponse>();
         Assert.NotNull(channel);
         Assert.NotEqual(Guid.Empty, channel.Id);
-        Assert.Equal(ChannelType.WhatsApp, channel.ChannelType);
+        Assert.Equal("test-channel", channel.ChannelType);
         Assert.Equal(request.Name, channel.Name);
         Assert.Equal(agentId, channel.AgentId);
         Assert.True(channel.IsActive);
+
+        var publicUrlBaseUrl = factory.Services.GetRequiredService<IOptions<PublicUrlOptions>>().Value.BaseUrl;
+        Assert.Equal($"{publicUrlBaseUrl.TrimEnd('/')}/webhooks/test-channel/{channel.Id}", channel.WebhookUrl);
+    }
+
+    [Fact]
+    public async Task CreateChannel_WithCredentialRejectedByAdapterValidator_ReturnsValidationProblem()
+    {
+        // Prova que o registro DI keyed resolve o validador certo para o
+        // ChannelType certo, chamado pelo Command antes de criptografar
+        // (design.md, Decision 2) — não uma checagem hardcoded no endpoint.
+        ResetAgentApiHandler();
+        var agentId = RegisterExistingAgent();
+
+        var request = new CreateChannelRequest("test-channel", "Canal Com Credencial Inválida", TestChannelConfigValidator.RejectedCredential, agentId);
+        var response = await _client.PostAsJsonAsync("/channels", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -40,7 +60,7 @@ public class ChannelEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
         ResetAgentApiHandler();
         var agentId = RegisterExistingAgent();
 
-        var request = new CreateChannelRequest("Telegram", "Canal Sigiloso", "s3gr3d0-secreto", agentId);
+        var request = new CreateChannelRequest("test-channel", "Canal Sigiloso", "s3gr3d0-secreto", agentId);
         var response = await _client.PostAsJsonAsync("/channels", request);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -77,7 +97,7 @@ public class ChannelEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
     {
         ResetAgentApiHandler();
 
-        var request = new CreateChannelRequest("WhatsApp", "Canal Sem Agente", "token", Guid.NewGuid());
+        var request = new CreateChannelRequest("test-channel", "Canal Sem Agente", "token", Guid.NewGuid());
         var response = await _client.PostAsJsonAsync("/channels", request);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -91,7 +111,7 @@ public class ChannelEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
         ResetAgentApiHandler();
         factory.AgentApiHandler.SimulateServerError = true;
 
-        var request = new CreateChannelRequest("WhatsApp", "Canal Com API Instável", "token", Guid.NewGuid());
+        var request = new CreateChannelRequest("test-channel", "Canal Com API Instável", "token", Guid.NewGuid());
         var response = await _client.PostAsJsonAsync("/channels", request);
 
         Assert.False(response.IsSuccessStatusCode);
@@ -104,7 +124,7 @@ public class ChannelEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
         ResetAgentApiHandler();
         factory.AgentApiHandler.SimulateUnreachable = true;
 
-        var request = new CreateChannelRequest("WhatsApp", "Canal Com API Fora Do Ar", "token", Guid.NewGuid());
+        var request = new CreateChannelRequest("test-channel", "Canal Com API Fora Do Ar", "token", Guid.NewGuid());
         var response = await _client.PostAsJsonAsync("/channels", request);
 
         Assert.False(response.IsSuccessStatusCode);
@@ -117,7 +137,7 @@ public class ChannelEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
         ResetAgentApiHandler();
         var agentId = RegisterExistingAgent(isActive: false);
 
-        var request = new CreateChannelRequest("WhatsApp", "Canal Com Agente Inativo", "token", agentId);
+        var request = new CreateChannelRequest("test-channel", "Canal Com Agente Inativo", "token", agentId);
         var response = await _client.PostAsJsonAsync("/channels", request);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -359,7 +379,7 @@ public class ChannelEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
     private async Task<ChannelResponse> CreateChannelAsync(string name, string credential = "credencial-padrao")
     {
         var agentId = RegisterExistingAgent();
-        var request = new CreateChannelRequest("WhatsApp", name, credential, agentId);
+        var request = new CreateChannelRequest("test-channel", name, credential, agentId);
         var response = await _client.PostAsJsonAsync("/channels", request);
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<ChannelResponse>())!;

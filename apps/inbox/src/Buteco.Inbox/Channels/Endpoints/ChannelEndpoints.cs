@@ -1,8 +1,8 @@
+using Buteco.Inbox.Channels.Adapters;
 using Buteco.Inbox.Channels.Commands.ActivateChannel;
 using Buteco.Inbox.Channels.Commands.CreateChannel;
 using Buteco.Inbox.Channels.Commands.DeactivateChannel;
 using Buteco.Inbox.Channels.Commands.UpdateChannel;
-using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Channels.Queries.GetChannelById;
 using Buteco.Inbox.Channels.Queries.ListChannels;
 using Buteco.Inbox.Channels.Requests;
@@ -31,9 +31,10 @@ public static class ChannelEndpoints
     private static async Task<Results<Created<ChannelResponse>, ValidationProblem, ProblemHttpResult>> CreateChannelAsync(
         CreateChannelRequest request,
         IMediator mediator,
+        IChannelAdapterRegistry adapterRegistry,
         CancellationToken cancellationToken)
     {
-        var shapeErrors = ValidateShape(request.Name, request.ChannelType, request.Credential, request.AgentId, out var channelType);
+        var shapeErrors = ValidateShape(request.Name, request.ChannelType, request.Credential, request.AgentId, adapterRegistry, out var channelType);
         if (shapeErrors is not null)
         {
             return TypedResults.ValidationProblem(shapeErrors);
@@ -46,6 +47,7 @@ public static class ChannelEndpoints
         {
             CreateChannelOutcome.Success => TypedResults.Created($"/channels/{result.Channel!.Id}", result.Channel),
             CreateChannelOutcome.AgentNotFound => TypedResults.ValidationProblem(BuildAgentNotFoundErrors()),
+            CreateChannelOutcome.InvalidCredential => TypedResults.ValidationProblem(result.ValidationErrors!),
             _ => TypedResults.Problem(AgentValidationFailedDetail, statusCode: StatusCodes.Status502BadGateway),
         };
     }
@@ -91,6 +93,7 @@ public static class ChannelEndpoints
             UpdateChannelOutcome.Success => TypedResults.Ok(result.Channel!),
             UpdateChannelOutcome.NotFound => TypedResults.NotFound(),
             UpdateChannelOutcome.AgentNotFound => TypedResults.ValidationProblem(BuildAgentNotFoundErrors()),
+            UpdateChannelOutcome.InvalidCredential => TypedResults.ValidationProblem(result.ValidationErrors!),
             _ => TypedResults.Problem(AgentValidationFailedDetail, statusCode: StatusCodes.Status502BadGateway),
         };
     }
@@ -119,19 +122,29 @@ public static class ChannelEndpoints
             : TypedResults.Ok(response);
     }
 
-    private static Dictionary<string, string[]>? ValidateShape(string? name, string? channelTypeRaw, string? credential, Guid? agentId, out ChannelType channelType)
+    private static Dictionary<string, string[]>? ValidateShape(
+        string? name,
+        string? channelTypeRaw,
+        string? credential,
+        Guid? agentId,
+        IChannelAdapterRegistry adapterRegistry,
+        out string channelType)
     {
         var errors = new Dictionary<string, string[]>();
-        channelType = default;
+        // Normalizado para lower-invariant no limite do sistema (design.md,
+        // Decision 1) — preserva o comportamento case-insensitive que
+        // Enum.TryParse(ignoreCase: true) já dava, agora contra o registro
+        // de adapters em vez de um enum.
+        channelType = channelTypeRaw?.Trim().ToLowerInvariant() ?? "";
 
         if (string.IsNullOrWhiteSpace(name))
         {
             errors["name"] = ["O nome do canal é obrigatório."];
         }
 
-        if (string.IsNullOrWhiteSpace(channelTypeRaw) || !Enum.TryParse(channelTypeRaw, ignoreCase: true, out channelType))
+        if (string.IsNullOrWhiteSpace(channelTypeRaw) || !adapterRegistry.IsRegistered(channelType))
         {
-            errors["channelType"] = ["O tipo de canal informado é inválido. Valores aceitos: WhatsApp, Telegram."];
+            errors["channelType"] = ["O tipo de canal informado não corresponde a nenhum adapter registrado."];
         }
 
         if (string.IsNullOrWhiteSpace(credential))

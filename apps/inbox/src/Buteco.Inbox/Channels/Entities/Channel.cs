@@ -4,7 +4,7 @@ public class Channel
 {
     public Guid Id { get; private set; }
 
-    public ChannelType ChannelType { get; private set; }
+    public string ChannelType { get; private set; } = null!;
 
     public string Name { get; private set; } = null!;
 
@@ -28,7 +28,7 @@ public class Channel
     {
     }
 
-    public Channel(ChannelType channelType, string name, string encryptedCredentials, Guid agentId)
+    public Channel(string channelType, string name, string encryptedCredentials, Guid agentId)
     {
         Id = Guid.NewGuid();
         ChannelType = channelType;

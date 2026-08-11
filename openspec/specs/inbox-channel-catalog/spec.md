@@ -8,15 +8,19 @@ TBD - defined by change inbox-catalogo-canais. Update Purpose after archive.
 
 ### Requirement: Cadastro de canal de entrada
 O sistema SHALL permitir, via `apps/inbox`, cadastrar um canal de entrada
-informando tipo de canal (`WhatsApp` ou `Telegram`), nome, credenciais e o
-identificador (`AgentId`) do agente de `apps/api` responsável por esse
-canal. As credenciais SHALL ser criptografadas antes de serem persistidas e
-nunca SHALL ser incluídas em nenhuma resposta da API. O `AgentId` informado
-SHALL ser validado contra `apps/api` antes do cadastro ser efetivado.
+informando tipo de canal, nome, credenciais e o identificador (`AgentId`)
+do agente de `apps/api` responsável por esse canal. O tipo de canal
+informado SHALL corresponder a um adapter efetivamente registrado no
+processo (ver capability `inbox-channel-adapter-plugin`) — não a uma
+lista fixa de valores conhecidos em tempo de compilação. As credenciais
+SHALL ser criptografadas antes de serem persistidas e nunca SHALL ser
+incluídas em nenhuma resposta da API. O `AgentId` informado SHALL ser
+validado contra `apps/api` antes do cadastro ser efetivado.
 
 #### Scenario: Criar canal com sucesso
-- **WHEN** um cliente envia `POST /channels` com `channelType: "WhatsApp"`,
-  nome, credenciais e um `agentId` que corresponde a um agente existente em
+- **WHEN** um cliente envia `POST /channels` com um `channelType`
+  correspondente a um adapter registrado, nome, credenciais válidas para
+  esse adapter e um `agentId` que corresponde a um agente existente em
   `apps/api`
 - **THEN** a API cria o registro e responde com o canal criado, incluindo
   um identificador único gerado pelo sistema, sem nenhum campo de
@@ -28,9 +32,9 @@ SHALL ser validado contra `apps/api` antes do cadastro ser efetivado.
 - **THEN** a API responde com erro de validação (HTTP 400) e não cria
   nenhum registro
 
-#### Scenario: Criar canal com tipo de canal inválido é rejeitado
-- **WHEN** um cliente envia `POST /channels` com `channelType` diferente de
-  `WhatsApp` ou `Telegram`
+#### Scenario: Criar canal com tipo de canal sem adapter registrado é rejeitado
+- **WHEN** um cliente envia `POST /channels` com um `channelType` que não
+  corresponde a nenhum adapter registrado no processo
 - **THEN** a API responde com erro de validação (HTTP 400) e não cria
   nenhum registro
 

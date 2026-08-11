@@ -66,7 +66,7 @@ public class DebounceRestartAndConcurrencyTests(PostgresOnlyFixture fixture) : I
             var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
             await using var dbContext = new AppDbContext(options);
 
-            var channel = new Channel(ChannelType.WhatsApp, $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
+            var channel = new Channel("test-channel", $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
             dbContext.Channels.Add(channel);
             var contact = new Contact(channel.Id, $"+5511{Guid.NewGuid():N}"[..15]);
             dbContext.Contacts.Add(contact);
@@ -133,7 +133,7 @@ public class DebounceRestartAndConcurrencyTests(PostgresOnlyFixture fixture) : I
     {
         using var scope = services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var channel = new Channel(ChannelType.WhatsApp, $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
+        var channel = new Channel("test-channel", $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
         dbContext.Channels.Add(channel);
         await dbContext.SaveChangesAsync();
 

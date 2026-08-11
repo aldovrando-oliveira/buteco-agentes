@@ -1,16 +1,21 @@
 using Buteco.Inbox.Agents;
+using Buteco.Inbox.Channels.Adapters;
 using Buteco.Inbox.Channels.Responses;
 using Buteco.Inbox.Channels.Security;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Options;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Buteco.Inbox.Channels.Commands.UpdateChannel;
 
 public sealed class UpdateChannelCommandHandler(
     AppDbContext dbContext,
     IChannelCredentialCipher credentialCipher,
-    IAgentReferenceValidator agentReferenceValidator) : ICommandHandler<UpdateChannelCommand, UpdateChannelResult>
+    IAgentReferenceValidator agentReferenceValidator,
+    IChannelAdapterRegistry adapterRegistry,
+    IOptions<PublicUrlOptions> publicUrlOptions) : ICommandHandler<UpdateChannelCommand, UpdateChannelResult>
 {
     public async ValueTask<UpdateChannelResult> Handle(UpdateChannelCommand command, CancellationToken cancellationToken)
     {
@@ -43,11 +48,20 @@ public sealed class UpdateChannelCommandHandler(
 
         if (!string.IsNullOrWhiteSpace(command.Credential))
         {
+            // ChannelType não é atualizável — o validador resolvido é
+            // sempre o do channel.ChannelType já persistido (design.md,
+            // Decision 2).
+            var configValidation = adapterRegistry.GetConfigValidator(channel.ChannelType).Validate(command.Credential);
+            if (!configValidation.IsValid)
+            {
+                return UpdateChannelResult.InvalidCredential(configValidation.Errors);
+            }
+
             channel.SetEncryptedCredentials(credentialCipher.Encrypt(command.Credential));
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return UpdateChannelResult.Success(ChannelResponse.FromEntity(channel));
+        return UpdateChannelResult.Success(ChannelResponse.FromEntity(channel, publicUrlOptions.Value.BaseUrl));
     }
 }

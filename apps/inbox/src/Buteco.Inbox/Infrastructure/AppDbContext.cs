@@ -21,7 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.ToTable("channels");
             entity.HasKey(channel => channel.Id);
-            entity.Property(channel => channel.ChannelType).IsRequired().HasConversion<string>();
+            entity.Property(channel => channel.ChannelType).IsRequired();
             entity.Property(channel => channel.Name).IsRequired();
             entity.Property(channel => channel.EncryptedCredentials).IsRequired();
             entity.Property(channel => channel.AgentId).IsRequired();
