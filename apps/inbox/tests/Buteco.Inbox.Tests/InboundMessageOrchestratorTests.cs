@@ -66,6 +66,29 @@ public class InboundMessageOrchestratorTests(InboxFactoryFixture factory) : ICla
         Assert.Equal(8, pendingDispatches[0].Messages.Count);
     }
 
+    [Fact]
+    public async Task ReceiveMessageAsync_ConcurrentCallsExistingPendingDispatch_AppendsAllMessagesWithoutLoss()
+    {
+        var channelId = await CreateChannelAsync();
+        var externalId = UniqueExternalId();
+
+        // Pré-cria a PendingDispatch fora de qualquer corrida — diferente
+        // de ReceiveMessageAsync_ConcurrentCallsSameSession_ResolveToSinglePendingDispatch,
+        // que só exercita o caminho pós-violação-de-unicidade (todas as
+        // chamadas competem na criação). Aqui, as chamadas concorrentes
+        // sempre encontram a PendingDispatch já existente na primeira
+        // leitura de FindPendingAsync, exercitando o caminho direto de
+        // append (design.md, Diagnóstico — caminho identificado como
+        // afetado pelo mesmo bug mas sem cobertura própria até este teste).
+        await ReceiveAsync(channelId, externalId, "Mensagem inicial");
+
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(i => ReceiveAsync(channelId, externalId, $"Mensagem concorrente {i}")));
+
+        var pendingDispatches = await AllPendingDispatchesAsync(channelId, externalId);
+        Assert.Single(pendingDispatches);
+        Assert.Equal(9, pendingDispatches[0].Messages.Count);
+    }
+
     private async Task ReceiveAsync(Guid channelId, string externalId, string text)
     {
         using var scope = factory.Services.CreateScope();
