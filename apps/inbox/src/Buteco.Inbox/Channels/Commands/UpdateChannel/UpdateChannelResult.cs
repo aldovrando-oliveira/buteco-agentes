@@ -9,12 +9,14 @@ public enum UpdateChannelOutcome
     AgentNotFound,
     AgentValidationFailed,
     InvalidCredential,
+    ProvisioningFailed,
 }
 
 public sealed record UpdateChannelResult(
     ChannelResponse? Channel,
     UpdateChannelOutcome Outcome,
-    IReadOnlyDictionary<string, string[]>? ValidationErrors = null)
+    IReadOnlyDictionary<string, string[]>? ValidationErrors = null,
+    string? ProvisioningError = null)
 {
     public static UpdateChannelResult NotFound() => new(null, UpdateChannelOutcome.NotFound);
 
@@ -26,4 +28,7 @@ public sealed record UpdateChannelResult(
 
     public static UpdateChannelResult InvalidCredential(IReadOnlyDictionary<string, string[]> errors) =>
         new(null, UpdateChannelOutcome.InvalidCredential, errors);
+
+    public static UpdateChannelResult ProvisioningFailed(string errorMessage) =>
+        new(null, UpdateChannelOutcome.ProvisioningFailed, ProvisioningError: errorMessage);
 }

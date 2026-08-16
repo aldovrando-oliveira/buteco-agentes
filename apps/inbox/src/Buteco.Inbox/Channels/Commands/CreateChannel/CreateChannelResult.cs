@@ -8,6 +8,7 @@ public enum CreateChannelOutcome
     AgentNotFound,
     AgentValidationFailed,
     InvalidCredential,
+    ProvisioningFailed,
 }
 
 /// <summary>
@@ -19,11 +20,16 @@ public enum CreateChannelOutcome
 /// (design.md, Decision 4). <see cref="CreateChannelOutcome.InvalidCredential"/>
 /// carrega os erros reportados pelo <c>IChannelConfigValidator</c> do
 /// adapter (design.md, Decision 2) em <see cref="ValidationErrors"/>.
+/// <see cref="CreateChannelOutcome.ProvisioningFailed"/> carrega a mensagem
+/// reportada pelo <c>IChannelWebhookProvisioner</c> do adapter
+/// (inbox-adapter-telegram, design.md, Decision 5) em
+/// <see cref="ProvisioningError"/>.
 /// </summary>
 public sealed record CreateChannelResult(
     ChannelResponse? Channel,
     CreateChannelOutcome Outcome,
-    IReadOnlyDictionary<string, string[]>? ValidationErrors = null)
+    IReadOnlyDictionary<string, string[]>? ValidationErrors = null,
+    string? ProvisioningError = null)
 {
     public static CreateChannelResult Success(ChannelResponse channel) => new(channel, CreateChannelOutcome.Success);
 
@@ -33,4 +39,7 @@ public sealed record CreateChannelResult(
 
     public static CreateChannelResult InvalidCredential(IReadOnlyDictionary<string, string[]> errors) =>
         new(null, CreateChannelOutcome.InvalidCredential, errors);
+
+    public static CreateChannelResult ProvisioningFailed(string errorMessage) =>
+        new(null, CreateChannelOutcome.ProvisioningFailed, ProvisioningError: errorMessage);
 }

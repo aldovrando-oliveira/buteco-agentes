@@ -1,6 +1,7 @@
 using Buteco.Inbox.Agents;
 using Buteco.Inbox.Channels.Adapters;
 using Buteco.Inbox.Channels.Adapters.Testing;
+using Buteco.Inbox.Channels.Adapters.Telegram;
 using Buteco.Inbox.Channels.Adapters.Waha;
 using Buteco.Inbox.Channels.Endpoints;
 using Buteco.Inbox.Channels.Security;
@@ -54,6 +55,14 @@ builder.Services.AddKeyedSingleton<IInboundWebhookHandler, TestInboundWebhookHan
 builder.Services.AddKeyedSingleton<IChannelConfigValidator, WahaChannelConfigValidator>("waha");
 builder.Services.AddKeyedSingleton<IOutboundMessageSender, WahaOutboundMessageSender>("waha");
 builder.Services.AddKeyedSingleton<IInboundWebhookHandler, WahaInboundWebhookHandler>("waha");
+// Segundo adapter real (inbox-adapter-telegram, design.md, Decisions 7-9).
+// Único adapter a registrar também o quarto contrato, opcional
+// (IChannelWebhookProvisioner) — setWebhook automático no cadastro/
+// atualização do canal.
+builder.Services.AddKeyedSingleton<IChannelConfigValidator, TelegramChannelConfigValidator>("telegram");
+builder.Services.AddKeyedSingleton<IOutboundMessageSender, TelegramOutboundMessageSender>("telegram");
+builder.Services.AddKeyedSingleton<IInboundWebhookHandler, TelegramInboundWebhookHandler>("telegram");
+builder.Services.AddKeyedSingleton<IChannelWebhookProvisioner, TelegramWebhookProvisioner>("telegram");
 // Falha o startup se algum ChannelType não tiver os três serviços
 // registrados (design.md, Decision 2/Decision 7 de inbox-adapter-contrato-catalogo)
 // — precisa rodar depois de todos os AddKeyedSingleton acima.

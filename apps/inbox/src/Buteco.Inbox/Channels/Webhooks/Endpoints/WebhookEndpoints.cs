@@ -16,7 +16,7 @@ public static class WebhookEndpoints
         return app;
     }
 
-    private static async Task<Results<Ok, NotFound, BadRequest>> ReceiveAsync(
+    private static async Task<Results<StatusCodeHttpResult, NotFound, BadRequest>> ReceiveAsync(
         Guid channelId,
         HttpRequest request,
         AppDbContext dbContext,
@@ -37,6 +37,14 @@ public static class WebhookEndpoints
 
         await handler.HandleAsync(channelId, request, cancellationToken);
 
-        return TypedResults.Ok();
+        // TypedResults.StatusCode, não TypedResults.Ok() fixo — um handler
+        // pode ter definido um status diferente de 200 na própria resposta
+        // antes de retornar (ex. TelegramInboundWebhookHandler rejeitando
+        // com 401 quando o secret_token diverge ou o canal está inativo;
+        // inbox-adapter-telegram, design.md, Decision 8). TypedResults.Ok()
+        // sobrescreveria isso incondicionalmente para 200. HttpResponse.StatusCode
+        // já é 200 por padrão quando nenhum handler o altera (WAHA,
+        // test-channel), então o comportamento existente não muda.
+        return TypedResults.StatusCode(request.HttpContext.Response.StatusCode);
     }
 }

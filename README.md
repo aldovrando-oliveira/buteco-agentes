@@ -277,6 +277,44 @@ conectado a um WhatsApp de teste, por isso é manual, não automatizada
    `apps/workers` → push notification → `WahaOutboundMessageSender` →
    `POST /api/sendText`).
 
+#### Checklist de round-trip manual com Telegram
+
+Verificação de ponta a ponta do adapter `telegram` — depende de um bot
+Telegram real, por isso é manual, não automatizada
+(`openspec/changes/inbox-adapter-telegram/design.md`, Decisions 1, 4 e 9).
+Ao contrário do WAHA, o cadastro do canal já configura o webhook
+automaticamente — não há passo manual de configuração de sessão:
+
+1. Crie um bot com o [@BotFather](https://t.me/BotFather) no Telegram
+   (`/newbot`) e anote o `BotToken` retornado.
+2. Cadastre o canal em `apps/inbox` — a credencial é o JSON de
+   `TelegramCredential` serializado como string (só `BotToken`;
+   `WebhookSecret` é preenchido automaticamente pelo provisionamento, não
+   informado pelo cliente):
+   ```bash
+   curl -X POST http://localhost:5027/channels \
+     -H "Content-Type: application/json" \
+     -d '{"channelType":"telegram","name":"Suporte Telegram","credential":"{\"BotToken\":\"<token do BotFather>\"}","agentId":"<id de um agente existente em apps/api>"}'
+   ```
+   Se o `BotToken` for inválido ou o Telegram estiver inalcançável, o
+   cadastro inteiro falha (HTTP 502) — nenhum canal é persistido sem o
+   webhook de fato registrado (design.md, Decision 4).
+3. Confirme que o webhook foi registrado, consultando `getWebhookInfo`
+   diretamente no Telegram:
+   ```bash
+   curl "https://api.telegram.org/bot<token do BotFather>/getWebhookInfo"
+   ```
+   `url` deve bater com o `webhookUrl` retornado no passo 2
+   (`http://localhost:5027/webhooks/<channelId>` em dev — só alcançável
+   pelo Telegram se o processo estiver exposto publicamente, ex. via
+   túnel/ngrok).
+4. Envie uma mensagem para o bot no Telegram. Confirme que uma
+   `Session`/`PendingDispatch` foi criada em `apps/inbox` e que, depois da
+   janela de debounce, o agente responde de volta no Telegram — round-trip
+   completo (webhook → verificação de `secret_token` → orquestrador →
+   `apps/api` → `apps/workers` → push notification →
+   `TelegramOutboundMessageSender` → `POST .../sendMessage`).
+
 ## Como testar cada app
 
 Os testes de integração de `apps/api`, `apps/workers`, `apps/inbox` e dos

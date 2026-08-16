@@ -36,11 +36,19 @@ public class CreateChannelCommandHandlerTests
     // teste registrado em Program.cs (design.md, Decision 6) — prova que
     // o handler chama o validador resolvido pelo registry, sem depender
     // de DI keyed real no teste unitário (design.md, Decision 5).
-    private static IChannelAdapterRegistry CreateAdapterRegistry()
+    // GetWebhookProvisioner não é configurado por padrão — Moq devolve
+    // null, mesmo comportamento de um ChannelType sem provisionador
+    // registrado (inbox-adapter-telegram, design.md, Decision 1).
+    private static IChannelAdapterRegistry CreateAdapterRegistry(Mock<IChannelWebhookProvisioner>? provisionerMock = null)
     {
         var registryMock = new Mock<IChannelAdapterRegistry>();
         registryMock.Setup(r => r.IsRegistered(ChannelType)).Returns(true);
         registryMock.Setup(r => r.GetConfigValidator(ChannelType)).Returns(new TestChannelConfigValidator());
+        if (provisionerMock is not null)
+        {
+            registryMock.Setup(r => r.GetWebhookProvisioner(ChannelType)).Returns(provisionerMock.Object);
+        }
+
         return registryMock.Object;
     }
 
@@ -158,5 +166,107 @@ public class CreateChannelCommandHandlerTests
         Assert.NotNull(result.ValidationErrors);
         Assert.Contains("credential", result.ValidationErrors!.Keys);
         Assert.False(await dbContext.Channels.AnyAsync());
+    }
+
+    // Quarto contrato, opcional (inbox-adapter-telegram, design.md,
+    // Decision 4) — os quatro testes abaixo cobrem o fluxo de
+    // provisionamento automático no cadastro.
+    [Fact]
+    public async Task Handle_ChannelTypeWithProvisioner_InvokesProvisionAsyncWithChannelIdCredentialAndWebhookUrlBeforeSaving()
+    {
+        await using var dbContext = CreateInMemoryDbContext();
+        var validatorMock = new Mock<IAgentReferenceValidator>();
+        validatorMock.Setup(v => v.ValidateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(AgentReferenceValidationResult.Found);
+
+        var provisionerMock = new Mock<IChannelWebhookProvisioner>();
+        provisionerMock
+            .Setup(p => p.ProvisionAsync(It.IsAny<Guid>(), "token-secreto", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid channelId, string _, string webhookUrl, CancellationToken _) =>
+            {
+                // Provado dentro do próprio setup: nada foi persistido
+                // ainda quando o provisionamento roda (design.md, Decision 4).
+                Assert.False(dbContext.Channels.Any());
+                Assert.Equal($"{PublicUrlBaseUrl}/webhooks/{channelId}", webhookUrl);
+                return ChannelWebhookProvisioningResult.Succeeded("token-secreto-provisionado");
+            });
+
+        var handler = new CreateChannelCommandHandler(dbContext, CreateCipher(), validatorMock.Object, CreateAdapterRegistry(provisionerMock), CreatePublicUrlOptions());
+
+        var command = new CreateChannelCommand(ChannelType, "Canal Telegram", "token-secreto", Guid.NewGuid());
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        Assert.Equal(CreateChannelOutcome.Success, result.Outcome);
+        provisionerMock.Verify(p => p.ProvisionAsync(result.Channel!.Id, "token-secreto", $"{PublicUrlBaseUrl}/webhooks/{result.Channel!.Id}", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Handle_ProvisioningSucceeds_PersistsUpdatedCredentialFromProvisioner()
+    {
+        await using var dbContext = CreateInMemoryDbContext();
+        var validatorMock = new Mock<IAgentReferenceValidator>();
+        validatorMock.Setup(v => v.ValidateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(AgentReferenceValidationResult.Found);
+
+        var provisionerMock = new Mock<IChannelWebhookProvisioner>();
+        provisionerMock
+            .Setup(p => p.ProvisionAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ChannelWebhookProvisioningResult.Succeeded("token-secreto-provisionado"));
+
+        var cipher = CreateCipher();
+        var handler = new CreateChannelCommandHandler(dbContext, cipher, validatorMock.Object, CreateAdapterRegistry(provisionerMock), CreatePublicUrlOptions());
+
+        var command = new CreateChannelCommand(ChannelType, "Canal Telegram", "token-original", Guid.NewGuid());
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        Assert.Equal(CreateChannelOutcome.Success, result.Outcome);
+        var persisted = await dbContext.Channels.AsNoTracking().SingleAsync(channel => channel.Id == result.Channel!.Id);
+        Assert.Equal("token-secreto-provisionado", cipher.Decrypt(persisted.EncryptedCredentials));
+    }
+
+    [Fact]
+    public async Task Handle_ProvisioningFails_DoesNotPersistAnyChannel()
+    {
+        await using var dbContext = CreateInMemoryDbContext();
+        var validatorMock = new Mock<IAgentReferenceValidator>();
+        validatorMock.Setup(v => v.ValidateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(AgentReferenceValidationResult.Found);
+
+        var provisionerMock = new Mock<IChannelWebhookProvisioner>();
+        provisionerMock
+            .Setup(p => p.ProvisionAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ChannelWebhookProvisioningResult.Failed("token inválido"));
+
+        var handler = new CreateChannelCommandHandler(dbContext, CreateCipher(), validatorMock.Object, CreateAdapterRegistry(provisionerMock), CreatePublicUrlOptions());
+
+        var command = new CreateChannelCommand(ChannelType, "Canal Telegram", "token-invalido", Guid.NewGuid());
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        Assert.Equal(CreateChannelOutcome.ProvisioningFailed, result.Outcome);
+        Assert.Null(result.Channel);
+        Assert.Equal("token inválido", result.ProvisioningError);
+        Assert.False(await dbContext.Channels.AnyAsync());
+    }
+
+    [Fact]
+    public async Task Handle_ChannelTypeWithoutProvisioner_PersistsOriginallyEncryptedCredential()
+    {
+        // GetWebhookProvisioner devolve null (CreateAdapterRegistry sem
+        // provisionerMock) — mesmo comportamento de "waha", sem nenhuma
+        // chamada externa de provisionamento.
+        await using var dbContext = CreateInMemoryDbContext();
+        var validatorMock = new Mock<IAgentReferenceValidator>();
+        validatorMock.Setup(v => v.ValidateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(AgentReferenceValidationResult.Found);
+
+        var cipher = CreateCipher();
+        var handler = new CreateChannelCommandHandler(dbContext, cipher, validatorMock.Object, CreateAdapterRegistry(), CreatePublicUrlOptions());
+
+        var command = new CreateChannelCommand(ChannelType, "Canal Sem Provisionamento", "token-secreto", Guid.NewGuid());
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        Assert.Equal(CreateChannelOutcome.Success, result.Outcome);
+        var persisted = await dbContext.Channels.AsNoTracking().SingleAsync(channel => channel.Id == result.Channel!.Id);
+        Assert.Equal("token-secreto", cipher.Decrypt(persisted.EncryptedCredentials));
     }
 }

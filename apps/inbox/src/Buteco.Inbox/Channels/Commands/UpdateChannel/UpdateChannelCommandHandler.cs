@@ -57,7 +57,29 @@ public sealed class UpdateChannelCommandHandler(
                 return UpdateChannelResult.InvalidCredential(configValidation.Errors);
             }
 
-            channel.SetEncryptedCredentials(credentialCipher.Encrypt(command.Credential));
+            var credentialToPersist = command.Credential;
+
+            // Troca de credencial em canal com provisionamento automático
+            // reprovisiona — sempre com um secret_token novo, nunca
+            // reaproveitando o anterior (inbox-adapter-telegram, design.md,
+            // Decision 6). channel.SetEncryptedCredentials só roda depois
+            // do provisionamento ter sucesso (ou não ser necessário) —
+            // mesma ordem de operações da Decision 4, sem necessidade de
+            // desfazer nada em caso de falha.
+            var provisioner = adapterRegistry.GetWebhookProvisioner(channel.ChannelType);
+            if (provisioner is not null)
+            {
+                var webhookUrl = ChannelResponse.BuildWebhookUrl(publicUrlOptions.Value.BaseUrl, channel.Id);
+                var provisioning = await provisioner.ProvisionAsync(channel.Id, command.Credential, webhookUrl, cancellationToken);
+                if (!provisioning.Success)
+                {
+                    return UpdateChannelResult.ProvisioningFailed(provisioning.ErrorMessage!);
+                }
+
+                credentialToPersist = provisioning.UpdatedCredential!;
+            }
+
+            channel.SetEncryptedCredentials(credentialCipher.Encrypt(credentialToPersist));
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);

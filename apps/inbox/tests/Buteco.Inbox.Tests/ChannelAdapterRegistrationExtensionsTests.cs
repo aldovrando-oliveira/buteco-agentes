@@ -70,4 +70,52 @@ public class ChannelAdapterRegistrationExtensionsTests
 
         Assert.Null(exception);
     }
+
+    // Quarto contrato, opcional (inbox-adapter-telegram, design.md,
+    // Decision 3) — os três testes abaixo provam os dois lados dessa
+    // opcionalidade.
+    [Fact]
+    public void ValidateChannelAdapterRegistrations_CompleteTriplesWithoutProvisioner_DoesNotThrow()
+    {
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton<IChannelConfigValidator, TestChannelConfigValidator>("test-channel");
+        services.AddKeyedSingleton<IOutboundMessageSender, TestOutboundMessageSender>("test-channel");
+        services.AddKeyedSingleton<IInboundWebhookHandler, TestInboundWebhookHandler>("test-channel");
+
+        var exception = Record.Exception(() => services.ValidateChannelAdapterRegistrations());
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void ValidateChannelAdapterRegistrations_CompleteQuadrupleWithProvisioner_DoesNotThrow()
+    {
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton<IChannelConfigValidator, TestChannelConfigValidator>("test-channel");
+        services.AddKeyedSingleton<IOutboundMessageSender, TestOutboundMessageSender>("test-channel");
+        services.AddKeyedSingleton<IInboundWebhookHandler, TestInboundWebhookHandler>("test-channel");
+        services.AddKeyedSingleton<IChannelWebhookProvisioner, TestWebhookProvisioner>("test-channel");
+
+        var exception = Record.Exception(() => services.ValidateChannelAdapterRegistrations());
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void ValidateChannelAdapterRegistrations_ProvisionerWithoutRequiredContracts_ThrowsNamingProvisioner()
+    {
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton<IChannelWebhookProvisioner, TestWebhookProvisioner>("orphan-provisioner");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => services.ValidateChannelAdapterRegistrations());
+
+        Assert.Contains("orphan-provisioner", exception.Message);
+        Assert.Contains(nameof(IChannelWebhookProvisioner), exception.Message);
+    }
+
+    private sealed class TestWebhookProvisioner : IChannelWebhookProvisioner
+    {
+        public Task<ChannelWebhookProvisioningResult> ProvisionAsync(Guid channelId, string credential, string webhookUrl, CancellationToken cancellationToken) =>
+            Task.FromResult(ChannelWebhookProvisioningResult.Succeeded(credential));
+    }
 }

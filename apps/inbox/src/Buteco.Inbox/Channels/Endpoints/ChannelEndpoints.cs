@@ -48,6 +48,7 @@ public static class ChannelEndpoints
             CreateChannelOutcome.Success => TypedResults.Created($"/channels/{result.Channel!.Id}", result.Channel),
             CreateChannelOutcome.AgentNotFound => TypedResults.ValidationProblem(BuildAgentNotFoundErrors()),
             CreateChannelOutcome.InvalidCredential => TypedResults.ValidationProblem(result.ValidationErrors!),
+            CreateChannelOutcome.ProvisioningFailed => TypedResults.Problem(BuildProvisioningFailedDetail(result.ProvisioningError), statusCode: StatusCodes.Status502BadGateway),
             _ => TypedResults.Problem(AgentValidationFailedDetail, statusCode: StatusCodes.Status502BadGateway),
         };
     }
@@ -94,6 +95,7 @@ public static class ChannelEndpoints
             UpdateChannelOutcome.NotFound => TypedResults.NotFound(),
             UpdateChannelOutcome.AgentNotFound => TypedResults.ValidationProblem(BuildAgentNotFoundErrors()),
             UpdateChannelOutcome.InvalidCredential => TypedResults.ValidationProblem(result.ValidationErrors!),
+            UpdateChannelOutcome.ProvisioningFailed => TypedResults.Problem(BuildProvisioningFailedDetail(result.ProvisioningError), statusCode: StatusCodes.Status502BadGateway),
             _ => TypedResults.Problem(AgentValidationFailedDetail, statusCode: StatusCodes.Status502BadGateway),
         };
     }
@@ -182,4 +184,11 @@ public static class ChannelEndpoints
 
     private const string AgentValidationFailedDetail =
         "Não foi possível validar o agente informado junto a apps/api (indisponível ou respondeu com erro).";
+
+    // Mensagem própria, não AgentValidationFailedDetail — essa é
+    // especificamente sobre apps/api; provisionamento é contra a
+    // plataforma externa do próprio ChannelType (ex. Telegram)
+    // (inbox-adapter-telegram, design.md, Decision 5).
+    private static string BuildProvisioningFailedDetail(string? provisioningError) =>
+        $"Não foi possível configurar o webhook do canal junto à plataforma externa: {provisioningError}";
 }

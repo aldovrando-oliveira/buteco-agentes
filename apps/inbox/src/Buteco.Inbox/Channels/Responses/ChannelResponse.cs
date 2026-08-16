@@ -33,6 +33,10 @@ public sealed record ChannelResponse(
         channel.UpdatedAt,
         BuildWebhookUrl(publicUrlBaseUrl, channel.Id));
 
-    private static string BuildWebhookUrl(string publicUrlBaseUrl, Guid channelId) =>
+    // internal, não private — reaproveitado por CreateChannelCommandHandler/
+    // UpdateChannelCommandHandler para computar a mesma URL antes de invocar
+    // um IChannelWebhookProvisioner, sem duplicar o formato "/webhooks/{id}"
+    // (inbox-adapter-telegram, design.md, Decision 4).
+    internal static string BuildWebhookUrl(string publicUrlBaseUrl, Guid channelId) =>
         $"{publicUrlBaseUrl.TrimEnd('/')}/webhooks/{channelId}";
 }

@@ -20,6 +20,7 @@ public static class ChannelAdapterRegistrationExtensions
         var validatorKeys = KeysFor<IChannelConfigValidator>(services);
         var senderKeys = KeysFor<IOutboundMessageSender>(services);
         var webhookHandlerKeys = KeysFor<IInboundWebhookHandler>(services);
+        var provisionerKeys = KeysFor<IChannelWebhookProvisioner>(services);
 
         var contracts = new (string Name, HashSet<object> Keys)[]
         {
@@ -28,13 +29,22 @@ public static class ChannelAdapterRegistrationExtensions
             (nameof(IInboundWebhookHandler), webhookHandlerKeys),
         };
 
-        var allKeys = validatorKeys.Union(senderKeys).Union(webhookHandlerKeys);
+        var requiredKeys = validatorKeys.Union(senderKeys).Union(webhookHandlerKeys);
 
-        var problems = allKeys
+        var problems = requiredKeys
             .SelectMany(key => contracts
                 .Where(contract => !contract.Keys.Contains(key))
                 .Select(contract => $"'{key}' não tem {contract.Name} registrado"))
             .ToList();
+
+        // IChannelWebhookProvisioner é o quarto contrato, opcional
+        // (inbox-adapter-telegram, design.md, Decision 3) — não entra em
+        // "contracts" acima, então sua ausência para um ChannelType com os
+        // três obrigatórios não é um problema. Só é erro registrá-lo sem os
+        // três obrigatórios por trás.
+        problems.AddRange(provisionerKeys
+            .Where(key => !requiredKeys.Contains(key))
+            .Select(key => $"'{key}' tem {nameof(IChannelWebhookProvisioner)} registrado sem os três contratos obrigatórios"));
 
         if (problems.Count > 0)
         {

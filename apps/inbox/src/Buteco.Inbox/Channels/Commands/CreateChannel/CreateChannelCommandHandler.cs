@@ -38,8 +38,29 @@ public sealed class CreateChannelCommandHandler(
             return CreateChannelResult.InvalidCredential(configValidation.Errors);
         }
 
+        // Channel construído em memória (Id já populado por Guid.NewGuid()
+        // no construtor) antes de qualquer Add/SaveChangesAsync — nada foi
+        // persistido ainda quando o provisionamento abaixo roda, então uma
+        // falha do provisionador simplesmente retorna, sem precisar de
+        // rollback/transação (inbox-adapter-telegram, design.md, Decision 4).
         var encryptedCredentials = credentialCipher.Encrypt(command.Credential);
         var channel = new Channel(command.ChannelType, command.Name, encryptedCredentials, command.AgentId);
+
+        // Quarto contrato, opcional — null para adapters sem provisionamento
+        // automático (ex. "waha"), presente para "telegram"
+        // (inbox-adapter-telegram, design.md, Decision 1/4).
+        var provisioner = adapterRegistry.GetWebhookProvisioner(command.ChannelType);
+        if (provisioner is not null)
+        {
+            var webhookUrl = ChannelResponse.BuildWebhookUrl(publicUrlOptions.Value.BaseUrl, channel.Id);
+            var provisioning = await provisioner.ProvisionAsync(channel.Id, command.Credential, webhookUrl, cancellationToken);
+            if (!provisioning.Success)
+            {
+                return CreateChannelResult.ProvisioningFailed(provisioning.ErrorMessage!);
+            }
+
+            channel.SetEncryptedCredentials(credentialCipher.Encrypt(provisioning.UpdatedCredential!));
+        }
 
         dbContext.Channels.Add(channel);
         await dbContext.SaveChangesAsync(cancellationToken);

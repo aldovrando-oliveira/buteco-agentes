@@ -15,4 +15,7 @@ public sealed class ChannelAdapterRegistry(IServiceProvider serviceProvider) : I
 
     public IInboundWebhookHandler? GetInboundWebhookHandler(string channelType) =>
         serviceProvider.GetKeyedService<IInboundWebhookHandler>(channelType);
+
+    public IChannelWebhookProvisioner? GetWebhookProvisioner(string channelType) =>
+        serviceProvider.GetKeyedService<IChannelWebhookProvisioner>(channelType);
 }
