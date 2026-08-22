@@ -47,6 +47,17 @@ public static class PushNotificationEndpoints
 
         var token = request.Headers[TokenHeaderName].FirstOrDefault();
 
+        // Só usada para a leitura inicial — daqui em diante o processamento
+        // roda com CancellationToken.None, não com o token da requisição
+        // (ligado a HttpContext.RequestAborted). PushNotificationSender
+        // (apps/workers) usa um HttpClient com Timeout curto e fixo de 5s
+        // (Program.cs, design.md, Decision 3) e nunca espera nem reage à
+        // resposta deste endpoint — se o round-trip (chamar o canal +
+        // persistir) ultrapassar esses 5s, o cliente aborta a conexão, o que
+        // cancelaria SaveChangesAsync mesmo já tendo enviado a resposta ao
+        // canal (ex. Telegram), perdendo a persistência sem perder o envio.
+        // Ver incidente: resposta chegou no Telegram, mas a Message/PendingDispatch
+        // nunca saiu de "Dispatching" no inbox.
         var pendingDispatch = await dbContext.PendingDispatches
             .FirstOrDefaultAsync(dispatch => dispatch.TaskId == task.Id, cancellationToken);
 
@@ -74,25 +85,30 @@ public static class PushNotificationEndpoints
         var responseText = ExtractResponseText(task);
         if (responseText is not null)
         {
-            await DeliverResponseAsync(dbContext, credentialCipher, adapterRegistry, logger, pendingDispatch, responseText, cancellationToken);
+            await DeliverResponseAsync(dbContext, credentialCipher, adapterRegistry, logger, pendingDispatch, responseText, CancellationToken.None);
         }
 
         // Único caminho que chega até aqui é uma push notification válida —
         // Completed cobre com e sem resposta textual associada
         // (inbox-mensagens-persistidas, design.md, Decisão 6).
-        await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Completed, cancellationToken);
+        await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Completed, CancellationToken.None);
 
         dbContext.Remove(pendingDispatch);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
 
         return TypedResults.Ok();
     }
 
+    // A resposta do agente chega como Artifact, não como Status.Message —
+    // AgentExecutionService.ExecuteAsync (apps/workers) grava o texto via
+    // TaskUpdater.AddArtifactAsync e chama CompleteAsync() sem mensagem
+    // final, mesmo padrão de leitura usado por AgentDelegationToolSetResolver
+    // e pelos testes de apps/workers (task.Artifacts?.LastOrDefault()?.Parts).
     // Partes não textuais (Raw/Url/Data) são ignoradas nesta fatia
     // (design.md, Decision 3) — null quando não há nenhum texto a entregar.
     private static string? ExtractResponseText(AgentTask task)
     {
-        var parts = task.Status.Message?.Parts;
+        var parts = task.Artifacts?.LastOrDefault()?.Parts;
         if (parts is null)
         {
             return null;

@@ -180,6 +180,10 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
         return client.SendAsync(request);
     }
 
+    // Espelha o formato real produzido por AgentExecutionService.ExecuteAsync
+    // (apps/workers): a resposta vira um Artifact via AddArtifactAsync,
+    // CompleteAsync() é chamado sem mensagem final — Status.Message nunca é
+    // preenchido em produção.
     private static AgentTask BuildAgentTask(string taskId, string? responseText = null) => new()
     {
         Id = taskId,
@@ -188,15 +192,10 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
         {
             State = TaskState.Completed,
             Timestamp = DateTimeOffset.UtcNow,
-            Message = responseText is null
-                ? null
-                : new A2A.Message
-                {
-                    Role = Role.Agent,
-                    Parts = [Part.FromText(responseText)],
-                    MessageId = Guid.NewGuid().ToString("N"),
-                },
         },
+        Artifacts = responseText is null
+            ? null
+            : [new Artifact { ArtifactId = Guid.NewGuid().ToString("N"), Parts = [Part.FromText(responseText)] }],
     };
 
     private async Task<PendingDispatch?> FindPendingDispatchAsync(Guid sessionId)

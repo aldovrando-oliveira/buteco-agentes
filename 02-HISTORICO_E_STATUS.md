@@ -66,7 +66,9 @@ Non-Goal que ficou pendente desde o MVP.
 `inbox-crm-contato-sessao` → `inbox-orquestrador-debounce` →
 `inbox-adapter-contrato-catalogo` → `inbox-adapter-waha` →
 `inbox-adapter-telegram` → `inbox-fix-concorrencia-orquestrador` (correção
-de bug, não capability nova) → `frontend-inbox-catalogo-canais`
+de bug, não capability nova) → `frontend-inbox-catalogo-canais` →
+`inbox-push-notification-recepcao-resiliente` (correção de bug, não
+capability nova)
  
 Scaffold do quarto app → catálogo de canais → CRM (Contact/Session,
 fronteira por inatividade) → orquestrador (debounce persistido,
@@ -82,6 +84,36 @@ corrigido trocando `ReloadAsync` por detach+rebusca. Achado durante um
 teste que só existiu porque foi pedido explicitamente numa revisão
 anterior — o teste "óbvio" (o que o bug relatado original pedia) não
 teria pego esse segundo bug, mais sutil.
+
+**Dois bugs reais de produção no round-trip de push notification,
+encontrados e corrigidos** (reportados via screenshot do inbox):
+(1) `PushNotificationEndpoints.ExtractResponseText` lia
+`task.Status.Message?.Parts`, mas `AgentExecutionService` (apps/workers)
+nunca preenche esse campo no caminho de sucesso — o texto da resposta vai
+para `task.Artifacts` (`AddArtifactAsync` + `CompleteAsync()` sem
+mensagem final); a resposta nunca era extraída, então nunca era entregue
+ao canal, embora a mensagem de entrada ainda virasse `Completed`. O
+fixture de teste (`BuildAgentTask`) montava `Status.Message` diretamente,
+por isso os testes existentes não pegaram o defeito. (2) `ReceiveAsync`
+propagava o `CancellationToken` da própria requisição (ligado a
+`HttpContext.RequestAborted`) até o `SaveChangesAsync` final;
+`PushNotificationSender` (apps/workers) usa, por decisão deliberada
+(`a2a-push-notifications`, Decision 3), um timeout fixo de 5s sem retry —
+se o round-trip (chamar o canal + persistir) ultrapassasse esses 5s, o
+cliente abortava a conexão, cancelando a persistência local mesmo depois
+de a resposta já ter sido entregue com sucesso ao canal (ex. Telegram):
+resposta chegava no Telegram, mensagem ficava presa em "Processando"
+para sempre. Corrigido trocando para `CancellationToken.None` a partir da
+localização do `PendingDispatch`. Ver
+`inbox-push-notification-recepcao-resiliente` — spec de
+`inbox-message-orchestration` ganhou requisito novo sobre resiliência do
+endpoint receptor à desconexão do chamador; `inbox-message-history` e
+`a2a-push-notifications` não mudaram (o defeito 1 era só de
+implementação, contra uma spec já correta). Docker Desktop indisponível
+neste ambiente — suíte de testes de `apps/inbox` validada com
+Testcontainers apontando para o socket da API do Podman
+(`DOCKER_HOST` + `TESTCONTAINERS_RYUK_DISABLED=true`, já que o Podman
+não roda o Ryuk privilegiado por padrão): 155/155 testes passando.
  
 ### Autenticação
 `auth-login-e-servico`

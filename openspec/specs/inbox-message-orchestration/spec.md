@@ -11,9 +11,7 @@ push notification. Ela cobre a ingestão de mensagens normalizadas, o buffer
 de debounce persistido por sessão, o disparo idempotente do `SendMessage`
 via cliente A2A, e a recepção validada da resposta assíncrona, garantindo
 que nenhum conteúdo bufferizado seja perdido ou retido além do necessário.
-
 ## Requirements
-
 ### Requirement: Ingestão de mensagem normalizada resolve Contact e Session
 O sistema SHALL expor, via `apps/inbox`, um serviço interno que recebe uma
 mensagem normalizada `(ChannelId, ExternalId, texto, receivedAt, metadado do
@@ -173,7 +171,13 @@ Quando o estado terminal for alcançado por uma push notification válida
 cuja task possui uma mensagem de resposta associada, o sistema SHALL,
 antes de remover o registro, entregar essa resposta ao canal de origem
 (ver capability `inbox-channel-adapter-plugin`, Requirement "Entrega da
-resposta do agente ao canal de origem").
+resposta do agente ao canal de origem"). Uma vez que uma push
+notification tenha sido aceita por ter o token correto, o sistema SHALL
+completar a entrega ao canal de origem (quando aplicável) e a
+persistência local do resultado — atualização de status de dispatch e
+remoção do registro do buffer — independentemente de o chamador que
+enviou a push notification já ter encerrado a conexão ou desistido de
+esperar a resposta dentro do seu próprio timeout.
 
 #### Scenario: Buffer é removido após push notification válida
 - **WHEN** uma push notification com token correto é recebida para um
@@ -186,3 +190,14 @@ resposta do agente ao canal de origem").
 - **WHEN** um disparo termina por rejeição síncrona ou por falha de
   transporte
 - **THEN** o registro correspondente do buffer de debounce é removido
+
+#### Scenario: Processamento completa mesmo com o chamador desconectado
+- **WHEN** uma push notification com token correto é aceita, e o
+  chamador que a enviou encerra a conexão (por exemplo, por atingir seu
+  próprio timeout) antes de receber a resposta HTTP deste endpoint, mas
+  depois de o token já ter sido validado
+- **THEN** a entrega ao canal de origem (quando aplicável), a
+  atualização do status de dispatch das mensagens do grupo para
+  concluído e a remoção do registro do buffer de debounce completam
+  normalmente, sem serem interrompidas pela desconexão do chamador
+
