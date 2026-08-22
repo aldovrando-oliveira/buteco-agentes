@@ -169,7 +169,9 @@ O sistema SHALL permitir, via `apps/inbox`, listar todas as sessões de um
 `Channel` específico, ordenadas pela mais recente atividade primeiro,
 incluindo o identificador externo e o nome de exibição do `Contact` de cada
 sessão, e uma prévia da última mensagem dessa sessão (ver capability
-`inbox-message-history`) — direção, conteúdo e instante.
+`inbox-message-history`) — direção, conteúdo e instante. O campo de
+direção dessa prévia SHALL ser serializado como string com o nome do
+valor do enum (`"Inbound"` ou `"Outbound"`), nunca como inteiro ordinal.
 
 #### Scenario: Lista de sessões de um canal com sessões existentes
 - **WHEN** um cliente envia `GET /channels/{channelId}/sessions` para um
@@ -189,3 +191,10 @@ sessão, e uma prévia da última mensagem dessa sessão (ver capability
 - **WHEN** um cliente envia `GET /channels/{channelId}/sessions` para um id
   de `Channel` que não existe
 - **THEN** a API responde com HTTP 404
+
+#### Scenario: Direção da prévia serializada como string
+- **WHEN** um cliente envia `GET /channels/{channelId}/sessions` para um
+  `Channel` cuja sessão mais recente tem, como última mensagem, uma
+  mensagem de entrada (`Direction: Inbound`)
+- **THEN** o campo de direção dentro da prévia da última mensagem, na
+  resposta JSON, é a string `"Inbound"`, não um valor numérico

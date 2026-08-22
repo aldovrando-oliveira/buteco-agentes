@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Contacts;
 using Buteco.Inbox.Contacts.Responses;
@@ -60,6 +61,28 @@ public class ChannelSessionEndpointsTests(InboxFactoryFixture factory) : IClassF
         var sessions = await response.Content.ReadFromJsonAsync<List<ChannelSessionResponse>>();
         Assert.NotNull(sessions);
         Assert.Empty(sessions!);
+    }
+
+    // inbox-enums-json-string, tasks.md 2.2: lê a resposta como JSON bruto
+    // (não ReadFromJsonAsync<ChannelSessionResponse>) — o enum atravessa
+    // esta rota também, dentro da prévia da última mensagem, não só
+    // GET /sessions/{id}/messages.
+    [Fact]
+    public async Task GetChannelSessions_SessionWithInboundLastMessage_SerializesPreviewDirectionAsString()
+    {
+        var channelId = await CreateChannelAsync();
+        var externalId = UniqueExternalId();
+        await ReceiveAsync(channelId, externalId, "Mensagem de entrada");
+
+        var response = await _client.GetAsync($"/channels/{channelId}/sessions");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var session = Assert.Single(document.RootElement.EnumerateArray());
+        var direction = session.GetProperty("lastMessage").GetProperty("direction");
+
+        Assert.Equal(JsonValueKind.String, direction.ValueKind);
+        Assert.Equal("Inbound", direction.GetString());
     }
 
     [Fact]
