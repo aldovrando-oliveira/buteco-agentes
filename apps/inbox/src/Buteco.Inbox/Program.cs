@@ -10,6 +10,7 @@ using Buteco.Inbox.Channels.Webhooks.Endpoints;
 using Buteco.Inbox.Contacts;
 using Buteco.Inbox.Contacts.Endpoints;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Messages.Endpoints;
 using Buteco.Inbox.Options;
 using Buteco.Inbox.Orchestration;
 using Buteco.Inbox.Orchestration.PushNotifications.Endpoints;
@@ -130,6 +131,8 @@ app.MapHealthChecks("/health")
     .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.HealthProbe));
 app.MapChannelEndpoints();
 app.MapContactEndpoints();
+app.MapChannelSessionEndpoints();
+app.MapMessageEndpoints();
 app.MapPushNotificationEndpoints();
 app.MapWebhookEndpoints();
 

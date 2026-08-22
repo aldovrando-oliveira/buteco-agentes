@@ -4,6 +4,7 @@ using Buteco.Inbox.Channels.Adapters.Telegram;
 using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Channels.Security;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -78,7 +79,8 @@ public class TelegramInboundWebhookHandlerTests
 
     private static void AssertOrchestratorNeverCalled(Mock<IInboundMessageOrchestrator> orchestratorMock) =>
         orchestratorMock.Verify(o => o.ReceiveMessageAsync(
-            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(),
+            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<MessageContentType>(),
+            It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<DateTimeOffset>(),
             It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<CancellationToken>()),
             Times.Never);
 
@@ -158,7 +160,7 @@ public class TelegramInboundWebhookHandlerTests
 
         Assert.Equal(StatusCodes.Status200OK, request.HttpContext.Response.StatusCode);
         orchestratorMock.Verify(o => o.ReceiveMessageAsync(
-            channel.Id, "987654321", "Olá, preciso de ajuda", It.IsAny<DateTimeOffset>(),
+            channel.Id, "987654321", "Olá, preciso de ajuda", MessageContentType.Text, "42", "ana_silva", It.IsAny<DateTimeOffset>(),
             It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -186,7 +188,7 @@ public class TelegramInboundWebhookHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_MessageWithoutText_IsIgnoredWithoutInvokingOrchestrator()
+    public async Task HandleAsync_MessageWithoutTextOrMedia_IsIgnoredWithoutInvokingOrchestrator()
     {
         const string json = """
             {
@@ -213,6 +215,69 @@ public class TelegramInboundWebhookHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_PhotoWithoutCaption_InvokesOrchestratorWithMarkerAndImageContentType()
+    {
+        const string json = """
+            {
+              "update_id": 123456789,
+              "message": {
+                "message_id": 43,
+                "date": 1700000000,
+                "chat": { "id": 987654321, "type": "private" },
+                "from": { "id": 111, "is_bot": false, "first_name": "Ana" },
+                "photo": [{ "file_id": "abc", "width": 90, "height": 90 }]
+              }
+            }
+            """;
+
+        var orchestratorMock = new Mock<IInboundMessageOrchestrator>();
+        var provider = BuildProvider(orchestratorMock);
+        var cipher = CreateCipher();
+        var channel = await SeedChannelAsync(provider, cipher);
+        var handler = new TelegramInboundWebhookHandler(provider.GetRequiredService<IServiceScopeFactory>(), cipher);
+
+        var request = BuildRequest(json, CorrectSecret);
+        await handler.HandleAsync(channel.Id, request, CancellationToken.None);
+
+        orchestratorMock.Verify(o => o.ReceiveMessageAsync(
+            channel.Id, "987654321", "[mídia: image]", MessageContentType.Image, "43", "Ana", It.IsAny<DateTimeOffset>(),
+            It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DocumentWithCaption_InvokesOrchestratorWithCaptionAndDocumentContentType()
+    {
+        const string json = """
+            {
+              "update_id": 123456789,
+              "message": {
+                "message_id": 44,
+                "date": 1700000000,
+                "chat": { "id": 987654321, "type": "private" },
+                "from": { "id": 111, "is_bot": false, "first_name": "Ana" },
+                "caption": "Segue o comprovante",
+                "document": { "file_id": "doc123", "file_name": "comprovante.pdf" }
+              }
+            }
+            """;
+
+        var orchestratorMock = new Mock<IInboundMessageOrchestrator>();
+        var provider = BuildProvider(orchestratorMock);
+        var cipher = CreateCipher();
+        var channel = await SeedChannelAsync(provider, cipher);
+        var handler = new TelegramInboundWebhookHandler(provider.GetRequiredService<IServiceScopeFactory>(), cipher);
+
+        var request = BuildRequest(json, CorrectSecret);
+        await handler.HandleAsync(channel.Id, request, CancellationToken.None);
+
+        orchestratorMock.Verify(o => o.ReceiveMessageAsync(
+            channel.Id, "987654321", "Segue o comprovante", MessageContentType.Document, "44", "Ana", It.IsAny<DateTimeOffset>(),
+            It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task HandleAsync_ExternalIdIsExactlyChatIdConvertedToString()
     {
         var orchestratorMock = new Mock<IInboundMessageOrchestrator>();
@@ -225,8 +290,9 @@ public class TelegramInboundWebhookHandlerTests
         await handler.HandleAsync(channel.Id, request, CancellationToken.None);
 
         orchestratorMock.Verify(o => o.ReceiveMessageAsync(
-            It.IsAny<Guid>(), "987654321", It.IsAny<string>(), It.IsAny<DateTimeOffset>(),
-            It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<CancellationToken>()),
+            It.IsAny<Guid>(), "987654321", It.IsAny<string>(), It.IsAny<MessageContentType>(), It.IsAny<string>(),
+            It.IsAny<string?>(), It.IsAny<DateTimeOffset>(), It.IsAny<IReadOnlyDictionary<string, string>>(),
+            It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -243,7 +309,8 @@ public class TelegramInboundWebhookHandlerTests
         await handler.HandleAsync(channel.Id, request, CancellationToken.None);
 
         orchestratorMock.Verify(o => o.ReceiveMessageAsync(
-            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(),
+            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<MessageContentType>(), It.IsAny<string>(),
+            It.IsAny<string?>(), It.IsAny<DateTimeOffset>(),
             It.Is<IReadOnlyDictionary<string, string>>(metadata =>
                 metadata.Count == 2 && metadata["username"] == "ana_silva" && metadata["firstName"] == "Ana"),
             It.IsAny<CancellationToken>()),
@@ -276,10 +343,42 @@ public class TelegramInboundWebhookHandlerTests
         await handler.HandleAsync(channel.Id, request, CancellationToken.None);
 
         orchestratorMock.Verify(o => o.ReceiveMessageAsync(
-            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(),
+            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<MessageContentType>(), It.IsAny<string>(),
+            It.IsAny<string?>(), It.IsAny<DateTimeOffset>(),
             It.Is<IReadOnlyDictionary<string, string>>(metadata =>
                 metadata.Count == 1 && metadata["firstName"] == "Ana" && !metadata.ContainsKey("username")),
             It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DisplayNameFallsBackToFirstNameWhenNoUsername()
+    {
+        const string json = """
+            {
+              "update_id": 123456789,
+              "message": {
+                "message_id": 45,
+                "date": 1700000000,
+                "chat": { "id": 987654321, "type": "private" },
+                "from": { "id": 111, "is_bot": false, "first_name": "Ana" },
+                "text": "Sem username"
+              }
+            }
+            """;
+
+        var orchestratorMock = new Mock<IInboundMessageOrchestrator>();
+        var provider = BuildProvider(orchestratorMock);
+        var cipher = CreateCipher();
+        var channel = await SeedChannelAsync(provider, cipher);
+        var handler = new TelegramInboundWebhookHandler(provider.GetRequiredService<IServiceScopeFactory>(), cipher);
+
+        var request = BuildRequest(json, CorrectSecret);
+        await handler.HandleAsync(channel.Id, request, CancellationToken.None);
+
+        orchestratorMock.Verify(o => o.ReceiveMessageAsync(
+            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<MessageContentType>(), It.IsAny<string>(),
+            "Ana", It.IsAny<DateTimeOffset>(), It.IsAny<IReadOnlyDictionary<string, string>>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 }

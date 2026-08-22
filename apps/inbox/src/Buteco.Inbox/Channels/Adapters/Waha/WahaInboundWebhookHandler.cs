@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,13 +30,26 @@ public sealed class WahaInboundWebhookHandler(IServiceScopeFactory scopeFactory)
     {
         var envelope = await JsonSerializer.DeserializeAsync<WahaWebhookEnvelope>(request.Body, JsonOptions, cancellationToken);
 
-        if (envelope?.Event != "message" || envelope.Payload?.From is null || envelope.Payload.Body is null)
+        var payload = envelope?.Payload;
+        if (envelope?.Event != "message" || payload?.Id is null || payload.From is null)
         {
             return;
         }
 
-        var externalId = envelope.Payload.From;
+        // Mensagem de mídia sem legenda tem Body nulo/vazio — não descartar
+        // nesse caso (inbox-mensagens-persistidas, design.md, Decisão 8).
+        var hasText = !string.IsNullOrEmpty(payload.Body);
+        if (!hasText && !payload.HasMedia)
+        {
+            return;
+        }
+
+        var contentType = ResolveContentType(payload);
+        var content = hasText ? payload.Body! : $"[mídia: {contentType.ToString().ToLowerInvariant()}]";
+
+        var externalId = payload.From;
         var phone = externalId.Split('@')[0];
+        var displayName = payload.Data?.Info?.PushName;
 
         using var scope = scopeFactory.CreateScope();
         var orchestrator = scope.ServiceProvider.GetRequiredService<IInboundMessageOrchestrator>();
@@ -43,9 +57,27 @@ public sealed class WahaInboundWebhookHandler(IServiceScopeFactory scopeFactory)
         await orchestrator.ReceiveMessageAsync(
             channelId,
             externalId,
-            envelope.Payload.Body,
+            content,
+            contentType,
+            payload.Id,
+            displayName,
             DateTimeOffset.UtcNow,
             new Dictionary<string, string> { ["phone"] = phone },
             cancellationToken);
+    }
+
+    private static MessageContentType ResolveContentType(WahaWebhookMessagePayload payload)
+    {
+        if (!payload.HasMedia)
+        {
+            return MessageContentType.Text;
+        }
+
+        return payload.Media?.Mimetype switch
+        {
+            { } mimetype when mimetype.StartsWith("image/", StringComparison.OrdinalIgnoreCase) => MessageContentType.Image,
+            { } mimetype when mimetype.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) => MessageContentType.Audio,
+            _ => MessageContentType.Document,
+        };
     }
 }

@@ -1,5 +1,6 @@
 using System.Text;
 using Buteco.Inbox.Channels.Adapters.Waha;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -64,6 +65,9 @@ public class WahaInboundWebhookHandlerTests
             channelId,
             "5511999999999@c.us",
             "Olá, preciso de ajuda",
+            MessageContentType.Text,
+            "true_5511999999999@c.us_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            null,
             It.IsAny<DateTimeOffset>(),
             It.Is<IReadOnlyDictionary<string, string>>(metadata => metadata["phone"] == "5511999999999"),
             It.IsAny<CancellationToken>()),
@@ -88,13 +92,83 @@ public class WahaInboundWebhookHandlerTests
 
         await handler.HandleAsync(Guid.NewGuid(), BuildRequest(json), CancellationToken.None);
 
+        AssertOrchestratorNeverCalled(orchestratorMock);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ImageMediaWithoutCaption_InvokesOrchestratorWithMarkerAndImageContentType()
+    {
+        // _data.Info.PushName confirmado só para o engine GOWS via discussão
+        // da comunidade, não doc oficial (design.md, Decisão 9) — fixture
+        // inclui o campo pra provar que o handler o extrai quando presente.
+        const string json = """
+            {
+              "event": "message",
+              "session": "default",
+              "payload": {
+                "id": "true_5511999999999@c.us_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+                "from": "5511999999999@c.us",
+                "fromMe": false,
+                "to": "5511888888888@c.us",
+                "hasMedia": true,
+                "media": { "mimetype": "image/jpeg" },
+                "_data": { "Info": { "PushName": "Maria" } }
+              }
+            }
+            """;
+
+        var orchestratorMock = new Mock<IInboundMessageOrchestrator>();
+        var channelId = Guid.NewGuid();
+        var handler = BuildHandler(orchestratorMock);
+
+        await handler.HandleAsync(channelId, BuildRequest(json), CancellationToken.None);
+
+        orchestratorMock.Verify(o => o.ReceiveMessageAsync(
+            channelId,
+            "5511999999999@c.us",
+            "[mídia: image]",
+            MessageContentType.Image,
+            "true_5511999999999@c.us_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            "Maria",
+            It.IsAny<DateTimeOffset>(),
+            It.IsAny<IReadOnlyDictionary<string, string>>(),
+            It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MessageWithoutIdOrFrom_DoesNotInvokeOrchestrator()
+    {
+        const string json = """
+            {
+              "event": "message",
+              "session": "default",
+              "payload": {
+                "body": "Sem id",
+                "fromMe": false,
+                "hasMedia": false
+              }
+            }
+            """;
+
+        var orchestratorMock = new Mock<IInboundMessageOrchestrator>();
+        var handler = BuildHandler(orchestratorMock);
+
+        await handler.HandleAsync(Guid.NewGuid(), BuildRequest(json), CancellationToken.None);
+
+        AssertOrchestratorNeverCalled(orchestratorMock);
+    }
+
+    private static void AssertOrchestratorNeverCalled(Mock<IInboundMessageOrchestrator> orchestratorMock) =>
         orchestratorMock.Verify(o => o.ReceiveMessageAsync(
             It.IsAny<Guid>(),
             It.IsAny<string>(),
             It.IsAny<string>(),
+            It.IsAny<MessageContentType>(),
+            It.IsAny<string>(),
+            It.IsAny<string?>(),
             It.IsAny<DateTimeOffset>(),
             It.IsAny<IReadOnlyDictionary<string, string>>(),
             It.IsAny<CancellationToken>()),
             Times.Never);
-    }
 }

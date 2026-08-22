@@ -23,8 +23,20 @@ public sealed class TestOutboundMessageSender : IOutboundMessageSender
         }
     }
 
+    // Settable pelo teste que precisa exercitar o caminho de falha de envio
+    // (inbox-mensagens-persistidas, design.md, Decisão 4) — null por padrão,
+    // mesmo comportamento de sempre-sucesso de antes. Teste que usa isso
+    // deve resetar para null ao final (try/finally), já que a instância é
+    // Singleton compartilhada entre os [Fact] da mesma fixture.
+    public Exception? ExceptionToThrow { get; set; }
+
     public Task SendAsync(OutboundMessage message, CancellationToken cancellationToken)
     {
+        if (ExceptionToThrow is { } exception)
+        {
+            throw exception;
+        }
+
         lock (_gate)
         {
             _capturedMessages.Add(message);

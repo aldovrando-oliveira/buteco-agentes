@@ -1,5 +1,6 @@
 using A2A;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Options;
 using Buteco.Inbox.Orchestration.Entities;
 using Buteco.Inbox.Orchestration.PushNotifications.Endpoints;
@@ -68,6 +69,7 @@ public sealed class DebounceSweepService(
 
         var token = Guid.NewGuid().ToString("N");
         pendingDispatch.MarkDispatching(token);
+        await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Dispatching, cancellationToken);
 
         try
         {
@@ -108,6 +110,7 @@ public sealed class DebounceSweepService(
                 "SendMessage rejeitado no nível de protocolo A2A para a sessão {SessionId}",
                 pendingDispatch.SessionId);
             dbContext.Remove(pendingDispatch);
+            await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Failed, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
             return;
         }
@@ -126,7 +129,7 @@ public sealed class DebounceSweepService(
 
         return new SendMessageRequest
         {
-            Message = new Message
+            Message = new A2A.Message
             {
                 Role = Role.User,
                 Parts = [Part.FromText(pendingDispatch.ConcatenatedText())],
@@ -163,6 +166,7 @@ public sealed class DebounceSweepService(
                 pendingDispatch.SessionId,
                 response.Task?.Status.State);
             dbContext.Remove(pendingDispatch);
+            await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Failed, cancellationToken);
         }
         else
         {
@@ -189,6 +193,7 @@ public sealed class DebounceSweepService(
                 pendingDispatch.SessionId);
             pendingDispatch.MarkFailed();
             dbContext.Remove(pendingDispatch);
+            await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Failed, cancellationToken);
         }
         else
         {
@@ -198,9 +203,28 @@ public sealed class DebounceSweepService(
                 pendingDispatch.SessionId,
                 pendingDispatch.AttemptCount,
                 debounceOptions.Value.MaxDispatchAttempts);
+            // RegisterTransportFailure devolveu PendingDispatch a Pending —
+            // mesmo espelhamento em Message (design.md, Decisão 6).
+            await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Pending, cancellationToken);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task UpdateMessageDispatchStatusesAsync(
+        AppDbContext dbContext,
+        Guid pendingDispatchId,
+        MessageDispatchStatus status,
+        CancellationToken cancellationToken)
+    {
+        var messages = await dbContext.Messages
+            .Where(message => message.PendingDispatchId == pendingDispatchId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var message in messages)
+        {
+            message.UpdateDispatchStatus(status);
+        }
     }
 
     private static bool IsTransportFailure(Exception exception, CancellationToken cancellationToken) =>

@@ -7,11 +7,11 @@
  
 ## Status atual
  
-A linha de trabalho de autenticação está concluída (`auth-login-e-servico`
-aplicada, sincronizada e arquivada). Ela é a **etapa 1 de 3** de uma linha
-maior, já planejada, de histórico de conversa por sessão no inbox. Não há
-change em andamento nem prompt pendente de revisão. Ver "Próximo passo"
-para onde retomar.
+A linha de trabalho de histórico de conversa por sessão no inbox está na
+**etapa 2 de 3**, concluída: `inbox-mensagens-persistidas` aplicada,
+sincronizada e arquivada (etapa 1, `auth-login-e-servico`, já concluída
+antes). Não há change em andamento nem prompt pendente de revisão. Ver
+"Próximo passo" para onde retomar — etapa 3, UI, é a próxima.
  
 ## Changes aplicadas, por linha de trabalho
  
@@ -131,6 +131,74 @@ usa o token de fato emitido pela outra API contra um `apps/inbox` com
 `apps/api` inalcançável pela rede — provando que a validação é local, em
 vez de só afirmá-lo.
  
+### Histórico de mensagens no inbox
+`inbox-mensagens-persistidas`
+ 
+Etapa 2 de 3 da linha de histórico de conversa no inbox. Entidade `Message`
+(`apps/inbox`), tabela relacional própria ligada a `Session` — **não**
+estende `PendingDispatch` nem toca sua coleção owned/JSON `Messages`,
+exatamente a restrição de desenho que a proposta original exigia.
+ 
+O que entrou:
+ 
+- **Persistência de entrada e saída**: `Message` grava direção, conteúdo,
+  tipo de conteúdo (`Text`/`Image`/`Audio`/`Document`, mídia binária fora
+  de escopo — só um marcador), instante e, na entrada, o identificador
+  externo da mensagem (dedup de webhook reentregue); na saída, status de
+  entrega (`Sent`/`Failed`, com motivo) do envio ao provedor via
+  `IOutboundMessageSender` — não recibo de entrega/leitura do destinatário
+  final.
+- **Estado de dispatch espelhado nas mensagens de entrada**
+  (`Pending`/`Dispatching`/`Failed`/`Completed`), atualizado nos seis
+  pontos reais que mutam ou removem `PendingDispatch`
+  (`InboundMessageOrchestrator`, os três desfechos de
+  `DebounceSweepService` — reivindicação, rejeição de protocolo A2A,
+  rejeição síncrona, esgotamento de tentativas — e
+  `PushNotificationEndpoints`), sobrevivendo à remoção da `PendingDispatch`
+  correspondente. `Failed` agrupa as três causas de "não haverá resposta"
+  sob o mesmo valor, decisão consciente.
+- **`Contact.DisplayName`** (nullable), atualizado a cada mensagem de
+  entrada — semântica oposta à de `Metadata` (congelado na criação).
+  Extraído de `payload._data.Info.PushName` no WAHA (confirmado só via
+  discussão da comunidade para o engine GOWS, não pela doc oficial — ver
+  Itens em aberto) e de `username`/`first_name` no Telegram.
+- **Duas consultas novas**: `GET /sessions/{id}/messages` (timeline
+  cronológica) e `GET /channels/{id}/sessions` (sessões de um canal por
+  última atividade, com `DisplayName`/`ExternalId` do contato e prévia da
+  última mensagem) — a segunda não fazia parte do escopo original da
+  proposta, entrou depois de uma revisão apontar que a etapa 3 precisa
+  dela e ela não existia em lugar nenhum.
+- **Pendência de varredura fechada**: o padrão de bug de
+  `inbox-fix-concorrencia-orquestrador` (coleção owned/JSON mutada
+  in-place + re-leitura na mesma instância de `DbContext`) foi varrido nos
+  dois eixos (gatilhos de re-leitura × superfícies owned/JSON) contra o
+  repo inteiro — interseção real é só `PendingDispatch.Messages`, já
+  corrigido; nenhum segundo site. A seção *Risks* do `design.md` de
+  `inbox-fix-concorrencia-orquestrador`, que ainda citava o mecanismo
+  abandonado (`ReloadAsync`), foi corrigida para o mecanismo final
+  (detach+rebusca).
+ 
+**Achado real durante a implementação, fora do escopo desta change**: um
+teste de concorrência novo (8 chamadas simultâneas com o mesmo
+identificador externo de mensagem) expôs, de forma intermitente, uma
+corrida em `ContactSessionResolver.FindOrCreateSessionAsync` —
+diferente de `Contact` e `PendingDispatch`, a criação de `Session` não
+tem índice único protegendo contra duplicação sob concorrência real
+(gap de `inbox-crm-contato-sessao`). O teste foi isolado da criação de
+`Session` (mesmo padrão já usado para isolar o teste de append de
+`PendingDispatch`) em vez de expandir esta change para corrigir um
+componente adjacente — registrado como item em aberto abaixo.
+ 
+Revisado antes do apply: seis correções pedidas (contagem de estados de
+`DispatchStatus` inconsistente entre `design.md`/`proposal.md`, colisão de
+nome entre `DispatchStatus`/`DeliveryStatus`, `ContentType` de saída não
+definido, ponto de escrita de `DisplayName` indeciso, cobertura de teste
+faltando para mídia, e a consulta de sessões por canal que tinha ficado no
+vão entre esta change e a etapa 3). Testes: 153 casos em
+`Buteco.Inbox.Tests` + 2 em `InboxOrchestratorRoundTrip.Tests`,
+Testcontainers Postgres real, rodados duas vezes para checar
+flakiness.
+ 
 ## Itens em aberto, registrados conscientemente (não esquecidos)
  
 Cada um tem gatilho de quando revisitar:
@@ -165,43 +233,49 @@ Cada um tem gatilho de quando revisitar:
   hoje; decisão consciente de escopo mínimo, não esquecimento.
 - **Rate limit do Telegram** — sem tratamento; debounce reduz o risco mas
   não elimina.
-- **Varredura da classe de bug de `ReloadAsync`** (pendência de
-  `inbox-fix-concorrencia-orquestrador`) — nunca foi confirmado se o
-  mesmo padrão de risco (coleção owned/JSON mutada in-place + re-leitura
-  na mesma instância de `DbContext`) existe em outro lugar do código além
-  de `InboundMessageOrchestrator`. Já tem plano definido em dois eixos
-  (gatilhos de re-leitura × superfícies owned/JSON), com a exigência de
-  classificar por escrito cada superfície encontrada, **inclusive as
-  seguras**. Agendada para o `/opsx:explore` da etapa 2, por ser
-  pré-requisito do desenho de persistência de mensagem. A outra metade da
-  pendência (seção de Risks daquele `design.md` possivelmente ainda
-  descrevendo o mecanismo abandonado) vai junto.
 - **ChatWoot** foi mencionado como alternativa possível na concepção
   inicial do projeto, nunca formalmente descartado — mas a direção
   tomada desde então (canais próprios em `apps/inbox`, arquitetura de
   plugin) é, na prática, a decisão de não usá-lo.
+- **Retenção de mensagens** (`Message`, `inbox-mensagens-persistidas`) —
+  nenhum TTL ou expurgo implementado; o campo de instante já deixa isso
+  trivial no futuro. Gatilho: revisitar quando o primeiro canal em
+  produção passar de dezenas de milhares de mensagens, ou quando o backup
+  do `buteco_inbox` incomodar.
+- **Criação de `Session` sem índice único protegendo contra concorrência**
+  (`ContactSessionResolver.FindOrCreateSessionAsync`, gap de
+  `inbox-crm-contato-sessao`, exposto por um teste novo de
+  `inbox-mensagens-persistidas`) — diferente de `Contact` e
+  `PendingDispatch`, nada impede duas chamadas verdadeiramente
+  concorrentes para o mesmo `Contact` novo criarem duas `Session`
+  distintas dentro da janela de inatividade. Não corrigido nesta change
+  (fora do escopo dela); o teste que o expôs foi isolado da corrida de
+  criação de `Session` para não ficar intermitente. Gatilho: revisitar se
+  aparecer duplicação real de `Session` em produção, ou antes de qualquer
+  mudança futura em `ContactSessionResolver`.
+- **`WahaWebhookMessagePayload.Data.Info.PushName`** (`DisplayName` do
+  WAHA, `inbox-mensagens-persistidas`) — confirmado só via discussão da
+  comunidade para o engine GOWS, não pela documentação oficial do WAHA
+  (que declara o shape de `_data` como "interno do engine, pode variar").
+  Gatilho: confirmar contra uma instância WAHA real de produção assim que
+  houver uma disponível; se o campo divergir, `DisplayName` do WAHA
+  simplesmente fica sempre nulo até a correção, sem quebrar nada mais.
 ## Próximo passo
  
 Linha de trabalho em andamento, de três etapas — histórico de conversa
 por sessão visível na UI do inbox:
  
 1. ~~`auth-login-e-servico`~~ — **concluída**.
-2. **`inbox-mensagens-persistidas`** ← próxima. Entidade `Message` ligada
-   a `Session` (tabela relacional própria, **não** estendendo o
-   `PendingDispatch` — é a área do bug de concorrência corrigido),
-   status de entrega com semântica de sucesso/falha do envio ao provedor
-   (não recibos de entrega/leitura), estado de dispatch renderável na
-   timeline, e `Contact.DisplayName` capturado do `pushName` (WAHA) e do
-   `from.username` (Telegram) — sem ele a lista da etapa 3 mostra número
-   cru. Inclui a varredura de `ReloadAsync` como pré-requisito do
-   desenho. Retenção de mensagem fica fora de escopo (ver abaixo).
-3. `frontend-inbox-sessoes-historico` — `/canais/{id}` ganha abas
-   *Sessões* (padrão) e *Configuração* (o card atual, intacto); lista de
-   sessões por última atividade; timeline com um check só para enviado e
-   ícone de erro com motivo para falha (nunca dois checks — entregue e
-   lido são recibos que o desenho escolhido não coleta).
-**A registrar quando a etapa 2 for aplicada**: retenção de mensagens
-(nada de TTL ou expurgo nessa fatia) entra aqui como item em aberto, com
-gatilho — sugestão: revisitar quando o primeiro canal em produção passar
-de dezenas de milhares de mensagens, ou quando o backup do
-`buteco_inbox` incomodar.
+2. ~~`inbox-mensagens-persistidas`~~ — **concluída**. `Message` persistida
+   por `Session`, dedup por identificador externo, status de entrega e
+   estado de dispatch renderável, `Contact.DisplayName`, e as duas
+   consultas (`GET /sessions/{id}/messages`,
+   `GET /channels/{id}/sessions`) que a etapa 3 vai consumir — ver detalhe
+   em "Changes aplicadas" acima.
+3. **`frontend-inbox-sessoes-historico`** ← próxima. `/canais/{id}` ganha
+   abas *Sessões* (padrão) e *Configuração* (o card atual, intacto); lista
+   de sessões por última atividade (já servida por
+   `GET /channels/{id}/sessions`, com prévia da última mensagem); timeline
+   com um check só para enviado e ícone de erro com motivo para falha
+   (nunca dois checks — entregue e lido são recibos que o desenho
+   escolhido não coleta; já servida por `GET /sessions/{id}/messages`).

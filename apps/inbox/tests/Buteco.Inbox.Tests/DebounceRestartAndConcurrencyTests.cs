@@ -2,6 +2,7 @@ using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Contacts;
 using Buteco.Inbox.Contacts.Entities;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration;
 using Buteco.Inbox.Orchestration.Entities;
 using Buteco.Inbox.Tests.Support;
@@ -68,7 +69,7 @@ public class DebounceRestartAndConcurrencyTests(PostgresOnlyFixture fixture) : I
 
             var channel = new Channel("test-channel", $"Canal {Guid.NewGuid()}", "irrelevante-nesta-fatia", agentId);
             dbContext.Channels.Add(channel);
-            var contact = new Contact(channel.Id, $"+5511{Guid.NewGuid():N}"[..15], new Dictionary<string, string>());
+            var contact = new Contact(channel.Id, $"+5511{Guid.NewGuid():N}"[..15], new Dictionary<string, string>(), displayName: null);
             dbContext.Contacts.Add(contact);
             var session = new Session(contact.Id);
             dbContext.Sessions.Add(session);
@@ -139,7 +140,16 @@ public class DebounceRestartAndConcurrencyTests(PostgresOnlyFixture fixture) : I
 
         var externalId = $"+5511{Guid.NewGuid():N}"[..15];
         var orchestrator = scope.ServiceProvider.GetRequiredService<IInboundMessageOrchestrator>();
-        await orchestrator.ReceiveMessageAsync(channel.Id, externalId, text, DateTimeOffset.UtcNow, new Dictionary<string, string>(), CancellationToken.None);
+        await orchestrator.ReceiveMessageAsync(
+            channel.Id,
+            externalId,
+            text,
+            MessageContentType.Text,
+            Guid.NewGuid().ToString(),
+            displayName: null,
+            DateTimeOffset.UtcNow,
+            new Dictionary<string, string>(),
+            CancellationToken.None);
     }
 
     private static async Task<T> PollUntilAsync<T>(Func<Task<T>> probeAsync, Func<T, bool> isDone, TimeSpan timeout)

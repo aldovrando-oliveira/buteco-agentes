@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Contacts.Entities;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -16,6 +17,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Session> Sessions => Set<Session>();
 
     public DbSet<PendingDispatch> PendingDispatches => Set<PendingDispatch>();
+
+    public DbSet<Message> Messages => Set<Message>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -54,6 +57,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                     (left, right) => (left ?? new Dictionary<string, string>()).SequenceEqual(right ?? new Dictionary<string, string>()),
                     dictionary => dictionary.Aggregate(0, (hash, pair) => HashCode.Combine(hash, pair.Key, pair.Value)),
                     dictionary => new Dictionary<string, string>(dictionary)));
+
+            entity.Property(contact => contact.DisplayName).IsRequired(false);
 
             entity.Property(contact => contact.CreatedAt).IsRequired();
 
@@ -122,6 +127,39 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // "xmin" (design.md, Decisão 5 — UseXminAsConcurrencyToken()
             // não existe na versão do provider referenciada).
             entity.Property<uint>("Version").IsRowVersion();
+        });
+
+        modelBuilder.Entity<Message>(entity =>
+        {
+            entity.ToTable("messages");
+            entity.HasKey(message => message.Id);
+            entity.Property(message => message.SessionId).IsRequired();
+            entity.Property(message => message.Direction).IsRequired().HasConversion<string>();
+            entity.Property(message => message.Content).IsRequired();
+            entity.Property(message => message.ContentType).IsRequired().HasConversion<string>();
+            entity.Property(message => message.OccurredAt).IsRequired();
+            entity.Property(message => message.ExternalId).IsRequired(false);
+            entity.Property(message => message.DeliveryStatus).IsRequired(false).HasConversion<string>();
+            entity.Property(message => message.DeliveryFailureReason).IsRequired(false);
+            entity.Property(message => message.PendingDispatchId).IsRequired(false);
+            entity.Property(message => message.DispatchStatus).IsRequired(false).HasConversion<string>();
+
+            entity.HasOne<Session>()
+                .WithMany()
+                .HasForeignKey(message => message.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Serve "mensagens de uma Session em ordem cronológica" e,
+            // reaproveitado por sessão individual, a prévia de última
+            // mensagem de "sessões de um canal por última atividade"
+            // (design.md, Decisões 7 e 10).
+            entity.HasIndex(message => new { message.SessionId, message.OccurredAt });
+
+            // Deduplicação de webhook reentregue — só mensagens de entrada
+            // têm ExternalId (design.md, Decisão 5).
+            entity.HasIndex(message => new { message.SessionId, message.ExternalId })
+                .IsUnique()
+                .HasFilter($"\"{nameof(Message.Direction)}\" = 'Inbound' AND \"{nameof(Message.ExternalId)}\" IS NOT NULL");
         });
     }
 }

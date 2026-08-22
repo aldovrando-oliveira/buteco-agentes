@@ -71,6 +71,9 @@ namespace Buteco.Inbox.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DisplayName")
+                        .HasColumnType("text");
+
                     b.Property<string>("ExternalId")
                         .IsRequired()
                         .HasColumnType("text");
@@ -114,6 +117,56 @@ namespace Buteco.Inbox.Infrastructure.Migrations
                     b.HasIndex("ContactId");
 
                     b.ToTable("sessions", (string)null);
+                });
+
+            modelBuilder.Entity("Buteco.Inbox.Messages.Entities.Message", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("DeliveryFailureReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DeliveryStatus")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("DispatchStatus")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExternalId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PendingDispatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "ExternalId")
+                        .IsUnique()
+                        .HasFilter("\"Direction\" = 'Inbound' AND \"ExternalId\" IS NOT NULL");
+
+                    b.HasIndex("SessionId", "OccurredAt");
+
+                    b.ToTable("messages", (string)null);
                 });
 
             modelBuilder.Entity("Buteco.Inbox.Orchestration.Entities.PendingDispatch", b =>
@@ -174,6 +227,15 @@ namespace Buteco.Inbox.Infrastructure.Migrations
                     b.HasOne("Buteco.Inbox.Contacts.Entities.Contact", null)
                         .WithMany()
                         .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Inbox.Messages.Entities.Message", b =>
+                {
+                    b.HasOne("Buteco.Inbox.Contacts.Entities.Session", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

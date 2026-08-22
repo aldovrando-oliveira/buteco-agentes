@@ -265,11 +265,12 @@ chamada, sem necessidade de ser configurável — não é exposto em
   ao padrão de uso esperado (mensagens humanas digitadas em sequência);
   se o comportamento em produção mostrar o contrário, ajustar o limite
   vira uma mudança pontual futura, não uma mudança de design.
-- **[Risco] `ReloadAsync` traz `Status` diferente de `Pending` porque o
-  `DebounceSweepService` reivindicou a linha entre a leitura original e o
-  reload** → tratado explicitamente na Decisão 1, passo 2: cai no
-  caminho de criação de uma nova `PendingDispatch`, mesmo comportamento
-  já usado quando não existe nenhuma `PendingDispatch` `Pending`.
+- **[Risco] A rebusca (detach + `FindPendingAsync`) traz `Status` diferente
+  de `Pending` porque o `DebounceSweepService` reivindicou a linha entre a
+  leitura original e a rebusca** → tratado explicitamente na Decisão 1,
+  passo 2: cai no caminho de criação de uma nova `PendingDispatch`, mesmo
+  comportamento já usado quando não existe nenhuma `PendingDispatch`
+  `Pending`.
 - **[Trade-off] Duas responsabilidades (criar vs. anexar) agora
   compartilham um caminho de retry único** → aumenta levemente a
   complexidade do método em troca de eliminar a duplicação de lógica de

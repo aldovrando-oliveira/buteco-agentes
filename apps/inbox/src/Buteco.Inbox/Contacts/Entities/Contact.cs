@@ -21,18 +21,35 @@ public class Contact
     // ExternalId já recebe hoje, não há Update para este campo.
     public IReadOnlyDictionary<string, string> Metadata { get; private set; } = new Dictionary<string, string>();
 
+    // Nullable, atualizado a cada mensagem de entrada — semântica oposta a
+    // Metadata (congelado na criação). Extraído do payload do adapter de
+    // origem (design.md de inbox-mensagens-persistidas, Decisão 9).
+    public string? DisplayName { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     private Contact()
     {
     }
 
-    public Contact(Guid channelId, string externalId, IReadOnlyDictionary<string, string> metadata)
+    public Contact(Guid channelId, string externalId, IReadOnlyDictionary<string, string> metadata, string? displayName)
     {
         Id = Guid.NewGuid();
         ChannelId = channelId;
         ExternalId = externalId;
         Metadata = metadata;
+        DisplayName = displayName;
         CreatedAt = DateTimeOffset.UtcNow;
+    }
+
+    // Chamado a cada mensagem de entrada, tanto na criação quanto no
+    // reaproveitamento de um Contact existente (design.md, Decisão 9).
+    // displayName nulo não apaga o valor já persistido.
+    public void UpdateDisplayName(string? displayName)
+    {
+        if (displayName is not null)
+        {
+            DisplayName = displayName;
+        }
     }
 }

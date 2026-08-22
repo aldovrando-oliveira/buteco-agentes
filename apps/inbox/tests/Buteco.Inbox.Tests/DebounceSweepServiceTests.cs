@@ -1,10 +1,13 @@
+using A2A;
 using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration;
 using Buteco.Inbox.Orchestration.Entities;
 using Buteco.Inbox.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using MessageEntity = Buteco.Inbox.Messages.Entities.Message;
 
 namespace Buteco.Inbox.Tests;
 
@@ -87,6 +90,26 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
     }
 
     [Fact]
+    public async Task SendMessage_Submitted_MessagesReflectDispatchingStatusWhileAwaitingPushNotification()
+    {
+        factory.A2AClientFactory.Handler = FakeA2AClientFactory.DefaultHandler;
+
+        var channelId = await CreateChannelAsync(Guid.NewGuid());
+        var externalId = UniqueExternalId();
+        await ReceiveAsync(channelId, externalId, "Mensagem aguardando resposta");
+        var sessionId = await ResolveSessionIdAsync(channelId, externalId);
+
+        await PollUntilAsync(
+            () => GetPendingDispatchAsync(sessionId),
+            dispatch => dispatch is { Status: PendingDispatchStatus.Dispatching },
+            TimeSpan.FromSeconds(3));
+
+        var messages = await GetMessagesAsync(sessionId);
+        Assert.Single(messages);
+        Assert.Equal(MessageDispatchStatus.Dispatching, messages[0].DispatchStatus);
+    }
+
+    [Fact]
     public async Task SendMessage_ReturnsRejectedTask_ClosesDispatchWithoutAwaitingPushNotification()
     {
         factory.A2AClientFactory.Handler = FakeA2AClientFactory.RejectedHandler;
@@ -104,6 +127,28 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
             TimeSpan.FromSeconds(3));
 
         await PollUntilNoPendingDispatchAsync(sessionId, TimeSpan.FromSeconds(3));
+
+        var messages = await GetMessagesAsync(sessionId);
+        Assert.Single(messages);
+        Assert.Equal(MessageDispatchStatus.Failed, messages[0].DispatchStatus);
+    }
+
+    [Fact]
+    public async Task SendMessage_ThrowsA2AException_ClosesDispatchWithMessagesMarkedFailed()
+    {
+        factory.A2AClientFactory.Handler = _ => throw new A2AException("Agente desconhecido.", A2AErrorCode.InvalidRequest);
+
+        var channelId = await CreateChannelAsync(Guid.NewGuid());
+        var externalId = UniqueExternalId();
+
+        await ReceiveAsync(channelId, externalId, "Mensagem para agente inexistente");
+        var sessionId = await ResolveSessionIdAsync(channelId, externalId);
+
+        await PollUntilNoPendingDispatchAsync(sessionId, TimeSpan.FromSeconds(3));
+
+        var messages = await GetMessagesAsync(sessionId);
+        Assert.Single(messages);
+        Assert.Equal(MessageDispatchStatus.Failed, messages[0].DispatchStatus);
     }
 
     [Fact]
@@ -131,6 +176,12 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
         Assert.NotNull(pendingDispatch);
         Assert.Equal(1, pendingDispatch!.AttemptCount);
         Assert.True(attempt >= 2);
+
+        // Espelhamento sobrevive ao ciclo Dispatching -> Pending (retry) ->
+        // Dispatching de novo (design.md, Decisão 6, passo 5).
+        var messages = await GetMessagesAsync(sessionId);
+        Assert.Single(messages);
+        Assert.Equal(MessageDispatchStatus.Dispatching, messages[0].DispatchStatus);
     }
 
     [Fact]
@@ -150,13 +201,35 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
         await PollUntilNoPendingDispatchAsync(sessionId, TimeSpan.FromSeconds(8));
 
         Assert.True(factory.A2AClientFactory.RequestedAgentIds.Count(id => id == agentId) >= 3);
+
+        // DispatchStatus permanece consultável mesmo com a PendingDispatch
+        // já removida (design.md, Decisão 6).
+        var messages = await GetMessagesAsync(sessionId);
+        Assert.Single(messages);
+        Assert.Equal(MessageDispatchStatus.Failed, messages[0].DispatchStatus);
     }
 
     private async Task ReceiveAsync(Guid channelId, string externalId, string text)
     {
         using var scope = factory.Services.CreateScope();
         var orchestrator = scope.ServiceProvider.GetRequiredService<IInboundMessageOrchestrator>();
-        await orchestrator.ReceiveMessageAsync(channelId, externalId, text, DateTimeOffset.UtcNow, new Dictionary<string, string>(), CancellationToken.None);
+        await orchestrator.ReceiveMessageAsync(
+            channelId,
+            externalId,
+            text,
+            MessageContentType.Text,
+            Guid.NewGuid().ToString(),
+            displayName: null,
+            DateTimeOffset.UtcNow,
+            new Dictionary<string, string>(),
+            CancellationToken.None);
+    }
+
+    private async Task<List<MessageEntity>> GetMessagesAsync(Guid sessionId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await dbContext.Messages.AsNoTracking().Where(m => m.SessionId == sessionId).ToListAsync();
     }
 
     private async Task<string> ResolveContextIdAsync(Guid channelId, string externalId)

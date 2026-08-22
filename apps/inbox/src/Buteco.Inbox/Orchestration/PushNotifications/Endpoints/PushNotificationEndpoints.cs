@@ -3,9 +3,13 @@ using Buteco.Inbox.Auth;
 using Buteco.Inbox.Channels.Adapters;
 using Buteco.Inbox.Channels.Security;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration.Entities;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+// A2A traz A2A.Message (usado via task.Status.Message) — alias explícito
+// para não colidir com Buteco.Inbox.Messages.Entities.Message.
+using MessageEntity = Buteco.Inbox.Messages.Entities.Message;
 
 namespace Buteco.Inbox.Orchestration.PushNotifications.Endpoints;
 
@@ -73,6 +77,11 @@ public static class PushNotificationEndpoints
             await DeliverResponseAsync(dbContext, credentialCipher, adapterRegistry, logger, pendingDispatch, responseText, cancellationToken);
         }
 
+        // Único caminho que chega até aqui é uma push notification válida —
+        // Completed cobre com e sem resposta textual associada
+        // (inbox-mensagens-persistidas, design.md, Decisão 6).
+        await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Completed, cancellationToken);
+
         dbContext.Remove(pendingDispatch);
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -124,21 +133,45 @@ public static class PushNotificationEndpoints
             dispatchInfo.ExternalId,
             responseText);
 
+        var occurredAt = DateTimeOffset.UtcNow;
+
         try
         {
             var sender = adapterRegistry.GetOutboundMessageSender(dispatchInfo.ChannelType);
             await sender.SendAsync(outboundMessage, cancellationToken);
+            dbContext.Messages.Add(MessageEntity.CreateOutbound(
+                pendingDispatch.SessionId, responseText, occurredAt, MessageDeliveryStatus.Sent, deliveryFailureReason: null));
         }
         catch (Exception exception)
         {
             // Falha do sender é só logada nesta fatia — sem retry, sem
             // nova reapresentação do PendingDispatch, que já será
-            // removido (design.md, Decision 3, Risks).
+            // removido (design.md, Decision 3, Risks). A partir de
+            // inbox-mensagens-persistidas, também vira estado persistido em
+            // Message, não só log (design.md, Decisão 4).
             logger.LogError(
                 exception,
                 "Falha ao entregar a resposta do agente ao canal {ChannelId} (tipo {ChannelType})",
                 dispatchInfo.Id,
                 dispatchInfo.ChannelType);
+            dbContext.Messages.Add(MessageEntity.CreateOutbound(
+                pendingDispatch.SessionId, responseText, occurredAt, MessageDeliveryStatus.Failed, exception.Message));
+        }
+    }
+
+    private static async Task UpdateMessageDispatchStatusesAsync(
+        AppDbContext dbContext,
+        Guid pendingDispatchId,
+        MessageDispatchStatus status,
+        CancellationToken cancellationToken)
+    {
+        var messages = await dbContext.Messages
+            .Where(message => message.PendingDispatchId == pendingDispatchId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var message in messages)
+        {
+            message.UpdateDispatchStatus(status);
         }
     }
 }

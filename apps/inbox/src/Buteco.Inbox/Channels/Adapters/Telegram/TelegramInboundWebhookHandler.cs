@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Buteco.Inbox.Channels.Security;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -61,24 +62,57 @@ public sealed class TelegramInboundWebhookHandler(
         }
 
         var update = await JsonSerializer.DeserializeAsync<TelegramUpdate>(request.Body, JsonOptions, cancellationToken);
-        if (update?.Message?.Chat is null || update.Message.Text is null)
+        var message = update?.Message;
+        if (message?.Chat is null)
         {
             return;
         }
 
-        var externalId = update.Message.Chat.Id.ToString();
+        // Mensagem de mídia carrega o texto em Caption, não Text — não
+        // descartar esse caso (inbox-mensagens-persistidas, design.md,
+        // Decisão 8).
+        var contentType = ResolveContentType(message);
+        var text = message.Text ?? message.Caption;
+        if (text is null && contentType == MessageContentType.Text)
+        {
+            return;
+        }
+
+        var content = text ?? $"[mídia: {contentType.ToString().ToLowerInvariant()}]";
+
+        var externalId = message.Chat.Id.ToString();
         var metadata = new Dictionary<string, string>();
-        if (update.Message.From?.Username is { } username)
+        if (message.From?.Username is { } username)
         {
             metadata["username"] = username;
         }
 
-        if (update.Message.From?.FirstName is { } firstName)
+        if (message.From?.FirstName is { } firstName)
         {
             metadata["firstName"] = firstName;
         }
 
+        var displayName = message.From?.Username ?? message.From?.FirstName;
+
         var orchestrator = scope.ServiceProvider.GetRequiredService<IInboundMessageOrchestrator>();
-        await orchestrator.ReceiveMessageAsync(channelId, externalId, update.Message.Text, DateTimeOffset.UtcNow, metadata, cancellationToken);
+        await orchestrator.ReceiveMessageAsync(
+            channelId,
+            externalId,
+            content,
+            contentType,
+            message.MessageId.ToString(),
+            displayName,
+            DateTimeOffset.UtcNow,
+            metadata,
+            cancellationToken);
     }
+
+    private static MessageContentType ResolveContentType(TelegramMessage message) =>
+        message switch
+        {
+            { Photo: not null } => MessageContentType.Image,
+            { Voice: not null } or { Audio: not null } => MessageContentType.Audio,
+            { Document: not null } => MessageContentType.Document,
+            _ => MessageContentType.Text,
+        };
 }

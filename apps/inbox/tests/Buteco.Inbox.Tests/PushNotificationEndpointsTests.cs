@@ -7,11 +7,13 @@ using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Channels.Security;
 using Buteco.Inbox.Contacts.Entities;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration.Entities;
 using Buteco.Inbox.Orchestration.PushNotifications.Endpoints;
 using Buteco.Inbox.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using MessageEntity = Buteco.Inbox.Messages.Entities.Message;
 using TaskStatus = A2A.TaskStatus;
 
 namespace Buteco.Inbox.Tests;
@@ -90,6 +92,56 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
     }
 
     [Fact]
+    public async Task ReceiveAsync_WithResponseMessage_PersistsOutboundMessageAsSentAndMarksInboundMessagesCompleted()
+    {
+        var (sessionId, _, taskId, token) = await SeedDispatchingPendingDispatchAsync();
+        var client = factory.CreateClient();
+
+        var task = BuildAgentTask(taskId, responseText: "Olá! Sua solicitação foi concluída.");
+        var response = await PostPushNotificationAsync(client, taskId, token, task);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var messages = await GetMessagesAsync(sessionId);
+        var outbound = Assert.Single(messages, m => m.Direction == MessageDirection.Outbound);
+        Assert.Equal("Olá! Sua solicitação foi concluída.", outbound.Content);
+        Assert.Equal(MessageContentType.Text, outbound.ContentType);
+        Assert.Equal(MessageDeliveryStatus.Sent, outbound.DeliveryStatus);
+        Assert.Null(outbound.DeliveryFailureReason);
+
+        var inbound = Assert.Single(messages, m => m.Direction == MessageDirection.Inbound);
+        Assert.Equal(MessageDispatchStatus.Completed, inbound.DispatchStatus);
+    }
+
+    [Fact]
+    public async Task ReceiveAsync_SenderThrows_PersistsOutboundMessageAsFailedWithReasonAndDoesNotFailRequest()
+    {
+        var sender = (TestOutboundMessageSender)factory.Services.GetRequiredKeyedService<IOutboundMessageSender>(ChannelType);
+        var (sessionId, _, taskId, token) = await SeedDispatchingPendingDispatchAsync();
+        var client = factory.CreateClient();
+
+        sender.ExceptionToThrow = new InvalidOperationException("Falha simulada no envio ao provedor.");
+        try
+        {
+            var task = BuildAgentTask(taskId, responseText: "Resposta que não consegue ser entregue.");
+            var response = await PostPushNotificationAsync(client, taskId, token, task);
+
+            // Falha do sender não derruba a requisição (convenção 4) — só
+            // vira estado persistido em Message (design.md, Decisão 4).
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+        finally
+        {
+            sender.ExceptionToThrow = null;
+        }
+
+        var messages = await GetMessagesAsync(sessionId);
+        var outbound = Assert.Single(messages, m => m.Direction == MessageDirection.Outbound);
+        Assert.Equal(MessageDeliveryStatus.Failed, outbound.DeliveryStatus);
+        Assert.Equal("Falha simulada no envio ao provedor.", outbound.DeliveryFailureReason);
+    }
+
+    [Fact]
     public async Task ReceiveAsync_WithoutResponseMessage_DoesNotInvokeSender()
     {
         var (sessionId, externalId, taskId, token) = await SeedDispatchingPendingDispatchAsync();
@@ -102,6 +154,20 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
 
         var sender = (TestOutboundMessageSender)factory.Services.GetRequiredKeyedService<IOutboundMessageSender>(ChannelType);
         Assert.DoesNotContain(sender.CapturedMessages, message => message.ContactExternalId == externalId);
+    }
+
+    [Fact]
+    public async Task ReceiveAsync_WithoutResponseMessage_MarksInboundMessagesCompletedWithoutPersistingOutboundMessage()
+    {
+        var (sessionId, _, taskId, token) = await SeedDispatchingPendingDispatchAsync();
+        var client = factory.CreateClient();
+
+        await PostPushNotificationAsync(client, taskId, token, BuildAgentTask(taskId));
+
+        var messages = await GetMessagesAsync(sessionId);
+        Assert.DoesNotContain(messages, m => m.Direction == MessageDirection.Outbound);
+        var inbound = Assert.Single(messages, m => m.Direction == MessageDirection.Inbound);
+        Assert.Equal(MessageDispatchStatus.Completed, inbound.DispatchStatus);
     }
 
     private static Task<HttpResponseMessage> PostPushNotificationAsync(HttpClient client, string taskId, string token, AgentTask task)
@@ -124,7 +190,7 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
             Timestamp = DateTimeOffset.UtcNow,
             Message = responseText is null
                 ? null
-                : new Message
+                : new A2A.Message
                 {
                     Role = Role.Agent,
                     Parts = [Part.FromText(responseText)],
@@ -150,7 +216,7 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
         dbContext.Channels.Add(channel);
 
         var externalId = $"+5511{Guid.NewGuid():N}"[..15];
-        var contact = new Contact(channel.Id, externalId, new Dictionary<string, string>());
+        var contact = new Contact(channel.Id, externalId, new Dictionary<string, string>(), displayName: null);
         dbContext.Contacts.Add(contact);
 
         var session = new Session(contact.Id);
@@ -163,8 +229,21 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
         pendingDispatch.RegisterTaskId(taskId);
         dbContext.PendingDispatches.Add(pendingDispatch);
 
+        // Correlacionada ao PendingDispatch (design.md, Decisão 6) — sem
+        // isso, ReceiveAsync não teria nenhuma Message pra atualizar para
+        // Completed.
+        dbContext.Messages.Add(MessageEntity.CreateInbound(
+            session.Id, "Mensagem em voo", MessageContentType.Text, DateTimeOffset.UtcNow, Guid.NewGuid().ToString(), pendingDispatch.Id));
+
         await dbContext.SaveChangesAsync();
 
         return (session.Id, externalId, taskId, token);
+    }
+
+    private async Task<List<MessageEntity>> GetMessagesAsync(Guid sessionId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await dbContext.Messages.AsNoTracking().Where(m => m.SessionId == sessionId).ToListAsync();
     }
 }

@@ -1,5 +1,6 @@
 using Buteco.Inbox.Contacts;
 using Buteco.Inbox.Infrastructure;
+using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration.Entities;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -21,29 +22,43 @@ public sealed class InboundMessageOrchestrator(
         Guid channelId,
         string externalId,
         string text,
+        MessageContentType contentType,
+        string externalMessageId,
+        string? displayName,
         DateTimeOffset receivedAt,
         IReadOnlyDictionary<string, string> contactMetadata,
         CancellationToken cancellationToken)
     {
-        var session = await sessionResolver.FindOrCreateSessionAsync(channelId, externalId, contactMetadata, cancellationToken);
-        await ReceiveForSessionAsync(session.Id, text, receivedAt, cancellationToken);
+        var session = await sessionResolver.FindOrCreateSessionAsync(channelId, externalId, contactMetadata, displayName, cancellationToken);
+        await ReceiveForSessionAsync(session.Id, text, contentType, externalMessageId, receivedAt, cancellationToken);
     }
 
     private async Task ReceiveForSessionAsync(
         Guid sessionId,
         string text,
+        MessageContentType contentType,
+        string externalMessageId,
         DateTimeOffset receivedAt,
         CancellationToken cancellationToken)
     {
+        // inbox-mensagens-persistidas, design.md, Decisão 5: webhook
+        // reentregue com o mesmo identificador externo não deve gerar nova
+        // Message nem novo conteúdo no buffer de debounce.
+        if (await IsDuplicateAsync(sessionId, externalMessageId, cancellationToken))
+        {
+            return;
+        }
+
         var pendingDispatch = await FindPendingAsync(sessionId, cancellationToken);
         if (pendingDispatch is not null
-            && await TryAppendWithRetryAsync(pendingDispatch, sessionId, text, receivedAt, cancellationToken))
+            && await TryAppendWithRetryAsync(pendingDispatch, sessionId, text, contentType, externalMessageId, receivedAt, cancellationToken))
         {
             return;
         }
 
         pendingDispatch = new PendingDispatch(sessionId, text, receivedAt);
         dbContext.PendingDispatches.Add(pendingDispatch);
+        dbContext.Messages.Add(Message.CreateInbound(sessionId, text, contentType, receivedAt, externalMessageId, pendingDispatch.Id));
 
         try
         {
@@ -54,22 +69,15 @@ public sealed class InboundMessageOrchestrator(
             // Mesma corrida (e mesma mitigação) de
             // ContactSessionResolver.FindOrCreateContactAsync: outra
             // mensagem quase simultânea da mesma Session já criou a
-            // PendingDispatch Pending entre a leitura e este SaveChanges —
-            // detach o registro rejeitado e reaproveita o já existente.
-            dbContext.Entry(pendingDispatch).State = EntityState.Detached;
+            // PendingDispatch Pending, ou já persistiu a Message com este
+            // ExternalId, entre a leitura e este SaveChanges — detach os
+            // registros novos (qualquer entidade ainda Added) e reentra no
+            // fluxo completo, que resolve o estado real: mensagem já
+            // deduplicada, ou PendingDispatch Pending já existente para
+            // anexar.
+            DetachAddedEntities();
 
-            var existing = await FindPendingAsync(sessionId, cancellationToken)
-                ?? throw new InvalidOperationException("Violação de unicidade sem PendingDispatch Pending correspondente.");
-
-            if (!await TryAppendWithRetryAsync(existing, sessionId, text, receivedAt, cancellationToken))
-            {
-                // A linha encontrada acima já deixou de estar Pending antes
-                // do append (reivindicada pelo DebounceSweepService ou
-                // removida) — mesmo tratamento do caminho principal acima:
-                // reentra no fluxo completo, que vai encontrar "nenhuma
-                // Pending" e criar uma nova PendingDispatch.
-                await ReceiveForSessionAsync(sessionId, text, receivedAt, cancellationToken);
-            }
+            await ReceiveForSessionAsync(sessionId, text, contentType, externalMessageId, receivedAt, cancellationToken);
         }
     }
 
@@ -95,9 +103,13 @@ public sealed class InboundMessageOrchestrator(
         PendingDispatch pendingDispatch,
         Guid sessionId,
         string text,
+        MessageContentType contentType,
+        string externalMessageId,
         DateTimeOffset receivedAt,
         CancellationToken cancellationToken)
     {
+        dbContext.Messages.Add(Message.CreateInbound(sessionId, text, contentType, receivedAt, externalMessageId, pendingDispatch.Id));
+
         for (var attempt = 0; ; attempt++)
         {
             pendingDispatch.AppendMessage(text, receivedAt);
@@ -107,6 +119,15 @@ public sealed class InboundMessageOrchestrator(
                 await dbContext.SaveChangesAsync(cancellationToken);
                 return true;
             }
+            catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+            {
+                // Mesmo ExternalId já persistido por uma chamada concorrente
+                // (reentrega quase simultânea do mesmo webhook, design.md,
+                // Decisão 5) — a mensagem já está registrada, nada mais a
+                // fazer.
+                DetachAddedEntities();
+                return true;
+            }
             catch (DbUpdateConcurrencyException) when (attempt < MaxAppendRetries)
             {
                 dbContext.Entry(pendingDispatch).State = EntityState.Detached;
@@ -114,6 +135,7 @@ public sealed class InboundMessageOrchestrator(
                 var refreshed = await FindPendingAsync(sessionId, cancellationToken);
                 if (refreshed is null)
                 {
+                    DetachAddedEntities();
                     return false;
                 }
 
@@ -125,6 +147,21 @@ public sealed class InboundMessageOrchestrator(
     private Task<PendingDispatch?> FindPendingAsync(Guid sessionId, CancellationToken cancellationToken) =>
         dbContext.PendingDispatches
             .FirstOrDefaultAsync(dispatch => dispatch.SessionId == sessionId && dispatch.Status == PendingDispatchStatus.Pending, cancellationToken);
+
+    private Task<bool> IsDuplicateAsync(Guid sessionId, string externalMessageId, CancellationToken cancellationToken) =>
+        dbContext.Messages.AnyAsync(
+            message => message.SessionId == sessionId
+                && message.Direction == MessageDirection.Inbound
+                && message.ExternalId == externalMessageId,
+            cancellationToken);
+
+    private void DetachAddedEntities()
+    {
+        foreach (var entry in dbContext.ChangeTracker.Entries().Where(entry => entry.State == EntityState.Added).ToList())
+        {
+            entry.State = EntityState.Detached;
+        }
+    }
 
     private static bool IsUniqueViolation(DbUpdateException exception) =>
         exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };

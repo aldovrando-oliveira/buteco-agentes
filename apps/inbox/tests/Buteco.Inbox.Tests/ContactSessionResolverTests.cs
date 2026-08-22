@@ -151,14 +151,76 @@ public class ContactSessionResolverTests(InboxFactoryFixture factory) : IClassFi
         Assert.Single(distinctContactIds);
     }
 
+    [Fact]
+    public async Task FindOrCreateSessionAsync_FirstCall_PersistsDisplayName()
+    {
+        var channelId = await CreateChannelAsync();
+        var externalId = UniqueExternalId();
+
+        var session = await ResolveAsync(channelId, externalId, new Dictionary<string, string>(), displayName: "Maria");
+
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var contact = await dbContext.Contacts.AsNoTracking().SingleAsync(c => c.Id == session.ContactId);
+        Assert.Equal("Maria", contact.DisplayName);
+    }
+
+    [Fact]
+    public async Task FindOrCreateSessionAsync_FirstCall_WithoutDisplayName_PersistsNull()
+    {
+        var channelId = await CreateChannelAsync();
+        var externalId = UniqueExternalId();
+
+        var session = await ResolveAsync(channelId, externalId);
+
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var contact = await dbContext.Contacts.AsNoTracking().SingleAsync(c => c.Id == session.ContactId);
+        Assert.Null(contact.DisplayName);
+    }
+
+    [Fact]
+    public async Task FindOrCreateSessionAsync_SubsequentCall_UpdatesDisplayNameToNewValue()
+    {
+        var channelId = await CreateChannelAsync();
+        var externalId = UniqueExternalId();
+
+        var first = await ResolveAsync(channelId, externalId, new Dictionary<string, string>(), displayName: "Maria");
+        await ResolveAsync(channelId, externalId, new Dictionary<string, string>(), displayName: "Maria Silva");
+
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var contact = await dbContext.Contacts.AsNoTracking().SingleAsync(c => c.Id == first.ContactId);
+        Assert.Equal("Maria Silva", contact.DisplayName);
+    }
+
+    [Fact]
+    public async Task FindOrCreateSessionAsync_SubsequentCallWithoutDisplayName_DoesNotOverwritePersistedValue()
+    {
+        var channelId = await CreateChannelAsync();
+        var externalId = UniqueExternalId();
+
+        var first = await ResolveAsync(channelId, externalId, new Dictionary<string, string>(), displayName: "Maria");
+        await ResolveAsync(channelId, externalId, new Dictionary<string, string>(), displayName: null);
+
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var contact = await dbContext.Contacts.AsNoTracking().SingleAsync(c => c.Id == first.ContactId);
+        Assert.Equal("Maria", contact.DisplayName);
+    }
+
     private Task<Session> ResolveAsync(Guid channelId, string externalId) =>
         ResolveAsync(channelId, externalId, new Dictionary<string, string>());
 
-    private async Task<Session> ResolveAsync(Guid channelId, string externalId, IReadOnlyDictionary<string, string> contactMetadata)
+    private Task<Session> ResolveAsync(Guid channelId, string externalId, IReadOnlyDictionary<string, string> contactMetadata) =>
+        ResolveAsync(channelId, externalId, contactMetadata, displayName: null);
+
+    private async Task<Session> ResolveAsync(
+        Guid channelId, string externalId, IReadOnlyDictionary<string, string> contactMetadata, string? displayName)
     {
         using var scope = factory.Services.CreateScope();
         var resolver = scope.ServiceProvider.GetRequiredService<IContactSessionResolver>();
-        return await resolver.FindOrCreateSessionAsync(channelId, externalId, contactMetadata, CancellationToken.None);
+        return await resolver.FindOrCreateSessionAsync(channelId, externalId, contactMetadata, displayName, CancellationToken.None);
     }
 
     private static string UniqueExternalId() => $"+5511{Guid.NewGuid():N}"[..15];

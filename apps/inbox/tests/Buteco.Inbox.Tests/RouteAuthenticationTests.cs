@@ -109,7 +109,7 @@ public class RouteAuthenticationTests(InboxFactoryFixture factory) : IClassFixtu
         dbContext.Channels.Add(channel);
 
         var externalId = $"+5511{Guid.NewGuid():N}"[..15];
-        var contact = new Contact(channel.Id, externalId, new Dictionary<string, string>());
+        var contact = new Contact(channel.Id, externalId, new Dictionary<string, string>(), displayName: null);
         dbContext.Contacts.Add(contact);
 
         var session = new Session(contact.Id);

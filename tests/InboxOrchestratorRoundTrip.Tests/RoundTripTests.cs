@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using InboxAppDbContext = InboxAssembly::Buteco.Inbox.Infrastructure.AppDbContext;
 using InboxChannel = InboxAssembly::Buteco.Inbox.Channels.Entities.Channel;
 using InboxInboundMessageOrchestrator = InboxAssembly::Buteco.Inbox.Orchestration.IInboundMessageOrchestrator;
+using InboxMessageContentType = InboxAssembly::Buteco.Inbox.Messages.Entities.MessageContentType;
 using InboxPendingDispatch = InboxAssembly::Buteco.Inbox.Orchestration.Entities.PendingDispatch;
 
 namespace InboxOrchestratorRoundTrip.Tests;
@@ -35,7 +36,16 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
         using (var scope = fixture.InboxFactory.Services.CreateScope())
         {
             var orchestrator = scope.ServiceProvider.GetRequiredService<InboxInboundMessageOrchestrator>();
-            await orchestrator.ReceiveMessageAsync(channelId, externalId, "Olá, preciso de ajuda", DateTimeOffset.UtcNow, new Dictionary<string, string>(), CancellationToken.None);
+            await orchestrator.ReceiveMessageAsync(
+                channelId,
+                externalId,
+                "Olá, preciso de ajuda",
+                InboxMessageContentType.Text,
+                Guid.NewGuid().ToString(),
+                displayName: null,
+                DateTimeOffset.UtcNow,
+                new Dictionary<string, string>(),
+                CancellationToken.None);
         }
 
         // Debounce disparou o SendMessage real: a PendingDispatch fica

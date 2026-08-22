@@ -12,9 +12,10 @@ public sealed class ContactSessionResolver(AppDbContext dbContext, IOptions<Sess
         Guid channelId,
         string externalId,
         IReadOnlyDictionary<string, string> contactMetadata,
+        string? displayName,
         CancellationToken cancellationToken)
     {
-        var contact = await FindOrCreateContactAsync(channelId, externalId, contactMetadata, cancellationToken);
+        var contact = await FindOrCreateContactAsync(channelId, externalId, contactMetadata, displayName, cancellationToken);
 
         var session = await dbContext.Sessions
             .Where(existing => existing.ContactId == contact.Id)
@@ -41,6 +42,7 @@ public sealed class ContactSessionResolver(AppDbContext dbContext, IOptions<Sess
         Guid channelId,
         string externalId,
         IReadOnlyDictionary<string, string> contactMetadata,
+        string? displayName,
         CancellationToken cancellationToken)
     {
         var existing = await dbContext.Contacts
@@ -49,11 +51,15 @@ public sealed class ContactSessionResolver(AppDbContext dbContext, IOptions<Sess
         {
             // contactMetadata desta chamada é ignorado — Contact já existe,
             // metadado gravado só na criação (inbox-adapter-waha, design.md,
-            // Decision 8).
+            // Decision 8). displayName, ao contrário, é atualizado a cada
+            // chamada — persistido pelo SaveChangesAsync de
+            // FindOrCreateSessionAsync (inbox-mensagens-persistidas,
+            // design.md, Decisão 9).
+            existing.UpdateDisplayName(displayName);
             return existing;
         }
 
-        var contact = new Contact(channelId, externalId, contactMetadata);
+        var contact = new Contact(channelId, externalId, contactMetadata, displayName);
         dbContext.Contacts.Add(contact);
 
         try
@@ -71,8 +77,10 @@ public sealed class ContactSessionResolver(AppDbContext dbContext, IOptions<Sess
             // (design.md, Decision 7).
             dbContext.Entry(contact).State = EntityState.Detached;
 
-            return await dbContext.Contacts
+            var raced = await dbContext.Contacts
                 .FirstAsync(other => other.ChannelId == channelId && other.ExternalId == externalId, cancellationToken);
+            raced.UpdateDisplayName(displayName);
+            return raced;
         }
     }
 
