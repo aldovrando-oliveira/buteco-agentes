@@ -7,6 +7,7 @@ import { theme } from '../theme';
 import { AppRouter } from './router';
 import { listAgents } from '../features/agents/api/agentsApi';
 import { listProviders } from '../features/agents/api/providersApi';
+import { listChannels } from '../features/channels/api/channelsApi';
 
 vi.mock('../features/agents/api/agentsApi', () => ({
   listAgents: vi.fn(),
@@ -16,6 +17,10 @@ vi.mock('../features/agents/api/agentsApi', () => ({
 
 vi.mock('../features/agents/api/providersApi', () => ({
   listProviders: vi.fn(),
+}));
+
+vi.mock('../features/channels/api/channelsApi', () => ({
+  listChannels: vi.fn(),
 }));
 
 function renderApp() {
@@ -35,6 +40,8 @@ describe('AppRouter', () => {
     vi.mocked(listAgents).mockResolvedValue([]);
     vi.mocked(listProviders).mockReset();
     vi.mocked(listProviders).mockResolvedValue([{ id: 'openai', models: ['gpt-5.6-sol'] }]);
+    vi.mocked(listChannels).mockReset();
+    vi.mocked(listChannels).mockResolvedValue([]);
     window.history.pushState({}, '', '/');
   });
 
@@ -58,5 +65,16 @@ describe('AppRouter', () => {
     expect(await screen.findByRole('heading', { name: 'Novo agente' })).toBeInTheDocument();
     expect(screen.getByText('Buteco Agentes')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Agentes' })).toBeInTheDocument();
+  });
+
+  it('navega para a listagem de canais pelo item de navegação "Canais"', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await screen.findByRole('heading', { name: 'Agentes' });
+    await user.click(screen.getByRole('link', { name: 'Canais' }));
+
+    expect(await screen.findByRole('heading', { name: 'Canais' })).toBeInTheDocument();
+    expect(screen.getByText('Buteco Agentes')).toBeInTheDocument();
   });
 });

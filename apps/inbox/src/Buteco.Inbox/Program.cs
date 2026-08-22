@@ -90,7 +90,15 @@ builder.Services.AddSingleton<IA2AClientFactory, A2AClientFactory>();
 
 builder.Services.AddHostedService<DebounceSweepService>();
 
+// Mesmo padrão de apps/api (Buteco.Api.Options.CorsOptions) — apps/inbox
+// nunca tinha consumidor via browser antes de frontend-inbox-catalogo-canais.
+var corsOptions = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new CorsOptions();
+builder.Services.AddCors(options =>
+    options.AddDefaultPolicy(policy => policy.WithOrigins(corsOptions.AllowedOrigins).AllowAnyHeader().AllowAnyMethod()));
+
 var app = builder.Build();
+
+app.UseCors();
 
 app.MapHealthChecks("/health");
 app.MapChannelEndpoints();

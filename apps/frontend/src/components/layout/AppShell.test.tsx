@@ -21,11 +21,12 @@ describe('AppShell', () => {
     window.localStorage.clear();
   });
 
-  it('lista os itens de navegação Agentes e Servidores MCP', () => {
+  it('lista os itens de navegação Agentes, Servidores MCP e Canais', () => {
     renderAppShell();
 
     expect(screen.getByRole('link', { name: 'Agentes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Servidores MCP' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Canais' })).toBeInTheDocument();
     expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
     expect(screen.queryByText('Inboxes')).not.toBeInTheDocument();
   });
