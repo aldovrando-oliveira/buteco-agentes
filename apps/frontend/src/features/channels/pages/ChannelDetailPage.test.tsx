@@ -14,8 +14,14 @@ import {
   getChannel,
 } from '../api/channelsApi';
 import { listAgents } from '../../agents/api/agentsApi';
+import {
+  ApiError as SessionsApiError,
+  getSessionMessages,
+  listChannelSessions,
+} from '../../sessions/api/sessionsApi';
 import type { Channel } from '../types/channel';
 import type { Agent } from '../../agents/types/agent';
+import type { ChannelSession } from '../../sessions/types/session';
 
 vi.mock('../api/channelsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/channelsApi')>();
@@ -30,6 +36,11 @@ vi.mock('../api/channelsApi', async (importOriginal) => {
 vi.mock('../../agents/api/agentsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../agents/api/agentsApi')>();
   return { ...actual, listAgents: vi.fn() };
+});
+
+vi.mock('../../sessions/api/sessionsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../sessions/api/sessionsApi')>();
+  return { ...actual, listChannelSessions: vi.fn(), getSessionMessages: vi.fn() };
 });
 
 vi.mock('@mantine/notifications', async (importOriginal) => {
@@ -69,14 +80,24 @@ const telegramChannel: Channel = {
 
 const inactiveChannel: Channel = { ...wahaChannel, isActive: false };
 
-function renderPage(id: string) {
+const session: ChannelSession = {
+  sessionId: '55555555-5555-5555-5555-555555555555',
+  contactId: '66666666-6666-6666-6666-666666666666',
+  contactExternalId: '5511999999999',
+  contactDisplayName: 'Maria',
+  lastActivityAt: '2026-08-20T12:00:00Z',
+  lastMessage: null,
+};
+
+function renderPage(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <MantineProvider theme={theme}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[`/channels/${id}`]}>
+        <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route path="/channels/:id" element={<ChannelDetailPage />} />
+            <Route path="/channels/:id/sessions/:sessionId" element={<ChannelDetailPage />} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>
@@ -91,13 +112,19 @@ describe('ChannelDetailPage', () => {
     vi.mocked(deactivateChannel).mockReset();
     vi.mocked(listAgents).mockReset();
     vi.mocked(listAgents).mockResolvedValue([agent]);
+    vi.mocked(listChannelSessions).mockReset();
+    vi.mocked(listChannelSessions).mockResolvedValue([]);
+    vi.mocked(getSessionMessages).mockReset();
+    vi.mocked(getSessionMessages).mockResolvedValue([]);
     vi.mocked(notifications.show).mockReset();
   });
 
   it('exibe nome, tipo, agente responsável, estado e webhookUrl de um canal', async () => {
     vi.mocked(getChannel).mockResolvedValue(wahaChannel);
+    const user = userEvent.setup();
 
-    renderPage(wahaChannel.id);
+    renderPage(`/channels/${wahaChannel.id}`);
+    await user.click(await screen.findByRole('tab', { name: 'Configuração' }));
 
     expect(await screen.findByRole('heading', { name: wahaChannel.name })).toBeInTheDocument();
     expect(await screen.findByText(agent.name, { exact: false })).toBeInTheDocument();
@@ -107,8 +134,10 @@ describe('ChannelDetailPage', () => {
 
   it('canal WAHA exibe instrução de configuração manual da sessão', async () => {
     vi.mocked(getChannel).mockResolvedValue(wahaChannel);
+    const user = userEvent.setup();
 
-    renderPage(wahaChannel.id);
+    renderPage(`/channels/${wahaChannel.id}`);
+    await user.click(await screen.findByRole('tab', { name: 'Configuração' }));
 
     expect(
       await screen.findByText(/configure manualmente a sessão do waha/i),
@@ -117,8 +146,10 @@ describe('ChannelDetailPage', () => {
 
   it('canal Telegram exibe indicação de que o webhook já foi configurado automaticamente', async () => {
     vi.mocked(getChannel).mockResolvedValue(telegramChannel);
+    const user = userEvent.setup();
 
-    renderPage(telegramChannel.id);
+    renderPage(`/channels/${telegramChannel.id}`);
+    await user.click(await screen.findByRole('tab', { name: 'Configuração' }));
 
     expect(
       await screen.findByText(/webhook já foi configurado automaticamente/i),
@@ -128,7 +159,7 @@ describe('ChannelDetailPage', () => {
   it('exibe estado de "não encontrado" quando o canal não existe', async () => {
     vi.mocked(getChannel).mockRejectedValue(new ApiError(404, 'Não encontrado'));
 
-    renderPage('inexistente');
+    renderPage('/channels/inexistente');
 
     expect(await screen.findByText('Canal não encontrado.')).toBeInTheDocument();
   });
@@ -138,7 +169,8 @@ describe('ChannelDetailPage', () => {
     vi.mocked(activateChannel).mockResolvedValue(wahaChannel);
     const user = userEvent.setup();
 
-    renderPage(inactiveChannel.id);
+    renderPage(`/channels/${inactiveChannel.id}`);
+    await user.click(await screen.findByRole('tab', { name: 'Configuração' }));
 
     await user.click(await screen.findByRole('button', { name: /^ativar$/i }));
 
@@ -154,7 +186,7 @@ describe('ChannelDetailPage', () => {
     vi.mocked(getChannel).mockResolvedValue(wahaChannel);
     const user = userEvent.setup();
 
-    renderPage(wahaChannel.id);
+    renderPage(`/channels/${wahaChannel.id}`);
 
     await user.click(await screen.findByRole('button', { name: /desativar/i }));
 
@@ -166,7 +198,8 @@ describe('ChannelDetailPage', () => {
     vi.mocked(getChannel).mockResolvedValue(wahaChannel);
     const user = userEvent.setup();
 
-    renderPage(wahaChannel.id);
+    renderPage(`/channels/${wahaChannel.id}`);
+    await user.click(await screen.findByRole('tab', { name: 'Configuração' }));
 
     await user.click(await screen.findByRole('button', { name: /desativar/i }));
     const dialog = await screen.findByRole('dialog');
@@ -182,7 +215,8 @@ describe('ChannelDetailPage', () => {
     vi.mocked(deactivateChannel).mockResolvedValue(inactiveChannel);
     const user = userEvent.setup();
 
-    renderPage(wahaChannel.id);
+    renderPage(`/channels/${wahaChannel.id}`);
+    await user.click(await screen.findByRole('tab', { name: 'Configuração' }));
 
     await user.click(await screen.findByRole('button', { name: /desativar/i }));
     await screen.findByRole('dialog');
@@ -193,5 +227,56 @@ describe('ChannelDetailPage', () => {
       expect(notifications.show).toHaveBeenCalledWith(expect.objectContaining({ color: 'green' })),
     );
     expect(await screen.findByText('Inativo')).toBeInTheDocument();
+  });
+
+  it('aba Sessões é a aba padrão', async () => {
+    vi.mocked(getChannel).mockResolvedValue(wahaChannel);
+    vi.mocked(listChannelSessions).mockResolvedValue([session]);
+
+    renderPage(`/channels/${wahaChannel.id}`);
+
+    expect(
+      await screen.findByRole('tab', { name: 'Sessões', selected: true }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Maria')).toBeInTheDocument();
+  });
+
+  it('aba Configuração renderiza o card existente sem alteração de comportamento', async () => {
+    vi.mocked(getChannel).mockResolvedValue(wahaChannel);
+    const user = userEvent.setup();
+
+    renderPage(`/channels/${wahaChannel.id}`);
+
+    await user.click(await screen.findByRole('tab', { name: 'Configuração' }));
+
+    expect(await screen.findByRole('heading', { name: wahaChannel.name })).toBeInTheDocument();
+    expect(screen.getByText(agent.name, { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('Ativo')).toBeInTheDocument();
+    expect(screen.getByLabelText(/url de webhook/i)).toHaveValue(wahaChannel.webhookUrl);
+  });
+
+  it('canal sem nenhuma sessão renderiza estado vazio na aba Sessões', async () => {
+    vi.mocked(getChannel).mockResolvedValue(wahaChannel);
+    vi.mocked(listChannelSessions).mockResolvedValue([]);
+
+    renderPage(`/channels/${wahaChannel.id}`);
+
+    expect(
+      await screen.findByText('Nenhuma sessão para este canal ainda.'),
+    ).toBeInTheDocument();
+  });
+
+  it('sessionId inexistente na URL renderiza o estado de erro genérico da timeline, não uma tela em branco', async () => {
+    vi.mocked(getChannel).mockResolvedValue(wahaChannel);
+    vi.mocked(listChannelSessions).mockResolvedValue([session]);
+    vi.mocked(getSessionMessages).mockRejectedValue(
+      new SessionsApiError(404, 'Sessão não encontrada'),
+    );
+
+    renderPage(`/channels/${wahaChannel.id}/sessions/inexistente`);
+
+    expect(
+      await screen.findByText('Não foi possível carregar as mensagens desta sessão.'),
+    ).toBeInTheDocument();
   });
 });

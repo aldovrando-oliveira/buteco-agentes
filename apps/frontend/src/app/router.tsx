@@ -41,6 +41,7 @@ export function AppRouter() {
               <Route index element={<ChannelListPage />} />
               <Route path="new" element={<ChannelCreatePage />} />
               <Route path=":id" element={<ChannelDetailPage />} />
+              <Route path=":id/sessions/:sessionId" element={<ChannelDetailPage />} />
               <Route path=":id/edit" element={<ChannelEditPage />} />
             </Route>
           </Route>

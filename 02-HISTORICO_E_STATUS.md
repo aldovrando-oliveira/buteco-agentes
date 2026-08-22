@@ -260,6 +260,12 @@ Cada um tem gatilho de quando revisitar:
   Gatilho: confirmar contra uma instância WAHA real de produção assim que
   houver uma disponível; se o campo divergir, `DisplayName` do WAHA
   simplesmente fica sempre nulo até a correção, sem quebrar nada mais.
+- **Paginação de `GET /channels/{id}/sessions` e `GET /sessions/{id}/messages`**
+  (`frontend-inbox-sessoes-historico`) — nenhuma das duas rotas pagina;
+  ambos os handlers fazem `ToListAsync()` direto, sem `Skip`/`Take`, e a
+  UI de sessões/timeline carrega a resposta inteira de uma vez. Gatilho:
+  sinal real de volume (sessão ou canal com histórico muito longo
+  tornando a tela perceptivelmente lenta).
 ## Próximo passo
  
 Linha de trabalho em andamento, de três etapas — histórico de conversa
