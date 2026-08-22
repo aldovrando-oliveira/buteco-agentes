@@ -1,4 +1,5 @@
 using global::A2A;
+using Buteco.Api.Auth;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Options;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -17,7 +18,9 @@ public static class AgentCardEndpoints
 {
     public static IEndpointRouteBuilder MapAgentCardEndpoint(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/agents/{id:guid}/.well-known/agent-card.json", GetAgentCardAsync);
+        app.MapGet("/agents/{id:guid}/.well-known/agent-card.json", GetAgentCardAsync)
+            .AllowAnonymous()
+            .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.PublicDiscovery));
 
         return app;
     }
@@ -63,6 +66,27 @@ public static class AgentCardEndpoints
             Skills = AgentSkillMapper.MapSkills(agent.Skills).ToList(),
             DefaultInputModes = ["text/plain"],
             DefaultOutputModes = ["text/plain"],
+            // Descoberta pública, mas o endpoint A2A do agente exige
+            // Bearer token — declarado via o mecanismo nativo da spec A2A
+            // (SecuritySchemes/SecurityRequirements), não por omissão
+            // (design.md, Decision 6).
+            SecuritySchemes = new Dictionary<string, SecurityScheme>
+            {
+                ["bearer"] = new SecurityScheme
+                {
+                    HttpAuthSecurityScheme = new HttpAuthSecurityScheme { Scheme = "Bearer" },
+                },
+            },
+            SecurityRequirements =
+            [
+                new SecurityRequirement
+                {
+                    Schemes = new Dictionary<string, StringList>
+                    {
+                        ["bearer"] = new StringList { List = [] },
+                    },
+                },
+            ],
         };
 
         return TypedResults.Ok(card);

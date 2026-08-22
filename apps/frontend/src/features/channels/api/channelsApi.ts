@@ -1,4 +1,5 @@
 import type { Channel, CreateChannelInput, UpdateChannelInput } from '../types/channel';
+import { clearToken, getToken } from '../../../auth/token';
 
 export interface ValidationProblemDetails {
   title?: string;
@@ -25,10 +26,20 @@ export class ApiError extends Error {
 const INBOX_BASE_URL = import.meta.env.VITE_INBOX_BASE_URL ?? 'http://localhost:5027';
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
   const response = await fetch(`${INBOX_BASE_URL}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
   });
+
+  if (response.status === 401) {
+    clearToken();
+    window.location.href = '/login';
+  }
 
   if (!response.ok) {
     const problem = (await response.json().catch(() => undefined)) as

@@ -74,10 +74,11 @@ Element.prototype.getBoundingClientRect = () => ({
   toJSON() {},
 });
 
-// A partir do Node 22, `localStorage` é um global nativo (experimental) que
-// exige a flag `--localstorage-file` para funcionar; sem ela, ele sombreia o
-// `window.localStorage` do jsdom com uma implementação inutilizável.
-// Substituímos por uma implementação em memória equivalente à da Storage API.
+// A partir do Node 22, `localStorage`/`sessionStorage` são globais nativos
+// (experimentais) que exigem flag para funcionar; sem ela, sombreiam as
+// implementações do jsdom com algo inutilizável. Substituímos os dois por
+// uma implementação em memória equivalente à da Storage API — sessionStorage
+// é usado por src/auth/token.ts (design.md, Decision 7 de auth-login-e-servico).
 class MemoryStorage implements Storage {
   private store = new Map<string, string>();
 
@@ -107,6 +108,11 @@ class MemoryStorage implements Storage {
 }
 
 Object.defineProperty(window, 'localStorage', {
+  value: new MemoryStorage(),
+  writable: true,
+  configurable: true,
+});
+Object.defineProperty(window, 'sessionStorage', {
   value: new MemoryStorage(),
   writable: true,
   configurable: true,

@@ -10,6 +10,11 @@ namespace Buteco.Api.Tests.Support;
 
 public sealed class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    // Compatibilidade com testes que já referenciavam estas constantes
+    // diretamente nesta fixture — mesmos valores de TestAuthentication.
+    public const string KnownOperatorUsername = TestAuthentication.KnownOperatorUsername;
+    public const string KnownOperatorPassword = TestAuthentication.KnownOperatorPassword;
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
         .WithDatabase("buteco_agents_test")
         .WithUsername("buteco")
@@ -23,11 +28,14 @@ public sealed class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLi
         // (esse arquivo é ajustado livremente por quem desenvolve, para uso
         // manual da API — não deveria ser pré-requisito de nenhum teste).
         builder.ConfigureAppConfiguration((_, config) =>
+        {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Anthropic:ApiKey"] = string.Empty,
                 ["Gemini:ApiKey"] = string.Empty,
-            }));
+            });
+            config.AddInMemoryCollection(TestAuthentication.ConfigOverrides);
+        });
 
         // Program.cs já registrou AppDbContext (AddInfrastructure) apontando para a
         // connection string do appsettings.Development.json. Substituímos aqui, depois
@@ -44,6 +52,12 @@ public sealed class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLi
 
             services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
         });
+    }
+
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        TestAuthentication.AttachOperatorToken(client, Services);
     }
 
     async Task IAsyncLifetime.InitializeAsync()

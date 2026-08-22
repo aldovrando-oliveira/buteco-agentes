@@ -6,6 +6,7 @@ import type {
   TestMcpServerConfigInput,
   UpdateMcpServerInput,
 } from '../types/mcpServer';
+import { clearToken, getToken } from '../../../auth/token';
 
 export interface ValidationProblemDetails {
   title?: string;
@@ -28,10 +29,20 @@ export class ApiError extends Error {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5017';
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
   });
+
+  if (response.status === 401) {
+    clearToken();
+    window.location.href = '/login';
+  }
 
   if (!response.ok) {
     const problem = (await response.json().catch(() => undefined)) as

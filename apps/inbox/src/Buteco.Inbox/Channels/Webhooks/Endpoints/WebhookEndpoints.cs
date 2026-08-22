@@ -1,3 +1,4 @@
+using Buteco.Inbox.Auth;
 using Buteco.Inbox.Channels.Adapters;
 using Buteco.Inbox.Infrastructure;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -11,7 +12,9 @@ public static class WebhookEndpoints
 {
     public static IEndpointRouteBuilder MapWebhookEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/webhooks/{channelId:guid}", ReceiveAsync);
+        app.MapPost("/webhooks/{channelId:guid}", ReceiveAsync)
+            .AllowAnonymous()
+            .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.ExternalUnauthenticated));
 
         return app;
     }

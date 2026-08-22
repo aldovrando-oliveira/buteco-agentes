@@ -22,11 +22,14 @@ public sealed class InboxFactoryFixture : WebApplicationFactory<Program>, IAsync
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) =>
+        {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Inbox:CredentialEncryptionKey"] = "NtxqjqnKG3sqy52PFRh/SGk573bsE9TrDtKOsDiR8uc=",
                 ["Api:BaseUrl"] = "http://apps-api.test",
-            }));
+            });
+            config.AddInMemoryCollection(TestAuthentication.ConfigOverrides);
+        });
 
         // Program.cs já registrou AppDbContext (AddInfrastructure) apontando para a
         // connection string do appsettings.Development.json. Substituímos aqui, depois
@@ -49,6 +52,12 @@ public sealed class InboxFactoryFixture : WebApplicationFactory<Program>, IAsync
             services.AddHttpClient(AgentReferenceValidator.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => AgentApiHandler);
         });
+    }
+
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        TestAuthentication.AttachOperatorToken(client, Services);
     }
 
     async Task IAsyncLifetime.InitializeAsync()

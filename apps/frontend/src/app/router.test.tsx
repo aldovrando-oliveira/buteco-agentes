@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { AppRouter } from './router';
 import { listAgents } from '../features/agents/api/agentsApi';
 import { listProviders } from '../features/agents/api/providersApi';
 import { listChannels } from '../features/channels/api/channelsApi';
+import { clearToken, setToken } from '../auth/token';
 
 vi.mock('../features/agents/api/agentsApi', () => ({
   listAgents: vi.fn(),
@@ -43,6 +44,20 @@ describe('AppRouter', () => {
     vi.mocked(listChannels).mockReset();
     vi.mocked(listChannels).mockResolvedValue([]);
     window.history.pushState({}, '', '/');
+    setToken('token-de-teste');
+  });
+
+  afterEach(() => {
+    clearToken();
+  });
+
+  it('sem token armazenado, redireciona para /login em vez do conteúdo protegido', async () => {
+    clearToken();
+
+    renderApp();
+
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    expect(screen.queryByRole('heading', { name: 'Agentes' })).not.toBeInTheDocument();
   });
 
   it('redireciona a rota raiz para /agents sem exibir página vazia', async () => {

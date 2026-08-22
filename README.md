@@ -108,31 +108,82 @@ cd apps/api
 dotnet run --project src/Buteco.Api
 ```
 
-Lê `ConnectionStrings:Postgres` e `RabbitMq:*` via `appsettings.Development.json`
-(defaults de dev, mesmos do `.env.example`) ou variáveis de ambiente
-(`ConnectionStrings__Postgres`, `RabbitMq__Host`, etc.) — nunca hardcoded.
+Lê `ConnectionStrings:Postgres`, `RabbitMq:*` e `Auth:*` via
+`appsettings.Development.json` (defaults de dev, mesmos do
+`.env.example`) ou variáveis de ambiente (`ConnectionStrings__Postgres`,
+`RabbitMq__Host`, `Auth__TokenSigningKey`, etc.) — nunca hardcoded.
+`Auth:TokenSigningKey`, `Auth:OperatorUsername` e
+`Auth:OperatorPasswordHash` são obrigatórios — o processo falha ao subir
+sem eles (fail-fast, mesmo padrão de `Api:BaseUrl` ausente em
+`apps/inbox`). Ver "Autenticação" abaixo para gerar
+`Auth:OperatorPasswordHash`.
+
+Toda rota, exceto `GET /health`, `POST /auth/login` e
+`GET /agents/{id}/.well-known/agent-card.json`, exige
+`Authorization: Bearer <token>` (openspec/changes/auth-login-e-servico) —
+os exemplos abaixo já fazem login primeiro e reutilizam o token:
 
 ```bash
 curl -i http://localhost:<porta>/health
 
+# login do operador — usuário/senha configurados em Auth:OperatorUsername/
+# Auth:OperatorPasswordHash (default de dev: "operator"/"changeme")
+TOKEN=$(curl -s -X POST http://localhost:<porta>/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"operator","password":"changeme"}' | jq -r '.token')
+
 # provedores de LLM disponíveis (só aparecem os que têm variável de ambiente configurada)
-curl http://localhost:<porta>/providers
+curl -H "Authorization: Bearer $TOKEN" http://localhost:<porta>/providers
 
 # cadastrar um agente — provider/model precisam estar entre os disponíveis em GET /providers
 curl -X POST http://localhost:<porta>/agents \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"name":"Atendente","instructions":"Você é um atendente simpático.","provider":"openai","model":"gpt-5.6-sol"}'
 
 # usar o agente via A2A (SendMessage, JSON-RPC)
 curl -X POST http://localhost:<porta>/agents/<id>/a2a \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","parts":[{"text":"Olá!"}],"messageId":"<uuid>"}}}'
 
 # consultar o estado da task (GetTask)
 curl -X POST http://localhost:<porta>/agents/<id>/a2a \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"id":"<taskId do SendMessage>"}}'
 ```
+
+#### Autenticação
+
+`apps/api` e `apps/inbox` compartilham a mesma `Auth:TokenSigningKey` e
+validam localmente qualquer token assinado com ela — sem chamada de rede
+entre os dois processos (`openspec/changes/auth-login-e-servico/design.md`,
+Decision 1). Único operador, credencial via variável de ambiente, sem
+tabela de usuários. Default de dev (`appsettings.Development.json`):
+usuário `operator`, senha `changeme`.
+
+Para gerar um `Auth:OperatorPasswordHash` novo (produção, ou trocar a
+senha de dev) — formato composto
+`{iterations}.{saltBase64}.{hashBase64}`, PBKDF2-HMAC-SHA256, gerado
+offline, nunca por código de produção (design.md, Decision 5):
+
+```bash
+python3 -c "
+import hashlib, base64, secrets
+password = 'sua-senha-aqui'
+salt = secrets.token_bytes(16)
+iterations = 100_000
+h = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, iterations, dklen=32)
+print(f'{iterations}.{base64.b64encode(salt).decode()}.{base64.b64encode(h).decode()}')
+"
+```
+
+Cole a saída em `Auth:OperatorPasswordHash` (`apps/api`, via
+`Auth__OperatorPasswordHash` como variável de ambiente).
+`Auth:OperatorTokenLifetime` é opcional — default de 30 minutos fixado no
+próprio tipo (`TokenSigningOptions`, não no `appsettings.json`), reduza
+ou amplie por ambiente só se precisar de um TTL diferente.
 
 A task nasce `TASK_STATE_SUBMITTED` e, com `apps/workers` rodando, avança
 para `TASK_STATE_WORKING` e depois `TASK_STATE_COMPLETED` (ou `TASK_STATE_FAILED`
@@ -186,8 +237,10 @@ npm install   # primeira vez
 npm run dev
 ```
 
-Abra `http://localhost:5173`. Deve renderizar o `AppShell` (header + navbar +
-área principal) sem erros no console do navegador.
+Abra `http://localhost:5173`. Redireciona para `/login` — entre com o
+operador configurado em `apps/api` (default de dev: `operator`/`changeme`,
+ver "Autenticação" acima). Depois do login, renderiza o `AppShell`
+(header + navbar + área principal) sem erros no console do navegador.
 
 ### apps/inbox
 
@@ -208,18 +261,27 @@ dotnet run --project src/Buteco.Inbox
 ```
 
 Lê `ConnectionStrings:Postgres`, `Inbox:CredentialEncryptionKey`,
-`Api:BaseUrl`, `PublicUrl:BaseUrl` e `Debounce:*` via
-`appsettings.Development.json` (defaults de dev, mesmos do
+`Api:BaseUrl`, `PublicUrl:BaseUrl`, `Debounce:*` e `Auth:TokenSigningKey`
+via `appsettings.Development.json` (defaults de dev, mesmos do
 `.env.example`) ou variáveis de ambiente (`ConnectionStrings__Postgres`,
 `Inbox__CredentialEncryptionKey`, `Api__BaseUrl`,
 `PublicUrl__BaseUrl`, `Debounce__Window`, `Debounce__SweepInterval`,
-`Debounce__MaxDispatchAttempts`) — nunca hardcoded. `Api:BaseUrl` deve
-apontar para onde `apps/api` está escutando (`http://localhost:5017` em
-dev) — usado para validar `AgentId` de canal (`GET /agents/{id}`) e para
-o cliente A2A (`POST /agents/{id}/a2a`). `PublicUrl:BaseUrl` deve ser a
-URL pela qual este processo é alcançável a partir de `apps/api`/
+`Debounce__MaxDispatchAttempts`, `Auth__TokenSigningKey`) — nunca
+hardcoded. `Api:BaseUrl` deve apontar para onde `apps/api` está
+escutando (`http://localhost:5017` em dev) — usado para validar
+`AgentId` de canal (`GET /agents/{id}`) e para o cliente A2A
+(`POST /agents/{id}/a2a`), ambos autenticados com um token de serviço
+que `apps/inbox` assina sozinho (`Auth:TokenSigningKey` — **precisa ser
+o mesmo valor** configurado em `apps/api`, senão nenhum token de
+operador nem de serviço é aceito entre os dois processos). `PublicUrl:BaseUrl`
+deve ser a URL pela qual este processo é alcançável a partir de `apps/api`/
 `apps/workers` (`http://localhost:5027` em dev) — usada no
 `pushNotificationConfig.url` enviado em cada `SendMessage`.
+
+Toda rota, exceto `GET /health`, `POST /webhooks/{channelId}` e
+`POST /internal/push-notifications`, exige `Authorization: Bearer
+<token>` — use o mesmo token de operador obtido via `POST /auth/login`
+em `apps/api` (seção `apps/api` acima):
 
 ```bash
 curl -i http://localhost:5027/health
@@ -230,16 +292,17 @@ curl -i http://localhost:5027/health
 # rejeitado (fail-fast)
 curl -X POST http://localhost:5027/channels \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"channelType":"waha","name":"Suporte WhatsApp","credential":"{\"ServiceUrl\":\"http://localhost:3000\",\"SessionName\":\"default\",\"AuthToken\":\"<api key do WAHA>\"}","agentId":"<id de um agente existente em apps/api>"}'
 
 # listar/consultar canais — credencial nunca aparece na resposta;
 # webhookUrl vem pronto para configurar no WAHA (ver checklist abaixo)
-curl http://localhost:5027/channels
-curl http://localhost:5027/channels/<id>
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5027/channels
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5027/channels/<id>
 
 # ativar/desativar (idempotente, nunca exclui o registro)
-curl -X POST http://localhost:5027/channels/<id>/deactivate
-curl -X POST http://localhost:5027/channels/<id>/activate
+curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:5027/channels/<id>/deactivate
+curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:5027/channels/<id>/activate
 ```
 
 O orquestrador (`IInboundMessageOrchestrator`) é um serviço interno, sem
@@ -374,3 +437,14 @@ npm run build
   cada mudança ficam em `openspec/changes/<nome-da-mudança>/`. Use
   `openspec status --change "<nome>"` para ver o progresso de uma mudança em
   andamento.
+- **Autenticação e allowlist de rotas anônimas**: `apps/api` e `apps/inbox`
+  exigem token (`Authorization: Bearer`) em toda rota por padrão — uma
+  rota só fica anônima com `.AllowAnonymous()` **e**
+  `AnonymousRouteClassification` (motivo documentado) anexados
+  explicitamente no `Map*` correspondente. Uma checagem de integridade
+  (`RouteAuthenticationExtensions.ValidateRouteAuthenticationClassification`,
+  chamada no fim de cada `Program.cs`) derruba o boot se alguma rota
+  ficar sem essa dupla marcação, ou se a allowlist de código citar uma
+  rota que não existe mais — mesmo padrão de
+  `ValidateChannelAdapterRegistrations` (`apps/inbox`). Ver
+  `openspec/changes/auth-login-e-servico/design.md`.

@@ -1,4 +1,5 @@
 using Buteco.Inbox.Agents;
+using Buteco.Inbox.Auth;
 using Buteco.Inbox.Channels.Adapters;
 using Buteco.Inbox.Channels.Adapters.Testing;
 using Buteco.Inbox.Channels.Adapters.Telegram;
@@ -12,6 +13,8 @@ using Buteco.Inbox.Infrastructure;
 using Buteco.Inbox.Options;
 using Buteco.Inbox.Orchestration;
 using Buteco.Inbox.Orchestration.PushNotifications.Endpoints;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +29,11 @@ builder.Services.Configure<InboxCryptoOptions>(builder.Configuration.GetSection(
 builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptions.SectionName));
 builder.Services.Configure<PublicUrlOptions>(builder.Configuration.GetSection(PublicUrlOptions.SectionName));
 builder.Services.Configure<DebounceOptions>(builder.Configuration.GetSection(DebounceOptions.SectionName));
+builder.Services.Configure<TokenSigningOptions>(builder.Configuration.GetSection(TokenSigningOptions.SectionName));
+builder.Services.AddSingleton<ITokenService, TokenService>();
+// Transient — AddHttpMessageHandler<T> não registra o handler
+// automaticamente no container, precisa ser feito à parte.
+builder.Services.AddTransient<ServiceTokenDelegatingHandler>();
 // Nome totalmente qualificado — colide com Microsoft.AspNetCore.Builder.SessionOptions
 // (middleware de sessão HTTP do ASP.NET Core, não usado aqui), trazido por
 // implicit usings do Sdk.Web.
@@ -72,9 +80,12 @@ var apiBaseUrl = builder.Configuration.GetSection(ApiOptions.SectionName).Get<Ap
     ?? throw new InvalidOperationException("Api:BaseUrl não configurado.");
 
 // Timeout curto e fixo (design.md, Decision 4) — mesmo padrão de
-// PushNotificationSender em apps/workers.
+// PushNotificationSender em apps/workers. ServiceTokenDelegatingHandler
+// (auth-login-e-servico, design.md, Decision 3) assina o token de
+// serviço em toda chamada a apps/api.
 builder.Services.AddHttpClient(AgentReferenceValidator.HttpClientName, client => client.BaseAddress = new Uri(apiBaseUrl))
-    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5))
+    .AddHttpMessageHandler<ServiceTokenDelegatingHandler>();
 builder.Services.AddSingleton<IAgentReferenceValidator, AgentReferenceValidator>();
 
 // Scoped, não Singleton — depende de AppDbContext/IContactSessionResolver,
@@ -83,10 +94,22 @@ builder.Services.AddScoped<IInboundMessageOrchestrator, InboundMessageOrchestrat
 
 // Sem BaseAddress fixo — A2AClientFactory monta a Uri completa por
 // AgentId (design.md, Decisão 3). Timeout curto e fixo, mesmo padrão de
-// AgentReferenceValidator.
+// AgentReferenceValidator. Mesmo ServiceTokenDelegatingHandler do client
+// acima.
 builder.Services.AddHttpClient(A2AClientFactory.HttpClientName)
-    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5))
+    .AddHttpMessageHandler<ServiceTokenDelegatingHandler>();
 builder.Services.AddSingleton<IA2AClientFactory, A2AClientFactory>();
+
+// Esquema único de autenticação (design.md, Decision 1) — valida token
+// de operador emitido por apps/api, mesma chave de assinatura, sem
+// chamada de rede entre os processos.
+builder.Services
+    .AddAuthentication(OperatorTokenAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, OperatorTokenAuthenticationHandler>(
+        OperatorTokenAuthenticationHandler.SchemeName, _ => { });
+builder.Services.AddAuthorization(options =>
+    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
 builder.Services.AddHostedService<DebounceSweepService>();
 
@@ -99,12 +122,25 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health")
+    .AllowAnonymous()
+    .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.HealthProbe));
 app.MapChannelEndpoints();
 app.MapContactEndpoints();
 app.MapPushNotificationEndpoints();
 app.MapWebhookEndpoints();
+
+// Falha o startup se alguma rota não estiver classificada como
+// autenticada (padrão) ou anônima com motivo documentado (design.md,
+// Decision 4) — mesmo padrão de ValidateChannelAdapterRegistrations
+// acima. Precisa rodar depois de todos os Map* acima.
+app.ValidateRouteAuthenticationClassification(
+    "/health",
+    "/webhooks/{channelId:guid}",
+    PushNotificationEndpoints.RoutePattern);
 
 app.Run();
 

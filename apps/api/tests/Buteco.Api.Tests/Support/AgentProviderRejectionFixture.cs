@@ -3,6 +3,7 @@ using Buteco.Api.Messaging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 
@@ -26,6 +27,8 @@ public sealed class AgentProviderRejectionFixture : WebApplicationFactory<Progra
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(TestAuthentication.ConfigOverrides));
+
         builder.ConfigureServices(services =>
         {
             var dbContextDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
@@ -44,6 +47,12 @@ public sealed class AgentProviderRejectionFixture : WebApplicationFactory<Progra
 
             services.AddSingleton<ITaskJobPublisher>(TaskJobPublisher);
         });
+    }
+
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        TestAuthentication.AttachOperatorToken(client, Services);
     }
 
     async Task IAsyncLifetime.InitializeAsync()

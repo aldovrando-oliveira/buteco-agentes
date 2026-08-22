@@ -31,6 +31,7 @@ public sealed class OrchestrationFactoryFixture : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) =>
+        {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Inbox:CredentialEncryptionKey"] = "NtxqjqnKG3sqy52PFRh/SGk573bsE9TrDtKOsDiR8uc=",
@@ -39,7 +40,9 @@ public sealed class OrchestrationFactoryFixture : WebApplicationFactory<Program>
                 ["Debounce:Window"] = "00:00:00.300",
                 ["Debounce:SweepInterval"] = "00:00:00.050",
                 ["Debounce:MaxDispatchAttempts"] = "3",
-            }));
+            });
+            config.AddInMemoryCollection(TestAuthentication.ConfigOverrides);
+        });
 
         builder.ConfigureServices(services =>
         {
@@ -59,6 +62,12 @@ public sealed class OrchestrationFactoryFixture : WebApplicationFactory<Program>
 
             services.AddSingleton<IA2AClientFactory>(A2AClientFactory);
         });
+    }
+
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        TestAuthentication.AttachOperatorToken(client, Services);
     }
 
     async Task IAsyncLifetime.InitializeAsync()

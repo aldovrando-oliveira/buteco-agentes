@@ -22,6 +22,10 @@ using ApiProgram = ApiAssembly::Program;
 using InboxAppDbContext = InboxAssembly::Buteco.Inbox.Infrastructure.AppDbContext;
 using InboxA2AClientFactory = InboxAssembly::Buteco.Inbox.Orchestration.A2AClientFactory;
 using InboxProgram = InboxAssembly::Program;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace InboxOrchestratorRoundTrip.Tests.Support;
 
@@ -72,6 +76,17 @@ public sealed class RoundTripFixture : IAsyncLifetime
     // do escopo desta fatia; só precisa provar que o texto de volta chega
     // intacto até a push notification recebida por apps/inbox.
     public const string MockedAgentReplyText = "Resposta do agente de teste do round-trip.";
+
+    // Mesmo valor literal usado pelas fixtures de apps/api/apps/inbox
+    // (Buteco.Api.Tests.Support.TestAuthentication,
+    // Buteco.Inbox.Tests.Support.TestAuthentication) — os três projetos de
+    // teste são independentes, sem referência cruzada de código, mas
+    // precisam do mesmo texto pra este teste provar o Risco 1 do
+    // design.md: token emitido por apps/api aceito por apps/inbox sem
+    // coordenação em runtime.
+    private const string TokenSigningKey = "test-signing-key-shared-between-api-and-inbox-fixtures";
+    private const string OperatorUsername = "operator";
+    private const string OperatorPassword = "correct-horse-battery-staple";
 
     public WebApplicationFactory<ApiProgram> ApiFactory => _apiFactory!;
 
@@ -135,6 +150,9 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     // olha só a presença da chave (libs/ProviderCatalog/LlmProviders.cs); a chamada
                     // real ao LLM nunca acontece, IChatClientResolver está mockado em apps/workers.
                     ["OpenAI:ApiKey"] = "test-api-key",
+                    ["Auth:TokenSigningKey"] = TokenSigningKey,
+                    ["Auth:OperatorUsername"] = OperatorUsername,
+                    ["Auth:OperatorPasswordHash"] = ComputeOperatorPasswordHash(),
                 }));
 
             builder.ConfigureServices(services =>
@@ -177,6 +195,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     ["Debounce:Window"] = "00:00:00.300",
                     ["Debounce:SweepInterval"] = "00:00:00.050",
                     ["Debounce:MaxDispatchAttempts"] = "3",
+                    ["Auth:TokenSigningKey"] = TokenSigningKey,
                 }));
 
             builder.ConfigureServices(services =>
@@ -238,5 +257,33 @@ public sealed class RoundTripFixture : IAsyncLifetime
         builder.Services.AddHostedService<TaskJobConsumer>();
 
         return builder.Build();
+    }
+
+    // Login real contra apps/api (não um token forjado com a mesma
+    // chave) — prova de verdade o Risco 1 do design.md: o token que
+    // apps/api emite é aceito por apps/inbox sem coordenação em runtime
+    // entre os dois processos, só pela chave de assinatura compartilhada.
+    public async Task<string> LoginAsOperatorAsync()
+    {
+        var client = ApiFactory.CreateClient();
+        var response = await client.PostAsJsonAsync("/auth/login", new { username = OperatorUsername, password = OperatorPassword });
+        response.EnsureSuccessStatusCode();
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return body.GetProperty("token").GetString()!;
+    }
+
+    private static string ComputeOperatorPasswordHash()
+    {
+        const int iterations = 100_000;
+        var salt = "fixed-test-salt-not-for-production"u8.ToArray();
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            Encoding.UTF8.GetBytes(OperatorPassword),
+            salt,
+            iterations,
+            HashAlgorithmName.SHA256,
+            32);
+
+        return $"{iterations}.{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
     }
 }

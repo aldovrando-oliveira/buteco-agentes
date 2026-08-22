@@ -27,12 +27,15 @@ public sealed class NoProvidersConfiguredFixture : WebApplicationFactory<Program
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) =>
+        {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["OpenAI:ApiKey"] = string.Empty,
                 ["Anthropic:ApiKey"] = string.Empty,
                 ["Gemini:ApiKey"] = string.Empty,
-            }));
+            });
+            config.AddInMemoryCollection(TestAuthentication.ConfigOverrides);
+        });
 
         builder.ConfigureServices(services =>
         {
@@ -44,6 +47,12 @@ public sealed class NoProvidersConfiguredFixture : WebApplicationFactory<Program
 
             services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
         });
+    }
+
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        TestAuthentication.AttachOperatorToken(client, Services);
     }
 
     async Task IAsyncLifetime.InitializeAsync()

@@ -1,4 +1,5 @@
 using A2A;
+using Buteco.Inbox.Auth;
 using Buteco.Inbox.Channels.Adapters;
 using Buteco.Inbox.Channels.Security;
 using Buteco.Inbox.Infrastructure;
@@ -20,7 +21,9 @@ public static class PushNotificationEndpoints
 
     public static IEndpointRouteBuilder MapPushNotificationEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost(RoutePattern, ReceiveAsync);
+        app.MapPost(RoutePattern, ReceiveAsync)
+            .AllowAnonymous()
+            .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.PreExistingAuthMechanism));
 
         return app;
     }

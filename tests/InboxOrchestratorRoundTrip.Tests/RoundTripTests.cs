@@ -1,6 +1,8 @@
 extern alias ApiAssembly;
 extern alias InboxAssembly;
 
+using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using InboxOrchestratorRoundTrip.Tests.Support;
@@ -64,9 +66,37 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
         Assert.Contains(RoundTripFixture.MockedAgentReplyText, artifactText);
     }
 
+    [Fact]
+    public async Task OperatorToken_IssuedByApi_IsAcceptedByInboxWithoutNetworkCallToApi()
+    {
+        // Prova o Risco 1 do design.md: apps/inbox valida o token
+        // localmente, só pela chave de assinatura compartilhada — não
+        // chama apps/api pra validar. A prova real disso é estrutural,
+        // não deste teste isolado: Api:BaseUrl da instância de apps/inbox
+        // deste fixture é "http://apps-api.test" (RoundTripFixture,
+        // BuildInboxFactory), um host que não existe e não tem nenhum
+        // handler de teste redirecionando-o para o TestServer de apps/api
+        // (diferente do client nomeado do A2AClientFactory, que tem). Se
+        // a validação do token dependesse de uma chamada de rede a
+        // apps/api, esta requisição teria que falhar ou dar timeout — ela
+        // não falha.
+        var token = await fixture.LoginAsOperatorAsync();
+
+        var inboxClient = fixture.InboxFactory.CreateClient();
+        inboxClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await inboxClient.GetAsync("/channels");
+
+        Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     private async Task<Guid> CreateAgentAsync()
     {
+        var token = await fixture.LoginAsOperatorAsync();
         var client = fixture.ApiFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
         var response = await client.PostAsJsonAsync(
             "/agents",
             new { name = "Agente Round-Trip", instructions = "Responda com simpatia.", provider = "openai", model = "gpt-5.6-sol" });
@@ -130,7 +160,9 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
 
     private async Task<(string State, string ArtifactText)> GetTaskFromApiAsync(Guid agentId, string taskId)
     {
+        var token = await fixture.LoginAsOperatorAsync();
         var client = fixture.ApiFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var payload = new { jsonrpc = "2.0", id = 1, method = "GetTask", @params = new { id = taskId } };
 
         var response = await client.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
