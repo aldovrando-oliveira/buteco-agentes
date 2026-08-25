@@ -253,6 +253,9 @@ public sealed class RoundTripFixture : IAsyncLifetime
             .ConfigurePrimaryHttpMessageHandler(() => InboxFactory.Server.CreateHandler());
         builder.Services.AddSingleton<PushNotificationSender>();
 
+        // AgentExecutionService/TaskJobConsumer passaram a exigir
+        // TimeProvider (change apps-workers-contexto-temporal).
+        builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

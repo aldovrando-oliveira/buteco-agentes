@@ -36,8 +36,7 @@ services:
   waha:
     image: devlikeapro/waha:latest
     restart: unless-stopped
-    environment:
-      WHATSAPP_DEFAULT_ENGINE: GOWS
+    env_file: .env
     ports:
       - "${WAHA_PORT:-3000}:3000"
 

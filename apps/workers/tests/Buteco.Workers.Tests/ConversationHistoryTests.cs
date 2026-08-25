@@ -6,12 +6,14 @@ using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
+using Buteco.Workers.Notifications;
 using Buteco.Workers.Options;
 using Buteco.Workers.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using RabbitMQ.Client;
 using TaskStatus = A2A.TaskStatus;
@@ -225,10 +227,102 @@ public class ConversationHistoryTests(WorkerInfrastructureFixture fixture) : ICl
         }
 
         Assert.NotNull(capturedOptions);
-        Assert.Equal("Instruções novas.", capturedOptions!.Instructions);
+        // StartsWith, não Equal: a change apps-workers-contexto-temporal
+        // passou a concatenar o bloco de contexto temporal depois das
+        // Instructions do agente (design.md, Decisão 2) — o teste continua
+        // verificando o que sempre verificou (Instructions frescas, não a
+        // "Instruções antigas." presa na sessão), só tolerando o bloco
+        // legítimo que vem depois.
+        Assert.StartsWith("Instruções novas.", capturedOptions!.Instructions);
+        Assert.DoesNotContain("Instruções antigas.", capturedOptions.Instructions);
     }
 
-    private IHost BuildHost(IChatClient chatClient)
+    /// <summary>
+    /// Cobre a change apps-workers-contexto-temporal, Tarefas 6.1/6.2 —
+    /// fecha o risco "carimbo congelado" (design.md, Achado 2, terceiro
+    /// eixo) com evidência de ponta a ponta, e a contraparte do risco
+    /// "bloco montado mas não entregue ao modelo" (design.md, Risks):
+    /// asserção contra o <see cref="ChatOptions"/> que de fato chega ao
+    /// <see cref="IChatClient"/> mockado, não contra
+    /// <c>TemporalContextBlockBuilder.Build</c> chamado isoladamente.
+    /// </summary>
+    [Fact]
+    public async Task SecondMessageInSameContext_TemporalBlockReflectsSecondExecutionInstant_NotFirst()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var firstTaskId = Guid.NewGuid().ToString("N");
+        var secondTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(agentId, "Atendente", "Responda com simpatia.");
+        await SeedTaskAsync(firstTaskId, agentId, contextId, "primeira mensagem");
+
+        // Mesma instância de FakeTimeProvider passada para os dois hosts,
+        // avançada entre a task A e a task B — não um FakeTimeProvider novo
+        // por host (design.md, Decisão 7). Fuso fixo, offset conhecido:
+        // TimeZoneInfo.CreateCustomTimeZone não depende da tz database
+        // estar presente no host que roda o teste.
+        // FakeTimeProvider precisa de um DateTimeOffset com offset zero no
+        // construtor (ToUniversalTime()) para GetLocalNow() calcular certo —
+        // ver TemporalContextBlockBuilderTests.BuildFakeTimeProvider.
+        var sharedTimeProvider = new FakeTimeProvider(
+            new DateTimeOffset(2026, 3, 10, 10, 0, 0, TimeSpan.FromHours(-3)).ToUniversalTime());
+        sharedTimeProvider.SetLocalTimeZone(
+            TimeZoneInfo.CreateCustomTimeZone("Test-03:00", TimeSpan.FromHours(-3), "Test -03:00", "Test -03:00"));
+
+        var firstChatClient = new Mock<IChatClient>();
+        firstChatClient
+            .Setup(client => client.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
+
+        using (var hostA = BuildHost(firstChatClient.Object, sharedTimeProvider))
+        {
+            await hostA.StartAsync();
+            await PublishJobAsync(firstTaskId, agentId, contextId);
+            var firstRecord = await PollUntilTerminalAsync(firstTaskId);
+            Assert.Equal(nameof(TaskState.Completed), firstRecord.State);
+            await hostA.StopAsync();
+        }
+
+        sharedTimeProvider.Advance(TimeSpan.FromHours(2));
+        await SeedTaskAsync(secondTaskId, agentId, contextId, "segunda mensagem");
+
+        ChatOptions? capturedOptions = null;
+        var secondChatClient = new Mock<IChatClient>();
+        secondChatClient
+            .Setup(client => client.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<ChatMessage>, ChatOptions, CancellationToken>((_, options, _) => capturedOptions = options)
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
+
+        using (var hostB = BuildHost(secondChatClient.Object, sharedTimeProvider))
+        {
+            await hostB.StartAsync();
+            await PublishJobAsync(secondTaskId, agentId, contextId);
+            var secondRecord = await PollUntilTerminalAsync(secondTaskId);
+            Assert.Equal(nameof(TaskState.Completed), secondRecord.State);
+            await hostB.StopAsync();
+        }
+
+        Assert.NotNull(capturedOptions);
+        var instructions = capturedOptions!.Instructions!;
+
+        // Tarefa 6.2: o bloco chega de fato ao IChatClient mockado.
+        Assert.Contains("[Contexto temporal", instructions);
+
+        // Tarefa 6.1: carimbo da segunda execução (10:00 + 2h = 12:00), não
+        // o congelado da primeira (10:00) — mesmo com a sessão da primeira
+        // task sendo recuperada do store durável para a segunda.
+        Assert.Contains("2026-03-10T12:00:00-03:00", instructions);
+        Assert.DoesNotContain("2026-03-10T10:00:00-03:00", instructions);
+    }
+
+    // timeProvider opcional: testes que não se importam com o carimbo
+    // temporal (a maioria) deixam um FakeTimeProvider novo ser criado por
+    // host; o teste de carimbo por sessão (design.md, Decisão 7) passa a
+    // MESMA instância para hostA e hostB, avançando o relógio entre as
+    // duas chamadas — é o que prova que a segunda execução usa o instante
+    // novo, não um valor congelado da primeira.
+    private IHost BuildHost(IChatClient chatClient, TimeProvider? timeProvider = null)
     {
         var builder = Host.CreateApplicationBuilder();
 
@@ -248,6 +342,19 @@ public class ConversationHistoryTests(WorkerInfrastructureFixture fixture) : ICl
         builder.Services.AddSingleton(resolverMock.Object);
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
+        // Gap pré-existente deste harness (não introduzido por esta change):
+        // AgentExecutionService já dependia de PushNotificationSender antes,
+        // e BuildHost nunca registrava — achado rodando os testes desta
+        // classe contra infraestrutura real (Testcontainers via podman) ao
+        // verificar o teste novo da Tarefa 6.1, não algo que esta change
+        // quebrou. Mesmo registro de Program.cs.
+        builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
+            .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
+        builder.Services.AddSingleton<PushNotificationSender>();
+        // FakeTimeProvider no lugar do TimeProvider.System de produção
+        // (design.md da change apps-workers-contexto-temporal, Decisão 6) —
+        // mesmo padrão já usado acima para IChatClientResolver/IMcpToolSetResolver.
+        builder.Services.AddSingleton(timeProvider ?? new FakeTimeProvider());
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

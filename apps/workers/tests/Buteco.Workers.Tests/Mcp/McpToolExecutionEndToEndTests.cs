@@ -7,6 +7,7 @@ using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Mcp.Security;
 using Buteco.Workers.Messaging;
+using Buteco.Workers.Notifications;
 using Buteco.Workers.Options;
 using Buteco.Workers.Tests.Mcp.Support;
 using Buteco.Workers.Tests.Support;
@@ -253,6 +254,14 @@ public class McpToolExecutionEndToEndTests(WorkerInfrastructureFixture fixture) 
         builder.Services.AddSingleton<IMcpToolSetResolver, McpToolSetResolver>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
 
+        // TimeProvider: AgentExecutionService/TaskJobConsumer passaram a
+        // exigi-lo (change apps-workers-contexto-temporal). PushNotificationSender:
+        // gap pré-existente deste harness, não introduzido por esta change —
+        // mesmo registro de Program.cs.
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
+            .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
+        builder.Services.AddSingleton<PushNotificationSender>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

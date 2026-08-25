@@ -12,6 +12,7 @@ namespace Buteco.Workers.Messaging;
 public sealed class TaskJobConsumer(
     IOptions<RabbitMqOptions> options,
     AgentExecutionService executionService,
+    TimeProvider timeProvider,
     ILogger<TaskJobConsumer> logger) : BackgroundService
 {
     public const string QueueName = "agent-tasks";
@@ -21,7 +22,7 @@ public sealed class TaskJobConsumer(
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("Worker starting at: {time}", DateTimeOffset.Now);
+        logger.LogInformation("Worker starting at: {time}", timeProvider.GetLocalNow());
         return base.StartAsync(cancellationToken);
     }
 
@@ -67,7 +68,7 @@ public sealed class TaskJobConsumer(
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("Worker stopping at: {time}", DateTimeOffset.Now);
+        logger.LogInformation("Worker stopping at: {time}", timeProvider.GetLocalNow());
 
         if (_channel is not null)
         {

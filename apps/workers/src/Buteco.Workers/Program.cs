@@ -21,6 +21,12 @@ builder.Services.Configure<McpCryptoOptions>(builder.Configuration.GetSection(Mc
 // são, na prática, constantes de produto (ver Options/AgentDelegationToolOptions.cs).
 builder.Services.Configure<AgentDelegationToolOptions>(_ => { });
 
+// Único ponto de acesso a relógio/fuso local em todo apps/workers (design.md
+// da change apps-workers-contexto-temporal, Decisão 6) — nenhum código,
+// novo ou pré-existente, deve chamar DateTimeOffset.Now/TimeZoneInfo.Local
+// diretamente. Testes substituem por FakeTimeProvider.
+builder.Services.AddSingleton(TimeProvider.System);
+
 builder.Services.AddSingleton<IChatClientResolver, ChatClientResolver>();
 
 builder.Services.AddSingleton<IMcpCredentialCipher, AesGcmMcpCredentialCipher>();
@@ -58,4 +64,7 @@ builder.Services.AddSingleton<AgentExecutionService>();
 builder.Services.AddHostedService<TaskJobConsumer>();
 
 var host = builder.Build();
+
+host.ValidateTimeZoneConfiguration();
+
 host.Run();

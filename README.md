@@ -214,9 +214,22 @@ configurada nos dois para o agente funcionar de ponta a ponta; se
 `apps/api` achar um provedor disponível mas `apps/workers` não tiver a
 mesma chave, a task termina `failed` (log de erro no worker), não trava.
 
-Esperado: log `Worker starting at: ...` no console, e (com um job na fila)
-logs de transição de estado da task. `Ctrl+C` para encerrar (loga
-`Worker stopping at: ...`).
+`apps/workers` também exige a variável de ambiente `TZ` do sistema
+operacional (não lida via `IConfiguration` — ver `.env.example`) com o
+nome IANA canônico da tz database, ex. `America/Sao_Paulo` (nunca com o
+prefixo POSIX `:`). O processo **falha ao subir** se `TZ` estiver ausente,
+vazia, ou se o fuso resolvido pelo SO não corresponder exatamente ao valor
+declarado — checagem de integridade no startup, mesmo padrão da
+classificação de rotas anônimas descrita em "Convenções" abaixo. É o único
+ponto de acesso a relógio/fuso do worker: usado para renderizar o instante
+de processamento e o dia da semana (sempre pt-BR, fixo) no bloco de
+contexto temporal enviado ao LLM
+(`openspec/changes/apps-workers-contexto-temporal`).
+
+Esperado: log `Worker starting at: ...` no console (junto com o fuso
+resolvido e o offset atual, ex. `Fuso horário do sistema: America/Sao_Paulo,
+offset atual: -03:00:00`), e (com um job na fila) logs de transição de
+estado da task. `Ctrl+C` para encerrar (loga `Worker stopping at: ...`).
 
 **Delegação entre agentes exige ≥ 2 instâncias de `apps/workers` rodando
 ao mesmo tempo.** O consumidor RabbitMQ processa no máximo uma mensagem
@@ -448,3 +461,11 @@ npm run build
   rota que não existe mais — mesmo padrão de
   `ValidateChannelAdapterRegistrations` (`apps/inbox`). Ver
   `openspec/changes/auth-login-e-servico/design.md`.
+- **Fuso horário do sistema (`apps/workers`)**: `TZ` do SO, único para o
+  processo inteiro, sem opção por agente e sem chave em
+  `appsettings.json`. Mesma família de checagem de integridade no
+  startup das duas acima (`ValidateTimeZoneConfiguration`) — compara o
+  fuso efetivamente resolvido contra o valor declarado em `TZ`, não só a
+  presença da variável, e derruba o boot se não baterem. Ver
+  `01-ARQUITETURA_E_CONVENCOES.md`, "Fuso horário do sistema", e
+  `openspec/changes/apps-workers-contexto-temporal/design.md`.

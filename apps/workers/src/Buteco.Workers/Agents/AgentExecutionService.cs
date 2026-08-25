@@ -21,6 +21,7 @@ public sealed class AgentExecutionService(
     IMcpToolSetResolver mcpToolSetResolver,
     IAgentDelegationToolSetResolver delegationToolSetResolver,
     PushNotificationSender pushNotificationSender,
+    TimeProvider timeProvider,
     ILogger<AgentExecutionService> logger)
 {
     // Teto de segurança, não um limiar concorrente com
@@ -168,10 +169,19 @@ public sealed class AgentExecutionService(
             var delegationTools = await delegationToolSetResolver.ResolveAsync(
                 dbContext, agent, message.ContextId, delegationDepth, cancellationToken);
 
+            // Bloco de contexto temporal concatenado às Instructions do
+            // operador — sem tocar Agent.Instructions no banco, sem entrar
+            // no histórico de conversa (design.md da change
+            // apps-workers-contexto-temporal, Decisões 1 e 2). Instructions
+            // vazia (Non-Goal: sem validação de não-vazio em apps/api) não
+            // pode deixar separador órfão — usa só o bloco nesse caso.
+            var temporalContextBlock = TemporalContextBlockBuilder.Build(timeProvider);
+            var instructionsWithTemporalContext = TemporalContextBlockBuilder.Concatenate(agent.Instructions, temporalContextBlock);
+
             var aiAgent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
             {
                 Name = agent.Name,
-                ChatOptions = new ChatOptions { Instructions = agent.Instructions, Tools = toolSet.Tools.Concat(delegationTools).ToList() },
+                ChatOptions = new ChatOptions { Instructions = instructionsWithTemporalContext, Tools = toolSet.Tools.Concat(delegationTools).ToList() },
                 ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
                 {
                     ChatReducer = new RecentMessageChatReducer(MaxHistoryMessages),

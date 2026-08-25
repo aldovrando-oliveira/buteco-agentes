@@ -7,6 +7,7 @@ using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
+using Buteco.Workers.Notifications;
 using Buteco.Workers.Options;
 using Buteco.Workers.Tests.Support;
 using Microsoft.EntityFrameworkCore;
@@ -253,6 +254,10 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, AgentDelegationToolSetResolver>();
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
+            .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
+        builder.Services.AddSingleton<PushNotificationSender>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 
