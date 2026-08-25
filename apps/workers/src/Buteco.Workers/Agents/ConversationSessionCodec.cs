@@ -1,4 +1,5 @@
 using System.Text.Json;
+using global::A2A;
 
 namespace Buteco.Workers.Agents;
 
@@ -18,11 +19,20 @@ namespace Buteco.Workers.Agents;
 /// para o <c>jsonb</c>, preservado byte a byte — em vez de estrutura
 /// aninhada. Ver design.md da change apps-workers-historico-conversa,
 /// Decisão 10.
+///
+/// A codificação em si precisa usar <see cref="A2AJsonUtilities.DefaultOptions"/>
+/// — as mesmas opções que o resto do pipeline A2A usa para
+/// serializar/desserializar o <c>AgentTask</c> inteiro (encoder de escaping,
+/// entre outras). Usar as opções padrão do .NET aqui produz um encoding de
+/// aspas diferente do que qualquer <c>PostgresTaskStore</c> grava de
+/// verdade — não corrompe o dado (as duas formas decodificam igual), mas
+/// quebra qualquer comparação textual bruta contra o valor persistido. Ver
+/// design.md da change crossapp-session-codec-encoder, Decisão D1.
 /// </remarks>
 public static class ConversationSessionCodec
 {
     public static JsonElement Encode(JsonElement serializedSession) =>
-        JsonSerializer.SerializeToElement(serializedSession.GetRawText());
+        JsonSerializer.SerializeToElement(serializedSession.GetRawText(), A2AJsonUtilities.DefaultOptions);
 
     public static JsonElement Decode(JsonElement encoded)
     {

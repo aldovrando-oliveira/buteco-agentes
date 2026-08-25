@@ -371,19 +371,18 @@ ambas explicadas abaixo, não celebradas sem entender a causa).
 - **`libs/ProviderCatalog.Tests`** — 6/6 limpo nos dois lados.
 - **`tests/CrossAppTaskStoreCompatibility.Tests`** — 0/2 nos dois
   lados, os mesmos dois testes nomeados, mesma mensagem de erro exata
-  (`"..."` esperado vs. `\"..."` obtido). Diagnóstico (não
-  correção, fora do Non-Goal desta change e fora do código desta linha
-  de trabalho): é divergência real de serialização entre os
-  `JsonSerializerOptions` independentes de `apps/api` e `apps/workers`
-  — não há schema/config compartilhado garantindo o mesmo encoder de
-  aspas entre os dois `AppDbContext`. Não há, porém, evidência de que
-  isso quebre algo em produção: as duas formas são JSON válido e
-  semanticamente idênticas para qualquer consumidor que desserialize; o
-  teste só falha porque compara as duas strings literalmente
-  (`Assert.Equal`) em vez de comparar os dois JSONs por valor. Registrar
-  como divergência real, não cosmética a nível de bytes, mas de impacto
-  desconhecido até algo depender de igualdade textual byte-a-byte da
-  coluna.
+  (`"..."` esperado vs. `\"..."` obtido). Diagnóstico coletado nesta
+  baseline (não correção, fora do Non-Goal desta change): divergência
+  real de serialização, hipótese inicial de que fosse
+  `JsonSerializerOptions` independentes entre `apps/api` e
+  `apps/workers`. **Corrigido e a hipótese refinada por
+  `crossapp-session-codec-encoder` — ver a subseção logo abaixo**: não é
+  divergência entre os dois apps (os dois usam a mesma
+  `A2AJsonUtilities.DefaultOptions`, mesma versão do pacote `A2A`); é um
+  único método, `ConversationSessionCodec.Encode`, que não usava essas
+  opções. Nenhum dado em risco existiu (as duas formas de escape
+  decodificam para o mesmo valor); o teste falhava porque compara texto
+  bruto, deliberadamente (é o ponto da asserção).
 - **`tests/InboxOrchestratorRoundTrip.Tests`** — 1/2 nos dois lados, o
   mesmo teste nomeado
   (`RoundTripTests.MessageReceived_TriggersFullRoundTrip_PushNotificationReceivedWithCorrectPayload`),
@@ -404,6 +403,61 @@ ambas explicadas abaixo, não celebradas sem entender a causa).
 Conclusão: nenhuma falha exclusiva de HEAD em nenhuma das sete suítes —
 nenhuma regressão desta change, confirmado por nome, não por contagem
 nem por inspeção.
+
+### Correção de encoder cross-app
+`crossapp-session-codec-encoder` — restauração do primeiro item da
+dívida de baseline registrada acima, sequenciada antes de
+`inbox-contexto-canal-metadata` (etapa 2) pelo motivo já explicado em
+"Próximo passo".
+
+`tests/CrossAppTaskStoreCompatibility.Tests` estava 0/2 desde
+2026-08-01. Diagnóstico fechado por execução real contra Postgres
+(`podman`/`DOCKER_HOST`), `git bisect` em worktrees isolados e
+decompilação de `A2A.dll` — não por leitura de código sozinha (convenção
+6):
+
+- **O que falhava**: só a asserção de `Metadata["conversationSession"]`
+  em `AssertTasksMatch` (comparação de texto bruto,
+  `GetRawText()`); as outras seis asserções da mesma função (`Id`,
+  `ContextId`, `Status.State`, contagens e conteúdo de
+  `History`/`Artifacts`) sempre passaram.
+- **Causa raiz**: `ConversationSessionCodec.Encode`
+  (`apps/workers/src/Buteco.Workers/Agents/ConversationSessionCodec.cs`)
+  serializava sem `A2AJsonUtilities.DefaultOptions` — cujo `Encoder` é
+  `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`, confirmado por
+  decompilação — enquanto o resto do pipeline A2A (os dois
+  `PostgresTaskStore`, o `PushNotificationSender`) usa essas opções
+  consistentemente. Não é divergência entre `apps/api` e
+  `apps/workers`: os dois usam a mesma `A2AJsonUtilities.DefaultOptions`,
+  mesma versão pinada do pacote `A2A` (`1.0.0-preview2`,
+  `Directory.Packages.props`). A comparação falharia mesmo com um único
+  app conversando consigo mesmo.
+- **Desde quando**: bisect real em worktrees — `7a56376` (antes de
+  `apps-workers-historico-conversa` introduzir o cenário) passa 2/2;
+  `1470b72` (mesma change, "propaga histórico de conversa",
+  2026-08-01), já falha 0/2 — nasceu quebrada no mesmo commit que
+  introduziu a asserção. Janela de 24 dias e 11 commits (`1470b72` até
+  `f668be5`) tocando a superfície `A2A`/`Infrastructure` dos dois apps
+  (MCP, delegação, AgentCard, push notification, auth, contexto
+  temporal) sem que isso desse qualquer sinal — teste vermelho não
+  distingue asserção nova de regressão real; as outras seis asserções da
+  mesma função continuaram cobrindo o acordo de schema o tempo todo.
+- **Nenhum dado em risco**: confirmado experimentalmente contra o commit
+  pré-correção (`f668be5`) que o valor já gravado em `a2a_tasks` já
+  saía no formato relaxado ao ser relido — o bug estava isolado ao valor
+  em memória que `Encode` retornava antes de qualquer persistência
+  (reescrito pelo `Serialize(task, A2AJsonUtilities.DefaultOptions)` de
+  qualquer `PostgresTaskStore` antes de tocar o banco). Nenhuma migração
+  de dados foi necessária.
+- **Varredura completa** de todo site `JsonSerializer.Serialize`/
+  `Deserialize`/`SerializeToElement` sobre payload A2A em `apps/api`,
+  `apps/workers` (produção e testes) e `tests/` na raiz — achou um
+  segundo site com o mesmo defeito de forma,
+  `PushNotificationConfigCodec.Encode`, mais sério e fora de escopo
+  desta change; ver "Itens em aberto" abaixo.
+
+`tests/CrossAppTaskStoreCompatibility.Tests` sai da lista de falhas
+pré-existentes: 2/2 verde, confirmado após a correção.
 
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
@@ -541,6 +595,30 @@ Cada um tem gatilho de quando revisitar:
   para tolerar ambientes mais lentos, sem perder o propósito do teste
   (round-trip completo dentro de um tempo razoável). O ajuste não é
   agora — este item é diagnóstico, não uma correção pendente.
+- **`PushNotificationConfigCodec.Encode` fora do contrato de
+  serialização A2A, com exposição externa confirmada** (achado durante
+  a varredura de `crossapp-session-codec-encoder`, mesma classe de bug
+  do `ConversationSessionCodec` corrigido naquela change, mas mais
+  sério) — `apps/workers/src/Buteco.Workers/Agents/PushNotificationConfigCodec.cs:16-17`
+  serializa sem `A2AJsonUtilities.DefaultOptions`, gravando
+  `Metadata["pushNotificationConfig"]` com casing errado (`Url`/`Token`
+  em vez de `url`/`token`) e nulls explícitos, em produção desde
+  2026-08-08. **Confirmado, não potencial**: `GetTask`/`ListTasks`
+  (`GET /agents/{id}/a2a`,
+  `RoutingA2ARequestHandler.GetTaskAsync`/`ListTasksAsync`,
+  `apps/api/src/Buteco.Api/A2A/RoutingA2ARequestHandler.cs:47-56`,
+  mapeado em `Program.cs:78`) devolvem a `AgentTask` inteira, `Metadata`
+  incluída, sem filtragem, a qualquer cliente do protocolo A2A; nenhum
+  código do repo relê essa chave para reformatá-la. Deliberadamente fora
+  do escopo de `crossapp-session-codec-encoder` (misturaria um bug de
+  escaping benigno com um bug de contrato de wire format com exposição
+  externa real). Gatilho: antes de qualquer mudança em
+  `apps/workers/.../Notifications/` ou no próprio
+  `PushNotificationConfigCodec`; dado que o endpoint já expõe o formato
+  errado há mais de duas semanas, a change de correção deixa de ser
+  "sucessora eventual" e passa a candidata a prioridade de
+  sequenciamento — decisão para quem revisar este item, não decidida
+  aqui.
 
 ## Próximo passo
 
@@ -564,10 +642,9 @@ proposta aqui, só o registro de que precisa de decisão**:
   paralelo. Não-determinístico (zero falhas numa rodada, 8 na outra).
 - `apps/api`: `AgentDeactivationTests.SendMessage_WithPushNotificationConfig_ForInactiveAgent_NeverPublishesJobOrCallsWebhook`
   — falha nomeada consistente nas rodadas coletadas.
-- `tests/CrossAppTaskStoreCompatibility.Tests` — os dois testes,
-  divergência de escaping JSON entre os `JsonSerializerOptions`
-  independentes de `apps/api` e `apps/workers`; impacto real em
-  produção não verificado.
+- ~~`tests/CrossAppTaskStoreCompatibility.Tests`~~ — **resolvido por
+  `crossapp-session-codec-encoder`**, ver a subseção "Correção de
+  encoder cross-app" acima. 2/2 verde.
 - `tests/InboxOrchestratorRoundTrip.Tests` —
   `MessageReceived_TriggersFullRoundTrip_PushNotificationReceivedWithCorrectPayload`,
   timeout de ~21s contra limite de 20s, reproduz no commit anterior ao

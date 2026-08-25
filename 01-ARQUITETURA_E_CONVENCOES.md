@@ -264,7 +264,16 @@ de propor algo nesta base:
     fazem parte do requisito. Enum sem formato declarado já saiu como
     inteiro por omissão e obrigou o consumidor a decodificar por índice.
     Defeito de formato pertence a quem expõe, e se corrige lá, em change
-    própria sequenciada antes — não se contorna no consumidor.
+    própria sequenciada antes — não se contorna no consumidor. Vale
+    também para as opções de serialização em si (encoder de escaping,
+    naming policy, tratamento de null), não só a representação de um
+    campo específico: dois sites que serializam o mesmo tipo com opções
+    diferentes produzem payloads estruturalmente diferentes mesmo com os
+    campos certos. Já aconteceu com um codec de `apps/workers`
+    serializando payload A2A sem as opções (`A2AJsonUtilities.DefaultOptions`)
+    que o resto do pipeline usa, divergindo em encoding de aspas de um
+    jeito que só um teste de acordo real entre `apps/api` e
+    `apps/workers` pegou (`crossapp-session-codec-encoder`).
 13. **A UI nunca afirma mais do que o sistema sabe** — se o dado não é
     coletado, a interface não o insinua. Um único indicador de envio,
     jamais dois checks, porque entrega e leitura são recibos que o desenho

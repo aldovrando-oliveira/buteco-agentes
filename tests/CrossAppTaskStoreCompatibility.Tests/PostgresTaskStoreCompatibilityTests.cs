@@ -155,6 +155,15 @@ public class PostgresTaskStoreCompatibilityTests : IAsyncLifetime
 
         Assert.NotNull(actual.Metadata);
         Assert.True(actual.Metadata!.ContainsKey("conversationSession"));
+
+        // Comparação de texto bruto é deliberada, não um descuido — é o que
+        // detecta os dois PostgresTaskStore divergindo em
+        // JsonSerializerOptions (ex.: encoder de escaping) entre si, mesmo
+        // quando os dois JSON decodificam para o mesmo valor. Já pegou um
+        // bug de produção real (ver design.md da change
+        // crossapp-session-codec-encoder). Não trocar por comparação
+        // semântica achando que é conserto de teste: isso mataria a
+        // capacidade desta asserção de guardar esse acordo.
         Assert.Equal(
             expected.Metadata!["conversationSession"].GetRawText(),
             actual.Metadata["conversationSession"].GetRawText());
