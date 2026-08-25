@@ -459,6 +459,53 @@ decompilação de `A2A.dll` — não por leitura de código sozinha (convenção
 `tests/CrossAppTaskStoreCompatibility.Tests` sai da lista de falhas
 pré-existentes: 2/2 verde, confirmado após a correção.
 
+### Correção do encoder de push notification
+
+`push-notification-config-codec-encoder` — fecha o item em aberto que
+`crossapp-session-codec-encoder` deixou registrado (mesma classe de bug,
+mais sério: exposição externa confirmada, não potencial).
+
+`PushNotificationConfigCodec.Encode`
+(`apps/workers/src/Buteco.Workers/Agents/PushNotificationConfigCodec.cs`)
+serializava sem `A2AJsonUtilities.DefaultOptions`, gravando
+`Metadata["pushNotificationConfig"]` com casing PascalCase
+(`Id`/`Url`/`Authentication`/`Token`) e nulls explícitos, em produção
+desde 2026-08-08. Diferente do bug de `ConversationSessionCodec`: o valor
+é um `JsonElement` objeto já materializado, e a re-serialização do
+`AgentTask` em `SaveTaskAsync` não reaplica naming policy sobre ele — só
+sobre objetos .NET serializados a fresco. Por isso o formato errado
+chegava ao disco, não só divergia temporariamente em memória.
+
+Uma rodada de `/opsx:explore` fechou as sete perguntas em aberto por
+leitura de código, decompilação de `A2A.dll`, reprodução empírica do
+path de produção e consulta à spec A2A na fonte:
+
+- **Formato correto confirmado na spec A2A**: `url`, `token`,
+  `authentication`, `id` — camelCase, opcionais omitidos, nunca `null`.
+  Bate exatamente com `A2AJsonUtilities.DefaultOptions`.
+- **Sem `Decode` interno**: nenhum código do repo relê essa chave como
+  `PushNotificationConfig` tipado — só o `Encode` grava, e só o teste
+  E2E lia como `JsonElement` bruto (e afirmava o formato errado, agora
+  corrigido). Sem gatilho de migração por quebra de leitura interna.
+- **Postgres de dev** (`buteco_agents`, não produção): 175 tasks totais,
+  37 com a chave, 37/37 no formato errado antes da correção, 0 no
+  correto.
+- **Nenhum consumidor de `GetTask`/`ListTasks` encontrado no código do
+  repo** — `apps/inbox` (único cliente A2A conhecido) só chama
+  `SendMessageAsync`. Limitação do método, não garantia: um cliente
+  externo autenticado poderia existir fora do repo (a rota é
+  autenticada, não anônima).
+- **Sem migração das linhas já gravadas** — decisão com gatilho, ver
+  "Itens em aberto" abaixo.
+
+Correção: `Encode` passa a usar `A2AJsonUtilities.DefaultOptions`.
+`PushNotificationEndToEndTests.cs` corrigido nas duas ocorrências que
+afirmavam o formato antigo, com asserção negativa (ausência de
+PascalCase e de opcionais ausentes gravados como `null`) estendida
+também ao aninhamento `authentication.scheme`/`authentication.credentials`
+e a `token`. Suíte completa de `apps/workers/tests/Buteco.Workers.Tests`
+verde (92/92) após a correção.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -595,30 +642,16 @@ Cada um tem gatilho de quando revisitar:
   para tolerar ambientes mais lentos, sem perder o propósito do teste
   (round-trip completo dentro de um tempo razoável). O ajuste não é
   agora — este item é diagnóstico, não uma correção pendente.
-- **`PushNotificationConfigCodec.Encode` fora do contrato de
-  serialização A2A, com exposição externa confirmada** (achado durante
-  a varredura de `crossapp-session-codec-encoder`, mesma classe de bug
-  do `ConversationSessionCodec` corrigido naquela change, mas mais
-  sério) — `apps/workers/src/Buteco.Workers/Agents/PushNotificationConfigCodec.cs:16-17`
-  serializa sem `A2AJsonUtilities.DefaultOptions`, gravando
-  `Metadata["pushNotificationConfig"]` com casing errado (`Url`/`Token`
-  em vez de `url`/`token`) e nulls explícitos, em produção desde
-  2026-08-08. **Confirmado, não potencial**: `GetTask`/`ListTasks`
-  (`GET /agents/{id}/a2a`,
-  `RoutingA2ARequestHandler.GetTaskAsync`/`ListTasksAsync`,
-  `apps/api/src/Buteco.Api/A2A/RoutingA2ARequestHandler.cs:47-56`,
-  mapeado em `Program.cs:78`) devolvem a `AgentTask` inteira, `Metadata`
-  incluída, sem filtragem, a qualquer cliente do protocolo A2A; nenhum
-  código do repo relê essa chave para reformatá-la. Deliberadamente fora
-  do escopo de `crossapp-session-codec-encoder` (misturaria um bug de
-  escaping benigno com um bug de contrato de wire format com exposição
-  externa real). Gatilho: antes de qualquer mudança em
-  `apps/workers/.../Notifications/` ou no próprio
-  `PushNotificationConfigCodec`; dado que o endpoint já expõe o formato
-  errado há mais de duas semanas, a change de correção deixa de ser
-  "sucessora eventual" e passa a candidata a prioridade de
-  sequenciamento — decisão para quem revisar este item, não decidida
-  aqui.
+- **Linhas antigas de `a2a_tasks` com `pushNotificationConfig` em formato
+  divergente** — decisão consciente de não migrar, registrada em
+  `push-notification-config-codec-encoder` (design.md D4). Nada quebra
+  (não há `Decode` interno; um leitor futuro é case-insensitive), mas as
+  linhas gravadas antes da correção (37/37 em dev, formato PascalCase com
+  nulls) convivem indefinidamente com as gravadas depois (camelCase, sem
+  opcionais ausentes) — sem job de limpeza/retenção em `a2a_tasks`.
+  Gatilho: se aparecer um consumidor real (interno ou externo) que
+  precise ler tasks terminais antigas com `pushNotificationConfig`,
+  avaliar backfill nesse momento.
 
 ## Próximo passo
 

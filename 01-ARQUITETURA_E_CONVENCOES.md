@@ -158,6 +158,20 @@ token, mas declara `SecuritySchemes`/`SecurityRequirements` (HTTP Bearer)
 para o endpoint A2A do agente — a exigência de credencial fica declarada
 de forma compatível com a spec, não implícita.
 
+A re-serialização do `AgentTask` inteiro em `PostgresTaskStore.SaveTaskAsync`
+(`Serialize(task, A2AJsonUtilities.DefaultOptions)`) **não é uma rede de
+segurança genérica** para qualquer valor colocado em `AgentTask.Metadata`
+fora do contrato A2A: ela só reaplica naming policy/`DefaultIgnoreCondition`
+sobre objetos .NET serializados a fresco, não sobre um `JsonElement` já
+materializado — esse é copiado verbatim. Um codec de `Metadata` que
+serializa sem `A2AJsonUtilities.DefaultOptions` só tem o defeito
+mascarado pela re-serialização se o valor nunca foi materializado como
+`JsonElement` antes dela (ex.: uma string escalar); se já foi (ex.: um
+objeto), o formato errado chega ao disco. Achado em
+`push-notification-config-codec-encoder`, comparando com o defeito
+benigno de `ConversationSessionCodec` corrigido em
+`crossapp-session-codec-encoder`.
+
 ## Contrato de plugin de canal (`apps/inbox`)
 
 Três contratos obrigatórios em conjunto por `ChannelType`, resolvidos via

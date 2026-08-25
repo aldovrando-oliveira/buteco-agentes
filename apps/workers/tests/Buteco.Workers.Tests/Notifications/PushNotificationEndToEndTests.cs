@@ -64,7 +64,13 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
         var persistedTask = DeserializeTask(record);
         Assert.NotNull(persistedTask.Metadata);
         Assert.True(persistedTask.Metadata!.TryGetValue(PushNotificationConfigCodec.MetadataKey, out var pushConfigElement));
-        Assert.Equal(WebhookUrl, pushConfigElement.GetProperty("Url").GetString());
+        // Formato de fio da spec A2A: camelCase, opcionais ausentes omitidos
+        // (nunca gravados como propriedade com valor null) — não
+        // "consertar" de volta para "Url"/nulls se isto ficar vermelho no
+        // futuro; é contrato, não coincidência (design.md de
+        // push-notification-config-codec-encoder, Decisões D1/D5).
+        Assert.Equal(WebhookUrl, pushConfigElement.GetProperty("url").GetString());
+        AssertPushConfigOptionalFieldsAbsent(pushConfigElement, "Url", "Id", "id", "Authentication", "authentication", "Token", "token");
 
         var call = Assert.Single(handler.Calls);
         Assert.Equal(new Uri(WebhookUrl), call.Url);
@@ -114,7 +120,13 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
         var persistedTask = DeserializeTask(record);
         Assert.NotNull(persistedTask.Metadata);
         Assert.True(persistedTask.Metadata!.TryGetValue(PushNotificationConfigCodec.MetadataKey, out var pushConfigElement));
-        Assert.Equal(WebhookUrl, pushConfigElement.GetProperty("Url").GetString());
+        // Formato de fio da spec A2A: camelCase, opcionais ausentes omitidos
+        // (nunca gravados como propriedade com valor null) — não
+        // "consertar" de volta para "Url"/nulls se isto ficar vermelho no
+        // futuro; é contrato, não coincidência (design.md de
+        // push-notification-config-codec-encoder, Decisões D1/D5).
+        Assert.Equal(WebhookUrl, pushConfigElement.GetProperty("url").GetString());
+        AssertPushConfigOptionalFieldsAbsent(pushConfigElement, "Url", "Id", "id", "Authentication", "authentication", "Token", "token");
 
         var call = Assert.Single(handler.Calls);
         var payload = JsonSerializer.Deserialize<AgentTask>(call.Body, A2AJsonUtilities.DefaultOptions)!;
@@ -243,10 +255,11 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
         using var host = BuildHost(chatClient.Object, handler);
         await host.StartAsync();
 
+        A2ATaskRecord record;
         try
         {
             await PublishJobAsync(taskId, agentId, contextId, config);
-            await PollUntilTerminalAsync(taskId);
+            record = await PollUntilTerminalAsync(taskId);
         }
         finally
         {
@@ -257,6 +270,18 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
         var authHeader = Assert.Single(call.Headers["Authorization"]);
         Assert.Equal("Bearer auth-credential", authHeader);
         Assert.False(call.Headers.ContainsKey("X-A2A-Notification-Token"));
+
+        // O aninhamento (authentication.scheme/credentials) é a parte mais
+        // propensa a regredir — depende da naming policy se aplicar em
+        // profundidade, não só no nível raiz do objeto (design.md de
+        // push-notification-config-codec-encoder, Decisão D5).
+        var persistedTask = DeserializeTask(record);
+        Assert.True(persistedTask.Metadata!.TryGetValue(PushNotificationConfigCodec.MetadataKey, out var pushConfigElement));
+        var authenticationElement = pushConfigElement.GetProperty("authentication");
+        Assert.Equal("Bearer", authenticationElement.GetProperty("scheme").GetString());
+        Assert.Equal("auth-credential", authenticationElement.GetProperty("credentials").GetString());
+        AssertPushConfigOptionalFieldsAbsent(authenticationElement, "Scheme", "Credentials");
+        AssertPushConfigOptionalFieldsAbsent(pushConfigElement, "Authentication", "Id", "id", "Token", "token");
     }
 
     [Fact]
@@ -276,10 +301,11 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
         using var host = BuildHost(chatClient.Object, handler);
         await host.StartAsync();
 
+        A2ATaskRecord record;
         try
         {
             await PublishJobAsync(taskId, agentId, contextId, config);
-            await PollUntilTerminalAsync(taskId);
+            record = await PollUntilTerminalAsync(taskId);
         }
         finally
         {
@@ -290,6 +316,11 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
         var tokenHeader = Assert.Single(call.Headers["X-A2A-Notification-Token"]);
         Assert.Equal("webhook-token", tokenHeader);
         Assert.False(call.Headers.ContainsKey("Authorization"));
+
+        var persistedTask = DeserializeTask(record);
+        Assert.True(persistedTask.Metadata!.TryGetValue(PushNotificationConfigCodec.MetadataKey, out var pushConfigElement));
+        Assert.Equal("webhook-token", pushConfigElement.GetProperty("token").GetString());
+        AssertPushConfigOptionalFieldsAbsent(pushConfigElement, "Token", "Id", "id", "Authentication", "authentication");
     }
 
     [Fact]
@@ -334,6 +365,23 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
 
     private static AgentTask DeserializeTask(A2ATaskRecord record) =>
         JsonSerializer.Deserialize<AgentTask>(record.Payload, A2AJsonUtilities.DefaultOptions)!;
+
+    /// <summary>
+    /// Afirma que nenhuma das propriedades nomeadas existe no elemento —
+    /// usado para o casing antigo (PascalCase) e para campos opcionais
+    /// ausentes, que a spec A2A exige omitidos, nunca gravados como
+    /// propriedade com valor null (design.md de
+    /// push-notification-config-codec-encoder, Decisão D5).
+    /// </summary>
+    private static void AssertPushConfigOptionalFieldsAbsent(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            Assert.False(
+                element.TryGetProperty(propertyName, out _),
+                $"'{propertyName}' não deveria existir — formato de fio A2A é camelCase e omite opcionais ausentes.");
+        }
+    }
 
     private IHost BuildHost(IChatClient chatClient, FakeWebhookHttpMessageHandler webhookHandler)
     {
