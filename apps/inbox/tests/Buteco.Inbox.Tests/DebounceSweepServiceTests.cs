@@ -7,6 +7,7 @@ using Buteco.Inbox.Orchestration.Entities;
 using Buteco.Inbox.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MessageEntity = Buteco.Inbox.Messages.Entities.Message;
 
 namespace Buteco.Inbox.Tests;
@@ -207,6 +208,102 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
         var messages = await GetMessagesAsync(sessionId);
         Assert.Single(messages);
         Assert.Equal(MessageDispatchStatus.Failed, messages[0].DispatchStatus);
+    }
+
+    // inbox-sweep-service-resiliencia, tasks.md 2.3/2.4: DebounceSweepService
+    // deixa de derrubar o processo quando a consulta de candidatos falha por
+    // infraestrutura (o mesmo caminho onde o 57P01 real foi reproduzido).
+    [Fact]
+    public async Task InfrastructureFailure_DuringCandidateQuery_IsLoggedAndSweepRecoversNextCycle()
+    {
+        factory.A2AClientFactory.Handler = FakeA2AClientFactory.DefaultHandler;
+
+        var channelId = await CreateChannelAsync(Guid.NewGuid());
+        var externalId = UniqueExternalId();
+        await ReceiveAsync(channelId, externalId, "Mensagem durante falha de infraestrutura na consulta");
+        var expectedContextId = await ResolveContextIdAsync(channelId, externalId);
+
+        // Armar só depois de persistir a mensagem: InboundMessageOrchestrator
+        // também consulta pending_dispatches (para achar um buffer já
+        // aberto) — armar antes capturaria essa consulta interna do
+        // recebimento, não a consulta do sweep que este teste quer atingir.
+        factory.CandidateQueryInterceptor.ArmNextMatchingCommand("pending_dispatches");
+
+        // A falha forçada na consulta de candidatos é capturada e logada
+        // em nível Error, sem propagar (Requirement: Falha de
+        // infraestrutura durante a consulta de candidatos do ciclo de
+        // varredura não derruba o processo, Scenario 1; Requirement:
+        // Falha capturada durante o ciclo de varredura nunca é
+        // silenciosa, Scenario de consulta).
+        await PollUntil(
+            () => factory.CapturedLogEntries.Count(e => e.Level == LogLevel.Error && e.Exception is InvalidOperationException),
+            count => count >= 1,
+            TimeSpan.FromSeconds(3));
+
+        // O ciclo de varredura seguinte consulta e dispara normalmente,
+        // sem reinício do processo — mesmo host, mesmo IServiceProvider
+        // (Requirement: (...) não derruba o processo, Scenario 2).
+        await PollUntil(
+            () => factory.A2AClientFactory.Requests.Count(r => r.Message.ContextId == expectedContextId),
+            count => count >= 1,
+            TimeSpan.FromSeconds(3));
+    }
+
+    // inbox-sweep-service-resiliencia, tasks.md 2.5: falha determinística ao
+    // processar um candidato não pode bloquear os demais candidatos do
+    // mesmo ciclo (catch por candidato, precedente de TaskJobConsumer).
+    [Fact]
+    public async Task InfrastructureFailure_ProcessingOneCandidate_IsLoggedAndDoesNotBlockAnotherCandidate()
+    {
+        var channelId = await CreateChannelAsync(Guid.NewGuid());
+
+        var externalIdA = UniqueExternalId();
+        await ReceiveAsync(channelId, externalIdA, "Candidato A — vai falhar de forma determinística");
+        var contextIdA = await ResolveContextIdAsync(channelId, externalIdA);
+        var sessionIdA = await ResolveSessionIdAsync(channelId, externalIdA);
+
+        var externalIdB = UniqueExternalId();
+        await ReceiveAsync(channelId, externalIdB, "Candidato B — deve disparar normalmente");
+        var contextIdB = await ResolveContextIdAsync(channelId, externalIdB);
+
+        factory.A2AClientFactory.Handler = request =>
+            request.Message.ContextId == contextIdA
+                ? throw new InvalidOperationException("Falha determinística forçada pelo teste, só para o candidato A.")
+                : FakeA2AClientFactory.DefaultHandler(request);
+
+        // A falha de A é capturada e logada, identificando o candidato
+        // (Requirement: Falha capturada durante o ciclo de varredura
+        // nunca é silenciosa, Scenario de candidato). A exceção forçada
+        // ocorre depois de MarkDispatching+SaveChangesAsync já terem
+        // commitado A como Dispatching, então A permanece Dispatching
+        // (não é removida nem volta a Pending) — não há retry automático
+        // para este caminho de falha, e isso é esperado.
+        var pendingDispatchA = await PollUntilAsync(
+            () => GetPendingDispatchAsync(sessionIdA),
+            dispatch => dispatch is { Status: PendingDispatchStatus.Dispatching },
+            TimeSpan.FromSeconds(3));
+
+        await PollUntil(
+            () => factory.CapturedLogEntries.Count(e =>
+                e.Level == LogLevel.Error
+                && e.Exception is InvalidOperationException
+                && e.Message.Contains(pendingDispatchA!.Id.ToString())),
+            count => count >= 1,
+            TimeSpan.FromSeconds(3));
+
+        // B não depende de A ser resolvida para ser disparado — o catch
+        // por candidato garante que a falha de A não aborta o
+        // processamento dos candidatos seguintes no mesmo ciclo
+        // (Requirement: Falha ao processar um candidato específico não
+        // bloqueia os demais candidatos do mesmo ciclo). O SweepInterval
+        // de 50ms desta fixture tornaria "ciclo seguinte" indistinguível
+        // de "mesmo ciclo" só por tempo decorrido; o que este teste prova
+        // é a garantia que importa operacionalmente — B nunca fica
+        // bloqueado por A.
+        await PollUntil(
+            () => factory.A2AClientFactory.Requests.Count(r => r.Message.ContextId == contextIdB),
+            count => count >= 1,
+            TimeSpan.FromSeconds(3));
     }
 
     private async Task ReceiveAsync(Guid channelId, string externalId, string text)

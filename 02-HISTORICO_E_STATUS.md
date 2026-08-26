@@ -349,16 +349,32 @@ ambas explicadas abaixo, não celebradas sem entender a causa).
 - **`apps/inbox` (`Buteco.Inbox.Tests`)** — não-determinístico entre
   execuções: nesta coleta, a base teve 8 falhas nomeadas
   (`WebhookEndpointsTests` × 3, `MessagePersistenceTests` × 5, todas
-  `ObjectDisposedException` sobre `IServiceProvider` — corrida de
-  disposal do `WebApplicationFactory` entre classes de teste rodando em
-  paralelo) e HEAD zerou (155/155). **Correção de uma hipótese anterior
-  registrada nesta seção**: nenhuma das duas rodadas reproduziu a
-  corrida específica de
-  `ContactSessionResolver.FindOrCreateSessionAsync` (item em aberto
-  citado abaixo) — o mecanismo observado desta vez é outro (disposal
-  race do fixture, não a falta de índice único na criação de
-  `Session`). Não é o bug conhecido reproduzindo; é uma segunda fonte de
-  flake de isolamento, distinta, na mesma suíte.
+  `ObjectDisposedException` sobre `IServiceProvider`) e HEAD zerou
+  (155/155). **Correção de uma hipótese anterior registrada nesta
+  seção — o mecanismo real não é o que estava escrito aqui.** Não é
+  corrida de disposal do `WebApplicationFactory` entre classes de teste
+  em paralelo: confirmado contra a documentação do xUnit 2.9.3 que, sem
+  nenhum `[Collection]`/`[CollectionDefinition]` no repo, `IClassFixture`
+  dá a cada classe seu próprio `WebApplicationFactory`, container e
+  `IServiceProvider` totalmente independentes — não existe caminho no
+  modelo do xUnit para a disposal de uma classe alcançar outra. Causa
+  real, reproduzida e corrigida por `inbox-sweep-service-resiliencia`:
+  `DebounceSweepService` (`BackgroundService` real de produção) não
+  tratava exceções fora de A2A/transporte na própria consulta de
+  candidatos; qualquer soluço transitório de Postgres nessa consulta
+  escapava de `ExecuteAsync` e, pelo default do .NET 8+
+  (`HostOptions.BackgroundServiceExceptionBehavior = StopHost`, não
+  configurado em lugar nenhum do repo), derrubava o processo inteiro —
+  reproduzido de verdade (`Npgsql.PostgresException: 57P01`) em 4 de 4
+  execuções verificadas com log detalhado, sob a contenção de recursos de
+  9 `WebApplicationFactory`+Postgres Testcontainers concorrentes.
+  Taxa medida numa rodada de 10 execuções da suíte: 2/10 com esta
+  `ObjectDisposedException` (mecanismo agora corrigido). Também
+  nenhuma das duas rodadas originais desta baseline reproduziu a corrida
+  específica de `ContactSessionResolver.FindOrCreateSessionAsync` (item
+  em aberto citado abaixo) — na mesma rodada de 10 execuções, esse outro
+  flake (`InboundMessageOrchestratorTests`) apareceu à parte, em 3/10,
+  sem relação de causa com o defeito do `DebounceSweepService`.
 - **`apps/workers` (`Buteco.Workers.Tests`)** — base: 30/75 falhas,
   quase todas com a mesma mensagem de erro exata (`Unable to resolve
   service for type 'Buteco.Workers.Notifications.PushNotificationSender'`),
@@ -572,9 +588,14 @@ Cada um tem gatilho de quando revisitar:
   mudança futura em `ContactSessionResolver`. Nota da baseline nomeada
   pós-archive de `apps-workers-contexto-temporal`: o flake de
   `apps/inbox` observado naquela coleta **não** reproduziu esta corrida
-  específica — foi uma corrida diferente (disposal do
-  `WebApplicationFactory`). O item aqui continua em aberto por si só,
-  sem relação de causa confirmada com aquele flake.
+  específica — foi uma causa diferente, corrigida por
+  `inbox-sweep-service-resiliencia` (`DebounceSweepService` sem
+  tratamento de falha de infraestrutura na consulta de candidatos,
+  derrubando o processo via
+  `BackgroundServiceExceptionBehavior.StopHost` — não a disposal do
+  `WebApplicationFactory` entre classes, hipótese registrada
+  originalmente aqui e desde então corrigida). O item aqui continua em
+  aberto por si só, sem relação de causa confirmada com aquele flake.
 - **`WahaWebhookMessagePayload.Data.Info.PushName`** (`DisplayName` do
   WAHA, `inbox-mensagens-persistidas`) — confirmado só via discussão da
   comunidade para o engine GOWS, não pela documentação oficial do WAHA
@@ -642,6 +663,33 @@ Cada um tem gatilho de quando revisitar:
   para tolerar ambientes mais lentos, sem perder o propósito do teste
   (round-trip completo dentro de um tempo razoável). O ajuste não é
   agora — este item é diagnóstico, não uma correção pendente.
+- **`InboxFactoryFixture.InitializeAsync` acessa `Services` antes de
+  migrar** (achado por `inbox-sweep-service-resiliencia`, design.md,
+  Non-Goals) — chama `Services.CreateScope()` para rodar a migration,
+  o que já constrói e inicia o host inteiro (incluindo
+  `DebounceSweepService`) antes de a tabela existir. Mesma armadilha que
+  `OrchestrationFactoryFixture` já corrigiu (migra com um `AppDbContext`
+  isolado, sem tocar `Services` antes) — ver o comentário em
+  `OrchestrationFactoryFixture.cs`. Não corrigido em
+  `InboxFactoryFixture`, usada pelas 9 classes de teste que
+  compartilhavam a `ObjectDisposedException` da baseline. Defeito de
+  teste, não de produção — depois de `inbox-sweep-service-resiliencia`
+  (que resolve o efeito, `DebounceSweepService` não derruba mais o host),
+  este item deixa de ser urgente, mas continua correto de qualquer forma.
+  Gatilho: antes ou junto da próxima change que toque
+  `apps/inbox/tests`.
+- **`TaskJobConsumer` (`apps/workers`) com setup inicial desprotegido**
+  (achado por `inbox-sweep-service-resiliencia`, design.md, Decisão 4) —
+  a sequência de `CreateConnectionAsync`/`CreateChannelAsync`/
+  `QueueDeclareAsync`/`BasicQosAsync`/`BasicConsumeAsync`, toda antes do
+  loop de consumo, não tem tratamento de exceção; falha do RabbitMQ
+  nesse ponto do boot derruba o host via o mesmo default
+  `BackgroundServiceExceptionBehavior.StopHost`. Diferente do defeito
+  corrigido em `DebounceSweepService` (risco de disponibilidade no boot,
+  não falha recorrente durante operação normal — o processamento de
+  cada mensagem já tem `try/catch` próprio). Gatilho: antes de qualquer
+  mudança futura em `TaskJobConsumer`, ou se `apps/workers` passar a
+  subir em ambiente onde o RabbitMQ pode não estar pronto no boot.
 - **Linhas antigas de `a2a_tasks` com `pushNotificationConfig` em formato
   divergente** — decisão consciente de não migrar, registrada em
   `push-notification-config-codec-encoder` (design.md D4). Nada quebra
@@ -669,10 +717,13 @@ decisão consciente de não corrigir) é pior do que foi entrar em
 diagnóstico já coletado na baseline nomeada acima — **nenhuma correção
 proposta aqui, só o registro de que precisa de decisão**:
 
-- `apps/inbox`: `WebhookEndpointsTests`/`MessagePersistenceTests` —
-  `ObjectDisposedException` sobre `IServiceProvider`, corrida de
-  disposal do `WebApplicationFactory` entre classes de teste em
-  paralelo. Não-determinístico (zero falhas numa rodada, 8 na outra).
+- ~~`apps/inbox`: `WebhookEndpointsTests`/`MessagePersistenceTests` —
+  `ObjectDisposedException` sobre `IServiceProvider`~~ — **resolvido por
+  `inbox-sweep-service-resiliencia`**, ver a correção da entrada na
+  baseline nomeada acima. Não era corrida de disposal entre classes; era
+  `DebounceSweepService` sem tratamento de falha de infraestrutura na
+  consulta de candidatos, derrubando o processo via
+  `BackgroundServiceExceptionBehavior.StopHost`.
 - `apps/api`: `AgentDeactivationTests.SendMessage_WithPushNotificationConfig_ForInactiveAgent_NeverPublishesJobOrCallsWebhook`
   — falha nomeada consistente nas rodadas coletadas.
 - ~~`tests/CrossAppTaskStoreCompatibility.Tests`~~ — **resolvido por

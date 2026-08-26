@@ -226,7 +226,14 @@ de propor algo nesta base:
    delegação, entrega de webhook, envio ao canal) nunca derruba a task
    principal — é logada, não propagada. Quando a falha precisa ser visível
    para o operador, ela vira **estado persistido além do log**; a
-   degradação continua graciosa, só deixa de ser invisível.
+   degradação continua graciosa, só deixa de ser invisível. Todo
+   `BackgroundService` deste monorepo captura suas próprias falhas
+   recuperáveis por unidade de trabalho (mesmo nível de granularidade de
+   `TaskJobConsumer`/`DebounceSweepService`) — nunca depende de
+   `HostOptions.BackgroundServiceExceptionBehavior` para isso:
+   `Ignore` não reinicia o serviço após a primeira exceção (fica "vivo
+   mas morto", pior que o crash que evita), e é política de host, não de
+   dependência específica (`inbox-sweep-service-resiliencia`).
 5. **Testes de integração com infraestrutura real** — Testcontainers
    Postgres/RabbitMQ, não mocks, para os caminhos principais; fakes só
    para dependências HTTP externas. Toda mudança de comportamento pede

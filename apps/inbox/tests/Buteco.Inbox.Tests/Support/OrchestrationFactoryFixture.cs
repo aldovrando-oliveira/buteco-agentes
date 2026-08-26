@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Testcontainers.PostgreSql;
 
 namespace Buteco.Inbox.Tests.Support;
@@ -28,6 +29,17 @@ public sealed class OrchestrationFactoryFixture : WebApplicationFactory<Program>
 
     public FakeA2AClientFactory A2AClientFactory { get; } = new();
 
+    // Captura logs de DebounceSweepService para os testes de
+    // inbox-sweep-service-resiliencia afirmarem nível e exceção, não só
+    // que o processo sobreviveu.
+    public List<CapturedLogEntry> CapturedLogEntries { get; } = [];
+
+    // Arma-se sob demanda para forçar, uma única vez, uma falha de
+    // infraestrutura na consulta real de candidatos elegíveis
+    // (DebounceSweepService.ProcessDueDispatchesAsync) — ver
+    // ThrowOnceOnCommandTextInterceptor.
+    public ThrowOnceOnCommandTextInterceptor CandidateQueryInterceptor { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) =>
@@ -44,6 +56,9 @@ public sealed class OrchestrationFactoryFixture : WebApplicationFactory<Program>
             config.AddInMemoryCollection(TestAuthentication.ConfigOverrides);
         });
 
+        builder.ConfigureLogging(logging => logging.AddProvider(
+            new CapturingLoggerProvider(CapturedLogEntries, typeof(DebounceSweepService).FullName!)));
+
         builder.ConfigureServices(services =>
         {
             var dbContextDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
@@ -52,7 +67,9 @@ public sealed class OrchestrationFactoryFixture : WebApplicationFactory<Program>
                 services.Remove(dbContextDescriptor);
             }
 
-            services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+            services.AddDbContext<AppDbContext>(options => options
+                .UseNpgsql(_postgres.GetConnectionString())
+                .AddInterceptors(CandidateQueryInterceptor));
 
             var a2AClientFactoryDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IA2AClientFactory));
             if (a2AClientFactoryDescriptor is not null)

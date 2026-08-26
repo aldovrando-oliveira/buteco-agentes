@@ -33,8 +33,9 @@ public sealed class DebounceSweepService(
     private async Task ProcessDueDispatchesAsync(CancellationToken cancellationToken)
     {
         List<Guid> candidateIds;
-        using (var scope = scopeFactory.CreateScope())
+        try
         {
+            using var scope = scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var cutoff = DateTimeOffset.UtcNow - debounceOptions.Value.Window;
 
@@ -43,10 +44,36 @@ public sealed class DebounceSweepService(
                 .Select(dispatch => dispatch.Id)
                 .ToListAsync(cancellationToken);
         }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // Falha de infraestrutura na própria consulta (ex.: queda de
+            // conexão do Postgres) — loga e encerra este ciclo sem
+            // processar nenhum candidato; o próximo tick do PeriodicTimer
+            // consulta de novo, do zero (design.md de
+            // inbox-sweep-service-resiliencia, Decisão 3). Sem este catch,
+            // a exceção escaparia de ExecuteAsync e o
+            // BackgroundServiceExceptionBehavior padrão (StopHost)
+            // derrubaria o processo inteiro — reproduzido de verdade
+            // (Npgsql 57P01) sob contenção de recursos.
+            logger.LogError(ex, "Falha ao consultar candidatos elegíveis para disparo de debounce");
+            return;
+        }
 
         foreach (var candidateId in candidateIds)
         {
-            await TryDispatchAsync(candidateId, cancellationToken);
+            try
+            {
+                await TryDispatchAsync(candidateId, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                // Falha ao processar um candidato específico não pode
+                // bloquear os demais candidatos deste ciclo — mesmo nível
+                // de captura (por unidade de trabalho, não por lote) do
+                // catch por mensagem de TaskJobConsumer (apps/workers).
+                // Loga e segue para o próximo candidato do foreach.
+                logger.LogError(ex, "Falha ao processar disparo do candidato de debounce {PendingDispatchId}", candidateId);
+            }
         }
     }
 
