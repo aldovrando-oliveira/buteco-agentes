@@ -92,6 +92,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(session => session.ContactId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // No máximo uma Session aberta (ClosedAt nulo) por Contact —
+            // defesa de banco contra a mesma corrida que Contact/PendingDispatch
+            // já resolvem (design.md de inbox-session-indice-unico, Decisão
+            // "Índice único parcial em sessions.ContactId").
+            entity.HasIndex(session => session.ContactId)
+                .IsUnique()
+                .HasFilter("\"ClosedAt\" IS NULL");
         });
 
         modelBuilder.Entity<PendingDispatch>(entity =>

@@ -59,8 +59,14 @@ propósito**: `Metadata` (congelado na criação) e `DisplayName` (nullable,
 reescrito a cada mensagem de entrada, extraído do `pushName` no WAHA e do
 `username`/`first_name` no Telegram). `Session` amarra várias conversas
 do mesmo `Contact` ao longo do tempo; fronteira por **inatividade
-automática** (timeout configurável) — sem encerramento explícito, e o
-estado aberta/encerrada não é exposto pela API (ver histórico).
+automática** (timeout configurável) — sem encerramento explícito. Ao
+expirar, a `Session` anterior tem `ClosedAt` preenchido
+(`inbox-session-indice-unico`) e um índice único parcial
+(`sessions."ContactId" WHERE "ClosedAt" IS NULL`) garante, por banco, no
+máximo uma `Session` aberta por `Contact` — mesmo idioma de índice único
++ catch + detach + re-busca já usado por `Contact`/`PendingDispatch`
+abaixo. O estado aberta/encerrada é **derivável** por isso, mas ainda não
+é promovido como contrato de API documentado (ver histórico).
 
 **`PendingDispatch`** (`apps/inbox`): buffer de debounce persistido por
 `Session`, mensagens agrupadas antes de disparar `SendMessage` real

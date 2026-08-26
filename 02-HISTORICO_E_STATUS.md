@@ -19,6 +19,14 @@ A linha de trabalho de contexto temporal e de canal está na **etapa 1 de
 (`inbox-contexto-canal-metadata`) ainda não proposta — ver "Changes
 aplicadas" abaixo para o que entrou e "Próximo passo" para a sequência.
 
+`inbox-session-indice-unico` fechou o último item da dívida de baseline
+com causa de produção conhecida (`ContactSessionResolver` sem índice
+único protegendo `Session` contra concorrência) — sequenciada antes da
+etapa 2 pelo mesmo motivo de `crossapp-session-codec-encoder`/
+`push-notification-config-codec-encoder`: a etapa 2 mexe no caminho de
+entrada de mensagem de `apps/inbox`. Ver "Índice único de Session"
+abaixo.
+
 ## Changes aplicadas, por linha de trabalho
 
 ### Fundação (backend + frontend básico)
@@ -371,10 +379,18 @@ ambas explicadas abaixo, não celebradas sem entender a causa).
   Taxa medida numa rodada de 10 execuções da suíte: 2/10 com esta
   `ObjectDisposedException` (mecanismo agora corrigido). Também
   nenhuma das duas rodadas originais desta baseline reproduziu a corrida
-  específica de `ContactSessionResolver.FindOrCreateSessionAsync` (item
-  em aberto citado abaixo) — na mesma rodada de 10 execuções, esse outro
-  flake (`InboundMessageOrchestratorTests`) apareceu à parte, em 3/10,
-  sem relação de causa com o defeito do `DebounceSweepService`.
+  específica de `ContactSessionResolver.FindOrCreateSessionAsync` — na
+  mesma rodada de 10 execuções, esse outro flake
+  (`InboundMessageOrchestratorTests`) apareceu à parte, em 3/10, sem
+  relação de causa com o defeito do `DebounceSweepService`. **Correção
+  (`inbox-session-indice-unico`)**: a causa desse outro flake de 3/10
+  está confirmada agora — é exatamente a corrida de
+  `ContactSessionResolver.FindOrCreateSessionAsync`, reproduzida de novo
+  10 vezes contra Postgres real com a mesma taxa antes da correção (ver
+  "Índice único de Session" abaixo). Deixa de ser "sem causa confirmada",
+  e deixa de ser uma falha conhecida: corrigida e o mesmo teste
+  reproduzido **10/10** depois da correção. `apps/inbox` (`Buteco.Inbox.Tests`)
+  não tem mais nenhum flake conhecido — suíte completa **160/160**.
 - **`apps/workers` (`Buteco.Workers.Tests`)** — base: 30/75 falhas,
   quase todas com a mesma mensagem de erro exata (`Unable to resolve
   service for type 'Buteco.Workers.Notifications.PushNotificationSender'`),
@@ -522,6 +538,83 @@ também ao aninhamento `authentication.scheme`/`authentication.credentials`
 e a `token`. Suíte completa de `apps/workers/tests/Buteco.Workers.Tests`
 verde (92/92) após a correção.
 
+### Índice único de Session
+
+`inbox-session-indice-unico` — fecha o item em aberto "Criação de
+`Session` sem índice único protegendo contra concorrência", registrado
+desde `inbox-mensagens-persistidas`.
+
+Reproduzido 10 vezes contra Postgres real antes da correção
+(`InboundMessageOrchestratorTests.ReceiveMessageAsync_ConcurrentCallsSameSession_ResolveToSinglePendingDispatch`,
+8 chamadas concorrentes ao mesmo `Contact` novo): **3 falhas em 10**, com
+3, 4 e 8 `Session`/`PendingDispatch` distintas nas três falhas.
+**Correção da nota da baseline pós-archive de
+`apps-workers-contexto-temporal`** (o item em aberto que este parágrafo
+fecha foi removido da lista "Itens em aberto" abaixo — a correção está
+aqui): aquela nota registrava que o flake de 3/10 de
+`InboundMessageOrchestratorTests` não tinha causa confirmada — a
+reprodução desta change confirma que é exatamente esta corrida; deixa de
+ser "sem relação de causa" e passa a "causa confirmada".
+
+Cada `Session` duplicada gerava seu próprio `PendingDispatch`
+(`DebounceSweepService` despacha cada um independentemente, com seu
+próprio `ContextId` A2A), e a resposta de saída é endereçada por
+`ContactExternalId` — não por `Session`. Efeito real, não só de banco: o
+mesmo chat do usuário final recebia N respostas independentes, cada uma
+gerada sem o histórico das outras.
+
+Correção segue o mesmo idioma já usado por `Contact`
+(`HasIndex(ChannelId, ExternalId).IsUnique()`) e `PendingDispatch`
+(`HasIndex(SessionId).IsUnique().HasFilter(...)`): índice único parcial
+`sessions."ContactId"` filtrado por `"ClosedAt" IS NULL` (no máximo uma
+`Session` aberta por `Contact`), com `ContactSessionResolver` passando a
+escrever `Session.ClosedAt` (coluna existente desde
+`inbox-crm-contato-sessao`, nunca escrita até agora) ao detectar
+expiração por timeout, e a buscar a sessão aberta filtrando `ClosedAt ==
+null` explicitamente — não mais por inferência via "mais recente por
+`StartedAt`". Violação do índice tratada com o mesmo `catch
+DbUpdateException` + detach + re-busca de `Contact`/`PendingDispatch`
+(uma única retentativa, sem loop — o Postgres só libera a exceção ao
+perdedor depois que o vencedor já commitou, então a retentativa sempre
+encontra a `Session` vencedora já persistida).
+
+Detach diferente do padrão já existente: `InboundMessageOrchestrator
+.DetachAddedEntities()` só cobre entidades `Added`, porque seu cenário
+não faz `UPDATE` na mesma transação do `INSERT`. Aqui, o `Close()` da
+`Session` expirando entra como `Modified` na mesma tentativa que insere
+a `Session` nova — sem descartar também o `Modified` na retentativa, o
+`Close()` da tentativa perdedora ficaria preso no change tracker e
+corromperia o `SaveChangesAsync` seguinte. Achado próprio desta change,
+não copiado do padrão existente sem adaptação.
+
+Migration (`AddUniqueOpenSessionIndex`) inclui saneamento retroativo:
+toda `Session` histórica exceto a mais recente por `Contact` recebe
+`ClosedAt` = `StartedAt` da `Session` seguinte, via `LEAD() OVER
+(PARTITION BY "ContactId" ORDER BY "StartedAt")` — sem isso, o índice
+único não poderia ser criado (nenhuma `Session` jamais teve `ClosedAt`
+escrito). Verificado em dev antes e depois: 1 `Contact` com 2 `Session`
+(intervalo de ~2h10, fronteira de inatividade legítima, não artefato de
+corrida) → após a migration, 0 `Contact` com mais de uma `Session`
+aberta.
+
+Modelo de deploy verificado antes de decidir a sequência de migration:
+`apps/inbox` roda como instância única, sem orquestração de deploy no
+repo, migration é passo manual e separado do boot (`dotnet ef database
+update` antes de subir o processo) — não existe janela em que código
+antigo rodaria contra o índice novo, então a change não precisou ser
+dividida em duas fases. Isso vale para dev, verificado nesta change —
+**aplicar a mesma migration em produção segue em aberto, não executado
+nesta sessão** (sem acesso a produção), ver item "Aplicação em produção
+da migration `AddUniqueOpenSessionIndex`" logo abaixo.
+
+Verificação pós-correção: suíte completa de `apps/inbox` **160/160**
+(157 testes antes desta change + 3 novos — 2 em
+`ContactSessionResolverTests`, 1 em `ContactEndpointsTests`, ver seções
+acima —, todos verdes), e
+`ReceiveMessageAsync_ConcurrentCallsSameSession_ResolveToSinglePendingDispatch`
+— o teste que falhava 3/10 — rodado **10/10** contra Postgres real
+depois da correção.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -554,12 +647,53 @@ Cada um tem gatilho de quando revisitar:
   de verdade em produção.
 - **Encerramento explícito de sessão** (CRM) — só inatividade automática
   hoje; decisão consciente de escopo mínimo, não esquecimento.
-- **Estado da sessão (aberta/encerrada) não é exposto pela API** — a
-  fronteira por inatividade é calculada com um timeout que vive só na
-  configuração do servidor, então a UI não tem como derivá-lo.
-  `GET /channels/{id}/sessions` devolve `LastActivityAt`, mas não o
-  estado. Gatilho: a lista de sessões precisar distinguir conversa viva de
-  conversa encerrada.
+- **Estado da sessão (aberta/encerrada) não é exposto pela API** —
+  atualizado por `inbox-session-indice-unico`: o estado agora **é
+  derivável** (`Session.ClosedAt` passou a ser escrito de verdade, e já
+  está em `SessionResponse.ClosedAt`, retornado por `GET
+  /contacts/{id}/sessions`), mas continua sem estar documentado/promovido
+  como contrato de produto, e `GET /channels/{id}/sessions` (o que o
+  frontend de fato consome) ainda só devolve `LastActivityAt`, sem
+  `closedAt`. Gatilho: a lista de sessões do frontend precisar distinguir
+  conversa viva de conversa encerrada.
+- **Aplicação em produção da migration `AddUniqueOpenSessionIndex`**
+  (`inbox-session-indice-unico`) — aplicada e verificada em dev nesta
+  change; **não aplicada em produção nesta sessão, sem acesso**. Quatro
+  coisas a levar para quando isso acontecer:
+  - **Query de diagnóstico** (rodar antes de aplicar, para saber o que
+    esperar — ver o próximo ponto):
+    ```sql
+    SELECT count(*) FROM (
+      SELECT "ContactId" FROM sessions WHERE "ClosedAt" IS NULL
+      GROUP BY "ContactId" HAVING count(*) > 1
+    ) sub;
+    ```
+  - **Referência de dev**: 1 contato com 2 sessões, de 10 sessões e 9
+    contatos distintos no total. Esse caso específico foi analisado e é
+    fronteira de inatividade legítima (2h de intervalo contra timeout de
+    1h em dev), não artefato da corrida — não há garantia de que
+    produção tenha a mesma proporção ou natureza.
+  - **Volume maior em produção**: o saneamento (`LEAD() OVER (PARTITION
+    BY "ContactId" ORDER BY "StartedAt")`) generaliza para qualquer
+    quantidade de sessões por contato — a migração funciona igual — mas
+    volume alto muda a **duração** do `UPDATE`, e isso importa porque o
+    processo fica parado durante ela (ver ponto seguinte). Rodar a query
+    de diagnóstico antes de parar o processo é o ponto de saber o que
+    esperar.
+  - **A sequência de deploy é a garantia, não um detalhe**: parar o
+    processo de `apps/inbox` → `dotnet ef database update` → subir o
+    processo já com o código novo, nessa ordem — é isso que garante que
+    o código antigo nunca roda contra o índice novo. Se a migration for
+    aplicada por outro caminho (processo novo subindo antes, ou a
+    migration rodando com o processo antigo ainda respondendo tráfego),
+    o índice único passa a rejeitar as inserções que a rotação normal de
+    sessão por inatividade faz — `DbUpdateException` não tratada no
+    caminho de recepção de webhook, no caminho mais comum do app. O
+    `design.md` desta change registra que essa janela não existe hoje
+    porque o deploy é de instância única com parada — **estado
+    verificado, não garantia permanente**; reavaliar se isso mudar
+    (múltiplas instâncias, deploy faseado).
+  Gatilho: antes do próximo deploy de `apps/inbox` em produção.
 - **Rate limit do Telegram** — sem tratamento; debounce reduz o risco mas
   não elimina.
 - **ChatWoot** foi mencionado como alternativa possível na concepção
@@ -577,25 +711,6 @@ Cada um tem gatilho de quando revisitar:
   UI de sessões/timeline carrega a resposta inteira de uma vez. Gatilho:
   sinal real de volume (sessão ou canal com histórico muito longo
   tornando a tela perceptivelmente lenta).
-- **Criação de `Session` sem índice único protegendo contra concorrência**
-  (`ContactSessionResolver.FindOrCreateSessionAsync`, gap de
-  `inbox-crm-contato-sessao`, exposto por um teste novo de
-  `inbox-mensagens-persistidas`) — diferente de `Contact` e
-  `PendingDispatch`, nada impede duas chamadas verdadeiramente
-  concorrentes para o mesmo `Contact` novo criarem duas `Session`
-  distintas dentro da janela de inatividade. Gatilho: revisitar se
-  aparecer duplicação real de `Session` em produção, ou antes de qualquer
-  mudança futura em `ContactSessionResolver`. Nota da baseline nomeada
-  pós-archive de `apps-workers-contexto-temporal`: o flake de
-  `apps/inbox` observado naquela coleta **não** reproduziu esta corrida
-  específica — foi uma causa diferente, corrigida por
-  `inbox-sweep-service-resiliencia` (`DebounceSweepService` sem
-  tratamento de falha de infraestrutura na consulta de candidatos,
-  derrubando o processo via
-  `BackgroundServiceExceptionBehavior.StopHost` — não a disposal do
-  `WebApplicationFactory` entre classes, hipótese registrada
-  originalmente aqui e desde então corrigida). O item aqui continua em
-  aberto por si só, sem relação de causa confirmada com aquele flake.
 - **`WahaWebhookMessagePayload.Data.Info.PushName`** (`DisplayName` do
   WAHA, `inbox-mensagens-persistidas`) — confirmado só via discussão da
   comunidade para o engine GOWS, não pela documentação oficial do WAHA
@@ -734,13 +849,29 @@ proposta aqui, só o registro de que precisa de decisão**:
   timeout de ~21s contra limite de 20s, reproduz no commit anterior ao
   apply de `apps-workers-contexto-temporal`; leitura mais provável é
   latência do `podman` frente a Docker nativo, não confirmada por falta
-  de comparação nativa disponível neste ambiente.
+  de comparação nativa disponível neste ambiente. Reproduzido de novo,
+  identicamente (~21-22s), durante o apply de `inbox-session-indice-unico`
+  — não regressão desta change, gatilho de "confirmar antes de mexer no
+  número" continua o mesmo (ver "Itens em aberto").
+- `InboxFactoryFixture.InitializeAsync` acessa `Services` antes de migrar
+  — não corrigido ainda, sem urgência depois de
+  `inbox-sweep-service-resiliencia` (ver "Itens em aberto" para o
+  gatilho completo).
+- `TaskJobConsumer` (`apps/workers`) com setup inicial desprotegido —
+  não corrigido ainda (ver "Itens em aberto" para o gatilho completo).
 - `apps/frontend` — `AgentForm`/`ChannelForm`/`McpServerForm` e páginas
   de criação/edição, timing de `userEvent`; contagem não-determinística
   entre rodadas (14–15).
 
+Com `inbox-session-indice-unico` aplicada, `apps/inbox` (`Buteco.Inbox.Tests`)
+não tem mais nenhum flake conhecido — 160/160 (ver "Índice único de
+Session" acima). O ruído que resta na fila acima é só cross-app/frontend.
+
 Etapa 2 da linha de contexto temporal (`inbox-contexto-canal-metadata`)
-é o sucessor natural depois disso, ainda não proposta.
+é o sucessor natural depois disso, ainda não proposta — checado durante
+`inbox-session-indice-unico` que nenhuma das duas mexe no mesmo trecho de
+código (`inbox-contexto-canal-metadata` toca o ponto de despacho/
+`TaskJobMessage`, não `ContactSessionResolver`), sem colisão.
 
 A linha de trabalho de histórico de conversa por sessão no inbox fechou
 nas três etapas antes desta — foi a primeira vez desde o MVP que não

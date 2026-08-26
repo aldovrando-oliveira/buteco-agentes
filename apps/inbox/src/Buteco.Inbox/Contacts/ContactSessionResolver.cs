@@ -17,15 +17,48 @@ public sealed class ContactSessionResolver(AppDbContext dbContext, IOptions<Sess
     {
         var contact = await FindOrCreateContactAsync(channelId, externalId, contactMetadata, displayName, cancellationToken);
 
+        try
+        {
+            return await TryResolveSessionOnceAsync(contact.Id, cancellationToken);
+        }
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+        {
+            // Outra chamada concorrente já fechou a Session anterior e/ou
+            // criou a nova Session aberta deste Contact entre a leitura e
+            // este SaveChanges — detach de Added (a Session nova desta
+            // tentativa) e Modified (o Close() da Session expirando,
+            // revertido junto pelo rollback da transação malsucedida;
+            // diferente de InboundMessageOrchestrator.DetachAddedEntities(),
+            // que só cobre Added porque seu cenário não faz update na mesma
+            // transação) e re-busca uma única vez — não em loop: o Postgres
+            // só libera esta exceção para quem perde a corrida depois que o
+            // vencedor já commitou, então a retentativa sempre encontra a
+            // Session vencedora já persistida (design.md, "Por que uma
+            // retentativa basta").
+            DetachAddedAndModifiedEntities();
+
+            return await TryResolveSessionOnceAsync(contact.Id, cancellationToken);
+        }
+    }
+
+    private async Task<Session> TryResolveSessionOnceAsync(Guid contactId, CancellationToken cancellationToken)
+    {
+        // ClosedAt == null: o índice único é a única fonte de verdade sobre
+        // "aberta" — a busca não depende do invariante implícito "mais
+        // recente por StartedAt é sempre a aberta", que deixaria de valer no
+        // dia em que existir encerramento explícito de sessão (item em
+        // aberto, 02-HISTORICO_E_STATUS.md).
         var session = await dbContext.Sessions
-            .Where(existing => existing.ContactId == contact.Id)
+            .Where(existing => existing.ContactId == contactId && existing.ClosedAt == null)
             .OrderByDescending(existing => existing.StartedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
         var timeout = options.Value.InactivityTimeout;
         if (session is null || DateTimeOffset.UtcNow - session.LastActivityAt > timeout)
         {
-            session = new Session(contact.Id);
+            session?.Close(DateTimeOffset.UtcNow);
+
+            session = new Session(contactId);
             dbContext.Sessions.Add(session);
         }
         else
@@ -36,6 +69,16 @@ public sealed class ContactSessionResolver(AppDbContext dbContext, IOptions<Sess
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return session;
+    }
+
+    private void DetachAddedAndModifiedEntities()
+    {
+        foreach (var entry in dbContext.ChangeTracker.Entries()
+                     .Where(entry => entry.State is EntityState.Added or EntityState.Modified)
+                     .ToList())
+        {
+            entry.State = EntityState.Detached;
+        }
     }
 
     private async Task<Contact> FindOrCreateContactAsync(

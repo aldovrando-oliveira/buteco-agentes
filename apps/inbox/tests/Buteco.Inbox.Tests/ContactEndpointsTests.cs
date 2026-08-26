@@ -63,7 +63,42 @@ public class ContactEndpointsTests(InboxFactoryFixture factory) : IClassFixture<
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var sessions = await response.Content.ReadFromJsonAsync<List<SessionResponse>>();
         Assert.NotNull(sessions);
-        Assert.Contains(sessions, s => s.Id == session.Id && s.ContextId == session.ContextId);
+        var returned = Assert.Single(sessions, s => s.Id == session.Id && s.ContextId == session.ContextId);
+        Assert.Null(returned.ClosedAt);
+    }
+
+    [Fact]
+    public async Task GetContactSessions_SessionSupersededByTimeout_ReturnsClosedAtOfPreviousSession()
+    {
+        var channelId = await CreateChannelAsync();
+        var externalId = UniqueExternalId();
+        var previous = await ResolveAsync(channelId, externalId);
+
+        // Backdate para além do timeout — mesmo mecanismo de
+        // ContactSessionResolverTests.FindOrCreateSessionAsync_AfterTimeout_CreatesNewSessionForSameContact.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"""UPDATE sessions SET "LastActivityAt" = {DateTimeOffset.UtcNow.AddHours(-2)} WHERE "Id" = {previous.Id}""");
+        }
+
+        var current = await ResolveAsync(channelId, externalId);
+
+        var response = await _client.GetAsync($"/contacts/{previous.ContactId}/sessions");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sessions = await response.Content.ReadFromJsonAsync<List<SessionResponse>>();
+        Assert.NotNull(sessions);
+        var previousResponse = Assert.Single(sessions, s => s.Id == previous.Id);
+        Assert.NotNull(previousResponse.ClosedAt);
+        // Close() da sessão anterior e o StartedAt da nova são duas leituras
+        // de relógio sequenciais e independentes na mesma chamada (design.md
+        // não exige que sejam bit-idênticas) — verificamos proximidade, não
+        // igualdade exata.
+        Assert.True((current.StartedAt - previousResponse.ClosedAt!.Value).Duration() < TimeSpan.FromSeconds(1));
+        var currentResponse = Assert.Single(sessions, s => s.Id == current.Id);
+        Assert.Null(currentResponse.ClosedAt);
     }
 
     [Fact]

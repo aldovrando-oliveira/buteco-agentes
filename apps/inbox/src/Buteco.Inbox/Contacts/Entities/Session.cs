@@ -36,4 +36,9 @@ public class Session
     {
         LastActivityAt = DateTimeOffset.UtcNow;
     }
+
+    public void Close(DateTimeOffset closedAt)
+    {
+        ClosedAt = closedAt;
+    }
 }

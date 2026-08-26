@@ -135,7 +135,7 @@ public class ContactSessionResolverTests(InboxFactoryFixture factory) : IClassFi
     }
 
     [Fact]
-    public async Task FindOrCreateSessionAsync_ConcurrentCallsSamePair_ResolveToSameContactWithoutUnhandledException()
+    public async Task FindOrCreateSessionAsync_ConcurrentCallsSamePair_ResolveToSameContactWithoutDuplicatingContact()
     {
         var channelId = await CreateChannelAsync();
         var externalId = UniqueExternalId();
@@ -149,6 +149,57 @@ public class ContactSessionResolverTests(InboxFactoryFixture factory) : IClassFi
 
         var distinctContactIds = sessions.Select(session => session.ContactId).Distinct().ToList();
         Assert.Single(distinctContactIds);
+    }
+
+    [Fact]
+    public async Task FindOrCreateSessionAsync_ConcurrentCallsNewPair_ResolveToSingleSession()
+    {
+        var channelId = await CreateChannelAsync();
+        var externalId = UniqueExternalId();
+
+        // Mesma concorrência real do teste acima, mas verificando a
+        // Session diretamente — não só o Contact. Reproduz a corrida de
+        // inbox-session-indice-unico: sem o índice único parcial em
+        // sessions.ContactId, 8 chamadas verdadeiramente concorrentes para
+        // o mesmo Contact novo geravam de 3 a 8 Session distintas (medido
+        // na exploração/proposal.md desta change).
+        var sessions = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => ResolveAsync(channelId, externalId)));
+
+        var distinctSessionIds = sessions.Select(session => session.Id).Distinct().ToList();
+        Assert.Single(distinctSessionIds);
+    }
+
+    [Fact]
+    public async Task FindOrCreateSessionAsync_ConcurrentCallsAfterTimeout_ResolveToSingleNewSessionAndClosesThePrevious()
+    {
+        var channelId = await CreateChannelAsync();
+        var externalId = UniqueExternalId();
+
+        var first = await ResolveAsync(channelId, externalId);
+
+        // Backdate a Session existente para além do timeout — mesmo
+        // mecanismo de FindOrCreateSessionAsync_AfterTimeout_CreatesNewSessionForSameContact.
+        // Duas chamadas concorrentes decidem "expirou" ao mesmo tempo:
+        // força o caminho de Close() + Add() na mesma tentativa, e o
+        // catch/detach de Added E Modified na retentativa perdedora (ver
+        // design.md, "Tratamento da violação").
+        using (var scope = factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"""UPDATE sessions SET "LastActivityAt" = {DateTimeOffset.UtcNow.AddHours(-2)} WHERE "Id" = {first.Id}""");
+        }
+
+        var sessions = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => ResolveAsync(channelId, externalId)));
+
+        var distinctSessionIds = sessions.Select(session => session.Id).Distinct().ToList();
+        var newSessionId = Assert.Single(distinctSessionIds);
+        Assert.NotEqual(first.Id, newSessionId);
+
+        using var verifyScope = factory.Services.CreateScope();
+        var verifyDbContext = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var previous = await verifyDbContext.Sessions.AsNoTracking().SingleAsync(s => s.Id == first.Id);
+        Assert.NotNull(previous.ClosedAt);
     }
 
     [Fact]
