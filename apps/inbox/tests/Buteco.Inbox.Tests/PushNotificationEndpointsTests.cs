@@ -141,6 +141,39 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
         Assert.Equal("Falha simulada no envio ao provedor.", outbound.DeliveryFailureReason);
     }
 
+    // Par de ReceiveAsync_SenderThrows_... acima, mas a falha acontece antes
+    // do sender ser alcançado: credencial gravada como literal inválido, não
+    // passado por cipher.Encrypt (mesmo padrão de literal usado por
+    // RoundTripTests.CreateChannelAsync — lá é fixture forjado por acidente,
+    // aqui é deliberado, é o ponto deste teste). Prova
+    // inbox-push-notification-decrypt-resiliente, design.md, Decisão 1: o
+    // try ampliado cobre a consulta de dispatchInfo e o Decrypt, não só o
+    // sender.
+    [Fact]
+    public async Task ReceiveAsync_CredentialDecryptFails_PersistsOutboundMessageAsFailedWithReasonAndDoesNotFailRequest()
+    {
+        var sender = (TestOutboundMessageSender)factory.Services.GetRequiredKeyedService<IOutboundMessageSender>(ChannelType);
+        var (sessionId, externalId, taskId, token) = await SeedDispatchingPendingDispatchWithEncryptedCredentialAsync("credencial-invalida-nao-cifrada");
+        var client = factory.CreateClient();
+
+        var task = BuildAgentTask(taskId, responseText: "Resposta que não consegue ser entregue.");
+        var response = await PostPushNotificationAsync(client, taskId, token, task);
+
+        // Falha ao decifrar a credencial não derruba a requisição nem prende
+        // o PendingDispatch (convenção 4) — mesmo destino de
+        // ReceiveAsync_SenderThrows_..., só que por um caminho anterior ao
+        // sender.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(await FindPendingDispatchAsync(sessionId));
+
+        var messages = await GetMessagesAsync(sessionId);
+        var outbound = Assert.Single(messages, m => m.Direction == MessageDirection.Outbound);
+        Assert.Equal(MessageDeliveryStatus.Failed, outbound.DeliveryStatus);
+        Assert.False(string.IsNullOrEmpty(outbound.DeliveryFailureReason));
+
+        Assert.DoesNotContain(sender.CapturedMessages, message => message.ContactExternalId == externalId);
+    }
+
     [Fact]
     public async Task ReceiveAsync_WithoutResponseMessage_DoesNotInvokeSender()
     {
@@ -208,10 +241,22 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
     private async Task<(Guid SessionId, string ExternalId, string TaskId, string Token)> SeedDispatchingPendingDispatchAsync(string plaintextCredential = "irrelevante-nesta-fatia")
     {
         using var scope = factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var cipher = scope.ServiceProvider.GetRequiredService<IChannelCredentialCipher>();
 
-        var channel = new Channel(ChannelType, $"Canal {Guid.NewGuid()}", cipher.Encrypt(plaintextCredential), Guid.NewGuid());
+        return await SeedDispatchingPendingDispatchWithEncryptedCredentialAsync(cipher.Encrypt(plaintextCredential));
+    }
+
+    // Compartilhada com SeedDispatchingPendingDispatchAsync (que cifra a
+    // credencial de verdade) — recebe o valor já "cifrado" para permitir
+    // gravar um literal inválido diretamente
+    // (ReceiveAsync_CredentialDecryptFails_..., deliberado, ver comentário
+    // do teste).
+    private async Task<(Guid SessionId, string ExternalId, string TaskId, string Token)> SeedDispatchingPendingDispatchWithEncryptedCredentialAsync(string encryptedCredential)
+    {
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var channel = new Channel(ChannelType, $"Canal {Guid.NewGuid()}", encryptedCredential, Guid.NewGuid());
         dbContext.Channels.Add(channel);
 
         var externalId = $"+5511{Guid.NewGuid():N}"[..15];

@@ -127,32 +127,36 @@ public static class PushNotificationEndpoints
         string responseText,
         CancellationToken cancellationToken)
     {
-        // Mesmo join de DebounceSweepService.TryDispatchAsync
-        // (Session.ContactId → Contact.ChannelId → Channel), selecionando
-        // os campos do Channel/Contact necessários para a entrega em vez
-        // de AgentId.
-        var dispatchInfo = await (
-            from session in dbContext.Sessions
-            join contact in dbContext.Contacts on session.ContactId equals contact.Id
-            join channel in dbContext.Channels on contact.ChannelId equals channel.Id
-            where session.Id == pendingDispatch.SessionId
-            select new { channel.Id, channel.ChannelType, channel.EncryptedCredentials, contact.ExternalId }
-        ).FirstAsync(cancellationToken);
-
-        // O endpoint decifra, não o sender — simétrico a como o validador
-        // recebe texto plano antes de cifrar na entrada (design.md,
-        // Decision 3). IOutboundMessageSender não depende de
-        // IChannelCredentialCipher.
-        var outboundMessage = new OutboundMessage(
-            dispatchInfo.Id,
-            credentialCipher.Decrypt(dispatchInfo.EncryptedCredentials),
-            dispatchInfo.ExternalId,
-            responseText);
-
         var occurredAt = DateTimeOffset.UtcNow;
 
         try
         {
+            // Mesmo join de DebounceSweepService.TryDispatchAsync
+            // (Session.ContactId → Contact.ChannelId → Channel), selecionando
+            // os campos do Channel/Contact necessários para a entrega em vez
+            // de AgentId. Dentro do try (inbox-push-notification-decrypt-resiliente,
+            // design.md, Decisão 1): antes, uma falha nesta consulta escapava
+            // de DeliverResponseAsync sem deixar o PendingDispatch ser
+            // resolvido.
+            var dispatchInfo = await (
+                from session in dbContext.Sessions
+                join contact in dbContext.Contacts on session.ContactId equals contact.Id
+                join channel in dbContext.Channels on contact.ChannelId equals channel.Id
+                where session.Id == pendingDispatch.SessionId
+                select new { channel.Id, channel.ChannelType, channel.EncryptedCredentials, contact.ExternalId }
+            ).FirstAsync(cancellationToken);
+
+            // O endpoint decifra, não o sender — simétrico a como o validador
+            // recebe texto plano antes de cifrar na entrada (design.md,
+            // Decision 3). IOutboundMessageSender não depende de
+            // IChannelCredentialCipher. Decrypt também dentro do try pelo
+            // mesmo motivo da consulta acima.
+            var outboundMessage = new OutboundMessage(
+                dispatchInfo.Id,
+                credentialCipher.Decrypt(dispatchInfo.EncryptedCredentials),
+                dispatchInfo.ExternalId,
+                responseText);
+
             var sender = adapterRegistry.GetOutboundMessageSender(dispatchInfo.ChannelType);
             await sender.SendAsync(outboundMessage, cancellationToken);
             dbContext.Messages.Add(MessageEntity.CreateOutbound(
@@ -160,16 +164,20 @@ public static class PushNotificationEndpoints
         }
         catch (Exception exception)
         {
-            // Falha do sender é só logada nesta fatia — sem retry, sem
-            // nova reapresentação do PendingDispatch, que já será
-            // removido (design.md, Decision 3, Risks). A partir de
+            // Falha ao resolver o canal, decifrar a credencial ou entregar ao
+            // sender é só logada nesta fatia — sem retry, sem nova
+            // reapresentação do PendingDispatch, que já será removido
+            // (design.md, Decision 3, Risks). A partir de
             // inbox-mensagens-persistidas, também vira estado persistido em
-            // Message, não só log (design.md, Decisão 4).
+            // Message, não só log (design.md, Decisão 4). Identificado por
+            // SessionId, não por ChannelId/ChannelType — dispatchInfo pode
+            // não existir se a própria consulta acima falhou
+            // (inbox-push-notification-decrypt-resiliente, design.md,
+            // Decisão 2).
             logger.LogError(
                 exception,
-                "Falha ao entregar a resposta do agente ao canal {ChannelId} (tipo {ChannelType})",
-                dispatchInfo.Id,
-                dispatchInfo.ChannelType);
+                "Falha ao entregar a resposta do agente ao canal de origem da sessão {SessionId}",
+                pendingDispatch.SessionId);
             dbContext.Messages.Add(MessageEntity.CreateOutbound(
                 pendingDispatch.SessionId, responseText, occurredAt, MessageDeliveryStatus.Failed, exception.Message));
         }

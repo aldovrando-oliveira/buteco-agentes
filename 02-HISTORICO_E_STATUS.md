@@ -32,6 +32,14 @@ etapa 2 pelo mesmo motivo de `crossapp-session-codec-encoder`/
 entrada de mensagem de `apps/inbox`. Ver "Índice único de Session"
 abaixo.
 
+`inbox-push-notification-decrypt-resiliente` corrigiu o terceiro defeito
+da mesma família de `DebounceSweepService` (`try/catch` existente, mas a
+chamada que mais realisticamente falha posicionada fora dele) e, como
+efeito colateral, destravou `tests/InboxOrchestratorRoundTrip.Tests` — a
+única verificação de acordo real entre os três apps, parada desde antes
+de `inbox-instante-mensagem`. Ver "Correção do decrypt de push
+notification" abaixo.
+
 ## Changes aplicadas, por linha de trabalho
 
 ### Fundação (backend + frontend básico)
@@ -717,6 +725,113 @@ unitárias, que a convenção 11 não aceita como prova de acordo. Ver
 "Itens em aberto" (os dois itens novos sobre este teste) para o
 detalhamento e o gatilho.
 
+**Atualização (`inbox-push-notification-decrypt-resiliente`)**: essa
+leitura também estava errada — não é causa ambiental, é regressão real
+de produção introduzida em `9fd8a87` (`Decrypt` de credencial fora do
+bloco protegido em `PushNotificationEndpoints.DeliverResponseAsync`),
+anterior a `a91f0c9`. Por isso o bisect desta sessão, que comparou só
+`a91f0c9`/HEAD, não pegou a regressão: os dois já estavam depois do
+commit ruim. Corrigida, e o teste de acordo de convenção 11 citado acima
+foi executado com sucesso pela primeira vez. Ver "Correção do decrypt de
+push notification" abaixo.
+
+### Correção do decrypt de push notification
+
+`PushNotificationEndpoints.DeliverResponseAsync` (`apps/inbox`) chamava
+`credentialCipher.Decrypt(dispatchInfo.EncryptedCredentials)` — e a
+consulta que resolve o `Channel` de origem — **fora** do `try/catch` que
+existe especificamente para engolir falha de entrega ao canal. Terceiro
+defeito da mesma família encontrado pela linha de restauração de
+baseline (depois de `DebounceSweepService`,
+`inbox-sweep-service-resiliencia`): o `try/catch` certo existe, mas a
+chamada que mais realisticamente falha está posicionada fora dele. Se
+`Decrypt` lançasse, a exceção escapava do handler inteiro, `apps/inbox`
+devolvia 500 não tratado, e o `PendingDispatch` nunca era limpo — a
+mensagem do usuário ficava presa em "Processando" para sempre, depois de
+a resposta do agente já ter sido gerada (já custou uma chamada de LLM).
+
+Causa raiz e regressão confirmadas por execução real e `git bisect`
+(exploração `roundtrip-tres-apps-nao-completa`, não por leitura de
+código sozinha — convenção 6): último commit bom `c72c64f` (passa em
+1s); primeiro commit ruim `9fd8a87` ("fix(inbox): corrige perda de
+resposta do agente na recepção de push notification") — a correção que
+fez `ExtractResponseText` efetivamente encontrar a resposta do agente
+(antes sempre devolvia `null`) fez `DeliverResponseAsync` executar pela
+primeira vez, e expôs o `Decrypt` desprotegido logo atrás.
+
+Corrigido ampliando o bloco `try` já existente para cobrir a consulta de
+`dispatchInfo` e o `Decrypt`, mantendo `catch (Exception)` único e amplo
+sem lista fechada de tipos (mesmo precedente de
+`inbox-sweep-service-resiliencia`, Decisão 3) — ver design.md de
+`inbox-push-notification-decrypt-resiliente`.
+
+**Verificação real, não só suíte de unidade**: `Buteco.Inbox.Tests`
+163/163 (novo teste incluído,
+`ReceiveAsync_CredentialDecryptFails_PersistsOutboundMessageAsFailedWithReasonAndDoesNotFailRequest`,
+par do já existente `ReceiveAsync_SenderThrows_...`). E o resultado que
+importa mais: **`tests/InboxOrchestratorRoundTrip.Tests` completa agora
+— 3/3**, incluindo
+`MessageReceived_TriggersFullRoundTrip_TaskCarriesMessageInstantInRawPersistedJson`
+(a asserção de convenção 11 de `inbox-instante-mensagem`, nunca
+executada com sucesso antes desta change — verificada também em
+isolamento). O round-trip completa **sem** a correção do fixture forjado
+de `RoundTripTests.CreateChannelAsync` (literal
+`"irrelevante-nesta-fatia"`, não ciphertext real) precisar acontecer
+antes: nenhuma das asserções dos três testes depende de a entrega ao
+canal ter sucesso, só de o `PendingDispatch` ser resolvido (o que a
+correção de produção garante mesmo quando `Decrypt` falha) e do estado
+da task em `apps/api`. A correção do fixture
+(`roundtrip-fixture-credencial-real`) continua válida para quando um
+teste futuro precisar afirmar entrega real ao canal, mas deixa de ser
+bloqueante para o round-trip completar — não é mais urgente.
+
+**Três leituras do mesmo sintoma, registradas na ordem em que
+ocorreram** — a causa real só apareceu na terceira, e as duas primeiras
+enganaram por razões diferentes, que valem como lição de método:
+
+1. "`TimeoutException` a ~21-22s contra um limite interno de 20s,
+   consistente com latência do `podman`" — leitura mais antiga. Errada:
+   o número nunca foi evidência de proximidade do sucesso, era só o
+   próprio limite de 20s do teste cortando a espera cedo.
+2. "Não completa nem com timeout estendido a 90s, causa ambiental não
+   aprofundada" (`inbox-instante-mensagem`) — corrigiu a leitura 1, mas
+   ainda errada: o bisect daquela sessão comparou `a91f0c9`/HEAD e leu
+   "idêntico nos dois lados" como sinal de causa ambiental. Não era —
+   `9fd8a87` é ancestral de `a91f0c9`, então **toda comparação
+   base×HEAD daquela sessão já estava dentro da janela quebrada**;
+   "reproduz no commit base escolhido" não descarta regressão quando
+   esse base já vem depois do commit ruim. Lição de método: um bisect só
+   descarta regressão se o commit base for anterior ao intervalo sob
+   suspeita, não só "o commit imediatamente anterior a esta change".
+3. Regressão real de produção, `9fd8a87`, corrigida por
+   `inbox-push-notification-decrypt-resiliente` (esta seção).
+
+**Hipótese do `DebounceSweepService` engolindo exceção silenciosamente —
+testada e descartada**: rodado com log detalhado durante a exploração;
+nenhuma das duas mensagens de erro de
+`DebounceSweepService.ProcessDueDispatchesAsync` ("Falha ao consultar
+candidatos elegíveis..."/"Falha ao processar disparo do candidato...")
+apareceu no log completo. O sweep disparava normalmente em toda
+execução — não reabrir esta hipótese.
+
+**Docker nativo confirmado ausente** neste ambiente (sem binário, sem
+`Docker.app`, sem `docker context`) — fecha a pergunta que ficava em
+aberto desde os primeiros registros deste item ("faltaria comparação
+nativa, não disponível").
+
+**Item novo em aberto, não desta change**: o bloco final e incondicional
+de `PushNotificationEndpoints.ReceiveAsync`
+(`UpdateMessageDispatchStatusesAsync` + `Remove(pendingDispatch)` +
+`SaveChangesAsync`) não tem `try/catch` próprio — uma indisponibilidade
+real de Postgres nesse ponto (não uma falha lógica como a corrigida
+aqui) ainda deixaria o `PendingDispatch` preso, e diferente de um
+`PendingDispatch` `Pending`, um `Dispatching` preso por essa via não é
+revisitado pela próxima varredura de `DebounceSweepService` (filtro
+`Status == PendingDispatchStatus.Pending`). Pré-existente, mais amplo
+que o defeito corrigido aqui (roda para toda push notification aceita).
+Gatilho: próxima falha real de Postgres observada afetando `apps/inbox`,
+ou próxima change que precisar tocar `ReceiveAsync` por outro motivo.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -869,51 +984,23 @@ Cada um tem gatilho de quando revisitar:
   aquela change — `apps/frontend` não foi tocado. Gatilho: qualquer
   trabalho futuro em `apps/frontend`, ou se continuarem vermelhos e
   atrapalharem CI.
-- **`InboxOrchestratorRoundTrip.Tests.MessageReceived_TriggersFullRoundTrip_...`
-  não completa contra `podman` — degradação maior do que o registrado
-  aqui antes, confirmada com evidência, não por semelhança
-  (`inbox-instante-mensagem`).** O registro anterior descrevia
-  `TimeoutException` a ~21-22s contra um limite interno de 20s — leitura
-  natural: "quase passa, só falta um pouco". Essa leitura estava errada.
-  Verificado nesta change com o mesmo método do bisect de
-  `crossapp-session-codec-encoder` (`git worktree` isolado no commit
-  imediatamente anterior ao apply, `a91f0c9`, mesma sessão e mesmo
-  ambiente): com o timeout do teste estendido para 90s **nos dois
-  lados** (worktree do commit base e HEAD desta change), os dois falham
-  **identicamente** — mesmo `TimeoutException`, mesma ordem de grandeza
-  (~91s, o teste nunca completa). O número "~21-22s" nunca foi evidência
-  de proximidade do sucesso; era só o próprio limite interno de 20s do
-  teste cortando a espera cedo. O round-trip completo dos três apps
-  simplesmente não termina neste ambiente/sessão, com ou sem
-  `inbox-instante-mensagem` — confirmado idêntico no commit base, não
-  regressão desta change. Causa real não aprofundada (recursos da VM do
-  podman verificados normais — memória livre, load baixo; suspeita não
-  investigada: alguma das duas pontas HTTP redirecionadas entre
-  `WebApplicationFactory`s, ou a publicação/consumo via RabbitMQ, nunca
-  fecha o ciclo neste ambiente específico). Gatilho: antes da próxima vez
-  que esta suíte precisar rodar de verdade — investigar com logging
-  detalhado do que trava (qual das pernas do round-trip não completa),
-  não só medir o timeout.
-- **Teste de acordo da convenção 11 de `inbox-instante-mensagem` nunca
-  executado com sucesso** —
+- ~~`InboxOrchestratorRoundTrip.Tests.MessageReceived_TriggersFullRoundTrip_...`
+  não completa contra `podman`~~ — **resolvido por
+  `inbox-push-notification-decrypt-resiliente`**, ver a seção "Correção
+  do decrypt de push notification" acima: causa real era regressão de
+  produção (`9fd8a87`), não latência/ambiente. Três leituras do sintoma
+  registradas lá, na ordem em que ocorreram, com a lição de método de
+  cada uma — vale ler antes de reabrir qualquer investigação futura de
+  timeout nesta suíte.
+- ~~Teste de acordo da convenção 11 de `inbox-instante-mensagem` nunca
+  executado com sucesso~~ — **resolvido por
+  `inbox-push-notification-decrypt-resiliente`** (efeito colateral da
+  correção de produção, não de uma correção de fixture):
   `MessageReceived_TriggersFullRoundTrip_TaskCarriesMessageInstantInRawPersistedJson`
-  (`InboxOrchestratorRoundTrip.Tests`) está implementado e compila, mas
-  nunca completou (mesma causa do item acima — o round-trip dos três
-  apps não termina neste ambiente). Isso significa que **o formato de
-  fio de `Message.Metadata["messageInstant"]` entre `apps/inbox` e
-  `apps/workers` não foi provado ponta a ponta com o valor real de um
-  lado consumido pelo outro** — só por asserções unitárias
-  (`DebounceMessageInstantTests`, `TemporalContextMessageInstantTests`),
-  que a convenção 11 explicitamente não aceita como prova de acordo entre
-  as duas pontas (fixture forjado nas duas pontas com a mesma
-  configuração passa igual com o formato certo e com o errado). Risco
-  real: é a mesma classe de defeito que já mordeu esta base três vezes
-  (chave de assinatura de token, enums de `Message`, os dois codecs de
-  encoder) — nenhuma delas foi pega por teste unitário, todas exigiram um
-  teste de acordo real. Gatilho: assim que
-  `InboxOrchestratorRoundTrip.Tests` voltar a completar neste ambiente
-  (ou rodar sob Docker nativo), executar esse teste especificamente antes
-  de qualquer outro trabalho na linha de contexto temporal/canal.
+  passou, verificado em isolamento. O formato de fio de
+  `Message.Metadata["messageInstant"]` entre `apps/inbox` e
+  `apps/workers` está provado ponta a ponta agora, com o valor real de um
+  lado consumido pelo outro.
 - **`InboxFactoryFixture.InitializeAsync` acessa `Services` antes de
   migrar** (achado por `inbox-sweep-service-resiliencia`, design.md,
   Non-Goals) — chama `Services.CreateScope()` para rodar a migration,
@@ -979,28 +1066,15 @@ correção proposta aqui, só o registro de que precisa de decisão**:
 - ~~`tests/CrossAppTaskStoreCompatibility.Tests`~~ — **resolvido por
   `crossapp-session-codec-encoder`**, ver a subseção "Correção de
   encoder cross-app" acima. 2/2 verde.
-- `tests/InboxOrchestratorRoundTrip.Tests` —
-  `MessageReceived_TriggersFullRoundTrip_PushNotificationReceivedWithCorrectPayload`,
-  timeout de ~21s contra limite de 20s, reproduz no commit anterior ao
-  apply de `apps-workers-contexto-temporal`; leitura mais provável é
-  latência do `podman` frente a Docker nativo, não confirmada por falta
-  de comparação nativa disponível neste ambiente. Reproduzido de novo,
-  identicamente (~21-22s), durante o apply de `inbox-session-indice-unico`
-  — não regressão desta change, gatilho de "confirmar antes de mexer no
-  número" continua o mesmo (ver "Itens em aberto"). **Reclassificado
-  durante o apply de `inbox-instante-mensagem`, não "piorou"**: o número
-  "~21-22s" nunca foi evidência de proximidade do sucesso — era só o
-  próprio limite interno de 20s do teste cortando a espera cedo.
-  Confirmado com `git worktree` isolado no commit imediatamente anterior
-  ao apply (mesmo método do bisect de `crossapp-session-codec-encoder`):
-  com o timeout estendido a 90s **nos dois lados** (commit base e HEAD
-  desta change), os dois falham identicamente (~91s, nunca completa) —
-  recursos da VM do podman verificados normais (memória livre, load
-  baixo), causa real não aprofundada
-  nesta sessão. Ainda não regressão de código (o teste-irmão sem nenhuma
-  mudança falhou do mesmo jeito), mas a leitura de "só latência" pode não
-  bastar mais — vale investigar antes da próxima vez que esta suíte
-  precisar rodar de verdade.
+- ~~`tests/InboxOrchestratorRoundTrip.Tests`~~ — **resolvido por
+  `inbox-push-notification-decrypt-resiliente`**, ver a seção "Correção
+  do decrypt de push notification" acima. 3/3 verde, incluindo a
+  asserção de convenção 11 de `inbox-instante-mensagem`, verificada com
+  sucesso pela primeira vez. Causa real: regressão de produção
+  (`9fd8a87`), não latência de `podman` frente a Docker nativo — as
+  leituras anteriores registradas aqui (timeout marginal, depois "causa
+  ambiental") estavam erradas; ver as três leituras, na ordem em que
+  ocorreram, na seção linkada.
 - `InboxFactoryFixture.InitializeAsync` acessa `Services` antes de migrar
   — não corrigido ainda, sem urgência depois de
   `inbox-sweep-service-resiliencia` (ver "Itens em aberto" para o

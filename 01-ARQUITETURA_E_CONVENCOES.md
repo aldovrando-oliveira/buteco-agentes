@@ -239,7 +239,19 @@ de propor algo nesta base:
    `HostOptions.BackgroundServiceExceptionBehavior` para isso:
    `Ignore` não reinicia o serviço após a primeira exceção (fica "vivo
    mas morto", pior que o crash que evita), e é política de host, não de
-   dependência específica (`inbox-sweep-service-resiliencia`).
+   dependência específica (`inbox-sweep-service-resiliencia`). O defeito
+   que essa degradação graciosa evita não é exclusivo de
+   `BackgroundService`: já apareceu duas vezes com a mesma forma — um
+   `try/catch` correto existe, mas a chamada que mais realisticamente
+   falha (consulta ao banco, decifragem de credencial) está posicionada
+   fora dele, então a exceção escapa antes de chegar à proteção
+   (`DebounceSweepService`, um `BackgroundService`;
+   `PushNotificationEndpoints.DeliverResponseAsync`, um handler de
+   endpoint HTTP comum — `inbox-push-notification-decrypt-resiliente`).
+   Ao revisar qualquer `try/catch` de degradação graciosa, checar se
+   **todas** as chamadas capazes de falhar antes do resultado esperado
+   estão dentro dele, não só a que motivou o `catch` originalmente — não
+   é uma checagem restrita a `BackgroundService`.
 5. **Testes de integração com infraestrutura real** — Testcontainers
    Postgres/RabbitMQ, não mocks, para os caminhos principais; fakes só
    para dependências HTTP externas. Toda mudança de comportamento pede
