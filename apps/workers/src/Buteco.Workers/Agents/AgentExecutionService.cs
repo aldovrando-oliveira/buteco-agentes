@@ -50,6 +50,15 @@ public sealed class AgentExecutionService(
 
     private const string ConversationSessionMetadataKey = "conversationSession";
 
+    // Chaves de contexto de canal (design.md da change inbox-contexto-canal,
+    // D3/D4) — mesmo nome usado do lado da escrita em apps/inbox
+    // (DebounceSweepService), duplicado deliberadamente (apps isolados sem
+    // ProjectReference cruzado). Sem classe Codec dedicada: ao contrário de
+    // DelegationDepth/ConversationSessionCodec/MessageInstantCodec, não há
+    // parsing a encapsular — os dois valores são strings cruas (D4).
+    private const string ChannelTypeMetadataKey = "channelType";
+    private const string ContactExternalIdMetadataKey = "contactExternalId";
+
     // Teto de saltos de delegação numa mesma cadeia desde a mensagem
     // original — constante global, não configurável por agente (non-goal
     // explícito, ver design.md da change apps-workers-delegacao-execucao,
@@ -150,6 +159,7 @@ public sealed class AgentExecutionService(
         {
             var userText = ExtractLatestUserText(task);
             var messageInstant = ExtractMessageInstant(task, message.TaskId);
+            var (channelType, contactExternalId) = ExtractChannelContext(task, message.TaskId);
 
             // agent.Provider/agent.Model só ficam nulos para um agente "precisa de
             // reconfiguração" — apps/api já rejeita SendMessage nesse caso antes de
@@ -180,10 +190,22 @@ public sealed class AgentExecutionService(
             var temporalContextBlock = TemporalContextBlockBuilder.Build(timeProvider, messageInstant);
             var instructionsWithTemporalContext = TemporalContextBlockBuilder.Concatenate(agent.Instructions, temporalContextBlock);
 
+            // Bloco de contexto de canal, concatenado depois do bloco
+            // temporal — reaproveita TemporalContextBlockBuilder.Concatenate
+            // uma segunda vez em vez de estender sua assinatura (design.md,
+            // D5). Omitido inteiramente quando os dois campos estão
+            // ausentes (Build retorna null) — Concatenate não é chamado
+            // nesse caso, preservando as Instructions com só o bloco
+            // temporal.
+            var channelContextBlock = ChannelContextBlockBuilder.Build(channelType, contactExternalId);
+            var instructionsWithContext = channelContextBlock is null
+                ? instructionsWithTemporalContext
+                : TemporalContextBlockBuilder.Concatenate(instructionsWithTemporalContext, channelContextBlock);
+
             var aiAgent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
             {
                 Name = agent.Name,
-                ChatOptions = new ChatOptions { Instructions = instructionsWithTemporalContext, Tools = toolSet.Tools.Concat(delegationTools).ToList() },
+                ChatOptions = new ChatOptions { Instructions = instructionsWithContext, Tools = toolSet.Tools.Concat(delegationTools).ToList() },
                 ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
                 {
                     ChatReducer = new RecentMessageChatReducer(MaxHistoryMessages),
@@ -358,6 +380,54 @@ public sealed class AgentExecutionService(
             "Task {TaskId} tem {MetadataKey} presente em Message.Metadata, mas com um valor ilegível como instante ISO 8601: {RawValue}",
             taskId,
             MessageInstantCodec.MetadataKey,
+            value.GetRawText());
+        return null;
+    }
+
+    /// <summary>
+    /// Lê <c>channelType</c>/<c>contactExternalId</c> de
+    /// <c>Message.Metadata</c> da última mensagem do usuário no histórico da
+    /// task — mesmo ponto de leitura de <see cref="ExtractMessageInstant"/>,
+    /// sem caminho de extração separado para tasks delegadas (design.md,
+    /// D6: contexto de canal não se propaga na delegação).
+    /// </summary>
+    private (string? ChannelType, string? ContactExternalId) ExtractChannelContext(AgentTask task, string taskId)
+    {
+        var lastUserMessage = task.History?.LastOrDefault(m => m.Role == Role.User);
+        var metadata = lastUserMessage?.Metadata;
+
+        return (
+            ExtractChannelContextField(metadata, ChannelTypeMetadataKey, taskId),
+            ExtractChannelContextField(metadata, ContactExternalIdMetadataKey, taskId));
+    }
+
+    /// <summary>
+    /// Por campo (design.md, D6): metadata nulo, chave ausente, ou string
+    /// vazia — ausência silenciosa, sem log (caminho normal, ex. cliente A2A
+    /// externo que não conhece a chave). Valor presente com
+    /// <see cref="JsonValueKind"/> diferente de <see cref="JsonValueKind.String"/>
+    /// — tratado como ausência para o bloco, mas registra log de aviso: é
+    /// sinal de bug em algum produtor da chave (nunca <c>apps/inbox</c>, que
+    /// só grava strings — mas um cliente A2A externo pode), mesmo padrão de
+    /// <see cref="ExtractMessageInstant"/> para valor ilegível.
+    /// </summary>
+    private string? ExtractChannelContextField(IReadOnlyDictionary<string, JsonElement>? metadata, string key, string taskId)
+    {
+        if (metadata is null || !metadata.TryGetValue(key, out var value))
+        {
+            return null;
+        }
+
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            var stringValue = value.GetString();
+            return string.IsNullOrEmpty(stringValue) ? null : stringValue;
+        }
+
+        logger.LogWarning(
+            "Task {TaskId} tem {MetadataKey} presente em Message.Metadata, mas com um valor que não é string: {RawValue}",
+            taskId,
+            key,
             value.GetRawText());
         return null;
     }

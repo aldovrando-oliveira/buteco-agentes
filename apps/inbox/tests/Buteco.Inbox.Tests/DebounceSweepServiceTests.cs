@@ -57,6 +57,40 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
         Assert.Equal(expectedContextId, request.Message.ContextId);
     }
 
+    // inbox-contexto-canal, tasks.md 1.3: channelType e contactExternalId
+    // gravados como chaves escalares separadas em Message.Metadata, nunca
+    // agrupadas num objeto único (design.md, D3).
+    [Fact]
+    public async Task SendMessage_IncludesChannelTypeAndContactExternalIdAsSeparateScalarKeysInMetadata()
+    {
+        factory.A2AClientFactory.Handler = FakeA2AClientFactory.DefaultHandler;
+
+        var channelId = await CreateChannelAsync(Guid.NewGuid());
+        var externalId = UniqueExternalId();
+
+        await ReceiveAsync(channelId, externalId, "Mensagem para contexto de canal");
+        var expectedContextId = await ResolveContextIdAsync(channelId, externalId);
+
+        await PollUntil(
+            () => factory.A2AClientFactory.Requests.Count(r => r.Message.ContextId == expectedContextId),
+            count => count >= 1,
+            TimeSpan.FromSeconds(3));
+
+        var request = factory.A2AClientFactory.Requests.Single(r => r.Message.ContextId == expectedContextId);
+        var metadata = request.Message.Metadata!;
+
+        Assert.True(metadata.TryGetValue("channelType", out var channelTypeValue));
+        Assert.Equal(System.Text.Json.JsonValueKind.String, channelTypeValue.ValueKind);
+        Assert.Equal("test-channel", channelTypeValue.GetString());
+
+        Assert.True(metadata.TryGetValue("contactExternalId", out var contactExternalIdValue));
+        Assert.Equal(System.Text.Json.JsonValueKind.String, contactExternalIdValue.ValueKind);
+        Assert.Equal(externalId, contactExternalIdValue.GetString());
+
+        // Nenhuma chave agrupando os dois valores num objeto — D3.
+        Assert.False(metadata.ContainsKey("channelContext"));
+    }
+
     [Fact]
     public async Task MessagesOutsideWindow_TriggerSeparateSendMessageCalls()
     {

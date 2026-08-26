@@ -138,6 +138,55 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
         Assert.Equal(receivedAt, DateTimeOffset.Parse(rawMessageInstant));
     }
 
+    /// <summary>
+    /// Cobre a change inbox-contexto-canal, Tarefa 3.1 (convenção 11): o
+    /// valor real de `channelType`/`contactExternalId` produzido por
+    /// `DebounceSweepService.BuildSendMessageRequest` (apps/inbox),
+    /// atravessando o `SendMessage` real contra apps/api, lido de volta
+    /// como JSON bruto via `GetTask` — mesmo método do teste-irmão de
+    /// `messageInstant` acima, não round-trip pelo mesmo tipo C#.
+    /// </summary>
+    [Fact]
+    public async Task MessageReceived_TriggersFullRoundTrip_TaskCarriesChannelTypeAndContactExternalIdInRawPersistedJson()
+    {
+        var agentId = await CreateAgentAsync();
+        var (channelId, externalId) = await CreateChannelAsync(agentId);
+
+        using (var scope = fixture.InboxFactory.Services.CreateScope())
+        {
+            var orchestrator = scope.ServiceProvider.GetRequiredService<InboxInboundMessageOrchestrator>();
+            await orchestrator.ReceiveMessageAsync(
+                channelId,
+                externalId,
+                "Olá, preciso de ajuda",
+                InboxMessageContentType.Text,
+                Guid.NewGuid().ToString(),
+                displayName: null,
+                DateTimeOffset.UtcNow,
+                new Dictionary<string, string>(),
+                CancellationToken.None);
+        }
+
+        var taskId = await PollUntilAsync(
+            () => GetPendingDispatchTaskIdAsync(channelId, externalId),
+            id => id is not null,
+            TimeSpan.FromSeconds(10));
+        Assert.NotNull(taskId);
+
+        await PollUntilAsync(
+            () => HasPendingDispatchAsync(channelId, externalId),
+            hasPending => !hasPending,
+            TimeSpan.FromSeconds(20));
+
+        var rawChannelType = await GetRawChannelContextValueFromApiAsync(agentId, taskId!, "channelType");
+        var rawContactExternalId = await GetRawChannelContextValueFromApiAsync(agentId, taskId!, "contactExternalId");
+
+        // "test-channel" é o ChannelType literal usado por CreateChannelAsync
+        // acima (mesmo identificador de adapter de teste do repo inteiro).
+        Assert.Equal("test-channel", rawChannelType);
+        Assert.Equal(externalId, rawContactExternalId);
+    }
+
     [Fact]
     public async Task OperatorToken_IssuedByApi_IsAcceptedByInboxWithoutNetworkCallToApi()
     {
@@ -288,6 +337,44 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
                 && metadata.TryGetProperty("messageInstant", out var messageInstant))
             {
                 return messageInstant.GetString();
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Generaliza <see cref="GetRawMessageInstantFromApiAsync"/> para
+    /// qualquer chave escalar de <c>Message.Metadata</c> — usada pelas
+    /// chaves novas de contexto de canal (design.md da change
+    /// inbox-contexto-canal, D3: escalares separadas, mesmo mecanismo de
+    /// leitura de JSON bruto).
+    /// </summary>
+    private async Task<string?> GetRawChannelContextValueFromApiAsync(Guid agentId, string taskId, string metadataKey)
+    {
+        var token = await fixture.LoginAsOperatorAsync();
+        var client = fixture.ApiFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var payload = new { jsonrpc = "2.0", id = 1, method = "GetTask", @params = new { id = taskId } };
+
+        var response = await client.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
+        response.EnsureSuccessStatusCode();
+
+        var raw = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(raw);
+        var result = document.RootElement.GetProperty("result");
+
+        if (!result.TryGetProperty("history", out var history))
+        {
+            return null;
+        }
+
+        foreach (var message in history.EnumerateArray())
+        {
+            if (message.TryGetProperty("metadata", out var metadata)
+                && metadata.TryGetProperty(metadataKey, out var value))
+            {
+                return value.GetString();
             }
         }
 

@@ -14,15 +14,14 @@ A linha de trabalho de histórico de conversa por sessão no inbox está
 etapa 3, aplicada antes dela). Todas aplicadas, sincronizadas e
 arquivadas.
 
-A linha de trabalho de contexto temporal e de canal está com a **etapa 1
-concluída e arquivada** (`apps-workers-contexto-temporal`) e a **etapa 2
-dividida em duas, pela revisão da exploração `inbox-contexto-canal-metadata`**
-(perfis de risco opostos — ver seção "Instante da mensagem" abaixo):
-`inbox-instante-mensagem` (instante da mensagem, aplicada) e
-`inbox-contexto-canal` (contexto de canal — `DisplayName`/`ExternalId`,
-risco de injeção de prompt sem mitigação fechada, ainda não proposta). Ver
-"Changes aplicadas" abaixo para o que entrou e "Próximo passo" para a
-sequência.
+A linha de trabalho de contexto temporal e de canal está **concluída nas
+duas etapas**: `apps-workers-contexto-temporal` (etapa 1) e, dividida em
+duas pela revisão da exploração `inbox-contexto-canal-metadata` (perfis de
+risco opostos), `inbox-instante-mensagem` (instante da mensagem) e
+`inbox-contexto-canal` (contexto de canal — `channelType`/`contactExternalId`,
+`DisplayName` deliberadamente fora do prompt). Todas aplicadas. Ver
+"Changes aplicadas" abaixo para o que entrou em cada uma e "Próximo passo"
+para o que vem a seguir.
 
 `inbox-session-indice-unico` fechou o último item da dívida de baseline
 com causa de produção conhecida (`ContactSessionResolver` sem índice
@@ -832,6 +831,97 @@ que o defeito corrigido aqui (roda para toda push notification aceita).
 Gatilho: próxima falha real de Postgres observada afetando `apps/inbox`,
 ou próxima change que precisar tocar `ReceiveAsync` por outro motivo.
 
+### Contexto de canal
+
+`inbox-contexto-canal` — etapa 2 (parte 2 de 2) da linha de contexto
+temporal e de canal, fechando a linha inteira. Reaproveita exatamente o
+mecanismo de transporte de `inbox-instante-mensagem` (`Message.Metadata`,
+sem campo novo em `TaskJobMessage`, sem mudança em `apps/api`) para duas
+chaves escalares novas: `channelType` (`Channel.ChannelType`) e
+`contactExternalId` (`Contact.ExternalId`).
+
+O que entrou:
+
+- **`apps/inbox`** (`DebounceSweepService.BuildSendMessageRequest`) passa
+  a incluir `Message.Metadata["channelType"]` e
+  `Message.Metadata["contactExternalId"]`, lidos de `Channel`/`Contact` da
+  sessão de origem — duas chaves escalares separadas, nunca agrupadas num
+  objeto (mesma disciplina de `messageInstant`, que elimina por construção
+  a variante séria do mecanismo do `JsonElement` documentado em
+  `push-notification-config-codec-encoder`).
+- **`apps/workers`** (`AgentExecutionService`, `ChannelContextBlockBuilder`
+  novo) lê as duas chaves da última mensagem do usuário e concatena um
+  bloco de contexto de canal às instruções, depois do bloco temporal —
+  reaproveitando `TemporalContextBlockBuilder.Concatenate` uma segunda vez
+  em vez de estender o builder temporal, que fica intocado. O texto nomeia
+  `contactExternalId` pelo que ele é ("identificador do contato atribuído
+  pelo canal"), nunca como telefone — WAHA usa dígitos de telefone,
+  Telegram usa um inteiro de chat sem relação com telefone.
+- **Ausência por campo, não só por par**: metadata nula, chave ausente, ou
+  string vazia — ausência silenciosa, sem log (caminho normal, ex. cliente
+  A2A externo que não conhece as chaves). Valor presente com tipo JSON
+  diferente de string (número, objeto, array, booleano, `null`) — tratado
+  como ausência para o bloco, mas com log de nível aviso identificando
+  task e campo, mesmo padrão já usado para `messageInstant` ilegível
+  (achado durante a revisão dos artefatos: a primeira versão do
+  `design.md` tratava os dois casos como um só, silenciosamente).
+- **Round-trip real dos três apps** (convenção 11): valor produzido por
+  `apps/inbox`, lido de volta como JSON bruto via `GetTask` de `apps/api`,
+  confirmando `channelType`/`contactExternalId` sobrevivendo
+  byte-identicamente — não round-trip pelo mesmo tipo C#.
+
+**`Contact.DisplayName` (texto livre do usuário final) NÃO entra nas
+`Instructions` do agente — decisão de escopo com gatilho, não Non-Goal
+esquecido.** Registrada em `design.md` (D1) com os achados que a
+sustentam, todos verificados contra o código real, não hipotéticos:
+
+- Separar o que dependeria de texto livre (chamar a pessoa pelo nome) do
+  que não depende (`channelType` é fechado pelo adapter; `contactExternalId`
+  é atribuído pelo provedor — nenhum dos dois é digitado pela pessoa)
+  mostrou que a maior parte do valor prático já chega sem `DisplayName`.
+- Sanitização por classe de caractere protege contra ataque estrutural,
+  não contra injeção semântica — uma frase inteira feita só de letras e
+  espaços passa ilesa por qualquer allowlist; a defesa contra isso seria
+  limite de tamanho, não classe de caractere.
+- O único delimitador textual do repo
+  (`TemporalContextBlockBuilder.NotAUserMessageMarker`) nunca foi testado
+  sob conteúdo adversarial — nunca carregou nada além de texto 100%
+  gerado pelo sistema.
+- O dano alcançável por uma instrução injetada não é hipotético:
+  `IMcpToolSetResolver.ResolveAsync` resolve, por agente, qualquer tool de
+  qualquer servidor MCP vinculado via `AgentMcpServer.AllowedTools`, **sem
+  distinção de leitura/escrita** — um agente de atendimento com tool MCP
+  de escrita (criar agendamento, mutar CRM externo) é configuração normal
+  do sistema, não um cenário forçado. Delegação estende isso para as
+  tools de outro agente.
+
+**Alternativa considerada e não adotada**: usar `DisplayName` fora do
+prompt — o sistema monta uma saudação em código (ex. "Olá, {nome}!" como
+primeira mensagem de uma sessão nova), sem o modelo nunca ver o texto
+livre. Eliminaria o ataque por construção, mas exigiria um caminho de
+resposta que não passa pelo LLM (o desenho atual é o agente produzir o
+texto inteiro da resposta), perderia naturalidade, e não cabe no
+processamento atual de `AgentExecutionService`, que não distingue
+"primeira mensagem da sessão" de qualquer outra. Disponível se o produto
+decidir que "chamar pelo nome" é essencial o suficiente para justificar
+esse desenho separado.
+
+**Achado reutilizável, além desta change**: identificador atribuído pelo
+provedor de um canal (`ChannelType`, `ExternalId`) não é a mesma
+categoria de dado que texto livre digitado pelo usuário final
+(`DisplayName`) — o primeiro pode entrar no contexto de um agente sem
+abrir a classe de risco de injeção de prompt que o segundo abre. Vale
+para qualquer dado futuro que alguém queira colocar na janela de contexto
+do modelo, não só para esta change (ver também item em aberto sobre
+`01-ARQUITETURA_E_CONVENCOES.md` abaixo).
+
+**Verificação**: `Buteco.Inbox.Tests` 164/164 (163 antes desta change + 1
+novo em `DebounceSweepServiceTests`). `Buteco.Workers.Tests` 117/117 (8
+novos em `ChannelContextBlockBuilderTests`, novo; 7 novos em
+`ChannelContextMessageTests`, novo). `tests/InboxOrchestratorRoundTrip.Tests`
+4/4, incluindo o cenário novo de acordo real de `channelType`/
+`contactExternalId` — nenhuma regressão nos três já existentes.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -1038,18 +1128,58 @@ Cada um tem gatilho de quando revisitar:
   Gatilho: se aparecer um consumidor real (interno ou externo) que
   precise ler tasks terminais antigas com `pushNotificationConfig`,
   avaliar backfill nesse momento.
+- **`Contact.DisplayName` fora das `Instructions` do agente**
+  (`inbox-contexto-canal`, design.md D1) — decisão de escopo com gatilho,
+  não Non-Goal esquecido: o valor que dependeria de texto livre do
+  usuário final (chamar a pessoa pelo nome) não compensou o risco de
+  injeção de prompt frente à superfície de dano real (ver item seguinte).
+  Alternativa registrada e não implementada: saudação montada em código,
+  fora do prompt. Gatilho: surgir um mecanismo de defesa que mude essa
+  conta (ex. classificação do `DisplayName` antes de liberá-lo, ou
+  desenho que tire tools de escrita do alcance de agentes de
+  atendimento).
+- **`AgentMcpServer.AllowedTools` não distingue tool de leitura de tool de
+  escrita** (achado por `inbox-contexto-canal`, design.md D1, ao mapear a
+  superfície de dano de uma eventual injeção de prompt) — um agente
+  voltado a canal de atendimento pode ter uma tool MCP de escrita
+  vinculada (criar agendamento, mutar CRM externo) sem nenhuma
+  distinção de risco no cadastro. Não é defeito desta change, é
+  característica do sistema desde `backend-mcp-selecao-tools` — só ficou
+  nomeada explicitamente agora. Gatilho: qualquer mudança futura que
+  aumente a superfície de texto não confiável no contexto do agente (o
+  gatilho de `DisplayName` acima é o primeiro candidato), ou pedido de
+  produto por controle de risco por tool.
+- **`TemporalContextBlockBuilder.NotAUserMessageMarker` nunca foi testado
+  sob conteúdo adversarial** (achado por `inbox-contexto-canal`,
+  design.md D1/D5) — é dica textual, não fronteira estrutural; só
+  carregou texto 100% gerado pelo sistema até agora (bloco temporal,
+  bloco de contexto de canal). Gatilho: antes de qualquer mudança que
+  coloque texto não controlado pelo sistema em um bloco de contexto
+  delimitado por esse marcador (ou por um análogo).
 
 ## Próximo passo
 
-**Concluído nesta sessão**: `inbox-instante-mensagem` foi proposta e
-aplicada (ver "Instante da mensagem" acima) — tocou exatamente a
-superfície que a baseline abaixo já sinalizava como sensível
-(`AgentDelegationToolSetResolver`), sem correção prévia de baseline ter
-sido feita antes (diferente do que este parágrafo recomendava
-originalmente). Nenhuma regressão nova encontrada por isso — os testes
-novos desta change passaram, e o único item da baseline que tocava a
-mesma superfície (`InboxOrchestratorRoundTrip.Tests`, ver abaixo)
-continua com a mesma causa já registrada, não uma nova.
+**Concluído nesta sessão**: `inbox-contexto-canal` foi explorada, proposta
+e aplicada (ver "Contexto de canal" acima), fechando a linha de trabalho
+de contexto temporal e de canal nas duas etapas. A exploração fechou duas
+das quatro perguntas reforçadas da change (a maior parte do valor não
+dependia de texto livre; a superfície de dano de tools MCP de escrita é
+real), o que encolheu a change de "quinto contrato de plugin + mitigação
+de injeção de prompt" para "duas chaves escalares no mecanismo já
+provado por `messageInstant`" — `DisplayName` ficou de fora por decisão,
+não a change inteira ficou menor por acaso. Nenhuma regressão encontrada
+— suíte completa de `apps/inbox` (164/164) e `apps/workers` (117/117)
+verde, incluindo o round-trip real dos três apps com o cenário novo de
+`channelType`/`contactExternalId`.
+
+Anteriormente nesta linha: `inbox-instante-mensagem` foi proposta e
+aplicada — tocou exatamente a superfície que a baseline abaixo já
+sinalizava como sensível (`AgentDelegationToolSetResolver`), sem correção
+prévia de baseline ter sido feita antes (diferente do que este parágrafo
+recomendava originalmente). Nenhuma regressão nova encontrada por isso —
+os testes novos daquela change passaram, e o único item da baseline que
+tocava a mesma superfície (`InboxOrchestratorRoundTrip.Tests`, ver abaixo)
+continuou com a mesma causa já registrada, não uma nova.
 
 Grupos da baseline, cada um com o diagnóstico já coletado — **nenhuma
 correção proposta aqui, só o registro de que precisa de decisão**:
@@ -1086,24 +1216,15 @@ correção proposta aqui, só o registro de que precisa de decisão**:
   entre rodadas (14–15).
 
 Com `inbox-session-indice-unico` aplicada, `apps/inbox` (`Buteco.Inbox.Tests`)
-não tem mais nenhum flake conhecido — 160/160 (ver "Índice único de
-Session" acima). O ruído que resta na fila acima é só cross-app/frontend.
+não tem mais nenhum flake conhecido — 164/164 (160/160 depois de
+`inbox-session-indice-unico`, +1 de `inbox-push-notification-decrypt-resiliente`,
++1 desta sessão). O ruído que resta na fila acima é só cross-app/frontend.
 
-`inbox-contexto-canal` (contexto de canal — `DisplayName`/`ExternalId`) é
-o sucessor natural agora, ainda não proposta. Diferente da etapa anterior,
-não é só plumbing: a pergunta de injeção de prompt via `DisplayName` (a
-que menos atenção recebeu nas conversas anteriores) precisa de desenho
-próprio antes de virar proposta — não repetir o padrão de
-`inbox-instante-mensagem`, que pôde ir direto para `/opsx:propose` porque
-a exploração já tinha fechado as perguntas de risco.
-
-A linha de trabalho de histórico de conversa por sessão no inbox fechou
-nas três etapas antes desta — foi a primeira vez desde o MVP que não
-havia sucessor já definido, até `apps-workers-contexto-temporal` começar
-e, agora arquivada, deixar a etapa 2 como sucessora definida de novo.
-
-Candidatos que saem do que já está registrado acima, em nenhuma ordem
-particular:
+A linha de trabalho de contexto temporal e de canal (`apps-workers-contexto-temporal`
+→ `inbox-instante-mensagem` → `inbox-contexto-canal`) está **concluída**.
+Como aconteceu depois da linha de histórico de conversa por sessão (três
+etapas antes desta), não há sucessor já definido para esta linha — os
+candidatos abaixo são independentes entre si, sem ordem imposta.
 
 - **Responder pela UI** — hoje a tela de sessões é só leitura. Foi
   Non-Goal explícito da etapa 3 e é o passo seguinte mais óbvio do ponto

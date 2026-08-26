@@ -117,11 +117,12 @@ public sealed class DebounceSweepService(
             join contact in dbContext.Contacts on session.ContactId equals contact.Id
             join channel in dbContext.Channels on contact.ChannelId equals channel.Id
             where session.Id == pendingDispatch.SessionId
-            select new { session.ContextId, channel.AgentId }
+            select new { session.ContextId, channel.AgentId, channel.ChannelType, contact.ExternalId }
         ).FirstAsync(cancellationToken);
 
         var client = a2AClientFactory.CreateForAgent(dispatchInfo.AgentId);
-        var request = BuildSendMessageRequest(pendingDispatch, dispatchInfo.ContextId, token);
+        var request = BuildSendMessageRequest(
+            pendingDispatch, dispatchInfo.ContextId, token, dispatchInfo.ChannelType, dispatchInfo.ExternalId);
 
         SendMessageResponse response;
         try
@@ -161,7 +162,17 @@ public sealed class DebounceSweepService(
     // biblioteca nova (convenção 2).
     private const string MessageInstantMetadataKey = "messageInstant";
 
-    private SendMessageRequest BuildSendMessageRequest(PendingDispatch pendingDispatch, string contextId, string token)
+    // Chaves novas de contexto de canal (design.md da change
+    // inbox-contexto-canal, D3/D4) — mesmo raciocínio de
+    // MessageInstantMetadataKey: nomes batendo com o lado da leitura em
+    // apps/workers, duplicado deliberadamente (apps isolados sem
+    // ProjectReference cruzado), chaves escalares separadas, nunca
+    // agrupadas num objeto (D3).
+    private const string ChannelTypeMetadataKey = "channelType";
+    private const string ContactExternalIdMetadataKey = "contactExternalId";
+
+    private SendMessageRequest BuildSendMessageRequest(
+        PendingDispatch pendingDispatch, string contextId, string token, string channelType, string contactExternalId)
     {
         var pushNotificationBaseUrl = publicUrlOptions.Value.BaseUrl.TrimEnd('/');
 
@@ -176,6 +187,13 @@ public sealed class DebounceSweepService(
                 Metadata = new Dictionary<string, JsonElement>
                 {
                     [MessageInstantMetadataKey] = EncodeMessageInstant(pendingDispatch.LastMessageAt),
+                    // channelType/contactExternalId são lidos direto de
+                    // Channel/Contact, atribuídos pelo adapter/provedor do
+                    // canal — nunca texto digitado pelo usuário final
+                    // (design.md, Goals). Sem transformação: string crua
+                    // (D4).
+                    [ChannelTypeMetadataKey] = EncodeScalar(channelType),
+                    [ContactExternalIdMetadataKey] = EncodeScalar(contactExternalId),
                 },
             },
             Configuration = new SendMessageConfiguration
@@ -189,15 +207,18 @@ public sealed class DebounceSweepService(
         };
     }
 
-    // Valor escalar (string ISO 8601 com offset, formato de arredondamento
-    // "O" do .NET) — nunca um objeto, para eliminar por construção a
+    // Valor escalar — nunca um objeto, para eliminar por construção a
     // variante séria do mecanismo em que um JsonElement pré-materializado
     // sem A2AJsonUtilities.DefaultOptions sobrevive à re-serialização do
-    // AgentTask e grava formato errado em disco (design.md, Decisão D2;
+    // AgentTask e grava formato errado em disco (design.md, Decisão D2 de
+    // inbox-instante-mensagem, reafirmada como D3 de inbox-contexto-canal;
     // mesma classe de defeito de PushNotificationConfigCodec/
     // ConversationSessionCodec em apps/workers).
     private static JsonElement EncodeMessageInstant(DateTimeOffset instant) =>
-        JsonSerializer.SerializeToElement(instant.ToString("O", CultureInfo.InvariantCulture), A2AJsonUtilities.DefaultOptions);
+        EncodeScalar(instant.ToString("O", CultureInfo.InvariantCulture));
+
+    private static JsonElement EncodeScalar(string value) =>
+        JsonSerializer.SerializeToElement(value, A2AJsonUtilities.DefaultOptions);
 
     private async Task HandleResponseAsync(
         AppDbContext dbContext,

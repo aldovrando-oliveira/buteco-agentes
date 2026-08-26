@@ -178,6 +178,38 @@ objeto), o formato errado chega ao disco. Achado em
 benigno de `ConversationSessionCodec` corrigido em
 `crossapp-session-codec-encoder`.
 
+## Contexto do agente (blocos concatenados às `Instructions`)
+
+`apps/workers` (`AgentExecutionService`) concatena às `Instructions`
+cadastradas do agente um ou mais blocos de contexto, montados em memória a
+cada execução — nunca persistidos em `Agent.Instructions`, nunca parte do
+histórico de conversa. Dois blocos hoje: contexto temporal (instante de
+processamento, instante da mensagem quando disponível, regra de
+precedência para expressões de tempo relativas —
+`apps-workers-contexto-temporal`, `inbox-instante-mensagem`) e contexto
+de canal (tipo do canal, identificador do contato —
+`inbox-contexto-canal`). Cada bloco é uma função pura em arquivo próprio
+(`TemporalContextBlockBuilder`, `ChannelContextBlockBuilder`), com seu
+próprio marcador delimitando "isto não é uma mensagem do usuário, não
+responda a ele diretamente" — arquivos separados de propósito, sem
+infraestrutura compartilhada entre eles antes de haver um terceiro bloco
+(convenção 2).
+
+**O que entra num bloco não é uma decisão só de utilidade — é uma decisão
+de risco.** `inbox-contexto-canal` formulou a distinção, ao decidir manter
+`Contact.DisplayName` fora do prompt: um valor **atribuído pelo
+provedor/adapter do canal** (`Channel.ChannelType`, `Contact.ExternalId`)
+não é a mesma categoria de dado que **texto livre digitado pelo usuário
+final** (`Contact.DisplayName`). O primeiro pode entrar num bloco de
+contexto sem abrir a classe de risco de injeção de prompt; o segundo abre
+— e o marcador de "não é mensagem do usuário" usado pelos dois blocos
+acima é uma dica textual, não uma fronteira estrutural: nunca foi testado
+sob conteúdo adversarial, porque nunca carregou nenhum até agora. Vale
+para qualquer dado futuro cogitado para entrar na janela de contexto do
+agente, não só para os dois blocos existentes — a pergunta a fazer antes
+de adicionar um valor novo é de onde ele vem, não só o que ele ajuda o
+agente a fazer.
+
 ## Contrato de plugin de canal (`apps/inbox`)
 
 Três contratos obrigatórios em conjunto por `ChannelType`, resolvidos via
