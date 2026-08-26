@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using RabbitMQ.Client;
 using TaskStatus = A2A.TaskStatus;
@@ -416,6 +417,194 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
         Assert.DoesNotContain(capturedOptions!.Tools ?? [], tool => tool.Name.StartsWith("delegate_to_", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Cobre a change inbox-instante-mensagem, Tarefa 3.6: a task criada
+    /// para o Target herda o mesmo `messageInstant` que o Source tinha
+    /// disponível — checado direto no `Message.Metadata` persistido da task
+    /// do Target, sem precisar que ela seja processada (mesmo padrão de
+    /// <see cref="TimeoutExpires_WithoutTargetCompleting_SourceTaskDoesNotFail"/>,
+    /// uma instância só, o Target nasce mas nunca é consumido).
+    /// </summary>
+    [Fact]
+    public async Task DelegatedTask_WithMessageInstantOnSource_CarriesSameMessageInstantToTarget()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+
+        var messageInstant = new DateTimeOffset(2026, 3, 10, 9, 58, 0, TimeSpan.FromHours(-3));
+        await SeedTaskAsync(
+            sourceTaskId, sourceId, contextId, "Preciso de um cálculo financeiro complexo.",
+            messageMetadata: BuildMessageInstantMetadata(messageInstant));
+
+        var toolName = ExpectedToolName("Financeiro");
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(toolName, "Uma tarefa qualquer.");
+
+        using var host = BuildHost(ClientsByProviderModel(sourceChatClient.Object, null), delegationTimeout: TimeSpan.FromSeconds(3));
+        await host.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            var sourceRecord = await PollUntilTerminalAsync(sourceTaskId);
+            Assert.Equal(nameof(TaskState.Completed), sourceRecord.State);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+
+        var targetRecord = await GetLatestTaskRecordForAgentAsync(targetId);
+        Assert.NotNull(targetRecord);
+        Assert.Equal(messageInstant, ExtractMessageInstantFromHistory(targetRecord!));
+    }
+
+    /// <summary>Contraparte "sem item" da Tarefa 3.6 — sem messageInstant no Source, o Target não inventa um valor.</summary>
+    [Fact]
+    public async Task DelegatedTask_WithoutMessageInstantOnSource_DoesNotInventOneForTarget()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Preciso de um cálculo financeiro complexo.");
+
+        var toolName = ExpectedToolName("Financeiro");
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(toolName, "Uma tarefa qualquer.");
+
+        using var host = BuildHost(ClientsByProviderModel(sourceChatClient.Object, null), delegationTimeout: TimeSpan.FromSeconds(3));
+        await host.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            var sourceRecord = await PollUntilTerminalAsync(sourceTaskId);
+            Assert.Equal(nameof(TaskState.Completed), sourceRecord.State);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+
+        var targetRecord = await GetLatestTaskRecordForAgentAsync(targetId);
+        Assert.NotNull(targetRecord);
+        Assert.Null(ExtractMessageInstantFromHistory(targetRecord!));
+    }
+
+    /// <summary>
+    /// Cobre a Tarefa 3.8 — a contraparte que prova a Decisão D3 do
+    /// design.md de ponta a ponta: Source e Target processados por
+    /// instâncias com <see cref="TimeProvider"/> diferentes (instantes de
+    /// processamento T1 ≠ T2, gap real, mesma mecânica de duas instâncias já
+    /// documentada na classe), mas ambos recebem o MESMO `messageInstant` —
+    /// sem este teste, a Tarefa 3.6 sozinha só prova que a chave foi
+    /// escrita, não que ela sobrevive a um cenário com defasagem real de
+    /// relógio entre Source e Target (ver invariante nomeado na Decisão D3).
+    /// </summary>
+    [Fact]
+    public async Task SourceAndTarget_ProcessedAtDifferentInstants_BothReceiveSameMessageInstant()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+
+        var messageInstant = new DateTimeOffset(2026, 3, 10, 9, 58, 0, TimeSpan.FromHours(-3));
+        await SeedTaskAsync(
+            sourceTaskId, sourceId, contextId, "Preciso de um cálculo financeiro complexo.",
+            messageMetadata: BuildMessageInstantMetadata(messageInstant));
+
+        var toolName = ExpectedToolName("Financeiro");
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(toolName, "Quanto é 2 + 2, considerando juros?");
+
+        ChatOptions? capturedTargetOptions = null;
+        var targetChatClient = new Mock<IChatClient>();
+        targetChatClient
+            .Setup(c => c.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .Callback<IEnumerable<ChatMessage>, ChatOptions, CancellationToken>((_, options, _) => capturedTargetOptions = options)
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "O resultado é 4.")));
+
+        var clients = ClientsByProviderModel(sourceChatClient.Object, targetChatClient.Object);
+
+        // T1 e T2 — instantes de processamento diferentes por instância
+        // (design.md, teste da Tarefa 3.8). Qual instância acaba processando
+        // Source e qual processa Target é não-determinístico (mesma fila,
+        // sem afinidade — ver comentário da classe); o que garante o gap
+        // real é que a instância que processa o Source fica ocupada
+        // aguardando o Target, então necessariamente é a OUTRA instância
+        // que consome a task delegada — T1 e T2 acabam associados a
+        // Source/Target nessa ordem ou na inversa, mas sempre diferentes
+        // entre si.
+        var timeProviderA = new FakeTimeProvider(new DateTimeOffset(2026, 3, 10, 10, 0, 0, TimeSpan.Zero));
+        var timeProviderB = new FakeTimeProvider(new DateTimeOffset(2026, 3, 10, 12, 30, 0, TimeSpan.Zero));
+
+        using var instanceA = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(20), timeProvider: timeProviderA);
+        using var instanceB = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(20), timeProvider: timeProviderB);
+
+        await instanceA.StartAsync();
+        await instanceB.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            var sourceRecord = await PollUntilTerminalAsync(sourceTaskId);
+            Assert.Equal(nameof(TaskState.Completed), sourceRecord.State);
+        }
+        finally
+        {
+            await instanceA.StopAsync();
+            await instanceB.StopAsync();
+        }
+
+        var targetRecord = await GetLatestTaskRecordForAgentAsync(targetId);
+        Assert.NotNull(targetRecord);
+        Assert.Equal(nameof(TaskState.Completed), targetRecord!.State);
+
+        Assert.NotNull(capturedTargetOptions);
+        var targetInstructions = capturedTargetOptions!.Instructions!;
+
+        // O mesmo messageInstant chegou ao Target, mesmo processado num
+        // instante de relógio diferente do Source.
+        Assert.Contains("Instante da mensagem", targetInstructions);
+        Assert.Contains("2026-03-10T09:58:00-03:00", targetInstructions);
+
+        // Prova de que os processing instants de fato divergiram (gap
+        // real, não coincidência) — um dos dois instantes de processamento
+        // aparece no bloco do Target, e é diferente do instante da
+        // mensagem.
+        var targetHasT1 = targetInstructions.Contains("2026-03-10T10:00:00+00:00");
+        var targetHasT2 = targetInstructions.Contains("2026-03-10T12:30:00+00:00");
+        Assert.True(targetHasT1 || targetHasT2, $"Instructions do Target não contêm nenhum dos dois instantes de processamento esperados: {targetInstructions}");
+    }
+
+    private static Dictionary<string, JsonElement> BuildMessageInstantMetadata(DateTimeOffset messageInstant) =>
+        new() { [MessageInstantCodec.MetadataKey] = MessageInstantCodec.Encode(messageInstant) };
+
+    private static DateTimeOffset? ExtractMessageInstantFromHistory(A2ATaskRecord record)
+    {
+        var task = JsonSerializer.Deserialize<AgentTask>(record.Payload, A2AJsonUtilities.DefaultOptions)!;
+        var lastUserMessage = task.History?.LastOrDefault(m => m.Role == Role.User);
+        if (lastUserMessage?.Metadata is null || !lastUserMessage.Metadata.TryGetValue(MessageInstantCodec.MetadataKey, out var value))
+        {
+            return null;
+        }
+
+        return DateTimeOffset.Parse(value.GetString()!);
+    }
+
     private static string ExpectedToolName(string targetAgentName) =>
         ToolNameSanitizer.Sanitize($"delegate_to_{DelegationToolNameSlugifier.Slugify(targetAgentName)}");
 
@@ -484,7 +673,10 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
         return mock;
     }
 
-    private IHost BuildHost(IReadOnlyDictionary<(string Provider, string Model), IChatClient> chatClientsByProviderModel, TimeSpan? delegationTimeout = null)
+    private IHost BuildHost(
+        IReadOnlyDictionary<(string Provider, string Model), IChatClient> chatClientsByProviderModel,
+        TimeSpan? delegationTimeout = null,
+        TimeProvider? timeProvider = null)
     {
         var builder = Host.CreateApplicationBuilder();
 
@@ -519,7 +711,7 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, AgentDelegationToolSetResolver>();
-        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton(timeProvider ?? TimeProvider.System);
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
         builder.Services.AddSingleton<PushNotificationSender>();
@@ -559,7 +751,9 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
              """);
     }
 
-    private async Task SeedTaskAsync(string taskId, Guid agentId, string contextId, string userMessage, int? delegationDepth = null)
+    private async Task SeedTaskAsync(
+        string taskId, Guid agentId, string contextId, string userMessage, int? delegationDepth = null,
+        Dictionary<string, JsonElement>? messageMetadata = null)
     {
         await using var dbContext = CreateDbContext();
 
@@ -577,6 +771,7 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
                     Parts = [Part.FromText(userMessage)],
                     MessageId = Guid.NewGuid().ToString("N"),
                     ContextId = contextId,
+                    Metadata = messageMetadata,
                 },
             ],
         };

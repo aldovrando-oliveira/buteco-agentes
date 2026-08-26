@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using A2A;
 using Buteco.Workers.A2A;
+using Buteco.Workers.Agents;
 using Buteco.Workers.Agents.Entities;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
@@ -28,6 +29,7 @@ public sealed class AgentDelegationToolSetResolver(
         Agent sourceAgent,
         string contextId,
         int currentDepth,
+        DateTimeOffset? messageInstant,
         CancellationToken cancellationToken)
     {
         var delegations = await (
@@ -52,19 +54,19 @@ public sealed class AgentDelegationToolSetResolver(
                 suffix++;
             }
 
-            tools.Add(BuildDelegationTool(toolName, delegation.TargetAgentId, delegation.TargetName, sourceAgent.Id, contextId, currentDepth));
+            tools.Add(BuildDelegationTool(toolName, delegation.TargetAgentId, delegation.TargetName, sourceAgent.Id, contextId, currentDepth, messageInstant));
         }
 
         return tools;
     }
 
     private AITool BuildDelegationTool(
-        string toolName, Guid targetAgentId, string targetAgentName, Guid sourceAgentId, string contextId, int currentDepth)
+        string toolName, Guid targetAgentId, string targetAgentName, Guid sourceAgentId, string contextId, int currentDepth, DateTimeOffset? messageInstant)
     {
         async Task<string> DelegateAsync(
             [Description("A tarefa ou pergunta a delegar para o agente Target.")] string message,
             CancellationToken cancellationToken) =>
-            await DelegateToTargetAsync(targetAgentId, sourceAgentId, contextId, currentDepth, message, cancellationToken);
+            await DelegateToTargetAsync(targetAgentId, sourceAgentId, contextId, currentDepth, messageInstant, message, cancellationToken);
 
         return AIFunctionFactory.Create(
             (Func<string, CancellationToken, Task<string>>)DelegateAsync,
@@ -77,6 +79,7 @@ public sealed class AgentDelegationToolSetResolver(
         Guid sourceAgentId,
         string contextId,
         int currentDepth,
+        DateTimeOffset? messageInstant,
         string message,
         CancellationToken cancellationToken)
     {
@@ -117,7 +120,7 @@ public sealed class AgentDelegationToolSetResolver(
         var targetTaskId = Guid.NewGuid().ToString("N");
         var targetTaskStore = new PostgresTaskStore(scopeFactory, targetAgentId);
 
-        var targetTask = await CreateDelegatedTaskAsync(targetTaskStore, targetTaskId, contextId, currentDepth + 1, message, cancellationToken);
+        var targetTask = await CreateDelegatedTaskAsync(targetTaskStore, targetTaskId, contextId, currentDepth + 1, messageInstant, message, cancellationToken);
         if (targetTask is null)
         {
             logger.LogError("Falha ao criar a task delegada {TargetTaskId} para o agente {TargetAgentId}.", targetTaskId, targetAgentId);
@@ -137,8 +140,18 @@ public sealed class AgentDelegationToolSetResolver(
     /// `Metadata` antes do primeiro `SaveTaskAsync` (Decision 6), não só na
     /// conclusão.
     /// </summary>
+    /// <remarks>
+    /// Quando <paramref name="messageInstant"/> não é nulo, grava-o em
+    /// <c>Message.Metadata[MessageInstantCodec.MetadataKey]</c> do próprio
+    /// `Message` que constrói para o Target — não num transporte separado.
+    /// O Target lê esse valor pelo mesmo mecanismo que qualquer task usa
+    /// (`AgentExecutionService.ExtractMessageInstant`, filtrando por
+    /// `Role.User` sobre `History`), porque este `Message` satisfaz o mesmo
+    /// filtro (invariante verificado contra o código real, não assumido —
+    /// design.md da change inbox-instante-mensagem, Decisão D3).
+    /// </remarks>
     private static async Task<AgentTask?> CreateDelegatedTaskAsync(
-        PostgresTaskStore targetTaskStore, string targetTaskId, string contextId, int childDepth, string message, CancellationToken cancellationToken)
+        PostgresTaskStore targetTaskStore, string targetTaskId, string contextId, int childDepth, DateTimeOffset? messageInstant, string message, CancellationToken cancellationToken)
     {
         var queue = new AgentEventQueue();
         var updater = new TaskUpdater(queue, targetTaskId, contextId);
@@ -151,6 +164,9 @@ public sealed class AgentDelegationToolSetResolver(
                 Parts = [Part.FromText(message)],
                 MessageId = Guid.NewGuid().ToString("N"),
                 ContextId = contextId,
+                Metadata = messageInstant is not null
+                    ? new Dictionary<string, JsonElement> { [MessageInstantCodec.MetadataKey] = MessageInstantCodec.Encode(messageInstant.Value) }
+                    : null,
             },
             cancellationToken);
         queue.Complete();

@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using A2A;
 using Buteco.Inbox.Infrastructure;
 using Buteco.Inbox.Messages.Entities;
@@ -150,6 +152,15 @@ public sealed class DebounceSweepService(
         await HandleResponseAsync(dbContext, pendingDispatch, response, cancellationToken);
     }
 
+    // Chave de Message.Metadata que carrega o instante de recebimento da
+    // última mensagem do buffer — mesmo nome usado do lado da leitura em
+    // apps/workers (design.md da change inbox-instante-mensagem, Decisão
+    // D2). Duplicado deliberadamente em vez de extraído para libs/: os dois
+    // apps são isolados sem ProjectReference cruzado, e o helper de
+    // serialização é pequeno o suficiente para não justificar uma
+    // biblioteca nova (convenção 2).
+    private const string MessageInstantMetadataKey = "messageInstant";
+
     private SendMessageRequest BuildSendMessageRequest(PendingDispatch pendingDispatch, string contextId, string token)
     {
         var pushNotificationBaseUrl = publicUrlOptions.Value.BaseUrl.TrimEnd('/');
@@ -162,6 +173,10 @@ public sealed class DebounceSweepService(
                 Parts = [Part.FromText(pendingDispatch.ConcatenatedText())],
                 MessageId = Guid.NewGuid().ToString("N"),
                 ContextId = contextId,
+                Metadata = new Dictionary<string, JsonElement>
+                {
+                    [MessageInstantMetadataKey] = EncodeMessageInstant(pendingDispatch.LastMessageAt),
+                },
             },
             Configuration = new SendMessageConfiguration
             {
@@ -173,6 +188,16 @@ public sealed class DebounceSweepService(
             },
         };
     }
+
+    // Valor escalar (string ISO 8601 com offset, formato de arredondamento
+    // "O" do .NET) — nunca um objeto, para eliminar por construção a
+    // variante séria do mecanismo em que um JsonElement pré-materializado
+    // sem A2AJsonUtilities.DefaultOptions sobrevive à re-serialização do
+    // AgentTask e grava formato errado em disco (design.md, Decisão D2;
+    // mesma classe de defeito de PushNotificationConfigCodec/
+    // ConversationSessionCodec em apps/workers).
+    private static JsonElement EncodeMessageInstant(DateTimeOffset instant) =>
+        JsonSerializer.SerializeToElement(instant.ToString("O", CultureInfo.InvariantCulture), A2AJsonUtilities.DefaultOptions);
 
     private async Task HandleResponseAsync(
         AppDbContext dbContext,

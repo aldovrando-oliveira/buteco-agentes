@@ -49,7 +49,7 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
         await using var dbContext = CreateDbContext();
         var sourceAgent = await dbContext.Agents.AsNoTracking().FirstAsync(a => a.Id == sourceId);
 
-        var tools = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), currentDepth: 0, CancellationToken.None);
+        var tools = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), currentDepth: 0, messageInstant: null, CancellationToken.None);
 
         Assert.Equal(2, tools.Count);
         var names = tools.Select(t => t.Name).ToList();
@@ -72,8 +72,8 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
         var sourceAgent = await dbContext.Agents.AsNoTracking().FirstAsync(a => a.Id == sourceId);
         var contextId = Guid.NewGuid().ToString("N");
 
-        var first = await resolver.ResolveAsync(dbContext, sourceAgent, contextId, currentDepth: 0, CancellationToken.None);
-        var second = await resolver.ResolveAsync(dbContext, sourceAgent, contextId, currentDepth: 0, CancellationToken.None);
+        var first = await resolver.ResolveAsync(dbContext, sourceAgent, contextId, currentDepth: 0, messageInstant: null, CancellationToken.None);
+        var second = await resolver.ResolveAsync(dbContext, sourceAgent, contextId, currentDepth: 0, messageInstant: null, CancellationToken.None);
 
         Assert.Equal(first.Select(t => t.Name), second.Select(t => t.Name));
     }
@@ -88,7 +88,7 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
         await using var dbContext = CreateDbContext();
         var sourceAgent = await dbContext.Agents.AsNoTracking().FirstAsync(a => a.Id == sourceId);
 
-        var tools = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), currentDepth: 0, CancellationToken.None);
+        var tools = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), currentDepth: 0, messageInstant: null, CancellationToken.None);
 
         Assert.Empty(tools);
     }

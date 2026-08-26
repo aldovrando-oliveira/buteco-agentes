@@ -34,10 +34,22 @@ public interface IAgentDelegationToolSetResolver
     /// Profundidade da própria task do Source nesta cadeia de delegação —
     /// a task criada para o Target recebe <c>currentDepth + 1</c> (Decision 6).
     /// </param>
+    /// <param name="messageInstant">
+    /// Instante em que a mensagem original do usuário foi enviada, já
+    /// extraído da própria task do Source (ver
+    /// <c>Buteco.Workers.Agents.AgentExecutionService</c>) — propagado para
+    /// a task criada para o Target, para que Source e Target resolvam
+    /// expressões de tempo relativas contra o mesmo instante mesmo quando
+    /// processados em momentos de relógio diferentes (design.md da change
+    /// inbox-instante-mensagem, Decisão D3). <c>null</c> quando o Source não
+    /// tinha um instante de mensagem disponível — a task do Target não
+    /// inventa um valor.
+    /// </param>
     Task<IReadOnlyList<AITool>> ResolveAsync(
         AppDbContext dbContext,
         Agent sourceAgent,
         string contextId,
         int currentDepth,
+        DateTimeOffset? messageInstant,
         CancellationToken cancellationToken);
 }

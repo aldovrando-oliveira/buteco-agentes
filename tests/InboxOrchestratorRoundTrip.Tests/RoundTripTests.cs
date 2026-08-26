@@ -76,6 +76,68 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
         Assert.Contains(RoundTripFixture.MockedAgentReplyText, artifactText);
     }
 
+    /// <summary>
+    /// Cobre a change inbox-instante-mensagem, Tarefa 4.1 (convenção 11):
+    /// o valor real de `messageInstant` produzido por
+    /// `DebounceSweepService.BuildSendMessageRequest` (apps/inbox),
+    /// atravessando o `SendMessage` real contra apps/api
+    /// (`EnqueueingAgentHandler`), lido de volta como JSON bruto via
+    /// `GetTask` — não round-trip pelo mesmo tipo C#, que passaria igual
+    /// com o formato certo e com o errado (mesmo padrão de
+    /// `inbox-enums-json-string`).
+    /// </summary>
+    [Fact]
+    public async Task MessageReceived_TriggersFullRoundTrip_TaskCarriesMessageInstantInRawPersistedJson()
+    {
+        var agentId = await CreateAgentAsync();
+        var (channelId, externalId) = await CreateChannelAsync(agentId);
+
+        // Instante fixo, não DateTimeOffset.UtcNow: o teste precisa
+        // comparar o valor exato lido de volta contra o valor exato
+        // enviado, sem depender de qual precisão sobrevive ao round-trip
+        // via Postgres do PendingDispatch.LastMessageAt. Offset zero
+        // (UTC) — Npgsql só aceita DateTimeOffset com Offset=0 para
+        // colunas timestamptz (mesma exigência de DateTimeOffset.UtcNow,
+        // já usado pelo resto desta classe).
+        var receivedAt = new DateTimeOffset(2026, 3, 10, 12, 58, 0, TimeSpan.Zero);
+
+        using (var scope = fixture.InboxFactory.Services.CreateScope())
+        {
+            var orchestrator = scope.ServiceProvider.GetRequiredService<InboxInboundMessageOrchestrator>();
+            await orchestrator.ReceiveMessageAsync(
+                channelId,
+                externalId,
+                "Tem lugar amanhã?",
+                InboxMessageContentType.Text,
+                Guid.NewGuid().ToString(),
+                displayName: null,
+                receivedAt,
+                new Dictionary<string, string>(),
+                CancellationToken.None);
+        }
+
+        var taskId = await PollUntilAsync(
+            () => GetPendingDispatchTaskIdAsync(channelId, externalId),
+            id => id is not null,
+            TimeSpan.FromSeconds(10));
+        Assert.NotNull(taskId);
+
+        // Mesmo limite do teste-irmão (20s) — a defasagem de latência sob
+        // podman já registrada em 02-HISTORICO_E_STATUS.md
+        // ("InboxOrchestratorRoundTrip.Tests... ~21-22s contra limite de
+        // 20s, não regressão de código") afeta os dois testes igualmente,
+        // por exercitarem o mesmo round-trip completo dos três apps.
+        await PollUntilAsync(
+            () => HasPendingDispatchAsync(channelId, externalId),
+            hasPending => !hasPending,
+            TimeSpan.FromSeconds(20));
+
+        var rawMessageInstant = await GetRawMessageInstantFromApiAsync(agentId, taskId!);
+
+        Assert.NotNull(rawMessageInstant);
+        Assert.Equal(receivedAt, DateTimeOffset.Parse(rawMessageInstant));
+    }
+
     [Fact]
     public async Task OperatorToken_IssuedByApi_IsAcceptedByInboxWithoutNetworkCallToApi()
     {
@@ -191,6 +253,45 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
             .FirstOrDefault(text => text is not null) ?? "";
 
         return (state, artifactText);
+    }
+
+    /// <summary>
+    /// Lê `messageInstant` como string bruta de `Message.Metadata`, direto
+    /// do JSON retornado por `GetTask` — sem desserializar para nenhum tipo
+    /// C# no meio do caminho (convenção 11). Varre `history` inteiro por
+    /// qualquer entrada com essa chave em `metadata`, em vez de depender do
+    /// valor exato de `role` no fio (não verificado aqui, fora do escopo
+    /// deste teste).
+    /// </summary>
+    private async Task<string?> GetRawMessageInstantFromApiAsync(Guid agentId, string taskId)
+    {
+        var token = await fixture.LoginAsOperatorAsync();
+        var client = fixture.ApiFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var payload = new { jsonrpc = "2.0", id = 1, method = "GetTask", @params = new { id = taskId } };
+
+        var response = await client.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
+        response.EnsureSuccessStatusCode();
+
+        var raw = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(raw);
+        var result = document.RootElement.GetProperty("result");
+
+        if (!result.TryGetProperty("history", out var history))
+        {
+            return null;
+        }
+
+        foreach (var message in history.EnumerateArray())
+        {
+            if (message.TryGetProperty("metadata", out var metadata)
+                && metadata.TryGetProperty("messageInstant", out var messageInstant))
+            {
+                return messageInstant.GetString();
+            }
+        }
+
+        return null;
     }
 
     private static async Task<T> PollUntilAsync<T>(Func<Task<T>> probeAsync, Func<T, bool> isDone, TimeSpan timeout)

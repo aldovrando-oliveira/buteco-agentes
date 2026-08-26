@@ -14,10 +14,15 @@ A linha de trabalho de histórico de conversa por sessão no inbox está
 etapa 3, aplicada antes dela). Todas aplicadas, sincronizadas e
 arquivadas.
 
-A linha de trabalho de contexto temporal e de canal está na **etapa 1 de
-2, concluída e arquivada**: `apps-workers-contexto-temporal`. Etapa 2
-(`inbox-contexto-canal-metadata`) ainda não proposta — ver "Changes
-aplicadas" abaixo para o que entrou e "Próximo passo" para a sequência.
+A linha de trabalho de contexto temporal e de canal está com a **etapa 1
+concluída e arquivada** (`apps-workers-contexto-temporal`) e a **etapa 2
+dividida em duas, pela revisão da exploração `inbox-contexto-canal-metadata`**
+(perfis de risco opostos — ver seção "Instante da mensagem" abaixo):
+`inbox-instante-mensagem` (instante da mensagem, aplicada) e
+`inbox-contexto-canal` (contexto de canal — `DisplayName`/`ExternalId`,
+risco de injeção de prompt sem mitigação fechada, ainda não proposta). Ver
+"Changes aplicadas" abaixo para o que entrou e "Próximo passo" para a
+sequência.
 
 `inbox-session-indice-unico` fechou o último item da dívida de baseline
 com causa de produção conhecida (`ContactSessionResolver` sem índice
@@ -615,6 +620,103 @@ acima —, todos verdes), e
 — o teste que falhava 3/10 — rodado **10/10** contra Postgres real
 depois da correção.
 
+### Instante da mensagem
+
+`inbox-instante-mensagem` — etapa 2 (parte 1 de 2) da linha de contexto
+temporal e de canal, fechando o caso de uso que originou a linha inteira:
+mensagem escrita no dia 21 dizendo "amanhã", processada no dia 22, passa a
+resolver para o dia 22, não mais para o dia 23. A exploração
+`inbox-contexto-canal-metadata` cobria também contexto de canal
+(`DisplayName`/`ExternalId`); a revisão dividiu em duas changes por
+perfil de risco oposto — este bloco é plumbing com cuidado de formato
+conhecido, o outro (`inbox-contexto-canal`, ainda não proposta) coloca
+texto livre do usuário final na janela de contexto do modelo pela
+primeira vez, sem mitigação que elimine o risco de injeção de prompt.
+
+O que entrou:
+
+- **`apps/inbox`** (`DebounceSweepService.BuildSendMessageRequest`) passa
+  a incluir, em `Message.Metadata["messageInstant"]`, o instante de
+  recebimento da última mensagem do buffer (`PendingDispatch
+  .LastMessageAt`) — string ISO 8601 com offset (formato de
+  arredondamento `"O"`), serializada com `A2AJsonUtilities.DefaultOptions`.
+- **`apps/workers`** (`AgentExecutionService.ExtractMessageInstant`) lê
+  essa chave da última mensagem de usuário no histórico da task e repassa
+  para `TemporalContextBlockBuilder.Build` — a regra de precedência da
+  etapa 1 passa a ter, pela primeira vez em produção, um instante de
+  mensagem real para resolver contra, incluindo a linha de defasagem
+  entre os dois instantes. Ausência (Metadata nulo, chave ausente, ou
+  valor ilegível) colapsa para o comportamento da etapa 1, sem falhar a
+  task; o terceiro caso emite log de aviso com o identificador da task.
+- **Propagação na delegação**: o instante da mensagem do Source passa a
+  ser gravado na task criada para o Target
+  (`AgentDelegationToolSetResolver.CreateDelegatedTaskAsync`), pela mesma
+  chave `Message.Metadata["messageInstant"]` — o Target lê pelo mesmo
+  mecanismo de qualquer task, não por um transporte separado. Sem isso,
+  Source e Target resolveriam "amanhã" contra dias diferentes quando
+  processados em momentos de relógio distintos (confirmado real, não
+  hipotético: delegação é assíncrona pela mesma fila `agent-tasks`,
+  Source bloqueado aguardando o Target — a etapa 1 já tinha declarado
+  isso Non-Goal, com gatilho apontando para esta change).
+- **Nenhuma mudança em `apps/api`** — `Message.Metadata` já sobrevivia
+  até `a2a_tasks.payload` sem alteração de código; confirmado por
+  rastreamento real do pipeline (`EnqueueingAgentHandler.ExecuteAsync` →
+  `TaskProjection.Apply` → `PostgresTaskStore.SaveTaskAsync`, serialização
+  fresca do `AgentTask`, sem risco de formato). **Nenhuma migração de
+  banco.**
+
+**Duas correções de estimativa registradas nesta seção anteriormente,
+ambas fechadas agora com a evidência real (convenção 9 — corrigir onde o
+achado divergiu, não só no resumo do chat)**:
+
+1. O custo dimensionado no registro da etapa 1 (ver "Itens em aberto",
+   entrada removida abaixo) dizia que `TaskJobMessage` precisaria de
+   campo novo para propagar o instante. **Não precisou** — o transporte
+   final foi via `Message.Metadata` (contrato A2A, não o envelope
+   RabbitMQ interno), e o worker já relê a task inteira do store; zero
+   mudança em `TaskJobMessage`.
+2. O custo de propagar na delegação estava registrado como "tocar dois
+   pontos em `DelegateToTargetAsync`/`CreateDelegatedTaskAsync`". O custo
+   real foi maior — **4 métodos + 1 assinatura de interface**
+   (`IAgentDelegationToolSetResolver.ResolveAsync`,
+   `AgentExecutionService.ExecuteAsync`, `BuildDelegationTool`,
+   `DelegateToTargetAsync`, `CreateDelegatedTaskAsync`) — porque
+   `CreateDelegatedTaskAsync` precisa escrever a chave no `Message` que
+   constrói para o Target (o registro original achava que não precisaria,
+   por só "montar `AgentTask`/`Metadata`, não o bloco temporal" — leitura
+   certa sobre onde `TemporalContextBlockBuilder.Build` é chamado, errada
+   sobre o custo total: se o Target lê pelo mesmo mecanismo de qualquer
+   task, alguém precisa escrever a chave nele antes).
+
+**Decisão sobre a convenção 12 de `01-ARQUITETURA_E_CONVENCOES.md`**:
+avaliado e descartado adicionar um exemplo novo — o mecanismo de
+`JsonElement` sobrevivendo à re-serialização sem reaplicar naming policy
+já está documentado na seção "AgentCard / protocolo A2A" do mesmo
+arquivo (achado por `push-notification-config-codec-encoder`); a escolha
+desta change de usar um valor escalar em `messageInstant` é aplicação
+desse conhecimento já registrado, não uma lição nova extraída de um
+defeito novo.
+
+**Verificação**: `Buteco.Inbox.Tests` e `Buteco.Workers.Tests` verdes com
+os testes novos desta change incluídos (11 casos em
+`AgentDelegationExecutionTests`, incluindo os 3 novos de propagação; 7 em
+`TemporalContextMessageInstantTests`, novo; 2 em
+`DebounceMessageInstantTests`, novo). O teste de acordo real entre
+`apps/inbox` e `apps/workers` (convenção 11,
+`InboxOrchestratorRoundTrip.Tests`) foi implementado e compila, mas
+**nunca completou nesta sessão — nem no commit imediatamente anterior ao
+apply desta change**. Verificado com o mesmo método do bisect de
+`crossapp-session-codec-encoder` (`git worktree` isolado em `a91f0c9`,
+mesma sessão/ambiente): com o timeout do teste estendido a 90s dos dois
+lados, o commit base falha **identicamente** ao HEAD desta change (mesmo
+`TimeoutException`, ~91s nos dois) — não regressão, causa ambiental
+confirmada por evidência direta, não por semelhança. Mas isso também
+significa que **o formato de fio de `messageInstant` entre os dois apps
+nunca foi provado ponta a ponta nesta sessão** — só por asserções
+unitárias, que a convenção 11 não aceita como prova de acordo. Ver
+"Itens em aberto" (os dois itens novos sobre este teste) para o
+detalhamento e o gatilho.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -718,18 +820,25 @@ Cada um tem gatilho de quando revisitar:
   Gatilho: confirmar contra uma instância WAHA real de produção assim que
   houver uma disponível; se o campo divergir, `DisplayName` do WAHA
   simplesmente fica sempre nulo até a correção, sem quebrar nada mais.
-- **Instante da mensagem não atravessa a delegação entre agentes**
-  (`apps-workers-contexto-temporal`, Non-Goal explícito) — quando a
-  etapa 2 (`inbox-contexto-canal-metadata`) passar a preencher esse
-  instante, ele não chega ao agente Target sem trabalho adicional:
-  Source e Target resolveriam "amanhã" contra dias diferentes, a falha
-  que a linha inteira existe para evitar. Custo já dimensionado, para
-  não ser redescoberto: `TaskJobMessage` é um `record` posicional
-  fechado (`TaskId`, `AgentId`, `ContextId`, `PushNotificationConfig?`),
-  sem bag extensível — propagar exige um campo novo (seguro, por ser
-  JSON nomeado, com precedente de campo opcional) e tocar dois pontos em
-  `AgentDelegationToolSetResolver.DelegateToTargetAsync`/
-  `CreateDelegatedTaskAsync`. Gatilho: proposta da etapa 2.
+- **`WahaInboundWebhookHandler`/`TelegramInboundWebhookHandler` chamam
+  `DateTimeOffset.UtcNow` direto, fora do `TimeProvider`** (achado por
+  `inbox-instante-mensagem`) — mesma regra que o Achado 9 de
+  `apps-workers-contexto-temporal` fechou em `apps/workers` (`TimeProvider`
+  como único ponto de acesso a relógio/fuso), mostrando que aquela
+  varredura era, de fato, só de `apps/workers`, nunca estendida a
+  `apps/inbox`. Gatilho: antes de qualquer mudança futura nesses adapters,
+  ou se algum teste precisar de relógio determinístico em `apps/inbox`.
+- **Nenhum adapter de canal desserializa o timestamp que o provedor
+  envia** (achado por `inbox-instante-mensagem`) — `Message.OccurredAt`
+  em `apps/inbox` é sempre o instante de recebimento do webhook, nunca o
+  declarado por WAHA/Telegram no payload (confirmado: nenhum dos dois
+  payloads modela esse campo em C#, embora os dois provedores enviem um).
+  Sob atraso do lado do provedor (WAHA fora do ar, reentrega tardia), o
+  `messageInstant` que chega a `apps/workers` já nasce defasado, sem
+  caminho de código para recuperar o instante real — decisão consciente
+  registrada em `inbox-instante-mensagem` (design.md, Riscos), não
+  lacuna. Gatilho: se a defasagem por atraso do provedor virar problema
+  real observado.
 - **Resíduo da Decisão B de `apps-workers-contexto-temporal`** — leitura
   de fuso local por código de framework (provider de logging, Npgsql/EF
   Core, o próprio host) continua fora do alcance de qualquer varredura
@@ -760,24 +869,51 @@ Cada um tem gatilho de quando revisitar:
   aquela change — `apps/frontend` não foi tocado. Gatilho: qualquer
   trabalho futuro em `apps/frontend`, ou se continuarem vermelhos e
   atrapalharem CI.
-- **Timeout de `InboxOrchestratorRoundTrip.Tests
-  .MessageReceived_TriggersFullRoundTrip_...` contra `podman`** — falha
-  por `TimeoutException` a ~22s contra um limite interno de 20s,
-  repetível nas duas tentativas, quando Testcontainers roda contra o
-  socket do `podman machine` em vez de Docker nativo (achado durante o
-  apply de `apps-workers-contexto-temporal`). Leitura mais provável:
-  overhead de rede da VM do podman frente a Docker nativo, para o qual o
-  timeout foi calibrado — não regressão de código nesta change. Reforçado
-  pela baseline nomeada pós-archive: o mesmo timeout reproduz também no
-  commit imediatamente anterior ao apply, onde `AgentExecutionService`/
-  `TaskJobConsumer` nem exigiam `TimeProvider` ainda — não prova que é
-  especificamente latência do podman (faltaria comparação nativa com
-  Docker, indisponível neste ambiente), mas descarta código desta change
-  como causa. Gatilho: rodar essa suíte com Docker real disponível para
-  confirmar se passa normalmente; se sim, considerar ampliar o timeout
-  para tolerar ambientes mais lentos, sem perder o propósito do teste
-  (round-trip completo dentro de um tempo razoável). O ajuste não é
-  agora — este item é diagnóstico, não uma correção pendente.
+- **`InboxOrchestratorRoundTrip.Tests.MessageReceived_TriggersFullRoundTrip_...`
+  não completa contra `podman` — degradação maior do que o registrado
+  aqui antes, confirmada com evidência, não por semelhança
+  (`inbox-instante-mensagem`).** O registro anterior descrevia
+  `TimeoutException` a ~21-22s contra um limite interno de 20s — leitura
+  natural: "quase passa, só falta um pouco". Essa leitura estava errada.
+  Verificado nesta change com o mesmo método do bisect de
+  `crossapp-session-codec-encoder` (`git worktree` isolado no commit
+  imediatamente anterior ao apply, `a91f0c9`, mesma sessão e mesmo
+  ambiente): com o timeout do teste estendido para 90s **nos dois
+  lados** (worktree do commit base e HEAD desta change), os dois falham
+  **identicamente** — mesmo `TimeoutException`, mesma ordem de grandeza
+  (~91s, o teste nunca completa). O número "~21-22s" nunca foi evidência
+  de proximidade do sucesso; era só o próprio limite interno de 20s do
+  teste cortando a espera cedo. O round-trip completo dos três apps
+  simplesmente não termina neste ambiente/sessão, com ou sem
+  `inbox-instante-mensagem` — confirmado idêntico no commit base, não
+  regressão desta change. Causa real não aprofundada (recursos da VM do
+  podman verificados normais — memória livre, load baixo; suspeita não
+  investigada: alguma das duas pontas HTTP redirecionadas entre
+  `WebApplicationFactory`s, ou a publicação/consumo via RabbitMQ, nunca
+  fecha o ciclo neste ambiente específico). Gatilho: antes da próxima vez
+  que esta suíte precisar rodar de verdade — investigar com logging
+  detalhado do que trava (qual das pernas do round-trip não completa),
+  não só medir o timeout.
+- **Teste de acordo da convenção 11 de `inbox-instante-mensagem` nunca
+  executado com sucesso** —
+  `MessageReceived_TriggersFullRoundTrip_TaskCarriesMessageInstantInRawPersistedJson`
+  (`InboxOrchestratorRoundTrip.Tests`) está implementado e compila, mas
+  nunca completou (mesma causa do item acima — o round-trip dos três
+  apps não termina neste ambiente). Isso significa que **o formato de
+  fio de `Message.Metadata["messageInstant"]` entre `apps/inbox` e
+  `apps/workers` não foi provado ponta a ponta com o valor real de um
+  lado consumido pelo outro** — só por asserções unitárias
+  (`DebounceMessageInstantTests`, `TemporalContextMessageInstantTests`),
+  que a convenção 11 explicitamente não aceita como prova de acordo entre
+  as duas pontas (fixture forjado nas duas pontas com a mesma
+  configuração passa igual com o formato certo e com o errado). Risco
+  real: é a mesma classe de defeito que já mordeu esta base três vezes
+  (chave de assinatura de token, enums de `Message`, os dois codecs de
+  encoder) — nenhuma delas foi pega por teste unitário, todas exigiram um
+  teste de acordo real. Gatilho: assim que
+  `InboxOrchestratorRoundTrip.Tests` voltar a completar neste ambiente
+  (ou rodar sob Docker nativo), executar esse teste especificamente antes
+  de qualquer outro trabalho na linha de contexto temporal/canal.
 - **`InboxFactoryFixture.InitializeAsync` acessa `Services` antes de
   migrar** (achado por `inbox-sweep-service-resiliencia`, design.md,
   Non-Goals) — chama `Services.CreateScope()` para rodar a migration,
@@ -818,19 +954,18 @@ Cada um tem gatilho de quando revisitar:
 
 ## Próximo passo
 
-**Imediato**: restauração de baseline de testes — **não é change de
-capability, é dívida de infraestrutura de teste**, e vem sequenciada
-**antes** de `inbox-contexto-canal-metadata` (etapa 2 da linha de
-contexto temporal). Motivo do sequenciamento: a etapa 2 vai mexer em
-`TaskJobMessage` (record fechado, precisa de campo novo) e em
-`AgentDelegationToolSetResolver.DelegateToTargetAsync`/
-`CreateDelegatedTaskAsync` — exatamente a superfície que
-`InboxOrchestratorRoundTrip.Tests` e os testes cross-app cobrem. Entrar
-na etapa 2 com a baseline suja (falhas nomeadas sem correção nem
-decisão consciente de não corrigir) é pior do que foi entrar em
-`apps-workers-contexto-temporal` do mesmo jeito. Grupos, cada um com o
-diagnóstico já coletado na baseline nomeada acima — **nenhuma correção
-proposta aqui, só o registro de que precisa de decisão**:
+**Concluído nesta sessão**: `inbox-instante-mensagem` foi proposta e
+aplicada (ver "Instante da mensagem" acima) — tocou exatamente a
+superfície que a baseline abaixo já sinalizava como sensível
+(`AgentDelegationToolSetResolver`), sem correção prévia de baseline ter
+sido feita antes (diferente do que este parágrafo recomendava
+originalmente). Nenhuma regressão nova encontrada por isso — os testes
+novos desta change passaram, e o único item da baseline que tocava a
+mesma superfície (`InboxOrchestratorRoundTrip.Tests`, ver abaixo)
+continua com a mesma causa já registrada, não uma nova.
+
+Grupos da baseline, cada um com o diagnóstico já coletado — **nenhuma
+correção proposta aqui, só o registro de que precisa de decisão**:
 
 - ~~`apps/inbox`: `WebhookEndpointsTests`/`MessagePersistenceTests` —
   `ObjectDisposedException` sobre `IServiceProvider`~~ — **resolvido por
@@ -852,7 +987,20 @@ proposta aqui, só o registro de que precisa de decisão**:
   de comparação nativa disponível neste ambiente. Reproduzido de novo,
   identicamente (~21-22s), durante o apply de `inbox-session-indice-unico`
   — não regressão desta change, gatilho de "confirmar antes de mexer no
-  número" continua o mesmo (ver "Itens em aberto").
+  número" continua o mesmo (ver "Itens em aberto"). **Reclassificado
+  durante o apply de `inbox-instante-mensagem`, não "piorou"**: o número
+  "~21-22s" nunca foi evidência de proximidade do sucesso — era só o
+  próprio limite interno de 20s do teste cortando a espera cedo.
+  Confirmado com `git worktree` isolado no commit imediatamente anterior
+  ao apply (mesmo método do bisect de `crossapp-session-codec-encoder`):
+  com o timeout estendido a 90s **nos dois lados** (commit base e HEAD
+  desta change), os dois falham identicamente (~91s, nunca completa) —
+  recursos da VM do podman verificados normais (memória livre, load
+  baixo), causa real não aprofundada
+  nesta sessão. Ainda não regressão de código (o teste-irmão sem nenhuma
+  mudança falhou do mesmo jeito), mas a leitura de "só latência" pode não
+  bastar mais — vale investigar antes da próxima vez que esta suíte
+  precisar rodar de verdade.
 - `InboxFactoryFixture.InitializeAsync` acessa `Services` antes de migrar
   — não corrigido ainda, sem urgência depois de
   `inbox-sweep-service-resiliencia` (ver "Itens em aberto" para o
@@ -867,11 +1015,13 @@ Com `inbox-session-indice-unico` aplicada, `apps/inbox` (`Buteco.Inbox.Tests`)
 não tem mais nenhum flake conhecido — 160/160 (ver "Índice único de
 Session" acima). O ruído que resta na fila acima é só cross-app/frontend.
 
-Etapa 2 da linha de contexto temporal (`inbox-contexto-canal-metadata`)
-é o sucessor natural depois disso, ainda não proposta — checado durante
-`inbox-session-indice-unico` que nenhuma das duas mexe no mesmo trecho de
-código (`inbox-contexto-canal-metadata` toca o ponto de despacho/
-`TaskJobMessage`, não `ContactSessionResolver`), sem colisão.
+`inbox-contexto-canal` (contexto de canal — `DisplayName`/`ExternalId`) é
+o sucessor natural agora, ainda não proposta. Diferente da etapa anterior,
+não é só plumbing: a pergunta de injeção de prompt via `DisplayName` (a
+que menos atenção recebeu nas conversas anteriores) precisa de desenho
+próprio antes de virar proposta — não repetir o padrão de
+`inbox-instante-mensagem`, que pôde ir direto para `/opsx:propose` porque
+a exploração já tinha fechado as perguntas de risco.
 
 A linha de trabalho de histórico de conversa por sessão no inbox fechou
 nas três etapas antes desta — foi a primeira vez desde o MVP que não

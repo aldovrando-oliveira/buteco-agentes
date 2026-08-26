@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using global::A2A;
 using Buteco.Workers.A2A;
@@ -148,6 +149,7 @@ public sealed class AgentExecutionService(
         try
         {
             var userText = ExtractLatestUserText(task);
+            var messageInstant = ExtractMessageInstant(task, message.TaskId);
 
             // agent.Provider/agent.Model só ficam nulos para um agente "precisa de
             // reconfiguração" — apps/api já rejeita SendMessage nesse caso antes de
@@ -167,7 +169,7 @@ public sealed class AgentExecutionService(
             // Sem conexão externa viva por trás (diferente de McpToolSet) —
             // não precisa de await using, ver design.md, Decision 10.
             var delegationTools = await delegationToolSetResolver.ResolveAsync(
-                dbContext, agent, message.ContextId, delegationDepth, cancellationToken);
+                dbContext, agent, message.ContextId, delegationDepth, messageInstant, cancellationToken);
 
             // Bloco de contexto temporal concatenado às Instructions do
             // operador — sem tocar Agent.Instructions no banco, sem entrar
@@ -175,7 +177,7 @@ public sealed class AgentExecutionService(
             // apps-workers-contexto-temporal, Decisões 1 e 2). Instructions
             // vazia (Non-Goal: sem validação de não-vazio em apps/api) não
             // pode deixar separador órfão — usa só o bloco nesse caso.
-            var temporalContextBlock = TemporalContextBlockBuilder.Build(timeProvider);
+            var temporalContextBlock = TemporalContextBlockBuilder.Build(timeProvider, messageInstant);
             var instructionsWithTemporalContext = TemporalContextBlockBuilder.Concatenate(agent.Instructions, temporalContextBlock);
 
             var aiAgent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
@@ -324,6 +326,40 @@ public sealed class AgentExecutionService(
     {
         var lastUserMessage = task.History?.LastOrDefault(m => m.Role == Role.User);
         return lastUserMessage?.Parts.FirstOrDefault(part => part.Text is not null)?.Text ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Lê <c>Message.Metadata[MessageInstantCodec.MetadataKey]</c> da última
+    /// mensagem do usuário no histórico da task — mesmo filtro de
+    /// <see cref="ExtractLatestUserText"/> (design.md da change
+    /// inbox-instante-mensagem, Decisão D3: invariante verificado contra o
+    /// código real, não assumido — o Message que uma task delegada recebe
+    /// satisfaz este mesmo filtro). Três casos tratados como "sem instante
+    /// de mensagem", nunca como erro de task (Decisão D4): Metadata nulo,
+    /// chave ausente, ou valor presente mas não parseável como ISO 8601 —
+    /// esse terceiro caso, e só ele, emite um log de aviso, porque um valor
+    /// presente e ilegível é sinal de bug em algum produtor da chave.
+    /// </summary>
+    private DateTimeOffset? ExtractMessageInstant(AgentTask task, string taskId)
+    {
+        var lastUserMessage = task.History?.LastOrDefault(m => m.Role == Role.User);
+        if (lastUserMessage?.Metadata is null || !lastUserMessage.Metadata.TryGetValue(MessageInstantCodec.MetadataKey, out var value))
+        {
+            return null;
+        }
+
+        if (value.ValueKind == JsonValueKind.String
+            && DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var instant))
+        {
+            return instant;
+        }
+
+        logger.LogWarning(
+            "Task {TaskId} tem {MetadataKey} presente em Message.Metadata, mas com um valor ilegível como instante ISO 8601: {RawValue}",
+            taskId,
+            MessageInstantCodec.MetadataKey,
+            value.GetRawText());
+        return null;
     }
 
     /// <summary>
