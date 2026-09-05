@@ -1,10 +1,12 @@
-# agent-delegation-binding-ui Specification
+## RENAMED Requirements
 
-## Purpose
+- FROM: `### Requirement: Seção de gestão de delegações de saída em AgentDetailPage`
+- TO: `### Requirement: Aba Delegações no detalhe do agente`
 
-TBD - defined by change frontend-agente-delegacoes-secao. Update Purpose after archive.
+- FROM: `### Requirement: Cancelar restaura a seleção original sem enviar requisição`
+- TO: `### Requirement: Descartar restaura a seleção original sem enviar requisição`
 
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Aba Delegações no detalhe do agente
 
@@ -45,18 +47,6 @@ presentes em `agent.delegatesTo` (retornado por `GET /agents/{id}`).
   `delegatesTo` é uma lista vazia
 - **THEN** a interface exibe a lista sem nenhum agente selecionado
 
-### Requirement: Exclusão do próprio agente das opções de delegação
-
-O sistema SHALL excluir o próprio agente (o agente cuja página de
-detalhe está sendo exibida) da lista de opções do controle de seleção
-múltipla, mesmo que ele conste no catálogo completo de agentes.
-
-#### Scenario: Agente atual ausente das opções
-- **WHEN** o usuário acessa a página de detalhe de um agente
-- **THEN** o próprio agente não aparece como opção selecionável no
-  controle de seleção múltipla, independentemente de quantos outros
-  agentes existam no catálogo
-
 ### Requirement: Indicador de agente inativo nas opções de delegação
 
 O sistema SHALL exibir, para cada agente listado como opção de delegação,
@@ -81,63 +71,6 @@ modelo, mantendo-o selecionável.
 - **THEN** a interface o inclui normalmente no conjunto de delegações a
   ser salvo, sem rejeitar a seleção nem exibir aviso
 
-### Requirement: Nenhuma detecção de ciclo de delegação na interface
-
-O sistema SHALL permitir que o usuário selecione, no controle de seleção
-múltipla, qualquer combinação de agentes como delegações de saída,
-incluindo combinações que formem um ciclo indireto (A→B→C→A) ou um par
-bidirecional (A→B e B→A) quando consideradas em conjunto com delegações
-já cadastradas em outros agentes — sem detectar, avisar ou bloquear
-esse caso na interface.
-
-#### Scenario: Selecionar uma delegação que fecha um ciclo indireto é permitido
-- **WHEN** o agente B já delega para o agente C, o agente C já delega
-  para o agente A, e o usuário, na página de detalhe do agente A,
-  seleciona o agente B como delegação de saída
-- **THEN** a interface permite a seleção e o submit normalmente, sem
-  exibir nenhum aviso sobre o ciclo resultante (A→B→C→A)
-
-### Requirement: Seleção e desseleção de agentes-alvo
-
-O usuário SHALL poder selecionar e desselecionar cada agente-alvo
-independentemente no controle de seleção múltipla, com o estado local
-refletindo a seleção antes de qualquer submit.
-
-#### Scenario: Selecionar um agente-alvo
-- **WHEN** o usuário marca um agente ainda não selecionado no controle
-  de seleção múltipla
-- **THEN** a interface passa a considerá-lo parte do conjunto de
-  delegações a ser salvo
-
-#### Scenario: Desselecionar um agente-alvo
-- **WHEN** o usuário desmarca um agente previamente selecionado no
-  controle de seleção múltipla
-- **THEN** a interface deixa de considerá-lo parte do conjunto de
-  delegações a ser salvo
-
-### Requirement: Submit do conjunto de delegações via PUT /agents/{id}/delegations
-
-Ao acionar "Salvar delegações", a interface SHALL enviar `PUT
-/agents/{id}/delegations` com `{ targetAgentIds: [...] }`, contendo o id
-de cada agente selecionado no controle de seleção múltipla — nunca
-omitindo o campo `targetAgentIds` nem enviando-o como `null`. Em caso de
-sucesso, a interface SHALL exibir uma notificação de sucesso e manter o
-usuário na página de detalhe do agente, refletindo o conjunto salvo.
-
-#### Scenario: Submit com um ou mais agentes selecionados
-- **WHEN** o usuário aciona "Salvar delegações" com um ou mais agentes
-  selecionados
-- **THEN** a interface envia `PUT /agents/{id}/delegations` com
-  `targetAgentIds` contendo o id de cada agente selecionado e exibe uma
-  notificação de sucesso
-
-#### Scenario: Submit sem nenhum agente selecionado remove todas as delegações
-- **WHEN** o usuário aciona "Salvar delegações" sem nenhum agente
-  selecionado (incluindo o caso de um agente que já tinha delegações e
-  todas foram desmarcadas)
-- **THEN** a interface envia `PUT /agents/{id}/delegations` com
-  `targetAgentIds: []` e exibe uma notificação de sucesso
-
 ### Requirement: Descartar restaura a seleção original sem enviar requisição
 
 A interface SHALL restaurar, ao acionar a ação de descartar na barra de
@@ -153,18 +86,7 @@ usuário, sem enviar nenhuma requisição a `PUT /agents/{id}/delegations`.
   `PUT /agents/{id}/delegations`, e a barra de alterações não salvas
   deixa de ser exibida
 
-### Requirement: Erro de submit exibido via notificação genérica
-
-O sistema SHALL exibir, quando `PUT /agents/{id}/delegations` falhar,
-uma notificação de erro genérica, sem interromper a renderização do
-restante da página de detalhe do agente nem exigir recarregamento.
-
-#### Scenario: Falha no submit não quebra a página
-- **WHEN** o usuário aciona "Salvar delegações" e `PUT
-  /agents/{id}/delegations` responde com erro
-- **THEN** a interface exibe uma notificação de erro genérica, mantém a
-  seleção atual do controle e mantém o restante da página de detalhe do
-  agente renderizado normalmente
+## ADDED Requirements
 
 ### Requirement: Busca por nome na lista de agentes-alvo
 

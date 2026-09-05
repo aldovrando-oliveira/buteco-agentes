@@ -1,4 +1,4 @@
-import { Navigate, Route, createRoutesFromElements } from 'react-router';
+import { Navigate, Route, createRoutesFromElements, redirect } from 'react-router';
 import type { RouteObject } from 'react-router';
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from './ProtectedRoute';
@@ -7,7 +7,6 @@ import { AgentListPage } from '../features/agents/pages/AgentListPage';
 import { AgentCreatePage } from '../features/agents/pages/AgentCreatePage';
 import { AgentDetailPage } from '../features/agents/pages/AgentDetailPage';
 import { AgentEditPage } from '../features/agents/pages/AgentEditPage';
-import { AgentMcpServersPage } from '../features/agents/pages/AgentMcpServersPage';
 import { McpServerListPage } from '../features/mcp-servers/pages/McpServerListPage';
 import { McpServerCreatePage } from '../features/mcp-servers/pages/McpServerCreatePage';
 import { McpServerDetailPage } from '../features/mcp-servers/pages/McpServerDetailPage';
@@ -38,7 +37,15 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
           <Route path="new" element={<AgentCreatePage />} />
           <Route path=":id" element={<AgentDetailPage />} />
           <Route path=":id/edit" element={<AgentEditPage />} />
-          <Route path=":id/mcp-servers" element={<AgentMcpServersPage />} />
+          {/* A gestão do vínculo virou aba do detalhe do agente. A rota
+              continua existindo, sem componente, só para que links salvos
+              antes da mudança não quebrem. É o único loader do projeto: não
+              busca nada, apenas traduz uma rota morta (Decision 4 do
+              design.md da change frontend-agente-detalhe-abas). */}
+          <Route
+            path=":id/mcp-servers"
+            loader={({ params }) => redirect(`/agents/${params.id}?tab=ferramentas`)}
+          />
         </Route>
         <Route path="mcp-servers">
           <Route index element={<McpServerListPage />} />

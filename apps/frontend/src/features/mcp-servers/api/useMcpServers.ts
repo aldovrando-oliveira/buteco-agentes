@@ -17,8 +17,16 @@ import type {
   UpdateMcpServerInput,
 } from '../types/mcpServer';
 
-export function useMcpServersQuery() {
-  return useQuery({ queryKey: ['mcp-servers'], queryFn: listMcpServers });
+// `enabled` opcional (mesmo formato de useMcpServerToolsQuery): o detalhe
+// do agente só busca o catálogo quando a aba de ferramentas está ativa, e
+// a maioria das visitas nunca a abre (Decision 5 do design.md da change
+// frontend-agente-detalhe-abas).
+export function useMcpServersQuery(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['mcp-servers'],
+    queryFn: listMcpServers,
+    enabled: options?.enabled ?? true,
+  });
 }
 
 export function useMcpServerQuery(id: string) {

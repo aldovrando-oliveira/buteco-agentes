@@ -1,10 +1,9 @@
-# agent-mcp-binding-ui Specification
+## RENAMED Requirements
 
-## Purpose
+- FROM: `### Requirement: Página de gestão do vínculo agente↔servidores MCP`
+- TO: `### Requirement: Aba Ferramentas no detalhe do agente`
 
-TBD - defined by change frontend-agente-vinculo-mcp-tools. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Aba Ferramentas no detalhe do agente
 
@@ -129,32 +128,6 @@ a descoberta quando ainda não houver resultado disponível.
 - **THEN** a interface reutiliza o resultado já obtido, sem exigir uma
   nova chamada a `GET /mcp-servers/{id}/tools`
 
-### Requirement: Seleção e desseleção de servidores e tools individuais
-
-O usuário SHALL poder selecionar e desselecionar cada servidor MCP
-independentemente, e, para um servidor selecionado cujas tools já foram
-descobertas, marcar e desmarcar cada tool individualmente.
-
-#### Scenario: Selecionar um servidor
-- **WHEN** o usuário marca o controle de seleção de um servidor MCP
-  ainda não selecionado
-- **THEN** a interface passa a considerá-lo parte do vínculo a ser
-  salvo, com `allowedTools` inicialmente vazio até que o usuário marque
-  alguma tool
-
-#### Scenario: Desselecionar um servidor remove seu vínculo do envio
-- **WHEN** o usuário desmarca o controle de seleção de um servidor MCP
-  previamente selecionado
-- **THEN** a interface deixa de considerá-lo parte do vínculo a ser
-  salvo, independentemente de quais tools estavam marcadas para ele
-
-#### Scenario: Marcar e desmarcar uma tool individual
-- **WHEN** o usuário, com um servidor selecionado e suas tools já
-  descobertas, marca ou desmarca uma tool específica
-- **THEN** a interface atualiza o `allowedTools` desse servidor para
-  refletir exatamente as tools marcadas, sem afetar a seleção de
-  nenhum outro servidor
-
 ### Requirement: Submit do vínculo via PUT /agents/{id}/mcp-servers
 
 Ao acionar a ação de salvar, a interface SHALL enviar
@@ -187,63 +160,7 @@ salvo, sem navegar para outra tela.
   validadas nos servidores MCP, sem afirmar em qual servidor a validação
   está, e mantém a ação de salvar inerte até a resposta chegar
 
-### Requirement: Tratamento do erro atômico de validação (502)
-
-O sistema SHALL exibir, quando `PUT /agents/{id}/mcp-servers` responde
-`502` (falha de handshake de validação contra um dos servidores do
-payload), uma mensagem que identifica qual servidor MCP falhou a
-validação e o motivo, deixando claro que nenhum vínculo foi salvo, sem
-navegar para outra página e sem limpar a seleção já feita pelo usuário.
-
-#### Scenario: Falha de handshake identifica o servidor e preserva a seleção
-- **WHEN** o usuário confirma o vínculo e a API responde `502` com um
-  `ProblemDetails` identificando um `McpServerId` e o motivo da falha
-- **THEN** a interface exibe uma mensagem citando esse servidor e o
-  motivo, indica que nada foi salvo, e mantém intacta a seleção de
-  todos os servidores e tools que o usuário já tinha marcado — inclusive
-  a dos servidores que não causaram o problema
-
-#### Scenario: Usuário pode corrigir e tentar novamente após falha de handshake
-- **WHEN** o usuário, após ver o erro de handshake de um servidor
-  específico, desmarca esse servidor (ou o mantém e tenta novamente) e
-  confirma outra vez
-- **THEN** a interface envia um novo `PUT /agents/{id}/mcp-servers`
-  refletindo o estado atual da seleção, sem exigir que a página seja
-  recarregada
-
-### Requirement: Falha na descoberta de tools de um servidor específico não bloqueia sua seleção
-
-O sistema SHALL permitir, quando `GET /mcp-servers/{id}/tools` responde
-com `success: false` (falha de conexão durante a descoberta, distinta do
-erro de submit), que o usuário selecione esse servidor mesmo assim, com
-`allowedTools` vazio, e SHALL oferecer uma ação para tentar buscar as
-tools novamente, sem bloquear a seleção dos demais servidores.
-
-#### Scenario: Falha de descoberta exibe o motivo e uma ação de tentar novamente
-- **WHEN** o usuário expande um servidor e `GET /mcp-servers/{id}/tools`
-  responde `200` com `success: false`
-- **THEN** a interface exibe o motivo da falha (`message`) e uma ação
-  "Tentar novamente" para esse servidor, em vez da lista de tools
-
-#### Scenario: Servidor com falha de descoberta pode ser selecionado com allowedTools vazio
-- **WHEN** o usuário seleciona um servidor cuja descoberta de tools
-  falhou
-- **THEN** a interface o inclui no vínculo a ser salvo com
-  `allowedTools: []`, sem impedir a seleção nem exigir que a descoberta
-  tenha sucesso primeiro
-
-#### Scenario: Tentar novamente refaz a busca sem afetar outros servidores
-- **WHEN** o usuário aciona "Tentar novamente" na descoberta de tools de
-  um servidor cuja busca anterior falhou
-- **THEN** a interface envia novamente `GET /mcp-servers/{id}/tools`
-  para esse servidor, sem alterar a seleção nem o estado de nenhum
-  outro servidor
-
-#### Scenario: Descoberta bem-sucedida após retry libera a seleção de tools
-- **WHEN** o retry de descoberta de tools de um servidor responde com
-  `success: true`
-- **THEN** a interface exibe a lista de tools desse servidor disponível
-  para seleção, substituindo a mensagem de falha anterior
+## ADDED Requirements
 
 ### Requirement: Aviso de servidor vinculado sem nenhuma tool
 

@@ -143,13 +143,16 @@ completos de um agente consumindo `GET /agents/{id}`, incluindo seu estado
 agente precisa de reconfiguração quando o provider ou o model estão
 ausentes, a descrição do agente (ou uma indicação explícita de que não há
 descrição), a lista de skills do agente (nome e, quando houver, descrição
-de cada uma; ou uma indicação explícita de que não há skills), um resumo
-dos servidores MCP vinculados ao agente (`agent.mcpServers`), com um link
-para editar o agente, um link para a página de gestão do vínculo com
-servidores MCP (`/agents/{id}/mcp-servers`) e uma ação para ativá-lo ou
-desativá-lo. O bloco com o link de edição e a ação de ativar/desativar
-SHALL ser exibido antes, na ordem do documento, dos dados do agente (nome,
-instruções, datas de criação e atualização). O campo de instruções SHALL
+de cada uma; ou uma indicação explícita de que não há skills), as
+instruções e as datas de criação e atualização, com um link para editar o
+agente e uma ação para ativá-lo ou desativá-lo. O nome, o estado, a
+descrição, o link de edição e a ação de ativar/desativar SHALL ser
+exibidos em um cabeçalho comum a todas as abas da página (ver requisito
+"Abas do detalhe do agente"), e o cabeçalho SHALL vir antes, na ordem do
+documento, dos dados exibidos nas abas. A página SHALL NOT exibir link
+para nenhuma página separada de gestão do vínculo com servidores MCP, nem
+resumo textual dos servidores vinculados, porque essa informação passa a
+ser responsabilidade da aba de ferramentas. O campo de instruções SHALL
 ser renderizado interpretando sua sintaxe markdown (títulos, listas,
 negrito, tabelas, texto riscado, `---` como separador) como formatação
 real, dentro de um container que usa o espaço vertical disponível da
@@ -161,12 +164,11 @@ necessário para ser lido confortavelmente.
 
 #### Scenario: Detalhe carregado com sucesso
 - **WHEN** o usuário acessa a página de detalhe de um agente existente
-- **THEN** a interface exibe nome, descrição, instruções, skills, as datas
-  de criação e atualização, um indicador do estado (`isActive`) do agente,
-  o provider e o model configurados, um resumo dos servidores MCP
-  vinculados, um link para editar o agente, um link para a página de
-  gestão do vínculo com servidores MCP e uma ação para ativá-lo ou
-  desativá-lo
+- **THEN** a interface exibe nome, descrição, um indicador do estado
+  (`isActive`) do agente, um link para editar o agente e uma ação para
+  ativá-lo ou desativá-lo no cabeçalho, e exibe instruções, skills, o
+  provider e o model configurados e as datas de criação e atualização na
+  aba de visão geral
 
 #### Scenario: Descrição exibida quando presente
 - **WHEN** o agente exibido tem `description` não nula
@@ -203,10 +205,16 @@ necessário para ser lido confortavelmente.
 - **THEN** a interface exibe uma ação para desativá-lo, e não exibe uma
   ação para ativá-lo
 
-#### Scenario: Bloco de ações exibido antes dos dados do agente
+#### Scenario: Cabeçalho exibido antes do conteúdo das abas
 - **WHEN** a página de detalhe de um agente é renderizada
-- **THEN** o link para editar e a ação de ativar/desativar aparecem, na
-  ordem do documento, antes do nome, das instruções e das datas do agente
+- **THEN** o nome, o link para editar e a ação de ativar/desativar
+  aparecem, na ordem do documento, antes do conteúdo da aba ativa
+
+#### Scenario: Nenhum link para página separada de vínculo com servidores MCP
+- **WHEN** a página de detalhe de um agente é renderizada, com ou sem
+  servidores MCP vinculados
+- **THEN** a interface não exibe nenhum link para uma página separada de
+  gestão do vínculo com servidores MCP
 
 #### Scenario: Instruções renderizadas como markdown formatado
 - **WHEN** o campo `instructions` do agente contém sintaxe markdown (por
@@ -239,21 +247,6 @@ necessário para ser lido confortavelmente.
 #### Scenario: Indicador de reconfiguração ausente quando provider e model configurados
 - **WHEN** o agente exibido tem `provider` e `model` preenchidos
 - **THEN** a interface não exibe o indicador de reconfiguração
-
-#### Scenario: Resumo lista os nomes dos servidores MCP vinculados
-- **WHEN** o agente exibido tem um ou mais servidores em `mcpServers`
-- **THEN** a interface exibe o nome de cada servidor MCP vinculado no
-  resumo da página de detalhe
-
-#### Scenario: Resumo indica ausência de vínculo quando nenhum servidor MCP está vinculado
-- **WHEN** o agente exibido tem `mcpServers` vazio
-- **THEN** a interface exibe uma indicação de que nenhum servidor MCP está
-  vinculado, em vez de uma lista vazia sem explicação
-
-#### Scenario: Link para a página de gestão do vínculo sempre presente
-- **WHEN** a página de detalhe de um agente é renderizada, com ou sem
-  servidores MCP vinculados
-- **THEN** a interface exibe um link para `/agents/{id}/mcp-servers`
 
 ### Requirement: Edição de agente pela interface
 O sistema SHALL prover, em `apps/frontend`, um formulário para editar o
@@ -396,3 +389,50 @@ enviar a requisição; ativar um agente SHALL NOT exigir confirmação.
   /agents/{id}/deactivate` falha (erro de rede ou erro do servidor)
 - **THEN** a interface exibe uma notificação de erro genérica e mantém o
   indicador de estado exibido igual ao estado anterior à tentativa
+
+### Requirement: Abas do detalhe do agente
+
+O sistema SHALL organizar o conteúdo da página de detalhe do agente em três
+abas — visão geral, ferramentas e delegações — exibindo, nas duas últimas,
+um contador com a quantidade de servidores MCP vinculados e de agentes-alvo
+de delegação, oculto quando a quantidade é zero. A aba ativa SHALL ser
+refletida na URL, de forma que o endereço seja compartilhável e sobreviva a
+um recarregamento da página. Apenas o conteúdo da aba ativa SHALL estar
+presente na página.
+
+#### Scenario: Três abas exibidas no detalhe do agente
+- **WHEN** o usuário acessa a página de detalhe de um agente existente
+- **THEN** a interface exibe as abas de visão geral, ferramentas e
+  delegações, com a visão geral ativa
+
+#### Scenario: Contadores refletem os vínculos do agente
+- **WHEN** o agente exibido tem um ou mais servidores MCP em `mcpServers`
+  ou um ou mais agentes em `delegatesTo`
+- **THEN** a interface exibe, junto do rótulo da aba correspondente, a
+  quantidade de itens de cada vínculo
+
+#### Scenario: Contador oculto quando o vínculo está vazio
+- **WHEN** o agente exibido tem `mcpServers` vazio ou `delegatesTo` vazio
+- **THEN** a interface não exibe contador junto do rótulo da aba
+  correspondente
+
+#### Scenario: Aba ativa refletida na URL
+- **WHEN** o usuário aciona a aba de ferramentas ou a de delegações
+- **THEN** a URL passa a identificar a aba ativa, e recarregar a página
+  nesse endereço reabre a mesma aba
+
+#### Scenario: Endereço sem identificação de aba abre a visão geral
+- **WHEN** o usuário acessa a página de detalhe do agente sem nenhuma aba
+  identificada na URL
+- **THEN** a interface exibe a aba de visão geral, sem alterar o endereço
+
+#### Scenario: Identificação de aba desconhecida abre a visão geral
+- **WHEN** o usuário acessa a página de detalhe do agente com uma
+  identificação de aba que não corresponde a nenhuma das três
+- **THEN** a interface exibe a aba de visão geral, sem quebrar a página e
+  sem exibir erro
+
+#### Scenario: Conteúdo da aba inativa não está presente na página
+- **WHEN** o usuário está em uma das abas do detalhe do agente
+- **THEN** o conteúdo das outras abas não está presente na página, e
+  passa a existir apenas quando a aba correspondente é acionada

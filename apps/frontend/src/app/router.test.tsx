@@ -7,16 +7,26 @@ import { RouterProvider, createMemoryRouter } from 'react-router';
 import { theme } from '../theme';
 import { AppRouter } from './router';
 import { appRoutes } from './routes';
-import { listAgents } from '../features/agents/api/agentsApi';
+import { getAgent, listAgents } from '../features/agents/api/agentsApi';
+import { listMcpServers } from '../features/mcp-servers/api/mcpServersApi';
+import type { Agent } from '../features/agents/types/agent';
 import { listProviders } from '../features/agents/api/providersApi';
 import { listChannels } from '../features/channels/api/channelsApi';
 import { clearToken, setToken } from '../auth/token';
 
-vi.mock('../features/agents/api/agentsApi', () => ({
-  listAgents: vi.fn(),
-  getAgent: vi.fn(),
-  createAgent: vi.fn(),
-}));
+// importOriginal preserva ApiError: o detalhe do agente faz `instanceof
+// ApiError` a cada render, e um mock que apagasse a classe quebraria a
+// página antes de qualquer asserção.
+vi.mock('../features/agents/api/agentsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../features/agents/api/agentsApi')>();
+  return { ...actual, listAgents: vi.fn(), getAgent: vi.fn(), createAgent: vi.fn() };
+});
+
+vi.mock('../features/mcp-servers/api/mcpServersApi', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../features/mcp-servers/api/mcpServersApi')>();
+  return { ...actual, listMcpServers: vi.fn(), listMcpServerTools: vi.fn() };
+});
 
 vi.mock('../features/agents/api/providersApi', () => ({
   listProviders: vi.fn(),
@@ -25,6 +35,21 @@ vi.mock('../features/agents/api/providersApi', () => ({
 vi.mock('../features/channels/api/channelsApi', () => ({
   listChannels: vi.fn(),
 }));
+
+const agent: Agent = {
+  id: '55555555-5555-5555-5555-555555555555',
+  name: 'Atendente',
+  instructions: 'Você é um atendente simpático.',
+  isActive: true,
+  provider: 'openai',
+  model: 'gpt-5.6-sol',
+  description: null,
+  skills: [],
+  createdAt: '2026-07-26T00:00:00Z',
+  updatedAt: '2026-07-26T00:00:00Z',
+  mcpServers: [],
+  delegatesTo: [],
+};
 
 function renderProviders(children: React.ReactNode) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -55,6 +80,10 @@ describe('appRoutes', () => {
     vi.mocked(listProviders).mockResolvedValue([{ id: 'openai', models: ['gpt-5.6-sol'] }]);
     vi.mocked(listChannels).mockReset();
     vi.mocked(listChannels).mockResolvedValue([]);
+    vi.mocked(getAgent).mockReset();
+    vi.mocked(getAgent).mockResolvedValue(agent);
+    vi.mocked(listMcpServers).mockReset();
+    vi.mocked(listMcpServers).mockResolvedValue([]);
     setToken('token-de-teste');
   });
 
@@ -101,6 +130,16 @@ describe('appRoutes', () => {
 
     expect(await screen.findByRole('heading', { name: 'Canais' })).toBeInTheDocument();
     expect(screen.getByText('Buteco Agentes')).toBeInTheDocument();
+  });
+
+  it('a rota antiga de gestão do vínculo leva à aba de ferramentas do detalhe', async () => {
+    renderRoutesFrom(`/agents/${agent.id}/mcp-servers`);
+
+    expect(await screen.findByRole('tab', { name: /ferramentas/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByText(/nenhum servidor mcp cadastrado/i)).toBeInTheDocument();
   });
 
   it('monta a partir de uma rota interna, com o mesmo layout e a mesma proteção', async () => {

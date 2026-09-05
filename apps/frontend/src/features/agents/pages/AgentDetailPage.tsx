@@ -1,25 +1,71 @@
-import { Alert, Button, Group, Loader, Modal, Text } from '@mantine/core';
+import {
+  Alert,
+  Badge,
+  Button,
+  Group,
+  Loader,
+  Modal,
+  Stack,
+  Tabs,
+  Text,
+  Title,
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import {
   useActivateAgentMutation,
   useAgentQuery,
   useAgentsQuery,
   useDeactivateAgentMutation,
 } from '../api/useAgents';
-import { AgentDelegationsSection } from '../components/AgentDelegationsSection';
-import { AgentDetailCard } from '../components/AgentDetailCard';
-import { AgentSkillsCard } from '../components/AgentSkillsCard';
+import { useMcpServersQuery } from '../../mcp-servers/api/useMcpServers';
+import { AgentDelegationsTab } from '../components/AgentDelegationsTab';
+import { AgentOverviewTab } from '../components/AgentOverviewTab';
+import { AgentToolsTab } from '../components/AgentToolsTab';
 import { ApiError } from '../api/agentsApi';
+
+const OVERVIEW_TAB = 'visao-geral';
+const TOOLS_TAB = 'ferramentas';
+const DELEGATIONS_TAB = 'delegacoes';
+
+type AgentDetailTab = typeof OVERVIEW_TAB | typeof TOOLS_TAB | typeof DELEGATIONS_TAB;
+
+// Ausência do parâmetro é a forma canônica da visão geral, e valor
+// desconhecido cai nela também — sem reescrever o endereço, que só poluiria
+// o histórico (Decision 1 do design.md da change
+// frontend-agente-detalhe-abas).
+function parseTab(value: string | null): AgentDetailTab {
+  return value === TOOLS_TAB || value === DELEGATIONS_TAB ? value : OVERVIEW_TAB;
+}
+
+function TabCounter({ count }: { count: number }) {
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <Badge size="sm" variant="default" circle>
+      {count}
+    </Badge>
+  );
+}
 
 export function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = parseTab(searchParams.get('tab'));
+
   const { data, isLoading, error } = useAgentQuery(id!);
   const agentsQuery = useAgentsQuery();
+  const mcpServersQuery = useMcpServersQuery({ enabled: activeTab === TOOLS_TAB });
   const activateMutation = useActivateAgentMutation();
   const deactivateMutation = useDeactivateAgentMutation();
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
+
+  const handleTabChange = (value: string | null) => {
+    const next = parseTab(value);
+    setSearchParams(next === OVERVIEW_TAB ? {} : { tab: next });
+  };
 
   const handleActivate = () => {
     activateMutation.mutate(id!, {
@@ -78,40 +124,88 @@ export function AgentDetailPage() {
     return <Alert color="red">Não foi possível carregar o agente.</Alert>;
   }
 
-  return (
-    <>
-      <Group mb="md">
-        <Button component={Link} to={`/agents/${data.id}/edit`} variant="default">
-          Editar
-        </Button>
-        <Button component={Link} to={`/agents/${data.id}/mcp-servers`} variant="default">
-          Gerenciar servidores MCP
-        </Button>
-        {data.isActive ? (
-          <Button color="red" variant="outline" onClick={openConfirm}>
-            Desativar
-          </Button>
-        ) : (
-          <Button
-            color="green"
-            variant="outline"
-            onClick={handleActivate}
-            loading={activateMutation.isPending}
-          >
-            Ativar
-          </Button>
-        )}
-      </Group>
-      <AgentDetailCard agent={data} />
-      <AgentSkillsCard skills={data.skills} />
+  const needsReconfiguration = data.provider === null || data.model === null;
 
-      {agentsQuery.isError ? (
-        <Alert color="red" mt="md">
-          Não foi possível carregar o catálogo de agentes para gerenciar delegações.
-        </Alert>
-      ) : (
-        <AgentDelegationsSection agent={data} agentsCatalog={agentsQuery.data ?? []} />
-      )}
+  return (
+    <Stack gap="md" pb={80}>
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <Stack gap={4}>
+          <Group gap="xs">
+            <Title order={2}>{data.name}</Title>
+            {needsReconfiguration && <Badge color="yellow">Precisa de reconfiguração</Badge>}
+            <Badge color={data.isActive ? 'green' : 'gray'}>
+              {data.isActive ? 'Ativo' : 'Inativo'}
+            </Badge>
+          </Group>
+          <Text size="sm" c={data.description ? undefined : 'dimmed'}>
+            {data.description ?? 'Sem descrição.'}
+          </Text>
+        </Stack>
+        <Group wrap="nowrap">
+          <Button component={Link} to={`/agents/${data.id}/edit`} variant="default">
+            Editar
+          </Button>
+          {data.isActive ? (
+            <Button color="red" variant="outline" onClick={openConfirm}>
+              Desativar
+            </Button>
+          ) : (
+            <Button
+              color="green"
+              variant="outline"
+              onClick={handleActivate}
+              loading={activateMutation.isPending}
+            >
+              Ativar
+            </Button>
+          )}
+        </Group>
+      </Group>
+
+      {/* keepMounted={false} é o que sustenta o modelo de rascunho: só a aba
+          ativa existe no DOM, então no máximo uma guarda de navegação está
+          armada por vez (Decision 2 do design.md). */}
+      <Tabs value={activeTab} onChange={handleTabChange} keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value={OVERVIEW_TAB}>Visão geral</Tabs.Tab>
+          <Tabs.Tab value={TOOLS_TAB} rightSection={<TabCounter count={data.mcpServers.length} />}>
+            Ferramentas
+          </Tabs.Tab>
+          <Tabs.Tab
+            value={DELEGATIONS_TAB}
+            rightSection={<TabCounter count={data.delegatesTo.length} />}
+          >
+            Delegações
+          </Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value={OVERVIEW_TAB} pt="md">
+          <AgentOverviewTab agent={data} />
+        </Tabs.Panel>
+
+        <Tabs.Panel value={TOOLS_TAB} pt="md">
+          {mcpServersQuery.isLoading ? (
+            <Group>
+              <Loader size="sm" />
+              <Text>Carregando servidores MCP...</Text>
+            </Group>
+          ) : mcpServersQuery.isError ? (
+            <Alert color="red">Não foi possível carregar os servidores MCP.</Alert>
+          ) : (
+            <AgentToolsTab agent={data} mcpServers={mcpServersQuery.data ?? []} />
+          )}
+        </Tabs.Panel>
+
+        <Tabs.Panel value={DELEGATIONS_TAB} pt="md">
+          {agentsQuery.isError ? (
+            <Alert color="red">
+              Não foi possível carregar o catálogo de agentes para gerenciar delegações.
+            </Alert>
+          ) : (
+            <AgentDelegationsTab agent={data} agentsCatalog={agentsQuery.data ?? []} />
+          )}
+        </Tabs.Panel>
+      </Tabs>
 
       <Modal opened={confirmOpened} onClose={closeConfirm} title="Confirmar desativação">
         <Text size="sm">
@@ -131,6 +225,6 @@ export function AgentDetailPage() {
           </Button>
         </Group>
       </Modal>
-    </>
+    </Stack>
   );
 }
