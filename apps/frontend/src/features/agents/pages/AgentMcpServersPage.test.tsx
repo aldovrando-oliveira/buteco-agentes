@@ -45,6 +45,8 @@ const agent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [{ id: 'srv-1', name: 'Zendesk MCP', allowedTools: ['read', 'ghost-tool'] }],
+  description: null,
+  skills: [],
   delegatesTo: [],
 };
 
@@ -212,7 +214,9 @@ describe('AgentMcpServersPage', () => {
     expect(
       await screen.findByText('Não foi possível validar as tools do servidor MCP srv-1.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Host inalcançável durante o handshake de validação.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Host inalcançável durante o handshake de validação.'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Detalhe do agente')).not.toBeInTheDocument();
     expect((await row('srv-1')).getByRole('checkbox', { name: /zendesk mcp/i })).toBeChecked();
     expect(githubCheckbox).toBeChecked();
@@ -237,9 +241,9 @@ describe('AgentMcpServersPage', () => {
     await user.click((await row('srv-3')).getByRole('button', { name: /tentar novamente/i }));
 
     await waitFor(() =>
-      expect(
-        vi.mocked(listMcpServerTools).mock.calls.filter(([id]) => id === 'srv-3').length,
-      ).toBe(callsBeforeRetry + 1),
+      expect(vi.mocked(listMcpServerTools).mock.calls.filter(([id]) => id === 'srv-3').length).toBe(
+        callsBeforeRetry + 1,
+      ),
     );
   });
 

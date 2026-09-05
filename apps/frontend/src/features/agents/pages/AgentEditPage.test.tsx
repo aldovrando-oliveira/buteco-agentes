@@ -42,6 +42,8 @@ const agent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  description: null,
+  skills: [],
   delegatesTo: [],
 };
 
@@ -94,6 +96,65 @@ describe('AgentEditPage', () => {
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith(`/agents/${agent.id}`));
     expect(notifications.show).toHaveBeenCalledWith(expect.objectContaining({ color: 'green' }));
+  });
+
+  it('salvar alterando só o nome preserva description e skills carregadas do agente (regressão: PUT sem os campos apagava os dois)', async () => {
+    const agentWithSkills: Agent = {
+      ...agent,
+      description: 'Atende o financeiro',
+      skills: [
+        { name: 'Segunda via de boleto', description: 'Emite boleto atualizado' },
+        { name: 'Cobrança', description: null },
+      ],
+    };
+    vi.mocked(getAgent).mockResolvedValue(agentWithSkills);
+    vi.mocked(updateAgent).mockResolvedValue({ ...agentWithSkills, name: 'Financeiro' });
+    const user = userEvent.setup();
+
+    renderPage(agent.id);
+
+    expect(await screen.findByLabelText(/^descrição$/i)).toHaveValue('Atende o financeiro');
+    await user.clear(screen.getByLabelText(/^nome\s*\*?$/i));
+    await user.type(screen.getByLabelText(/^nome\s*\*?$/i), 'Financeiro');
+    await user.click(screen.getByRole('button', { name: /salvar alterações/i }));
+
+    await waitFor(() =>
+      expect(updateAgent).toHaveBeenCalledWith(agent.id, {
+        name: 'Financeiro',
+        instructions: agent.instructions,
+        provider: 'openai',
+        model: 'gpt-5.6-sol',
+        description: 'Atende o financeiro',
+        skills: [
+          { name: 'Segunda via de boleto', description: 'Emite boleto atualizado' },
+          { name: 'Cobrança', description: null },
+        ],
+      }),
+    );
+  });
+
+  it('limpar a descrição e remover todas as skills envia description: null e skills: [] explicitamente', async () => {
+    const agentWithSkills: Agent = {
+      ...agent,
+      description: 'Atende o financeiro',
+      skills: [{ name: 'Cobrança', description: null }],
+    };
+    vi.mocked(getAgent).mockResolvedValue(agentWithSkills);
+    vi.mocked(updateAgent).mockResolvedValue(agent);
+    const user = userEvent.setup();
+
+    renderPage(agent.id);
+
+    await user.clear(await screen.findByLabelText(/^descrição$/i));
+    await user.click(screen.getByRole('button', { name: 'Remover skill 1' }));
+    await user.click(screen.getByRole('button', { name: /salvar alterações/i }));
+
+    await waitFor(() =>
+      expect(updateAgent).toHaveBeenCalledWith(
+        agent.id,
+        expect.objectContaining({ description: null, skills: [] }),
+      ),
+    );
   });
 
   it('em erro 400, aplica os erros nos campos certos do formulário e não navega', async () => {

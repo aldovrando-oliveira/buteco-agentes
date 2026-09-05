@@ -36,6 +36,8 @@ const activeAgent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  description: null,
+  skills: [],
   delegatesTo: [],
 };
 
@@ -82,14 +84,34 @@ describe('AgentDetailPage', () => {
     expect(screen.queryByRole('button', { name: /^ativar$/i })).not.toBeInTheDocument();
   });
 
+  it('renderiza o card de skills depois do card de detalhe, com as skills do agente', async () => {
+    vi.mocked(getAgent).mockResolvedValue({
+      ...activeAgent,
+      skills: [{ name: 'Segunda via de boleto', description: 'Emite boleto atualizado' }],
+    });
+
+    renderPage(activeAgent.id);
+
+    await screen.findByRole('heading', { name: activeAgent.name });
+    const skillsCard = screen.getByTestId('agent-skills-card');
+    expect(within(skillsCard).getByText('Segunda via de boleto')).toBeInTheDocument();
+    expect(within(skillsCard).getByText('Emite boleto atualizado')).toBeInTheDocument();
+
+    const instructions = screen.getByText(activeAgent.instructions);
+    expect(
+      instructions.compareDocumentPosition(skillsCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('exibe o link para a página de gestão de servidores MCP', async () => {
     vi.mocked(getAgent).mockResolvedValue(activeAgent);
 
     renderPage(activeAgent.id);
 
-    expect(
-      await screen.findByRole('link', { name: /gerenciar servidores mcp/i }),
-    ).toHaveAttribute('href', `/agents/${activeAgent.id}/mcp-servers`);
+    expect(await screen.findByRole('link', { name: /gerenciar servidores mcp/i })).toHaveAttribute(
+      'href',
+      `/agents/${activeAgent.id}/mcp-servers`,
+    );
   });
 
   it('exibe o bloco de ações (Editar, Ativar/Desativar) antes dos dados do agente na ordem do DOM', async () => {
@@ -222,7 +244,9 @@ describe('AgentDetailPage', () => {
 
     renderPage(activeAgent.id);
 
-    expect(await screen.findByRole('heading', { name: /delegações de saída/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /delegações de saída/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /salvar delegações/i })).toBeInTheDocument();
   });
 });

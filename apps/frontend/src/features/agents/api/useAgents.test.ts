@@ -22,6 +22,8 @@ const agent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  description: null,
+  skills: [],
   delegatesTo: [],
 };
 
@@ -101,6 +103,8 @@ describe('useCreateAgentMutation', () => {
       instructions: agent.instructions,
       provider: agent.provider!,
       model: agent.model!,
+      description: null,
+      skills: [],
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -124,7 +128,14 @@ describe('useCreateAgentMutation', () => {
 
     const { result } = renderHook(() => useCreateAgentMutation(), { wrapper: Wrapper });
 
-    result.current.mutate({ name: '', instructions: '', provider: '', model: '' });
+    result.current.mutate({
+      name: '',
+      instructions: '',
+      provider: '',
+      model: '',
+      description: null,
+      skills: [],
+    });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as { status?: number })?.status).toBe(400);
@@ -260,12 +271,14 @@ describe('useReplaceAgentDelegationsMutation', () => {
   it('em erro, expõe o ApiError sem popular o cache', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          { title: 'Validação falhou', status: 400, errors: { targetAgentIds: ['inválido'] } },
-          400,
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            { title: 'Validação falhou', status: 400, errors: { targetAgentIds: ['inválido'] } },
+            400,
+          ),
         ),
-      ),
     );
     const { Wrapper } = createWrapper();
 

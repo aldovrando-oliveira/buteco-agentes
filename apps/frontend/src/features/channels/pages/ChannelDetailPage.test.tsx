@@ -7,12 +7,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { notifications } from '@mantine/notifications';
 import { theme } from '../../../theme';
 import { ChannelDetailPage } from './ChannelDetailPage';
-import {
-  ApiError,
-  activateChannel,
-  deactivateChannel,
-  getChannel,
-} from '../api/channelsApi';
+import { ApiError, activateChannel, deactivateChannel, getChannel } from '../api/channelsApi';
 import { listAgents } from '../../agents/api/agentsApi';
 import {
   ApiError as SessionsApiError,
@@ -58,6 +53,8 @@ const agent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  description: null,
+  skills: [],
   delegatesTo: [],
 };
 
@@ -139,9 +136,7 @@ describe('ChannelDetailPage', () => {
     renderPage(`/channels/${wahaChannel.id}`);
     await user.click(await screen.findByRole('tab', { name: 'Configuração' }));
 
-    expect(
-      await screen.findByText(/configure manualmente a sessão do waha/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/configure manualmente a sessão do waha/i)).toBeInTheDocument();
   });
 
   it('canal Telegram exibe indicação de que o webhook já foi configurado automaticamente', async () => {
@@ -235,9 +230,7 @@ describe('ChannelDetailPage', () => {
 
     renderPage(`/channels/${wahaChannel.id}`);
 
-    expect(
-      await screen.findByRole('tab', { name: 'Sessões', selected: true }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Sessões', selected: true })).toBeInTheDocument();
     expect(await screen.findByText('Maria')).toBeInTheDocument();
   });
 
@@ -261,9 +254,7 @@ describe('ChannelDetailPage', () => {
 
     renderPage(`/channels/${wahaChannel.id}`);
 
-    expect(
-      await screen.findByText('Nenhuma sessão para este canal ainda.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Nenhuma sessão para este canal ainda.')).toBeInTheDocument();
   });
 
   it('sessionId inexistente na URL renderiza o estado de erro genérico da timeline, não uma tela em branco', async () => {

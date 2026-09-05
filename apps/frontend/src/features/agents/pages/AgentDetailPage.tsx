@@ -10,6 +10,7 @@ import {
 } from '../api/useAgents';
 import { AgentDelegationsSection } from '../components/AgentDelegationsSection';
 import { AgentDetailCard } from '../components/AgentDetailCard';
+import { AgentSkillsCard } from '../components/AgentSkillsCard';
 import { ApiError } from '../api/agentsApi';
 
 export function AgentDetailPage() {
@@ -102,6 +103,7 @@ export function AgentDetailPage() {
         )}
       </Group>
       <AgentDetailCard agent={data} />
+      <AgentSkillsCard skills={data.skills} />
 
       {agentsQuery.isError ? (
         <Alert color="red" mt="md">

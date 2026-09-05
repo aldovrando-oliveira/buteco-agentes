@@ -33,6 +33,8 @@ function makeAgent(overrides: Partial<Agent>): Agent {
     createdAt: '2026-07-26T00:00:00Z',
     updatedAt: '2026-07-26T00:00:00Z',
     mcpServers: [],
+    description: null,
+    skills: [],
     delegatesTo: [],
     ...overrides,
   };
@@ -89,7 +91,10 @@ describe('AgentDelegationsSection', () => {
   });
 
   it('pré-seleciona os agentes já presentes em delegatesTo', () => {
-    const agentWithDelegations = { ...agent, delegatesTo: [{ id: delegateB.id, name: delegateB.name }] };
+    const agentWithDelegations = {
+      ...agent,
+      delegatesTo: [{ id: delegateB.id, name: delegateB.name }],
+    };
 
     const { container } = renderSection({
       agent: agentWithDelegations,
@@ -153,7 +158,10 @@ describe('AgentDelegationsSection', () => {
 
   it('seleção e desseleção atualizam o estado local', async () => {
     const user = userEvent.setup();
-    const agentWithDelegations = { ...agent, delegatesTo: [{ id: delegateB.id, name: delegateB.name }] };
+    const agentWithDelegations = {
+      ...agent,
+      delegatesTo: [{ id: delegateB.id, name: delegateB.name }],
+    };
     const { container } = renderSection({
       agent: agentWithDelegations,
       agentsCatalog: [agent, delegateB, delegateC],
@@ -190,7 +198,10 @@ describe('AgentDelegationsSection', () => {
   it('salvar depois de desmarcar todos os agentes envia targetAgentIds: [] (array vazio explícito)', async () => {
     const user = userEvent.setup();
     vi.mocked(replaceAgentDelegations).mockResolvedValue({ ...agent, delegatesTo: [] });
-    const agentWithDelegations = { ...agent, delegatesTo: [{ id: delegateB.id, name: delegateB.name }] };
+    const agentWithDelegations = {
+      ...agent,
+      delegatesTo: [{ id: delegateB.id, name: delegateB.name }],
+    };
     const { container } = renderSection({
       agent: agentWithDelegations,
       agentsCatalog: [agent, delegateB, delegateC],
@@ -204,7 +215,10 @@ describe('AgentDelegationsSection', () => {
 
   it('cancelar restaura a seleção original sem enviar requisição', async () => {
     const user = userEvent.setup();
-    const agentWithDelegations = { ...agent, delegatesTo: [{ id: delegateB.id, name: delegateB.name }] };
+    const agentWithDelegations = {
+      ...agent,
+      delegatesTo: [{ id: delegateB.id, name: delegateB.name }],
+    };
     const { container } = renderSection({
       agent: agentWithDelegations,
       agentsCatalog: [agent, delegateB, delegateC],

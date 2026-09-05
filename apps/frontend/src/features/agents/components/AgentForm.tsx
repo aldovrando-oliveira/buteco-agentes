@@ -1,6 +1,8 @@
-import { Button, Group, Select, Stack, Textarea, TextInput } from '@mantine/core';
+import { Button, Group, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import type { CreateAgentInput, ProviderCatalogEntry } from '../types/agent';
+import type { AgentSkill, CreateAgentInput, ProviderCatalogEntry } from '../types/agent';
+import { AgentSkillsFields } from './AgentSkillsFields';
+import type { AgentFormValues, AgentSkillFormValue } from './agentFormValues';
 
 interface AgentFormProps {
   onSubmit: (values: CreateAgentInput) => void;
@@ -18,6 +20,8 @@ interface SelectOption {
   disabled?: boolean;
 }
 
+const SKILL_NAME_REQUIRED = 'O nome da skill é obrigatório.';
+
 // Injeta uma opção sintética desabilitada quando o valor atual não consta
 // nas opções disponíveis (provider/model removido do ambiente depois do
 // cadastro do agente) — informativo, mas não re-selecionável. Ver Decision
@@ -32,6 +36,40 @@ function withStaleOption(options: SelectOption[], currentValue: string): SelectO
   return options;
 }
 
+function toFormValues(input?: CreateAgentInput): AgentFormValues {
+  return {
+    name: input?.name ?? '',
+    description: input?.description ?? '',
+    instructions: input?.instructions ?? '',
+    provider: input?.provider ?? '',
+    model: input?.model ?? '',
+    skills: (input?.skills ?? []).map((skill) => ({
+      name: skill.name,
+      description: skill.description ?? '',
+    })),
+  };
+}
+
+function toSkills(values: AgentSkillFormValue[]): AgentSkill[] {
+  return values.map((skill) => ({
+    name: skill.name.trim(),
+    description: skill.description.trim() || null,
+  }));
+}
+
+// Erros de validação do servidor chegam como `skills[0].name` (formato do
+// ValidateShape da API); aqui viram um mapa por índice de linha.
+function skillNameErrorsFrom(errors?: Record<string, string>): Record<number, string> {
+  const result: Record<number, string> = {};
+  for (const [key, message] of Object.entries(errors ?? {})) {
+    const match = /^skills\[(\d+)\]\.name$/i.exec(key);
+    if (match) {
+      result[Number(match[1])] = message;
+    }
+  }
+  return result;
+}
+
 export function AgentForm({
   onSubmit,
   onCancel,
@@ -41,14 +79,17 @@ export function AgentForm({
   initialValues,
   submitLabel = 'Criar agente',
 }: AgentFormProps) {
-  const form = useForm<CreateAgentInput>({
-    initialValues: initialValues ?? { name: '', instructions: '', provider: '', model: '' },
+  const form = useForm<AgentFormValues>({
+    initialValues: toFormValues(initialValues),
     validate: {
       name: (value) => (value.trim() ? null : 'O nome do agente é obrigatório.'),
       instructions: (value) =>
         value.trim() ? null : 'As instruções (system prompt) do agente são obrigatórias.',
       provider: (value) => (value.trim() ? null : 'O provedor de LLM do agente é obrigatório.'),
       model: (value) => (value.trim() ? null : 'O modelo do agente é obrigatório.'),
+      skills: {
+        name: (value: string) => (value.trim() ? null : SKILL_NAME_REQUIRED),
+      },
     },
   });
 
@@ -63,8 +104,19 @@ export function AgentForm({
     form.values.model,
   );
 
+  const handleSubmit = (values: AgentFormValues) => {
+    onSubmit({
+      name: values.name,
+      instructions: values.instructions,
+      provider: values.provider,
+      model: values.model,
+      description: values.description.trim() || null,
+      skills: toSkills(values.skills),
+    });
+  };
+
   return (
-    <form onSubmit={form.onSubmit((values) => onSubmit(values))}>
+    <form onSubmit={form.onSubmit(handleSubmit)}>
       <Stack>
         <TextInput
           label="Nome"
@@ -74,35 +126,55 @@ export function AgentForm({
           error={errors?.name ?? form.errors.name}
         />
         <Textarea
+          label="Descrição"
+          placeholder="Descrição do agente"
+          description="Uso interno: ajuda o operador a identificar o agente nas listas."
+          rows={2}
+          resize="vertical"
+          {...form.getInputProps('description')}
+          error={errors?.description ?? form.errors.description}
+        />
+        <Textarea
           label="Instruções"
           placeholder="System prompt do agente"
+          description="System prompt, aceita Markdown."
           withAsterisk
           rows={12}
           resize="vertical"
+          styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
           {...form.getInputProps('instructions')}
           error={errors?.instructions ?? form.errors.instructions}
         />
-        <Select
-          label="Provedor"
-          placeholder="Selecione o provedor de LLM"
-          withAsterisk
-          data={providerOptions}
-          value={form.values.provider || null}
-          onChange={(value) => {
-            form.setFieldValue('provider', value ?? '');
-            form.setFieldValue('model', '');
-          }}
-          error={errors?.provider ?? form.errors.provider}
-        />
-        <Select
-          label="Modelo"
-          placeholder="Selecione o modelo"
-          withAsterisk
-          data={modelOptions}
-          value={form.values.model || null}
-          onChange={(value) => form.setFieldValue('model', value ?? '')}
-          error={errors?.model ?? form.errors.model}
-        />
+        <Text size="xs" c="dimmed" mt={-8} data-testid="instructions-counter">
+          {form.values.instructions.length} caracteres
+        </Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <Select
+            label="Provedor"
+            placeholder="Selecione o provedor de LLM"
+            withAsterisk
+            data={providerOptions}
+            value={form.values.provider || null}
+            onChange={(value) => {
+              form.setFieldValue('provider', value ?? '');
+              form.setFieldValue('model', '');
+            }}
+            error={errors?.provider ?? form.errors.provider}
+          />
+          <Select
+            label="Modelo"
+            placeholder={
+              form.values.provider ? 'Selecione o modelo' : 'Escolha o provedor primeiro'
+            }
+            withAsterisk
+            disabled={!form.values.provider}
+            data={modelOptions}
+            value={form.values.model || null}
+            onChange={(value) => form.setFieldValue('model', value ?? '')}
+            error={errors?.model ?? form.errors.model}
+          />
+        </SimpleGrid>
+        <AgentSkillsFields form={form} nameErrors={skillNameErrorsFrom(errors)} />
         <Group>
           <Button type="submit" loading={submitting}>
             {submitLabel}

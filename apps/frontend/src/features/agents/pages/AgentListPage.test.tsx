@@ -22,6 +22,8 @@ const agent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  description: null,
+  skills: [],
   delegatesTo: [],
 };
 

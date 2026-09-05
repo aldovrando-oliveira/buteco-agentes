@@ -16,6 +16,8 @@ const activeAgent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  description: null,
+  skills: [],
   delegatesTo: [],
 };
 
@@ -127,7 +129,9 @@ describe('ChannelForm', () => {
     await user.click(getSelect(/agente responsável/i));
 
     expect(screen.getByRole('option', { name: activeAgent.name })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: `${inactiveAgent.name} (inativo)` })).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: `${inactiveAgent.name} (inativo)` }),
+    ).toBeInTheDocument();
   });
 
   it('erro 400 de credencial com múltiplas mensagens exibe todas, não só a primeira', () => {
@@ -197,9 +201,7 @@ describe('ChannelForm', () => {
     await user.click(screen.getByRole('button', { name: /cadastrar canal/i }));
 
     expect(await screen.findByText('O nome do canal é obrigatório.')).toBeInTheDocument();
-    expect(
-      screen.getByText('O agente responsável pelo canal é obrigatório.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('O agente responsável pelo canal é obrigatório.')).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

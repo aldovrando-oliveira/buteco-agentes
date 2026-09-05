@@ -15,6 +15,8 @@ const baseAgent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  description: null,
+  skills: [],
   delegatesTo: [],
 };
 
@@ -65,6 +67,23 @@ describe('AgentDetailCard', () => {
     // correção: o `scrollTop` do Viewport não se movia com a roda do mouse.
     expect(scrollArea.style.height).toBeTruthy();
     expect(scrollArea.style.minHeight).toBeTruthy();
+  });
+
+  it('exibe a descrição do agente quando presente', () => {
+    render(
+      <MantineProvider theme={theme}>
+        <AgentDetailCard agent={{ ...baseAgent, description: 'Atende o financeiro' }} />
+      </MantineProvider>,
+    );
+
+    expect(screen.getByText('Atende o financeiro')).toBeInTheDocument();
+    expect(screen.queryByText('Sem descrição.')).not.toBeInTheDocument();
+  });
+
+  it('indica explicitamente a ausência de descrição quando ela é nula', () => {
+    renderCard('Instruções curtas.');
+
+    expect(screen.getByText('Sem descrição.')).toBeInTheDocument();
   });
 
   it('exibe o provider e o model do agente', () => {

@@ -1,20 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
 import { theme } from '../../../theme';
 import { AgentForm } from './AgentForm';
-import type { ProviderCatalogEntry } from '../types/agent';
+import type { CreateAgentInput, ProviderCatalogEntry } from '../types/agent';
 
 const defaultProviders: ProviderCatalogEntry[] = [
   { id: 'openai', models: ['gpt-5.6-sol', 'gpt-5.6-terra'] },
   { id: 'anthropic', models: ['claude-opus-5', 'claude-sonnet-5'] },
 ];
 
+const validInitialValues: CreateAgentInput = {
+  name: 'Atendente',
+  instructions: 'Você é um atendente simpático.',
+  provider: 'openai',
+  model: 'gpt-5.6-sol',
+  description: null,
+  skills: [],
+};
+
 function renderForm(overrides?: {
   errors?: Record<string, string>;
   submitting?: boolean;
   providers?: ProviderCatalogEntry[];
+  initialValues?: CreateAgentInput;
 }) {
   const onSubmit = vi.fn();
   const onCancel = vi.fn();
@@ -61,7 +71,83 @@ describe('AgentForm', () => {
       instructions: 'Você é um atendente simpático.',
       provider: 'openai',
       model: 'gpt-5.6-sol',
+      description: null,
+      skills: [],
     });
+  });
+
+  it('envia description e skills preenchidas, com description da skill nula quando em branco', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm({
+      initialValues: {
+        ...validInitialValues,
+        description: 'Atende o financeiro',
+        skills: [
+          { name: 'Segunda via de boleto', description: 'Emite boleto' },
+          { name: 'Cobrança', description: null },
+        ],
+      },
+    });
+
+    // Descrição da segunda skill fica só com espaços: deve virar null no submit.
+    await user.type(
+      within(screen.getByTestId('agent-skill-row-1')).getByLabelText(/descrição da skill/i),
+      '   ',
+    );
+    await user.click(screen.getByRole('button', { name: /criar agente/i }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: 'Atendente',
+      instructions: 'Você é um atendente simpático.',
+      provider: 'openai',
+      model: 'gpt-5.6-sol',
+      description: 'Atende o financeiro',
+      skills: [
+        { name: 'Segunda via de boleto', description: 'Emite boleto' },
+        { name: 'Cobrança', description: null },
+      ],
+    });
+  });
+
+  it('skill com nome em branco bloqueia o submit com mensagem na linha', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm({ initialValues: validInitialValues });
+
+    await user.click(screen.getByRole('button', { name: /adicionar skill/i }));
+
+    await user.click(screen.getByRole('button', { name: /criar agente/i }));
+
+    expect(
+      await within(screen.getByTestId('agent-skill-row-0')).findByText(
+        'O nome da skill é obrigatório.',
+      ),
+    ).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('erro de servidor com chave skills[0].name aparece na primeira linha de skill', () => {
+    render(
+      <MantineProvider theme={theme}>
+        <AgentForm
+          onSubmit={vi.fn()}
+          onCancel={vi.fn()}
+          providers={defaultProviders}
+          errors={{ 'skills[0].name': 'O nome da skill é obrigatório.' }}
+          initialValues={{
+            name: 'Atendente',
+            instructions: 'Você é um atendente simpático.',
+            provider: 'openai',
+            model: 'gpt-5.6-sol',
+            description: null,
+            skills: [{ name: '', description: null }],
+          }}
+        />
+      </MantineProvider>,
+    );
+
+    expect(
+      within(screen.getByTestId('agent-skill-row-0')).getByText('O nome da skill é obrigatório.'),
+    ).toBeInTheDocument();
   });
 
   it('exibe erro de validação e não chama onSubmit quando os campos estão vazios', async () => {
@@ -90,7 +176,7 @@ describe('AgentForm', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('pré-preenche os campos com initialValues quando fornecido', () => {
+  it('pré-preenche os campos com initialValues quando fornecido, incluindo description e skills', () => {
     render(
       <MantineProvider theme={theme}>
         <AgentForm
@@ -102,15 +188,20 @@ describe('AgentForm', () => {
             instructions: 'Você é um atendente simpático.',
             provider: 'openai',
             model: 'gpt-5.6-sol',
+            description: 'Atende o financeiro',
+            skills: [{ name: 'Boleto', description: 'Emite boleto' }],
           }}
         />
       </MantineProvider>,
     );
 
-    expect(screen.getByLabelText(/nome/i)).toHaveValue('Atendente');
+    expect(screen.getByLabelText(/^nome\s*\*?$/i)).toHaveValue('Atendente');
+    expect(screen.getByLabelText(/^descrição$/i)).toHaveValue('Atende o financeiro');
     expect(screen.getByLabelText(/instruções/i)).toHaveValue('Você é um atendente simpático.');
     expect(getSelect(/provedor/i)).toHaveValue('openai');
     expect(getSelect(/modelo/i)).toHaveValue('gpt-5.6-sol');
+    expect(screen.getByLabelText(/nome da skill/i)).toHaveValue('Boleto');
+    expect(screen.getByLabelText(/descrição da skill/i)).toHaveValue('Emite boleto');
   });
 
   it('usa o rótulo do botão informado em submitLabel', () => {
@@ -165,6 +256,8 @@ describe('AgentForm', () => {
             instructions: 'Você é um atendente simpático.',
             provider: 'gemini',
             model: 'gemini-3.6-flash',
+            description: null,
+            skills: [],
           }}
         />
       </MantineProvider>,
@@ -187,6 +280,8 @@ describe('AgentForm', () => {
             instructions: 'Você é um atendente simpático.',
             provider: 'gemini',
             model: 'gemini-3.6-flash',
+            description: null,
+            skills: [],
           }}
         />
       </MantineProvider>,

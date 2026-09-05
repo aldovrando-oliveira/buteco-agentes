@@ -22,6 +22,9 @@ export function AgentDetailCard({ agent }: AgentDetailCardProps) {
             </Badge>
           </Group>
         </Group>
+        <Text size="sm" c={agent.description ? undefined : 'dimmed'}>
+          {agent.description ?? 'Sem descrição.'}
+        </Text>
         <Text size="sm" c="dimmed">
           Provider: {agent.provider ?? '—'} · Model: {agent.model ?? '—'}
         </Text>

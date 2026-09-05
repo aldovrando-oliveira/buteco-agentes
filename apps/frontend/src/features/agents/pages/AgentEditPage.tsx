@@ -97,6 +97,8 @@ export function AgentEditPage() {
           instructions: data.instructions,
           provider: data.provider ?? '',
           model: data.model ?? '',
+          description: data.description,
+          skills: data.skills,
         }}
         submitLabel="Salvar alterações"
         providers={providersQuery.data ?? []}

@@ -42,6 +42,8 @@ const createdAgent: Agent = {
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
+  description: null,
+  skills: [],
   delegatesTo: [],
 };
 
@@ -98,6 +100,15 @@ describe('AgentCreatePage', () => {
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith(`/agents/${createdAgent.id}`));
     expect(notifications.show).toHaveBeenCalledWith(expect.objectContaining({ color: 'green' }));
+    // description e skills sempre presentes no body, mesmo vazios
+    expect(createAgent).toHaveBeenCalledWith({
+      name: createdAgent.name,
+      instructions: createdAgent.instructions,
+      provider: 'openai',
+      model: 'gpt-5.6-sol',
+      description: null,
+      skills: [],
+    });
   });
 
   it('em erro 400, aplica os erros nos campos certos do formulário e não navega', async () => {
