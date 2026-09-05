@@ -1,5 +1,16 @@
 import { useState } from 'react';
-import { Alert, Button, Group, Loader, Modal, Text } from '@mantine/core';
+import {
+  Alert,
+  Badge,
+  Button,
+  Grid,
+  Group,
+  Loader,
+  Modal,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { Link, useParams } from 'react-router';
@@ -9,16 +20,24 @@ import {
   useMcpServerQuery,
   useTestSavedMcpServerConnectionMutation,
 } from '../api/useMcpServers';
-import { McpServerDetailCard } from '../components/McpServerDetailCard';
+import { useAgentsQuery } from '../../agents/api/useAgents';
+import { McpServerAgentsCard } from '../components/McpServerAgentsCard';
+import { McpServerConfigCard } from '../components/McpServerConfigCard';
+import { McpServerToolsCatalog } from '../components/McpServerToolsCatalog';
 import {
   ConnectionTestResultAlert,
   type ConnectionTestResult,
 } from '../components/ConnectionTestResultAlert';
+import { agentsUsingServer } from '../utils/agentUsage';
 import { ApiError } from '../api/mcpServersApi';
 
 export function McpServerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, error } = useMcpServerQuery(id!);
+  // Só para derivar o uso: quem usa o servidor, quais tools estão
+  // permitidas e quem é afetado pela desativação. Uma falha aqui não
+  // impede o detalhe de carregar (Decision 2 do design.md).
+  const agentsQuery = useAgentsQuery();
   const activateMutation = useActivateMcpServerMutation();
   const deactivateMutation = useDeactivateMcpServerMutation();
   const testMutation = useTestSavedMcpServerConnectionMutation();
@@ -68,12 +87,19 @@ export function McpServerDetailPage() {
   const handleTestConnection = () => {
     testMutation.mutate(id!, {
       onSuccess: (result) => {
-        setTestResult({ success: result.success, message: result.message });
+        setTestResult({
+          success: result.success,
+          failureReason: result.failureReason,
+          message: result.message,
+          testedAt: new Date(),
+        });
       },
       onError: () => {
         setTestResult({
           success: false,
+          failureReason: null,
           message: 'Não foi possível testar a conexão. Tente novamente.',
+          testedAt: new Date(),
         });
       },
     });
@@ -96,38 +122,79 @@ export function McpServerDetailPage() {
     return <Alert color="red">Não foi possível carregar o servidor MCP.</Alert>;
   }
 
+  const affectedAgents = agentsQuery.data ? agentsUsingServer(agentsQuery.data, data.id) : [];
+
   return (
-    <>
-      <Group mb="md">
-        <Button component={Link} to={`/mcp-servers/${data.id}/edit`} variant="default">
-          Editar
-        </Button>
-        {data.isActive ? (
-          <Button color="red" variant="outline" onClick={openConfirm}>
-            Desativar
+    <Stack gap="md">
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <Stack gap={4}>
+          <Group gap="xs">
+            <Title order={2}>{data.name}</Title>
+            <Badge color={data.isActive ? 'green' : 'gray'}>
+              {data.isActive ? 'Ativo' : 'Inativo'}
+            </Badge>
+          </Group>
+          <Text size="sm" c={data.description ? undefined : 'dimmed'}>
+            {data.description || 'Sem descrição.'}
+          </Text>
+        </Stack>
+        <Group wrap="nowrap">
+          <Button component={Link} to={`/mcp-servers/${data.id}/edit`} variant="default">
+            Editar
           </Button>
-        ) : (
-          <Button
-            color="green"
-            variant="outline"
-            onClick={handleActivate}
-            loading={activateMutation.isPending}
-          >
-            Ativar
+          <Button variant="outline" onClick={handleTestConnection} loading={testMutation.isPending}>
+            Testar conexão
           </Button>
-        )}
-        <Button variant="outline" onClick={handleTestConnection} loading={testMutation.isPending}>
-          Testar conexão
-        </Button>
+          {data.isActive ? (
+            <Button color="red" variant="outline" onClick={openConfirm}>
+              Desativar
+            </Button>
+          ) : (
+            <Button
+              color="green"
+              variant="outline"
+              onClick={handleActivate}
+              loading={activateMutation.isPending}
+            >
+              Ativar
+            </Button>
+          )}
+        </Group>
       </Group>
+
       <ConnectionTestResultAlert result={testResult} />
-      <McpServerDetailCard mcpServer={data} />
+
+      <Grid gap="md" align="start">
+        <Grid.Col span={{ base: 12, md: 5 }}>
+          <McpServerConfigCard mcpServer={data} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 7 }}>
+          <McpServerToolsCatalog mcpServerId={data.id} agents={agentsQuery.data} />
+        </Grid.Col>
+      </Grid>
+
+      <McpServerAgentsCard mcpServerId={data.id} agents={agentsQuery.data} />
 
       <Modal opened={confirmOpened} onClose={closeConfirm} title="Confirmar desativação">
-        <Text size="sm">
-          Agentes vinculados a este servidor MCP deixarão de conseguir usar suas tools enquanto ele
-          estiver inativo. Tem certeza que deseja desativar "{data.name}"?
-        </Text>
+        <Stack gap="sm">
+          <Text size="sm">
+            Agentes vinculados a este servidor MCP deixarão de conseguir usar suas tools enquanto
+            ele estiver inativo. Tem certeza que deseja desativar "{data.name}"?
+          </Text>
+
+          {affectedAgents.length > 0 ? (
+            <Alert color="yellow" data-testid="deactivate-affected-agents">
+              Afeta {affectedAgents.length}{' '}
+              {affectedAgents.length === 1 ? 'agente' : 'agentes'}:{' '}
+              {affectedAgents.map((usage) => usage.agent.name).join(', ')}
+            </Alert>
+          ) : (
+            <Text size="sm" c="dimmed" data-testid="deactivate-no-agents">
+              Nenhum agente usa este servidor no momento.
+            </Text>
+          )}
+        </Stack>
+
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={closeConfirm}>
             Cancelar
@@ -141,6 +208,6 @@ export function McpServerDetailPage() {
           </Button>
         </Group>
       </Modal>
-    </>
+    </Stack>
   );
 }

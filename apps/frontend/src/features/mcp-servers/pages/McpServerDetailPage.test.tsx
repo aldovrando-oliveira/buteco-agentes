@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MantineProvider } from '@mantine/core';
@@ -14,7 +14,10 @@ import {
   getMcpServer,
   testSavedMcpServerConnection,
 } from '../api/mcpServersApi';
+import { listAgents } from '../../agents/api/agentsApi';
+import { listMcpServerTools } from '../api/mcpServersApi';
 import type { McpServer } from '../types/mcpServer';
+import type { Agent } from '../../agents/types/agent';
 
 vi.mock('../api/mcpServersApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/mcpServersApi')>();
@@ -24,7 +27,13 @@ vi.mock('../api/mcpServersApi', async (importOriginal) => {
     activateMcpServer: vi.fn(),
     deactivateMcpServer: vi.fn(),
     testSavedMcpServerConnection: vi.fn(),
+    listMcpServerTools: vi.fn(),
   };
+});
+
+vi.mock('../../agents/api/agentsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../agents/api/agentsApi')>();
+  return { ...actual, listAgents: vi.fn() };
 });
 
 vi.mock('@mantine/notifications', async (importOriginal) => {
@@ -44,6 +53,31 @@ const activeMcpServer: McpServer = {
 };
 
 const inactiveMcpServer: McpServer = { ...activeMcpServer, isActive: false };
+
+function agent(overrides: Partial<Agent>): Agent {
+  return {
+    id: 'agent-1',
+    name: 'Atendente',
+    instructions: 'Você é um atendente simpático.',
+    isActive: true,
+    provider: 'openai',
+    model: 'gpt-5.6-sol',
+    description: null,
+    skills: [],
+    createdAt: '2026-07-26T00:00:00Z',
+    updatedAt: '2026-07-26T00:00:00Z',
+    mcpServers: [],
+    delegatesTo: [],
+    ...overrides,
+  };
+}
+
+function agentUsing(overrides: Partial<Agent>, allowedTools: string[] = ['read']): Agent {
+  return agent({
+    ...overrides,
+    mcpServers: [{ id: activeMcpServer.id, name: activeMcpServer.name, allowedTools }],
+  });
+}
 
 function renderPage(id: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -67,6 +101,15 @@ describe('McpServerDetailPage', () => {
     vi.mocked(deactivateMcpServer).mockReset();
     vi.mocked(testSavedMcpServerConnection).mockReset();
     vi.mocked(notifications.show).mockReset();
+    vi.mocked(listAgents).mockReset();
+    vi.mocked(listAgents).mockResolvedValue([]);
+    vi.mocked(listMcpServerTools).mockReset();
+    vi.mocked(listMcpServerTools).mockResolvedValue({
+      success: true,
+      tools: [{ name: 'read', description: 'Lê dados' }],
+      failureReason: null,
+      message: null,
+    });
   });
 
   it('exibe nome, url, autenticação, estado, link de edição e ação de desativar de um servidor ativo', async () => {
@@ -191,5 +234,113 @@ describe('McpServerDetailPage', () => {
     ).toBeInTheDocument();
     expect(notifications.show).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('exibe a linha de credencial cifrada quando a autenticação exige credencial', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+
+    renderPage(activeMcpServer.id);
+
+    expect(await screen.findByTestId('credential-row')).toHaveTextContent('cifrada');
+  });
+
+  it('não exibe linha de credencial quando o tipo de autenticação é None', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue({ ...activeMcpServer, authType: 'None' });
+
+    renderPage(activeMcpServer.id);
+
+    await screen.findByRole('heading', { name: activeMcpServer.name });
+    expect(screen.queryByTestId('credential-row')).not.toBeInTheDocument();
+  });
+
+  it('o catálogo de tools começa ocioso e só consulta o servidor ao ser acionado', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+    const user = userEvent.setup();
+
+    renderPage(activeMcpServer.id);
+
+    await screen.findByTestId('mcp-server-tools-catalog');
+    expect(listMcpServerTools).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Atualizar' }));
+
+    expect(await screen.findByText('read')).toBeInTheDocument();
+    expect(listMcpServerTools).toHaveBeenCalledWith(activeMcpServer.id);
+  });
+
+  it('exibe os agentes que usam o servidor, com as tools permitidas', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+    vi.mocked(listAgents).mockResolvedValue([agentUsing({ id: 'a1', name: 'Atendente' })]);
+
+    renderPage(activeMcpServer.id);
+
+    const card = within(await screen.findByTestId('mcp-server-agents-card'));
+    expect(card.getByRole('link', { name: 'Atendente' })).toHaveAttribute('href', '/agents/a1');
+    expect(card.getByText('read')).toBeInTheDocument();
+  });
+
+  it('informa que desativar não afeta ninguém quando nenhum agente usa o servidor', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+
+    renderPage(activeMcpServer.id);
+
+    const card = within(await screen.findByTestId('mcp-server-agents-card'));
+    expect(card.getByText(/não afeta nenhum agente agora/)).toBeInTheDocument();
+  });
+
+  it('o diálogo de desativação nomeia os agentes afetados', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+    vi.mocked(listAgents).mockResolvedValue([
+      agentUsing({ id: 'a1', name: 'Atendente' }),
+      agentUsing({ id: 'a2', name: 'Cobrança' }, []),
+    ]);
+    const user = userEvent.setup();
+
+    renderPage(activeMcpServer.id);
+
+    await user.click(await screen.findByRole('button', { name: /desativar/i }));
+
+    const affected = await screen.findByTestId('deactivate-affected-agents');
+    expect(affected).toHaveTextContent('Afeta 2 agentes');
+    expect(affected).toHaveTextContent('Atendente, Cobrança');
+  });
+
+  it('o diálogo de desativação informa quando nenhum agente é afetado', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+    const user = userEvent.setup();
+
+    renderPage(activeMcpServer.id);
+
+    await user.click(await screen.findByRole('button', { name: /desativar/i }));
+
+    expect(await screen.findByTestId('deactivate-no-agents')).toBeInTheDocument();
+    expect(screen.queryByTestId('deactivate-affected-agents')).not.toBeInTheDocument();
+  });
+
+  it('falha ao carregar o catálogo de agentes não quebra o detalhe do servidor', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+    vi.mocked(listAgents).mockRejectedValue(new Error('falha de rede'));
+
+    renderPage(activeMcpServer.id);
+
+    expect(await screen.findByRole('heading', { name: activeMcpServer.name })).toBeInTheDocument();
+    const card = within(screen.getByTestId('mcp-server-agents-card'));
+    expect(card.getByText(/Não foi possível carregar a informação de uso/)).toBeInTheDocument();
+  });
+
+  it('o resultado do teste indica que não é persistido', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+    vi.mocked(testSavedMcpServerConnection).mockResolvedValue({
+      success: true,
+      failureReason: null,
+      message: null,
+    });
+    const user = userEvent.setup();
+
+    renderPage(activeMcpServer.id);
+
+    await user.click(await screen.findByRole('button', { name: /testar conexão/i }));
+
+    expect(await screen.findByText(/resultado não é persistido/)).toBeInTheDocument();
   });
 });

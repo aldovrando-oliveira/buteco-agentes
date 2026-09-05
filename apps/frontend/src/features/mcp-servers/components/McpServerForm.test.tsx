@@ -6,11 +6,19 @@ import { MantineProvider } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { theme } from '../../../theme';
 import { McpServerForm } from './McpServerForm';
-import { ApiError, testUnsavedMcpServerConnection } from '../api/mcpServersApi';
+import {
+  ApiError,
+  testSavedMcpServerConnection,
+  testUnsavedMcpServerConnection,
+} from '../api/mcpServersApi';
 
 vi.mock('../api/mcpServersApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/mcpServersApi')>();
-  return { ...actual, testUnsavedMcpServerConnection: vi.fn() };
+  return {
+    ...actual,
+    testUnsavedMcpServerConnection: vi.fn(),
+    testSavedMcpServerConnection: vi.fn(),
+  };
 });
 
 vi.mock('@mantine/notifications', async (importOriginal) => {
@@ -24,6 +32,7 @@ function renderForm(overrides?: {
   initialValues?: Parameters<typeof McpServerForm>[0]['initialValues'];
   submitLabel?: string;
   mode?: 'create' | 'edit';
+  mcpServerId?: string;
 }) {
   const onSubmit = vi.fn();
   const onCancel = vi.fn();
@@ -54,6 +63,7 @@ async function selectOption(
 describe('McpServerForm', () => {
   beforeEach(() => {
     vi.mocked(testUnsavedMcpServerConnection).mockReset();
+    vi.mocked(testSavedMcpServerConnection).mockReset();
     vi.mocked(notifications.show).mockReset();
   });
 
@@ -211,6 +221,7 @@ describe('McpServerForm', () => {
     const user = userEvent.setup();
     renderForm();
 
+    await user.type(screen.getByLabelText(/url/i), 'https://mcp.zendesk.example/sse');
     await user.click(screen.getByRole('button', { name: /testar conexão/i }));
 
     expect(await screen.findByText('Falha na conexão')).toBeInTheDocument();
@@ -250,5 +261,110 @@ describe('McpServerForm', () => {
     expect(await screen.findByText('Falha na conexão')).toBeInTheDocument();
     expect(notifications.show).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('testar com a Url vazia é barrado antes de qualquer requisição', async () => {
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(screen.getByRole('button', { name: /testar conexão/i }));
+
+    expect(await screen.findByText('Informe a Url antes de testar.')).toBeInTheDocument();
+    expect(testUnsavedMcpServerConnection).not.toHaveBeenCalled();
+    expect(testSavedMcpServerConnection).not.toHaveBeenCalled();
+  });
+
+  it('na edição sem credencial digitada, testa o servidor salvo e avisa que usa a credencial guardada', async () => {
+    vi.mocked(testSavedMcpServerConnection).mockResolvedValue({
+      success: true,
+      failureReason: null,
+      message: null,
+    });
+    const user = userEvent.setup();
+    renderForm({
+      mode: 'edit',
+      mcpServerId: 'srv-1',
+      initialValues: {
+        name: 'Zendesk MCP',
+        description: 'Servidor MCP do Zendesk',
+        url: 'https://mcp.zendesk.example/sse',
+        authType: 'BearerToken',
+      },
+    });
+
+    expect(screen.getByTestId('saved-credential-test-note')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /testar conexão/i }));
+
+    expect(await screen.findByText('Conexão bem-sucedida')).toBeInTheDocument();
+    expect(testSavedMcpServerConnection).toHaveBeenCalledWith('srv-1');
+    expect(testUnsavedMcpServerConnection).not.toHaveBeenCalled();
+  });
+
+  it('na edição com credencial digitada, testa a configuração informada', async () => {
+    vi.mocked(testUnsavedMcpServerConnection).mockResolvedValue({
+      success: true,
+      failureReason: null,
+      message: null,
+    });
+    const user = userEvent.setup();
+    renderForm({
+      mode: 'edit',
+      mcpServerId: 'srv-1',
+      initialValues: {
+        name: 'Zendesk MCP',
+        description: 'Servidor MCP do Zendesk',
+        url: 'https://mcp.zendesk.example/sse',
+        authType: 'BearerToken',
+      },
+    });
+
+    await user.type(screen.getByLabelText(/credencial/i), 'novo-token');
+    expect(screen.queryByTestId('saved-credential-test-note')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /testar conexão/i }));
+
+    await screen.findByText('Conexão bem-sucedida');
+    expect(testUnsavedMcpServerConnection).toHaveBeenCalledWith({
+      url: 'https://mcp.zendesk.example/sse',
+      authType: 'BearerToken',
+      credential: 'novo-token',
+    });
+    expect(testSavedMcpServerConnection).not.toHaveBeenCalled();
+  });
+
+  it('no cadastro, testa a configuração digitada mesmo com credencial em branco', async () => {
+    vi.mocked(testUnsavedMcpServerConnection).mockResolvedValue({
+      success: true,
+      failureReason: null,
+      message: null,
+    });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByLabelText(/url/i), 'https://mcp.zendesk.example/sse');
+    await user.click(screen.getByRole('button', { name: /testar conexão/i }));
+
+    await screen.findByText('Conexão bem-sucedida');
+    expect(testUnsavedMcpServerConnection).toHaveBeenCalled();
+    expect(testSavedMcpServerConnection).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('saved-credential-test-note')).not.toBeInTheDocument();
+  });
+
+  it('exibe a dica de credencial adequada ao contexto', () => {
+    renderForm();
+    expect(screen.queryByText(/Enviada cifrada/)).not.toBeInTheDocument();
+
+    renderForm({
+      mode: 'edit',
+      mcpServerId: 'srv-1',
+      initialValues: {
+        name: 'Zendesk MCP',
+        description: '',
+        url: 'https://mcp.zendesk.example/sse',
+        authType: 'BearerToken',
+      },
+    });
+    expect(screen.getByText('Deixe em branco para manter a credencial atual.')).toBeInTheDocument();
   });
 });

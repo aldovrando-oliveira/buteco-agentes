@@ -1,10 +1,15 @@
 import { Alert, Button, Group, Loader, Stack, Text, Title } from '@mantine/core';
 import { Link } from 'react-router';
 import { useMcpServersQuery } from '../api/useMcpServers';
+import { useAgentsQuery } from '../../agents/api/useAgents';
 import { McpServerTable } from '../components/McpServerTable';
 
 export function McpServerListPage() {
   const { data, isLoading, isError } = useMcpServersQuery();
+  // Só para derivar a coluna de uso. Uma falha aqui não impede a listagem:
+  // a coluna fica vazia e o resto continua servindo (Decision 2 do
+  // design.md da change frontend-mcp-servidor-uso-e-diagnostico).
+  const agentsQuery = useAgentsQuery();
 
   return (
     <Stack>
@@ -28,7 +33,7 @@ export function McpServerListPage() {
         <Text c="dimmed">Nenhum servidor MCP cadastrado ainda.</Text>
       )}
 
-      {!isLoading && !isError && data && data.length > 0 && <McpServerTable mcpServers={data} />}
+      {!isLoading && !isError && data && data.length > 0 && <McpServerTable mcpServers={data} agents={agentsQuery.data} />}
     </Stack>
   );
 }

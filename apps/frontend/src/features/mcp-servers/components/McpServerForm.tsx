@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { Button, Group, PasswordInput, Select, Stack, Textarea, TextInput } from '@mantine/core';
+import { Button, Group, PasswordInput, Select, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { ApiError } from '../api/mcpServersApi';
-import { useTestUnsavedMcpServerConnectionMutation } from '../api/useMcpServers';
+import {
+  useTestSavedMcpServerConnectionMutation,
+  useTestUnsavedMcpServerConnectionMutation,
+} from '../api/useMcpServers';
 import { ConnectionTestResultAlert, type ConnectionTestResult } from './ConnectionTestResultAlert';
 import type { CreateMcpServerInput, McpServerAuthType } from '../types/mcpServer';
 
@@ -22,6 +25,10 @@ interface McpServerFormProps {
   initialValues?: CreateMcpServerInput;
   submitLabel?: string;
   mode?: 'create' | 'edit';
+  // Necessário para testar a conexão do servidor já salvo, no caso em que
+  // a credencial fica em branco durante a edição (Decision 6 do design.md
+  // da change frontend-mcp-servidor-uso-e-diagnostico).
+  mcpServerId?: string;
 }
 
 interface TestedConnectionConfig {
@@ -53,6 +60,7 @@ export function McpServerForm({
   initialValues,
   submitLabel = 'Cadastrar servidor',
   mode = 'create',
+  mcpServerId,
 }: McpServerFormProps) {
   const isEditing = mode === 'edit';
   const form = useForm<McpServerFormValues>({
@@ -71,6 +79,13 @@ export function McpServerForm({
     { config: TestedConnectionConfig; result: ConnectionTestResult } | undefined
   >();
   const testMutation = useTestUnsavedMcpServerConnectionMutation();
+  const testSavedMutation = useTestSavedMcpServerConnectionMutation();
+
+  // Em edição, credencial em branco significa "manter a credencial atual".
+  // Testar a configuração digitada nesse caso mandaria uma requisição sem
+  // credencial nenhuma e falharia por um motivo que não é o do servidor
+  // salvo — pior do que não ter teste (Decision 6 do design.md).
+  const usesSavedCredential = isEditing && !!mcpServerId && !form.values.credential.trim();
 
   const currentConfig: TestedConnectionConfig = {
     url: form.values.url,
@@ -87,6 +102,40 @@ export function McpServerForm({
 
   const handleTestConnection = () => {
     const config = currentConfig;
+
+    if (!config.url.trim()) {
+      form.setFieldError('url', 'Informe a Url antes de testar.');
+      return;
+    }
+
+    if (usesSavedCredential) {
+      testSavedMutation.mutate(mcpServerId!, {
+        onSuccess: (result) => {
+          setTestState({
+            config,
+            result: {
+              success: result.success,
+              failureReason: result.failureReason,
+              message: result.message,
+              testedAt: new Date(),
+            },
+          });
+        },
+        onError: () => {
+          setTestState({
+            config,
+            result: {
+              success: false,
+              failureReason: null,
+              message: 'Não foi possível testar a conexão. Tente novamente.',
+              testedAt: new Date(),
+            },
+          });
+        },
+      });
+      return;
+    }
+
     testMutation.mutate(
       {
         url: config.url,
@@ -95,21 +144,34 @@ export function McpServerForm({
       },
       {
         onSuccess: (result) => {
-          setTestState({ config, result: { success: result.success, message: result.message } });
+          setTestState({
+            config,
+            result: {
+              success: result.success,
+              failureReason: result.failureReason,
+              message: result.message,
+              testedAt: new Date(),
+            },
+          });
         },
         onError: (error) => {
           if (error instanceof ApiError && error.status === 400 && error.problem?.errors) {
             const message = Object.values(error.problem.errors)
               .map((messages) => messages[0])
               .join(' ');
-            setTestState({ config, result: { success: false, message } });
+            setTestState({
+              config,
+              result: { success: false, failureReason: null, message, testedAt: new Date() },
+            });
             return;
           }
           setTestState({
             config,
             result: {
               success: false,
+              failureReason: null,
               message: 'Não foi possível testar a conexão. Tente novamente.',
+              testedAt: new Date(),
             },
           });
         },
@@ -169,10 +231,20 @@ export function McpServerForm({
             placeholder={
               isEditing ? 'Deixe em branco para manter a credencial atual' : 'Credencial de acesso'
             }
+            description={
+              isEditing
+                ? 'Deixe em branco para manter a credencial atual.'
+                : 'Enviada cifrada (AES-GCM) e nunca retorna na API.'
+            }
             withAsterisk={!isEditing}
             {...form.getInputProps('credential')}
             error={errors?.credential ?? form.errors.credential}
           />
+        )}
+        {usesSavedCredential && (
+          <Text size="xs" c="dimmed" data-testid="saved-credential-test-note">
+            Sem digitar a credencial, o teste usa a credencial salva deste servidor.
+          </Text>
         )}
         <ConnectionTestResultAlert result={testResult} />
         <Group>
@@ -186,7 +258,7 @@ export function McpServerForm({
             type="button"
             variant="outline"
             onClick={handleTestConnection}
-            loading={testMutation.isPending}
+            loading={testMutation.isPending || testSavedMutation.isPending}
           >
             Testar conexão
           </Button>

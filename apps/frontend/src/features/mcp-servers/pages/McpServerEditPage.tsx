@@ -78,6 +78,7 @@ export function McpServerEditPage() {
         errors={fieldErrors}
         submitting={mutation.isPending}
         mode="edit"
+        mcpServerId={data.id}
         submitLabel="Salvar alterações"
         initialValues={{
           name: data.name,

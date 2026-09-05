@@ -6,7 +6,14 @@ import { MemoryRouter } from 'react-router';
 import { theme } from '../../../theme';
 import { McpServerListPage } from './McpServerListPage';
 import { listMcpServers } from '../api/mcpServersApi';
+import { listAgents } from '../../agents/api/agentsApi';
 import type { McpServer } from '../types/mcpServer';
+import type { Agent } from '../../agents/types/agent';
+
+vi.mock('../../agents/api/agentsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../agents/api/agentsApi')>();
+  return { ...actual, listAgents: vi.fn() };
+});
 
 vi.mock('../api/mcpServersApi', () => ({
   listMcpServers: vi.fn(),
@@ -39,6 +46,8 @@ function renderPage() {
 describe('McpServerListPage', () => {
   beforeEach(() => {
     vi.mocked(listMcpServers).mockReset();
+    vi.mocked(listAgents).mockReset();
+    vi.mocked(listAgents).mockResolvedValue([]);
   });
 
   it('exibe um indicador de carregamento enquanto a lista não chega', () => {
@@ -75,5 +84,39 @@ describe('McpServerListPage', () => {
     expect(
       await screen.findByText('Não foi possível carregar os servidores MCP.'),
     ).toBeInTheDocument();
+  });
+
+  it('exibe a quantidade de agentes que usam cada servidor', async () => {
+    vi.mocked(listMcpServers).mockResolvedValue([mcpServer]);
+    const agent: Agent = {
+      id: 'agent-1',
+      name: 'Atendente',
+      instructions: 'Você é um atendente simpático.',
+      isActive: true,
+      provider: 'openai',
+      model: 'gpt-5.6-sol',
+      description: null,
+      skills: [],
+      createdAt: '2026-07-26T00:00:00Z',
+      updatedAt: '2026-07-26T00:00:00Z',
+      mcpServers: [{ id: mcpServer.id, name: mcpServer.name, allowedTools: [] }],
+      delegatesTo: [],
+    };
+    vi.mocked(listAgents).mockResolvedValue([agent]);
+
+    renderPage();
+
+    expect(await screen.findByText('1 agente')).toBeInTheDocument();
+    expect(screen.getByText('1 sem tools')).toBeInTheDocument();
+  });
+
+  it('falha ao carregar o catálogo de agentes não quebra a listagem de servidores', async () => {
+    vi.mocked(listMcpServers).mockResolvedValue([mcpServer]);
+    vi.mocked(listAgents).mockRejectedValue(new Error('falha de rede'));
+
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: mcpServer.name })).toBeInTheDocument();
+    expect(screen.getByText(mcpServer.url)).toBeInTheDocument();
   });
 });
