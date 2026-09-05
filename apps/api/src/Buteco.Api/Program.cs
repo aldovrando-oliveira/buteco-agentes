@@ -61,7 +61,11 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-app.UseHttpsRedirection();
+// Sem UseHttpsRedirection: no compose de servidor (containerizacao-stack-servidor),
+// apps/api só recebe tráfego HTTP puro do nginx interno do stack — TLS termina
+// fora do stack (nginx/Cloudflare já existentes), sem ForwardedHeaders
+// configurado. Redirecionar aqui geraria 307 permanente em todo request via
+// proxy. Alinha com apps/inbox, que nunca chamou este middleware.
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

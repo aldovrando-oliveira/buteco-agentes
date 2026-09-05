@@ -1,0 +1,25 @@
+# Artefatos de build .NET — nunca devem entrar no contexto de build; um
+# bin/obj compilado no host (RID diferente do container, ex. osx-arm64)
+# pode vazar pra dentro da imagem se algum estágio reusar em vez de
+# restaurar do zero.
+**/bin/
+**/obj/
+
+# Artefatos de build do frontend.
+apps/frontend/node_modules/
+apps/frontend/dist/
+
+# Nunca deve entrar no contexto de build.
+.git/
+.gitignore
+
+# Segredos locais — nunca no contexto de build.
+.env
+.env.prod
+
+# OpenSpec, docs, IDE — irrelevantes para qualquer build de imagem.
+openspec/
+docs/
+.claude/
+.codegraph/
+*.md

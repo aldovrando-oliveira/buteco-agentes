@@ -1,0 +1,163 @@
+# Compose de SERVIDOR — roda o stack completo numa VM na cloud, atrás de
+# um nginx/Cloudflare já existentes (fora deste stack, ver
+# openspec/changes/containerizacao-stack-servidor/design.md, D2). Não
+# confundir com docker-compose.yml (raiz), que continua sendo só a infra
+# de desenvolvimento local — intocado por esta change (D3).
+#
+# Segredos vêm de .env.prod (copie de .env.prod.example), nunca
+# versionado. Ver deploy/runbook.md pra sequência de deploy e a tabela
+# completa de variáveis por processo.
+#
+# Non-Goals explícitos (não sugerir nem alterar aqui): CI/CD, orquestrador
+# além do compose, observabilidade/métricas, múltiplas réplicas de
+# apps/workers/apps/inbox (lock hoje é pg_advisory_lock/xmin, não
+# distribuído — nunca usar `replicas > 1`/`deploy.replicas` nesses dois
+# serviços), TLS (resolvido pelo nginx externo), WAHA (instância externa
+# já existente, não sobe aqui).
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: buteco_agents
+    volumes:
+      - buteco-postgres-data-prod:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d buteco_agents"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Sem porta publicada no host — só acessível de dentro da rede do
+    # compose (diferente do docker-compose.yml de dev).
+
+  rabbitmq:
+    image: rabbitmq:4.3-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - buteco-rabbitmq-data-prod:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Sem porta publicada no host — idem postgres.
+
+  migrator:
+    build:
+      context: .
+      dockerfile: deploy/migrate/Dockerfile
+    environment:
+      API_DB_CONNECTION_STRING: "Host=postgres;Port=5432;Database=buteco_agents;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      INBOX_DB_CONNECTION_STRING: "Host=postgres;Port=5432;Database=buteco_inbox;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      API_BASE_URL: "http://api:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=buteco_agents;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: "5672"
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      OpenAI__BaseUrl: ${OPENAI_BASE_URL}
+      OpenAI__ApiKey: ${OPENAI_API_KEY}
+      Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY}
+      PublicUrl__BaseUrl: ${PUBLIC_DOMAIN}
+      Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY}
+      Auth__OperatorUsername: ${AUTH_OPERATOR_USERNAME}
+      Auth__OperatorPasswordHash: ${AUTH_OPERATOR_PASSWORD_HASH}
+    # Sem porta publicada — só o nginx do stack (serviço "frontend")
+    # alcança apps/api, via nome de serviço na rede do compose.
+
+  inbox:
+    build:
+      context: .
+      dockerfile: apps/inbox/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=buteco_inbox;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Inbox__CredentialEncryptionKey: ${INBOX_CREDENTIAL_ENCRYPTION_KEY}
+      Api__BaseUrl: "http://api:8080"
+      # D8: mesmo domínio público de apps/api nesta change (trade-off
+      # documentado — push notification interna sai e volta pela
+      # internet pública; correção futura seria uma variável separada
+      # só pra isso).
+      PublicUrl__BaseUrl: ${PUBLIC_DOMAIN}
+      Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY}
+    # Sem porta publicada — idem apps/api.
+
+  workers:
+    # Sem HEALTHCHECK — apps/workers nunca serviu HTTP, sem /health pra
+    # sondar (diferente de api/inbox/frontend, todos com HEALTHCHECK no
+    # próprio Dockerfile). O `restart: unless-stopped` cobre o caso de o
+    # processo cair — não há como verificar "está respondendo", só "está
+    # rodando".
+    build:
+      context: .
+      dockerfile: apps/workers/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ}
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=buteco_agents;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: "5672"
+      RabbitMq__Username: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      OpenAI__BaseUrl: ${OPENAI_BASE_URL}
+      OpenAI__ApiKey: ${OPENAI_API_KEY}
+      Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY}
+    # Sem porta — apps/workers nunca serviu HTTP.
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        # Caminho relativo (D2/D6 do design) — string vazia, não omitida
+        # (achado da exploração: import.meta.env usa `??`, só cai no
+        # default de dev em undefined, não em string vazia; o Dockerfile
+        # falha o build se o ARG não for passado, ver
+        # apps/frontend/Dockerfile).
+        VITE_API_BASE_URL: ""
+        VITE_INBOX_BASE_URL: ""
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      inbox:
+        condition: service_healthy
+    ports:
+      # Só porta interna do host — nunca 80/443 diretamente. Quem recebe
+      # tráfego público é o nginx/Cloudflare já existentes, fora deste
+      # stack, fazendo proxy_pass pra essa porta.
+      - "127.0.0.1:${STACK_HTTP_PORT}:80"
+
+volumes:
+  buteco-postgres-data-prod:
+  buteco-rabbitmq-data-prod:

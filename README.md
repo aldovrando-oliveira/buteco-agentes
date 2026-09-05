@@ -425,6 +425,52 @@ npm run format:check
 npm run build
 ```
 
+## Como buildar as imagens Docker
+
+Cada app tem um `Dockerfile` na própria pasta, mas o **build context é
+sempre a raiz do monorepo** — necessário porque `Directory.Build.props`,
+`Directory.Packages.props`, `global.json` e `libs/ProviderCatalog` vivem
+fora da pasta de cada app. Rode os comandos abaixo a partir da raiz.
+
+```bash
+# apps/api
+docker build -f apps/api/Dockerfile -t buteco-api .
+
+# apps/inbox
+docker build -f apps/inbox/Dockerfile -t buteco-inbox .
+
+# apps/workers
+docker build -f apps/workers/Dockerfile -t buteco-workers .
+
+# apps/frontend — VITE_API_BASE_URL/VITE_INBOX_BASE_URL são build-time
+# (embutidas no bundle) e OBRIGATÓRIAS: o build falha se não forem
+# passadas, mesmo que vazias. Vazio ("") = caminho relativo, para quando
+# o nginx do stack serve o SPA e faz proxy para apps/api/apps/inbox no
+# mesmo domínio (ver docker-compose.prod.yml).
+docker build -f apps/frontend/Dockerfile \
+  --build-arg VITE_API_BASE_URL= \
+  --build-arg VITE_INBOX_BASE_URL= \
+  -t buteco-frontend .
+
+# migration bundle (apps/api + apps/inbox — nunca apps/workers, que não
+# aplica migration)
+docker build -f deploy/migrate/Dockerfile -t buteco-migrate .
+```
+
+Todas as imagens finais usam a variante **default** (não `-alpine`) das
+imagens `mcr.microsoft.com/dotnet/*` — a `-alpine` não traz a tz database
+nem ICU por padrão, o que quebra a checagem de fuso horário de
+`apps/workers` e a formatação de data em pt-BR (verificado empiricamente,
+ver `openspec/changes/archive/2026-08-26-containerizacao-stack-servidor/design.md`,
+decisão D4).
+
+Para subir o stack completo numa VM (todas as imagens + Postgres/
+RabbitMQ próprios + nginx interno), use `docker-compose.prod.yml` — não
+confundir com o `docker-compose.yml` da seção acima, que é só infra de
+desenvolvimento local. Sequência de deploy, inventário de variáveis de
+ambiente e segredos compartilhados entre processos estão documentados em
+`deploy/runbook.md`.
+
 ## Convenções
 
 - **Isolamento entre apps**: nenhum `.csproj` ou arquivo do frontend pode
