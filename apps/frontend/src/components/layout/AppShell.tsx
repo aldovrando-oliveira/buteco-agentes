@@ -1,55 +1,46 @@
 import {
   ActionIcon,
   AppShell as MantineAppShell,
-  Burger,
+  Box,
   Group,
   NavLink,
+  ScrollArea,
   Text,
-  useComputedColorScheme,
-  useMantineColorScheme,
 } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { Bot, MessagesSquare, Moon, Server, Sun } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
+import { useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
 
-function SunIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-    </svg>
-  );
-}
+const navItems = [
+  { to: '/agents', label: 'Agentes', icon: Bot },
+  { to: '/mcp-servers', label: 'Servidores MCP', icon: Server },
+  { to: '/channels', label: 'Canais', icon: MessagesSquare },
+];
 
-function MoonIcon() {
+// Quadrado de identidade do protótipo: 24px, raio 6px, fundo na cor de
+// destaque, "B" em monoespaçada branca.
+function ProductMark() {
   return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
+    <Box
+      w={24}
+      h={24}
+      bg="var(--mantine-primary-color-filled)"
+      style={{
+        borderRadius: 'var(--mantine-radius-xs)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
     >
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
-    </svg>
+      <Text c="white" ff="monospace" fw={700} fz={12} lh={1} aria-hidden>
+        B
+      </Text>
+    </Box>
   );
 }
 
 export function AppShell() {
-  const [opened, { toggle }] = useDisclosure();
   const location = useLocation();
   const { setColorScheme } = useMantineColorScheme();
   // useMantineColorScheme devolve a preferência crua, que com o padrão "auto"
@@ -60,47 +51,66 @@ export function AppShell() {
   const isDark = useComputedColorScheme('light') === 'dark';
 
   return (
-    <MantineAppShell
-      header={{ height: 60 }}
-      navbar={{ width: 260, breakpoint: 'sm', collapsed: { mobile: !opened } }}
-      padding="md"
-    >
-      <MantineAppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Group>
-            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Text fw={700}>Buteco Agentes</Text>
+    // Sem header: a marca sobe para o topo da barra e o controle de tema desce
+    // para o rodapé (design.md da change frontend-shell-navegacao-e-icones,
+    // D3). Sem colapso em gaveta: o Burger era hiddenFrom="sm" e nunca aparecia
+    // no desktop; abaixo desse ponto o conteúdo aperta em vez de virar gaveta
+    // (D4).
+    <MantineAppShell navbar={{ width: 224, breakpoint: 'sm' }} padding="md">
+      <MantineAppShell.Navbar>
+        <MantineAppShell.Section
+          p="sm"
+          style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
+        >
+          <Group gap="xs" wrap="nowrap">
+            <ProductMark />
+            <Text fw={600} fz="sm" style={{ letterSpacing: '-0.01em' }}>
+              Buteco Agentes
+            </Text>
           </Group>
+        </MantineAppShell.Section>
+
+        <MantineAppShell.Section grow component={ScrollArea} p="xs">
+          {navItems.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              component={Link}
+              to={to}
+              label={label}
+              leftSection={<Icon size={18} />}
+              // Ativo para todo o grupo de rotas, não só para a raiz dele: o
+              // detalhe, a criação e a edição continuam marcando o item.
+              active={location.pathname.startsWith(to)}
+              // O fundo já resolve para o tom 1 da escala de destaque — o
+              // --acsf do protótipo — sem declarar cor aqui. A cor do texto,
+              // não: a variante clara do NavLink usa o tom 9, e o protótipo
+              // quer a cor de destaque. O raio também não vem por prop: o
+              // NavLink não expõe `radius`, e o default é um bloco reto de
+              // largura inteira (D5).
+              styles={{
+                root: {
+                  borderRadius: 'var(--mantine-radius-sm)',
+                  '--nl-color': 'var(--mantine-primary-color-filled)',
+                },
+              }}
+            />
+          ))}
+        </MantineAppShell.Section>
+
+        <MantineAppShell.Section
+          p="sm"
+          style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
+        >
           <ActionIcon
-            variant="default"
+            variant="subtle"
+            color="gray"
             size="lg"
             aria-label={isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
             onClick={() => setColorScheme(isDark ? 'light' : 'dark')}
           >
-            {isDark ? <SunIcon /> : <MoonIcon />}
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </ActionIcon>
-        </Group>
-      </MantineAppShell.Header>
-
-      <MantineAppShell.Navbar p="md">
-        <NavLink
-          component={Link}
-          to="/agents"
-          label="Agentes"
-          active={location.pathname.startsWith('/agents')}
-        />
-        <NavLink
-          component={Link}
-          to="/mcp-servers"
-          label="Servidores MCP"
-          active={location.pathname.startsWith('/mcp-servers')}
-        />
-        <NavLink
-          component={Link}
-          to="/channels"
-          label="Canais"
-          active={location.pathname.startsWith('/channels')}
-        />
+        </MantineAppShell.Section>
       </MantineAppShell.Navbar>
 
       <MantineAppShell.Main>

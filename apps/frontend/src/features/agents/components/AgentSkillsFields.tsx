@@ -1,4 +1,5 @@
 import { ActionIcon, Button, Group, Stack, Text, TextInput } from '@mantine/core';
+import { X } from 'lucide-react';
 import type { UseFormReturnType } from '@mantine/form';
 import type { AgentFormValues } from './agentFormValues';
 
@@ -8,24 +9,6 @@ interface AgentSkillsFieldsProps {
   // Erros vindos do servidor já indexados por linha (Decision 3 do
   // design.md): AgentForm converte `skills[i].name` para `nameErrors[i]`.
   nameErrors?: Record<number, string>;
-}
-
-function RemoveIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
 }
 
 export function AgentSkillsFields({ form, nameErrors }: AgentSkillsFieldsProps) {
@@ -70,7 +53,7 @@ export function AgentSkillsFields({ form, nameErrors }: AgentSkillsFieldsProps) 
             aria-label={`Remover skill ${index + 1}`}
             onClick={() => form.removeListItem('skills', index)}
           >
-            <RemoveIcon />
+            <X size={14} />
           </ActionIcon>
         </Group>
       ))}

@@ -18,22 +18,19 @@ import de código interno desses outros apps.
 ### Requirement: Mantine configurado com AppShell inicial
 O sistema SHALL incluir, em `apps/frontend`, as bibliotecas Mantine `core`,
 `hooks`, `form` e `notifications`, configuradas com os providers necessários
-(`MantineProvider`, `Notifications`), e um `AppShell` no estilo de
-composição visual de https://ui.mantine.dev (navbar/header estruturais) que
-renderiza o conteúdo roteado da aplicação (via `<Outlet/>`), com a
-navegação do navbar limitada aos itens que possuem uma página real.
+(`MantineProvider`, `Notifications`), e um `AppShell` do Mantine que renderiza
+o conteúdo roteado da aplicação na área principal (via `<Outlet/>`).
+
+A composição da casca — as regiões da barra lateral, a navegação e os controles
+do operador — é especificada pela capability `frontend-app-shell`, para onde
+migra também a regra de que a navegação só lista itens com página real, sem
+mudança de comportamento.
 
 #### Scenario: Aplicação renderiza o AppShell inicial
 - **WHEN** a aplicação frontend é iniciada em modo de desenvolvimento e
   acessada no navegador
-- **THEN** a página renderiza um `AppShell` do Mantine com header e navbar
-  visíveis, exibindo a página correspondente à rota atual dentro da área
-  principal, sem erros no console
-
-#### Scenario: Navbar não lista itens sem página correspondente
-- **WHEN** o usuário visualiza a navbar do `AppShell`
-- **THEN** só aparecem itens de navegação que apontam para uma rota
-  existente na aplicação
+- **THEN** a página renderiza a casca da aplicação exibindo, na área principal,
+  a página correspondente à rota atual, sem erros no console
 
 ### Requirement: Esquema de cor automático com alternância manual
 O sistema SHALL configurar, em `apps/frontend`, o Mantine com o esquema de
@@ -79,8 +76,8 @@ primeiro acionamento produza mudança visível.
 ### Requirement: Roteamento client-side configurado
 O sistema SHALL prover, em `apps/frontend`, roteamento client-side via
 `react-router` em data mode (`createBrowserRouter` combinado com
-`RouterProvider`), com o `AppShell` atuando como layout compartilhado das
-rotas e a rota raiz (`/`) redirecionando para a primeira feature
+`RouterProvider`), com a casca da aplicação atuando como layout compartilhado
+das rotas e a rota raiz (`/`) redirecionando para a primeira feature
 disponível. A árvore de rotas SHALL ser definida em um módulo próprio, sem
 efeito colateral no histórico do browser, de forma que a mesma árvore
 usada pela aplicação possa ser montada em um router de memória fora do
@@ -95,8 +92,8 @@ alterações não salvas — só funcionam nesse modo.
 
 #### Scenario: Navegação entre rotas preserva o layout
 - **WHEN** o usuário navega entre páginas diferentes da aplicação
-- **THEN** o header e a navbar do `AppShell` permanecem visíveis e não são
-  recarregados, apenas o conteúdo da área principal muda
+- **THEN** a casca compartilhada permanece visível e não é recarregada,
+  apenas o conteúdo da área principal muda
 
 #### Scenario: Árvore de rotas montável fora do browser
 - **WHEN** a mesma árvore de rotas usada pela aplicação é montada em um
