@@ -164,6 +164,16 @@ token, mas declara `SecuritySchemes`/`SecurityRequirements` (HTTP Bearer)
 para o endpoint A2A do agente — a exigência de credencial fica declarada
 de forma compatível com a spec, não implícita.
 
+Os dois endereços do agente — endpoint de execução e card de descoberta —
+saem também na resposta de `GET /agents/{id}` e da listagem, montados no
+servidor por um ponto único que o próprio card consome (`agente-enderecos-a2a`).
+Nunca são construídos pelo consumidor a partir de host mais identificador: a
+url pública é configuração do servidor, e o host de onde a página foi servida
+não é o host público atrás de proxy. Sem url pública configurada, o bloco vem
+**ausente** em vez de relativo — o card de descoberta ainda emite endereço
+relativo nesse caso, e corrigir isso é change própria (ver "Itens em aberto"
+no arquivo 02).
+
 A re-serialização do `AgentTask` inteiro em `PostgresTaskStore.SaveTaskAsync`
 (`Serialize(task, A2AJsonUtilities.DefaultOptions)`) **não é uma rede de
 segurança genérica** para qualquer valor colocado em `AgentTask.Metadata`
@@ -254,6 +264,11 @@ de propor algo nesta base:
    Mesmo raciocínio decide jsonb vs. tabela relacional: jsonb quando não
    há necessidade de FK/consulta relacional, tabela quando os dois lados
    do vínculo são entidades com identidade própria.
+   No frontend a régua é a mesma e o gatilho é repetição **já observada**,
+   nunca prevista: os três componentes visuais compartilhados do painel
+   (card seccionado, rótulo de seção, cabeçalho de detalhe) saíram de cinco
+   cópias idênticas, quatro estruturas iguais e três cabeçalhos repetidos —
+   contados antes de extrair.
 3. **Credenciais**: sempre write-only, nunca retornadas em nenhuma
    resposta, criptografadas com AES-GCM (chave por domínio/app via env
    var), padrão "deixe em branco para manter a atual" na edição. Segredo
@@ -345,6 +360,14 @@ de propor algo nesta base:
     que o resto do pipeline usa, divergindo em encoding de aspas de um
     jeito que só um teste de acordo real entre `apps/api` e
     `apps/workers` pegou (`crossapp-session-codec-encoder`).
+    A cláusula de naming policy voltou a morder em `agente-enderecos-a2a`,
+    de forma mais sutil: a política camelCase minúscula apenas a primeira
+    letra, então uma propriedade `A2A` vai para o fio como `a2A` e o
+    consumidor que lê `a2a` recebe campo ausente. **Teste que desserializa a
+    resposta para o mesmo tipo é cego a isso** — a chave passa pela mesma
+    política na ida e na volta e sempre casa. O teste que pega inspeciona o
+    texto do JSON. Sempre que um nome de propriedade tiver sigla, número ou
+    maiúsculas consecutivas, fixar o nome no fio explicitamente.
 13. **A UI nunca afirma mais do que o sistema sabe** — se o dado não é
     coletado, a interface não o insinua. Um único indicador de envio,
     jamais dois checks, porque entrega e leitura são recibos que o desenho
@@ -353,3 +376,45 @@ de propor algo nesta base:
     protege isso é a **negativa** (afirmar a ausência do segundo
     indicador), porque é ela que impede a regressão bem-intencionada de
     "deixar parecido com o WhatsApp".
+
+14. **Mudança visual só é verificada por olho humano** — a suíte roda em
+    jsdom, que não enxerga cor, contraste nem layout. Uma mudança de tema
+    ou de composição pode deixar a suíte inteira verde e o painel
+    ilegível, e isso aconteceu: três etapas do redesenho passaram verde
+    com defeitos que só a comparação com o protótipo pegou. Change que
+    mexe em aparência traz conferência manual como tarefa própria, tela a
+    tela, nos dois esquemas de cor — e a conferência é **iterativa**,
+    porque cada correção muda o que fica visível (migrar o card revelou o
+    divisor recuado, corrigir o divisor revelou a faixa desalinhada). O
+    que a suíte pode cobrir é contrato: que o token vale o que a spec diz,
+    que o componente recebe o que promete, que o link aponta para a rota
+    certa.
+15. **Um guarda só vale depois de ter falhado contra o defeito real** —
+    escrever o teste, reintroduzir o defeito de propósito, ver reprovar, e
+    só então manter a correção. Três guardas desta base passaram verde
+    **com o defeito presente** antes de serem consertados: o que varre
+    tons fixos de superfície (a expressão não cobria valor dentro de
+    ternário, que era justamente a forma do caso real), o que prende a
+    altura da faixa de cabeçalho, e o que afirma o nome do campo no fio.
+    Guarda não verificado é pior que nenhum, porque dá impressão de
+    cobertura sem ter.
+16. **Papel visual que troca de ponta da escala precisa de variável
+    declarada por esquema** — `gray[n]` é claro nos dois esquemas e
+    `dark[n]` é escuro nos dois, então um tom fixo usado como fundo de
+    superfície funciona num tema e quebra no outro. O mesmo defeito
+    apareceu três vezes no redesenho: fundo da página, faixa de cabeçalho
+    de card e de tabela, e linha selecionada no histórico de sessões. A
+    causa é conceitual — no tema claro a superfície sutil é *mais clara*
+    que o card, no escuro é *mais escura* —, e a saída é uma variável
+    declarada nos dois esquemas pelo resolver, ou um token da biblioteca
+    que já troque sozinho. Fechado por guarda estático (ver 15).
+17. **Contrariar o protótipo é resultado legítimo, e vira registro** —
+    handoff de design feito sem acesso ao código diverge da realidade, e a
+    divergência se resolve com decisão explícita, não com implementação
+    silenciosa nem com fidelidade cega. No redesenho isso aconteceu cinco
+    vezes: campo que a API não devolve, progresso que ninguém mede,
+    contagem que exigiria segunda requisição, identidade de operador que o
+    login não fornece, e um tom de rótulo que reprova no contraste mínimo
+    que a própria identidade visual exige. Regra que o sistema já
+    escreveu vence protótipo; a recusa vai para o `design.md` com o
+    número que a sustenta.

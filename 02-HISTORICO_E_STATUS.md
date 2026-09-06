@@ -39,6 +39,24 @@ efeito colateral, destravou `tests/InboxOrchestratorRoundTrip.Tests` — a
 de `inbox-instante-mensagem`. Ver "Correção do decrypt de push
 notification" abaixo.
 
+A linha de trabalho de **entrega containerizada** está concluída em uma
+change: `containerizacao-stack-servidor` — Dockerfile multi-stage por app,
+serviço one-shot de migration bundle antes de `apps/api`/`apps/inbox`, nginx
+interno servindo o SPA e fazendo proxy, e `docker-compose.prod.yml` na raiz.
+O compose de desenvolvimento permanece intocado.
+
+A linha de trabalho de **redesenho do painel** está **concluída nas oito
+etapas**, todas aplicadas, sincronizadas e arquivadas. Ela veio de um handoff
+de design feito sem acesso ao código, e o trabalho foi tanto implementá-lo
+quanto arbitrar onde ele divergia da realidade da API e do próprio sistema.
+Ver "Redesenho do painel" abaixo.
+
+O painel deixou de rodar com os defaults da biblioteca de componentes: existe
+uma identidade visual declarada em tema, uma casca própria, padrões de card e
+de cabeçalho compartilhados, e o protocolo A2A finalmente visível para quem
+opera. A suíte do frontend saiu de 341 para 451 testes ao longo dessas oito
+etapas.
+
 ## Changes aplicadas, por linha de trabalho
 
 ### Fundação (backend + frontend básico)
@@ -922,6 +940,68 @@ novos em `ChannelContextBlockBuilderTests`, novo; 7 novos em
 4/4, incluindo o cenário novo de acordo real de `channelType`/
 `contactExternalId` — nenhuma regressão nos três já existentes.
 
+### Entrega containerizada
+
+- `containerizacao-stack-servidor` — Dockerfile multi-stage por app, cada um
+  na pasta do próprio app mas com build context na raiz (obrigatório por
+  `Directory.Build.props`/`Directory.Packages.props`/`global.json` e pelo
+  `ProjectReference` de `apps/api`/`apps/workers` para `libs/ProviderCatalog`).
+  Migration bundle como serviço one-shot antes de `apps/api` e `apps/inbox`
+  subirem — nunca para `apps/workers`, que só detecta divergência de schema.
+  Nginx interno serve o SPA e faz proxy; TLS e domínio público continuam fora
+  deste stack.
+
+### Redesenho do painel (handoff Claude Design)
+
+Oito etapas, na ordem em que foram aplicadas. As três primeiras vieram de uma
+única proposta do handoff, dividida para não juntar risco de infraestrutura com
+risco de interface no mesmo diff.
+
+- `frontend-agente-description-skills` — expõe `description` e `skills` no
+  painel e **corrige perda de dados**: a edição enviava `PUT` sem os campos, e
+  o endpoint trata ausência como "limpar", então toda edição pelo painel
+  apagava silenciosamente o que fora cadastrado via API. Os campos ficaram
+  obrigatórios no tipo de entrada para o compilador impedir a regressão.
+- `frontend-roteamento-data-router` — migra para `createBrowserRouter` +
+  `RouterProvider`, sem nenhuma mudança visível. Necessária porque `useBlocker`,
+  único mecanismo de interceptar navegação, estoura fora do data mode.
+  Deliberadamente separada da etapa seguinte.
+- `frontend-agente-detalhe-abas` — detalhe do agente vira host de três abas
+  com a aba ativa na URL; a página separada de vínculo MCP deixa de existir
+  (rota antiga sobrevive como redirect). Só a aba ativa fica montada, o que é o
+  que sustenta o modelo de rascunho: trocar de aba é navegação, navegação com
+  pendência é bloqueada, logo no máximo uma aba tem rascunho vivo.
+- `frontend-mcp-servidor-uso-e-diagnostico` — visão inversa do servidor MCP
+  (quais agentes o usam, com quais tools), catálogo de tools no detalhe, e
+  explicação por `failureReason` em vez da mensagem crua da API. O teste de
+  conexão no formulário passou a escolher o endpoint pelo estado da credencial:
+  em branco durante edição significa "manter a atual", e antes o teste rodava
+  sem credencial nenhuma.
+- `frontend-listas-busca-e-colunas` — busca com normalização de acentos, filtro
+  por estado, e colunas que respondem as perguntas que levam alguém a abrir um
+  agente. Dívida assumida: busca e filtro rodam no cliente porque nenhuma das
+  rotas de listagem tem busca ou paginação.
+- `frontend-tema-identidade-visual` — o tema deixa de ser `createTheme({})`.
+  Paleta, tipografia, raios e sombras derivados do protótipo, com as âncoras
+  corrigidas contra o que a biblioteca de fato consome (a tabela do handoff
+  estava deslocada em duas das quatro pontas). Esquema de cor passa a seguir o
+  sistema operacional.
+- `frontend-shell-navegacao-e-icones` — casca unificada numa barra lateral com
+  marca, navegação com ícone e o controle de tema no rodapé. Entra a primeira
+  biblioteca de ícones do projeto; os três ícones que existiam eram a geometria
+  dela transcrita à mão. O rodapé **não** identifica o operador: o login
+  devolve só credencial e validade.
+- `frontend-acabamento-telas` — padrões compartilhados de card seccionado,
+  rótulo de seção e cabeçalho de detalhe; aparência do badge declarada no tema,
+  cobrindo os dezenove de uma vez; volta para a listagem em todas as nove telas
+  que não são listagem. Um ponto do protótipo foi **recusado**: o tom de rótulo
+  que ele pede reprova no contraste mínimo que a própria identidade visual
+  exige.
+- `agente-enderecos-a2a` — a única etapa que precisou do backend. A resposta de
+  agente passa a carregar os endereços A2A, montados no servidor a partir da
+  url pública, num ponto único que o card de descoberta também consome. Sem url
+  pública configurada, os endereços vêm ausentes em vez de quebrados.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -1157,9 +1237,41 @@ Cada um tem gatilho de quando revisitar:
   coloque texto não controlado pelo sistema em um bloco de contexto
   delimitado por esse marcador (ou por um análogo).
 
+### Abertos pelo redesenho do painel
+
+- **Validar a url pública no startup.** Sem ela configurada, o card de
+  descoberta A2A emite endereço relativo como se fosse absoluto, em silêncio —
+  a resposta de agente passou a declarar a ausência, mas o card não. Validar no
+  startup resolveria de vez, ao custo de mudar o comportamento de inicialização
+  de um sistema em uso. Registrado como candidata a change própria no
+  `design.md` de `agente-enderecos-a2a`, não enfiado nela.
+- **`AgentDeactivationTests.SendMessage_WithPushNotificationConfig_ForInactiveAgent_NeverPublishesJobOrCallsWebhook`**
+  falha com o runtime de containers no ar, e falha igual sem as mudanças do
+  redesenho. Anterior a essa linha de trabalho e nunca investigada.
+- **Formatação pendente em 18 arquivos do frontend**, todos já assim antes do
+  redesenho. Deixados intactos de propósito em todos os commits, para não
+  inchar diffs de mudança de comportamento. Duas vezes durante o redesenho um
+  `prettier --write` com glob amplo os reformatou por acidente e foi revertido.
+- **Densidade compacta/confortável e card "Primeiros passos"** do protótipo
+  seguem adiados por decisão de 2026-09-05, nunca propostos.
+
 ## Próximo passo
 
-**Concluído nesta sessão**: `inbox-contexto-canal` foi explorada, proposta
+**Concluído nesta sessão**: o redesenho do painel foi fechado nas **oito
+etapas**, da identidade visual ao card A2A, mais a change de CORS de
+desenvolvimento que a conferência visual exigiu. Todas propostas, aplicadas,
+conferidas à mão, sincronizadas, arquivadas e commitadas.
+
+Duas coisas que arrastavam foram fechadas de arrasto na última etapa, por
+estarem impedindo verificá-la: a instabilidade da suíte do frontend (prazo
+padrão de um segundo das consultas assíncronas, curto para dropdowns em portal
+sob paralelismo) e a configuração do Testcontainers com Podman, agora
+documentada no README.
+
+Não há linha de trabalho em andamento. Os candidatos registrados estão em
+"Itens em aberto" acima — o mais concreto é validar a url pública no startup.
+
+**Anteriormente**: `inbox-contexto-canal` foi explorada, proposta
 e aplicada (ver "Contexto de canal" acima), fechando a linha de trabalho
 de contexto temporal e de canal nas duas etapas. A exploração fechou duas
 das quatro perguntas reforçadas da change (a maior parte do valor não
