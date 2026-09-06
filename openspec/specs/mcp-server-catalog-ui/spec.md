@@ -12,7 +12,9 @@ servidores MCP cadastrados consumindo `GET /mcp-servers`, exibindo para
 cada servidor o nome (com link para o detalhe), a URL, o tipo de
 autenticação (`AuthType`), quantos agentes usam aquele servidor e um
 indicador do estado (`isActive`), além de um botão para iniciar o
-cadastro de um novo servidor MCP. A quantidade de agentes SHALL ser
+cadastro de um novo servidor MCP. A página SHALL exibir a quantidade de
+servidores cadastrados e um campo de busca por nome ou url, aplicado no
+cliente sobre a coleção já carregada. A quantidade de agentes SHALL ser
 derivada no cliente a partir de `GET /agents`, percorrendo os vínculos de
 cada agente, já que a API não oferece consulta inversa; quando algum
 desses agentes está vinculado ao servidor sem nenhuma tool permitida, a
@@ -23,8 +25,8 @@ interface SHALL sinalizar quantos estão nessa situação.
   servidores cadastrados
 - **THEN** a interface exibe, para cada servidor, o nome com link para o
   detalhe, a URL, o tipo de autenticação, quantos agentes o usam, um
-  indicador visual do estado (ativo ou inativo), e um botão para
-  cadastrar um novo servidor MCP
+  indicador visual do estado (ativo ou inativo), a quantidade de
+  servidores cadastrados, e um botão para cadastrar um novo servidor MCP
 
 #### Scenario: Lista vazia
 - **WHEN** o usuário acessa a página de servidores MCP e não existe
@@ -60,6 +62,24 @@ interface SHALL sinalizar quantos estão nessa situação.
   responde normalmente
 - **THEN** a interface continua exibindo a lista de servidores com nome,
   URL, autenticação e estado, apenas sem a informação de uso
+
+#### Scenario: Busca por nome ou url
+- **WHEN** o usuário digita um termo no campo de busca da listagem de
+  servidores MCP
+- **THEN** a interface exibe apenas os servidores cujo nome ou url contém
+  aquele termo, sem enviar nenhuma requisição nova
+
+#### Scenario: Busca ignora maiúsculas e acentuação
+- **WHEN** o usuário busca por um termo sem acentuação ou com caixa
+  diferente da cadastrada
+- **THEN** a interface encontra o servidor correspondente normalmente
+
+#### Scenario: Nenhum servidor corresponde à busca
+- **WHEN** existem servidores cadastrados, mas nenhum corresponde ao
+  termo buscado
+- **THEN** a interface indica que nenhum servidor corresponde à busca,
+  com uma mensagem distinta da usada quando não há nenhum servidor
+  cadastrado
 
 ### Requirement: Cadastro de servidor MCP pela interface
 O sistema SHALL prover, em `apps/frontend`, um formulário para cadastrar

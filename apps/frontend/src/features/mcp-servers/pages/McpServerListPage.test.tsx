@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MantineProvider } from '@mantine/core';
 import { MemoryRouter } from 'react-router';
@@ -118,5 +119,82 @@ describe('McpServerListPage', () => {
 
     expect(await screen.findByRole('link', { name: mcpServer.name })).toBeInTheDocument();
     expect(screen.getByText(mcpServer.url)).toBeInTheDocument();
+  });
+
+  const outroServidor: McpServer = {
+    ...mcpServer,
+    id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+    name: 'Notas Fiscais',
+    url: 'https://mcp.notas.example/sse',
+  };
+
+  async function renderWithServers(servers: McpServer[]) {
+    vi.mocked(listMcpServers).mockResolvedValue(servers);
+    renderPage();
+    await screen.findByLabelText('Buscar');
+  }
+
+  // Restrito à tabela: fora dela existe o link de cadastrar servidor.
+  function visibleServerNames() {
+    const table = screen.queryByRole('table');
+    return table ? within(table).getAllByRole('link').map((link) => link.textContent) : [];
+  }
+
+  it('exibe a quantidade de servidores cadastrados', async () => {
+    await renderWithServers([mcpServer, outroServidor]);
+
+    expect(screen.getByText(/2 servidores cadastrados/)).toBeInTheDocument();
+  });
+
+  it('usa o singular quando há um único servidor cadastrado', async () => {
+    await renderWithServers([mcpServer]);
+
+    expect(screen.getByText(/1 servidor cadastrado/)).toBeInTheDocument();
+  });
+
+  it('busca pelo nome do servidor', async () => {
+    const user = userEvent.setup();
+    await renderWithServers([mcpServer, outroServidor]);
+
+    await user.type(screen.getByLabelText('Buscar'), 'notas');
+
+    expect(visibleServerNames()).toEqual(['Notas Fiscais']);
+  });
+
+  it('busca pela url do servidor', async () => {
+    const user = userEvent.setup();
+    await renderWithServers([mcpServer, outroServidor]);
+
+    await user.type(screen.getByLabelText('Buscar'), 'notas.example');
+
+    expect(visibleServerNames()).toEqual(['Notas Fiscais']);
+  });
+
+  it('busca ignorando acentuação e caixa', async () => {
+    const user = userEvent.setup();
+    await renderWithServers([mcpServer, outroServidor]);
+
+    await user.type(screen.getByLabelText('Buscar'), 'NOTAS FISCAIS');
+
+    expect(visibleServerNames()).toEqual(['Notas Fiscais']);
+  });
+
+  it('mensagem de nenhum resultado é distinta da de catálogo vazio', async () => {
+    const user = userEvent.setup();
+    await renderWithServers([mcpServer]);
+
+    await user.type(screen.getByLabelText('Buscar'), 'inexistente');
+
+    expect(screen.getByText('Nenhum servidor corresponde à busca.')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhum servidor MCP cadastrado ainda.')).not.toBeInTheDocument();
+  });
+
+  it('catálogo vazio não exibe campo de busca', async () => {
+    vi.mocked(listMcpServers).mockResolvedValue([]);
+
+    renderPage();
+
+    await screen.findByText('Nenhum servidor MCP cadastrado ainda.');
+    expect(screen.queryByLabelText('Buscar')).not.toBeInTheDocument();
   });
 });
