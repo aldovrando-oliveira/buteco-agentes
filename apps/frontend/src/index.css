@@ -7,3 +7,20 @@ body,
 body {
   margin: 0;
 }
+
+/* Degrau de superfície entre a página e os cards. Não dá para fazer pela
+   paleta: no Mantine o <body> e o Paper leem a MESMA variável
+   (--mantine-color-body, styles.css linhas 30 e 840), então mexer nela move os
+   dois juntos e o degrau continua não existindo. A variável fica sendo a
+   superfície — o que Paper, Card, Table e Modal precisam — e o fundo da página
+   vem de --buteco-page-bg, declarada no cssVariablesResolver de theme.ts.
+
+   O fundo da página também não pode ser um tom da escala `gray`: o Mantine lê
+   gray[1] como superfície sutil em quinze lugares, e igualar os dois faz o
+   SegmentedControl, os hovers e a linha selecionada sumirem contra a página.
+
+   Este arquivo é importado depois de @mantine/core/styles.css em main.tsx,
+   então vence sem !important. */
+body {
+  background-color: var(--buteco-page-bg);
+}

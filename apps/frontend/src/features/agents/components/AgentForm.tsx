@@ -1,4 +1,14 @@
-import { Button, Group, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import {
+  Button,
+  Group,
+  Paper,
+  Select,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+} from '@mantine/core';
 import { useForm } from '@mantine/form';
 import type { AgentSkill, CreateAgentInput, ProviderCatalogEntry } from '../types/agent';
 import { AgentSkillsFields } from './AgentSkillsFields';
@@ -70,6 +80,9 @@ function skillNameErrorsFrom(errors?: Record<string, string>): Record<number, st
   return result;
 }
 
+// Superfície própria: o fundo da página deixou de ser branco (change
+// frontend-tema-identidade-visual, D4/D12), então o conteúdo precisa declarar
+// a sua em vez de herdar o branco do body.
 export function AgentForm({
   onSubmit,
   onCancel,
@@ -117,73 +130,75 @@ export function AgentForm({
 
   return (
     <form onSubmit={form.onSubmit(handleSubmit)}>
-      <Stack>
-        <TextInput
-          label="Nome"
-          placeholder="Nome do agente"
-          withAsterisk
-          {...form.getInputProps('name')}
-          error={errors?.name ?? form.errors.name}
-        />
-        <Textarea
-          label="Descrição"
-          placeholder="Descrição do agente"
-          description="Uso interno: ajuda o operador a identificar o agente nas listas."
-          rows={2}
-          resize="vertical"
-          {...form.getInputProps('description')}
-          error={errors?.description ?? form.errors.description}
-        />
-        <Textarea
-          label="Instruções"
-          placeholder="System prompt do agente"
-          description="System prompt, aceita Markdown."
-          withAsterisk
-          rows={12}
-          resize="vertical"
-          styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
-          {...form.getInputProps('instructions')}
-          error={errors?.instructions ?? form.errors.instructions}
-        />
-        <Text size="xs" c="dimmed" mt={-8} data-testid="instructions-counter">
-          {form.values.instructions.length} caracteres
-        </Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <Select
-            label="Provedor"
-            placeholder="Selecione o provedor de LLM"
+      <Paper withBorder radius="md" p="lg">
+        <Stack>
+          <TextInput
+            label="Nome"
+            placeholder="Nome do agente"
             withAsterisk
-            data={providerOptions}
-            value={form.values.provider || null}
-            onChange={(value) => {
-              form.setFieldValue('provider', value ?? '');
-              form.setFieldValue('model', '');
-            }}
-            error={errors?.provider ?? form.errors.provider}
+            {...form.getInputProps('name')}
+            error={errors?.name ?? form.errors.name}
           />
-          <Select
-            label="Modelo"
-            placeholder={
-              form.values.provider ? 'Selecione o modelo' : 'Escolha o provedor primeiro'
-            }
+          <Textarea
+            label="Descrição"
+            placeholder="Descrição do agente"
+            description="Uso interno: ajuda o operador a identificar o agente nas listas."
+            rows={2}
+            resize="vertical"
+            {...form.getInputProps('description')}
+            error={errors?.description ?? form.errors.description}
+          />
+          <Textarea
+            label="Instruções"
+            placeholder="System prompt do agente"
+            description="System prompt, aceita Markdown."
             withAsterisk
-            disabled={!form.values.provider}
-            data={modelOptions}
-            value={form.values.model || null}
-            onChange={(value) => form.setFieldValue('model', value ?? '')}
-            error={errors?.model ?? form.errors.model}
+            rows={12}
+            resize="vertical"
+            styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
+            {...form.getInputProps('instructions')}
+            error={errors?.instructions ?? form.errors.instructions}
           />
-        </SimpleGrid>
-        <AgentSkillsFields form={form} nameErrors={skillNameErrorsFrom(errors)} />
-        <Group>
-          <Button type="submit" loading={submitting}>
-            {submitLabel}
-          </Button>
-          <Button type="button" variant="default" onClick={onCancel}>
-            Cancelar
-          </Button>
-        </Group>
-      </Stack>
+          <Text size="xs" c="dimmed" mt={-8} data-testid="instructions-counter">
+            {form.values.instructions.length} caracteres
+          </Text>
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
+            <Select
+              label="Provedor"
+              placeholder="Selecione o provedor de LLM"
+              withAsterisk
+              data={providerOptions}
+              value={form.values.provider || null}
+              onChange={(value) => {
+                form.setFieldValue('provider', value ?? '');
+                form.setFieldValue('model', '');
+              }}
+              error={errors?.provider ?? form.errors.provider}
+            />
+            <Select
+              label="Modelo"
+              placeholder={
+                form.values.provider ? 'Selecione o modelo' : 'Escolha o provedor primeiro'
+              }
+              withAsterisk
+              disabled={!form.values.provider}
+              data={modelOptions}
+              value={form.values.model || null}
+              onChange={(value) => form.setFieldValue('model', value ?? '')}
+              error={errors?.model ?? form.errors.model}
+            />
+          </SimpleGrid>
+          <AgentSkillsFields form={form} nameErrors={skillNameErrorsFrom(errors)} />
+          <Group>
+            <Button type="submit" loading={submitting}>
+              {submitLabel}
+            </Button>
+            <Button type="button" variant="default" onClick={onCancel}>
+              Cancelar
+            </Button>
+          </Group>
+        </Stack>
+      </Paper>
     </form>
   );
 }

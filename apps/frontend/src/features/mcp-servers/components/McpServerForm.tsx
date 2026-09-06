@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { Button, Group, PasswordInput, Select, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import {
+  Button,
+  Group,
+  Paper,
+  PasswordInput,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+} from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { ApiError } from '../api/mcpServersApi';
 import {
@@ -52,6 +62,9 @@ function toFormValues(input?: CreateMcpServerInput): McpServerFormValues {
   };
 }
 
+// Superfície própria: o fundo da página deixou de ser branco (change
+// frontend-tema-identidade-visual, D4/D12), então o conteúdo precisa declarar
+// a sua em vez de herdar o branco do body.
 export function McpServerForm({
   onSubmit,
   onCancel,
@@ -192,78 +205,82 @@ export function McpServerForm({
 
   return (
     <form onSubmit={form.onSubmit(handleSubmit)}>
-      <Stack>
-        <TextInput
-          label="Nome"
-          placeholder="Nome do servidor MCP"
-          withAsterisk
-          {...form.getInputProps('name')}
-          error={errors?.name ?? form.errors.name}
-        />
-        <Textarea
-          label="Descrição"
-          placeholder="Descrição do servidor MCP"
-          rows={4}
-          resize="vertical"
-          {...form.getInputProps('description')}
-          error={errors?.description ?? form.errors.description}
-        />
-        <TextInput
-          label="Url"
-          placeholder="https://mcp.exemplo.com/sse"
-          withAsterisk
-          {...form.getInputProps('url')}
-          error={errors?.url ?? form.errors.url}
-        />
-        <Select
-          label="Tipo de autenticação"
-          withAsterisk
-          data={authTypeOptions}
-          value={form.values.authType}
-          onChange={(value) =>
-            form.setFieldValue('authType', (value as McpServerAuthType) ?? 'None')
-          }
-          error={errors?.authType ?? form.errors.authType}
-        />
-        {form.values.authType !== 'None' && (
-          <PasswordInput
-            label="Credencial"
-            placeholder={
-              isEditing ? 'Deixe em branco para manter a credencial atual' : 'Credencial de acesso'
-            }
-            description={
-              isEditing
-                ? 'Deixe em branco para manter a credencial atual.'
-                : 'Enviada cifrada (AES-GCM) e nunca retorna na API.'
-            }
-            withAsterisk={!isEditing}
-            {...form.getInputProps('credential')}
-            error={errors?.credential ?? form.errors.credential}
+      <Paper withBorder radius="md" p="lg">
+        <Stack>
+          <TextInput
+            label="Nome"
+            placeholder="Nome do servidor MCP"
+            withAsterisk
+            {...form.getInputProps('name')}
+            error={errors?.name ?? form.errors.name}
           />
-        )}
-        {usesSavedCredential && (
-          <Text size="xs" c="dimmed" data-testid="saved-credential-test-note">
-            Sem digitar a credencial, o teste usa a credencial salva deste servidor.
-          </Text>
-        )}
-        <ConnectionTestResultAlert result={testResult} />
-        <Group>
-          <Button type="submit" loading={submitting}>
-            {submitLabel}
-          </Button>
-          <Button type="button" variant="default" onClick={onCancel}>
-            Cancelar
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleTestConnection}
-            loading={testMutation.isPending || testSavedMutation.isPending}
-          >
-            Testar conexão
-          </Button>
-        </Group>
-      </Stack>
+          <Textarea
+            label="Descrição"
+            placeholder="Descrição do servidor MCP"
+            rows={4}
+            resize="vertical"
+            {...form.getInputProps('description')}
+            error={errors?.description ?? form.errors.description}
+          />
+          <TextInput
+            label="Url"
+            placeholder="https://mcp.exemplo.com/sse"
+            withAsterisk
+            {...form.getInputProps('url')}
+            error={errors?.url ?? form.errors.url}
+          />
+          <Select
+            label="Tipo de autenticação"
+            withAsterisk
+            data={authTypeOptions}
+            value={form.values.authType}
+            onChange={(value) =>
+              form.setFieldValue('authType', (value as McpServerAuthType) ?? 'None')
+            }
+            error={errors?.authType ?? form.errors.authType}
+          />
+          {form.values.authType !== 'None' && (
+            <PasswordInput
+              label="Credencial"
+              placeholder={
+                isEditing
+                  ? 'Deixe em branco para manter a credencial atual'
+                  : 'Credencial de acesso'
+              }
+              description={
+                isEditing
+                  ? 'Deixe em branco para manter a credencial atual.'
+                  : 'Enviada cifrada (AES-GCM) e nunca retorna na API.'
+              }
+              withAsterisk={!isEditing}
+              {...form.getInputProps('credential')}
+              error={errors?.credential ?? form.errors.credential}
+            />
+          )}
+          {usesSavedCredential && (
+            <Text size="xs" c="dimmed" data-testid="saved-credential-test-note">
+              Sem digitar a credencial, o teste usa a credencial salva deste servidor.
+            </Text>
+          )}
+          <ConnectionTestResultAlert result={testResult} />
+          <Group>
+            <Button type="submit" loading={submitting}>
+              {submitLabel}
+            </Button>
+            <Button type="button" variant="default" onClick={onCancel}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleTestConnection}
+              loading={testMutation.isPending || testSavedMutation.isPending}
+            >
+              Testar conexão
+            </Button>
+          </Group>
+        </Stack>
+      </Paper>
     </form>
   );
 }

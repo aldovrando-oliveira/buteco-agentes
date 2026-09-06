@@ -5,6 +5,7 @@ import {
   Group,
   NavLink,
   Text,
+  useComputedColorScheme,
   useMantineColorScheme,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
@@ -50,8 +51,13 @@ function MoonIcon() {
 export function AppShell() {
   const [opened, { toggle }] = useDisclosure();
   const location = useLocation();
-  const { colorScheme, setColorScheme } = useMantineColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { setColorScheme } = useMantineColorScheme();
+  // useMantineColorScheme devolve a preferência crua, que com o padrão "auto"
+  // é a string 'auto' — nunca 'dark'. Quem resolve a preferência do sistema
+  // operacional para o esquema efetivo é useComputedColorScheme; sem ele o
+  // rótulo do botão mentiria e o primeiro clique não mudaria nada na tela de
+  // quem usa o SO no escuro.
+  const isDark = useComputedColorScheme('light') === 'dark';
 
   return (
     <MantineAppShell

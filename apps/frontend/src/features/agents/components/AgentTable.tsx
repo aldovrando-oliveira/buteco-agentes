@@ -1,4 +1,4 @@
-import { Anchor, Badge, Group, Stack, Table, Text } from '@mantine/core';
+import { Anchor, Badge, Group, Paper, Stack, Table, Text } from '@mantine/core';
 import { Link } from 'react-router';
 import type { Agent } from '../types/agent';
 
@@ -49,71 +49,78 @@ function ToolsCell({ agent }: { agent: Agent }) {
   );
 }
 
+// Superfície própria: o fundo da página deixou de ser branco (change
+// frontend-tema-identidade-visual, D4/D12), então o conteúdo precisa declarar
+// a sua em vez de herdar o branco do body.
 export function AgentTable({ agents }: AgentTableProps) {
   return (
-    <Table>
-      <Table.Thead>
-        <Table.Tr>
-          <Table.Th>Agente</Table.Th>
-          <Table.Th>Provedor / modelo</Table.Th>
-          <Table.Th>Ferramentas</Table.Th>
-          <Table.Th>Delega para</Table.Th>
-          <Table.Th>Estado</Table.Th>
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {agents.map((agent) => {
-          const needsReconfiguration = agent.provider === null || agent.model === null;
+    <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+      <Table>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Agente</Table.Th>
+            <Table.Th>Provedor / modelo</Table.Th>
+            <Table.Th>Ferramentas</Table.Th>
+            <Table.Th>Delega para</Table.Th>
+            <Table.Th>Estado</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {agents.map((agent) => {
+            const needsReconfiguration = agent.provider === null || agent.model === null;
 
-          return (
-            <Table.Tr key={agent.id}>
-              <Table.Td>
-                <Stack gap={2} style={{ minWidth: 0 }}>
-                  <Anchor component={Link} to={`/agents/${agent.id}`}>
-                    {agent.name}
-                  </Anchor>
-                  {agent.description && (
-                    <Text size="xs" c="dimmed" truncate>
-                      {agent.description}
+            return (
+              <Table.Tr key={agent.id}>
+                <Table.Td>
+                  <Stack gap={2} style={{ minWidth: 0 }}>
+                    <Anchor component={Link} to={`/agents/${agent.id}`}>
+                      {agent.name}
+                    </Anchor>
+                    {agent.description && (
+                      <Text size="xs" c="dimmed" truncate>
+                        {agent.description}
+                      </Text>
+                    )}
+                  </Stack>
+                </Table.Td>
+
+                <Table.Td>
+                  <Text size="sm" ff="monospace" c="dimmed">
+                    {agent.provider ?? '—'} / {agent.model ?? 'não configurado'}
+                  </Text>
+                </Table.Td>
+
+                <Table.Td>
+                  <ToolsCell agent={agent} />
+                </Table.Td>
+
+                <Table.Td>
+                  {agent.delegatesTo.length === 0 ? (
+                    <Text size="sm" c="dimmed">
+                      —
+                    </Text>
+                  ) : (
+                    <Text size="sm">
+                      {agent.delegatesTo.map((delegate) => delegate.name).join(', ')}
                     </Text>
                   )}
-                </Stack>
-              </Table.Td>
+                </Table.Td>
 
-              <Table.Td>
-                <Text size="sm" ff="monospace" c="dimmed">
-                  {agent.provider ?? '—'} / {agent.model ?? 'não configurado'}
-                </Text>
-              </Table.Td>
-
-              <Table.Td>
-                <ToolsCell agent={agent} />
-              </Table.Td>
-
-              <Table.Td>
-                {agent.delegatesTo.length === 0 ? (
-                  <Text size="sm" c="dimmed">
-                    —
-                  </Text>
-                ) : (
-                  <Text size="sm">
-                    {agent.delegatesTo.map((delegate) => delegate.name).join(', ')}
-                  </Text>
-                )}
-              </Table.Td>
-
-              <Table.Td>
-                <Group gap="xs">
-                  {needsReconfiguration && <Badge color="yellow">Precisa de reconfiguração</Badge>}
-                  <Badge color={agent.isActive ? 'green' : 'gray'}>
-                    {agent.isActive ? 'Ativo' : 'Inativo'}
-                  </Badge>
-                </Group>
-              </Table.Td>
-            </Table.Tr>
-          );
-        })}
-      </Table.Tbody>
-    </Table>
+                <Table.Td>
+                  <Group gap="xs">
+                    {needsReconfiguration && (
+                      <Badge color="yellow">Precisa de reconfiguração</Badge>
+                    )}
+                    <Badge color={agent.isActive ? 'green' : 'gray'}>
+                      {agent.isActive ? 'Ativo' : 'Inativo'}
+                    </Badge>
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+    </Paper>
   );
 }

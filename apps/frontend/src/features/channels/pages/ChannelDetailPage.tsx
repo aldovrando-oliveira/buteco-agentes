@@ -8,6 +8,7 @@ import {
   Group,
   Loader,
   Modal,
+  Paper,
   ScrollArea,
   Stack,
   Tabs,
@@ -61,41 +62,45 @@ function SessionsTab({ channelId, sessionId }: SessionsTabProps) {
   return (
     <Grid mt="md">
       <Grid.Col span={4}>
-        <ScrollArea h={500} type="auto">
-          {sessionsQuery.isLoading && (
-            <Group>
-              <Loader size="sm" />
-              <Text>Carregando sessões...</Text>
-            </Group>
-          )}
-          {sessionsQuery.isError && (
-            <Alert color="red">Não foi possível carregar as sessões.</Alert>
-          )}
-          {!sessionsQuery.isLoading && !sessionsQuery.isError && (
-            <SessionList
-              sessions={sessionsQuery.data ?? []}
-              selectedSessionId={sessionId}
-              onSelect={handleSelect}
-            />
-          )}
-        </ScrollArea>
+        <Paper withBorder radius="md" p="sm">
+          <ScrollArea h={500} type="auto">
+            {sessionsQuery.isLoading && (
+              <Group>
+                <Loader size="sm" />
+                <Text>Carregando sessões...</Text>
+              </Group>
+            )}
+            {sessionsQuery.isError && (
+              <Alert color="red">Não foi possível carregar as sessões.</Alert>
+            )}
+            {!sessionsQuery.isLoading && !sessionsQuery.isError && (
+              <SessionList
+                sessions={sessionsQuery.data ?? []}
+                selectedSessionId={sessionId}
+                onSelect={handleSelect}
+              />
+            )}
+          </ScrollArea>
+        </Paper>
       </Grid.Col>
       <Grid.Col span={8}>
-        <ScrollArea h={500} type="auto">
-          {!sessionId && <Text c="dimmed">Selecione uma sessão para ver a conversa.</Text>}
-          {sessionId && messagesQuery.isLoading && (
-            <Group>
-              <Loader size="sm" />
-              <Text>Carregando mensagens...</Text>
-            </Group>
-          )}
-          {sessionId && messagesQuery.isError && (
-            <Alert color="red">Não foi possível carregar as mensagens desta sessão.</Alert>
-          )}
-          {sessionId && !messagesQuery.isLoading && !messagesQuery.isError && (
-            <MessageTimeline messages={messagesQuery.data ?? []} />
-          )}
-        </ScrollArea>
+        <Paper withBorder radius="md" p="sm">
+          <ScrollArea h={500} type="auto">
+            {!sessionId && <Text c="dimmed">Selecione uma sessão para ver a conversa.</Text>}
+            {sessionId && messagesQuery.isLoading && (
+              <Group>
+                <Loader size="sm" />
+                <Text>Carregando mensagens...</Text>
+              </Group>
+            )}
+            {sessionId && messagesQuery.isError && (
+              <Alert color="red">Não foi possível carregar as mensagens desta sessão.</Alert>
+            )}
+            {sessionId && !messagesQuery.isLoading && !messagesQuery.isError && (
+              <MessageTimeline messages={messagesQuery.data ?? []} />
+            )}
+          </ScrollArea>
+        </Paper>
       </Grid.Col>
     </Grid>
   );
