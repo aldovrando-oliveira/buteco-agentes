@@ -1,4 +1,6 @@
-import { Anchor, Badge, Paper, Stack, Table, Text } from '@mantine/core';
+import { Anchor, Badge, Stack, Table, Text } from '@mantine/core';
+import { SectionedCard } from '../../../components/data/SectionedCard';
+import { SectionLabel } from '../../../components/data/SectionLabel';
 import { Link } from 'react-router';
 import { serverUsageSummary } from '../utils/agentUsage';
 import type { McpServer } from '../types/mcpServer';
@@ -46,20 +48,31 @@ function UsageCell({ mcpServer, agents }: { mcpServer: McpServer; agents?: Agent
   );
 }
 
-// Superfície própria: o fundo da página deixou de ser branco (change
-// frontend-tema-identidade-visual, D4/D12), então o conteúdo precisa declarar
-// a sua em vez de herdar o branco do body.
+// Faixa no cabeçalho e rótulos de coluna em maiúsculas com espaçamento entre
+// letras. O divisor entre as linhas já vinha de graça: o Mantine liga
+// withRowBorders por padrão e usa a mesma cor de borda da identidade visual
+// (design.md da change frontend-acabamento-telas, D1).
 export function McpServerTable({ mcpServers, agents }: McpServerTableProps) {
   return (
-    <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+    <SectionedCard>
       <Table>
-        <Table.Thead>
+        <Table.Thead bg="var(--buteco-surface-subtle)">
           <Table.Tr>
-            <Table.Th>Nome</Table.Th>
-            <Table.Th>Url</Table.Th>
-            <Table.Th>Autenticação</Table.Th>
-            <Table.Th>Usado por</Table.Th>
-            <Table.Th>Estado</Table.Th>
+            <Table.Th>
+              <SectionLabel>Nome</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Url</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Autenticação</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Usado por</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Estado</SectionLabel>
+            </Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -84,6 +97,6 @@ export function McpServerTable({ mcpServers, agents }: McpServerTableProps) {
           ))}
         </Table.Tbody>
       </Table>
-    </Paper>
+    </SectionedCard>
   );
 }

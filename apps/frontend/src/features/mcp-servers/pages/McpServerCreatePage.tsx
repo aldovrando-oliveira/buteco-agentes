@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Stack, Title } from '@mantine/core';
+import { BackLink } from '../../../components/layout/BackLink';
 import { notifications } from '@mantine/notifications';
 import { useNavigate } from 'react-router';
 import { useCreateMcpServerMutation } from '../api/useMcpServers';
@@ -49,6 +50,7 @@ export function McpServerCreatePage() {
 
   return (
     <Stack>
+      <BackLink to={'/mcp-servers'} label="Servidores MCP" />
       <Title order={2}>Novo servidor MCP</Title>
       <McpServerForm
         onSubmit={handleSubmit}

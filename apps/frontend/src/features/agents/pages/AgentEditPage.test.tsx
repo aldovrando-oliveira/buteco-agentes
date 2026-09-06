@@ -234,4 +234,17 @@ describe('AgentEditPage', () => {
     const staleOption = screen.getByRole('option', { name: 'gemini (indisponível)' });
     expect(staleOption).toHaveAttribute('data-combobox-disabled', 'true');
   });
+
+  it('volta para o registro que está sendo editado, e não para a listagem', async () => {
+    vi.mocked(getAgent).mockResolvedValue(agent);
+
+    renderPage(agent.id);
+
+    // De "editar X" quer-se voltar para X, que é de onde se veio — não para a
+    // lista inteira.
+    expect(await screen.findByRole('link', { name: 'Voltar ao agente' })).toHaveAttribute(
+      'href',
+      `/agents/${agent.id}`,
+    );
+  });
 });

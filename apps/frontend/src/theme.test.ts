@@ -78,6 +78,21 @@ describe('theme — âncoras da identidade visual', () => {
     expect(neutral[9]).toBe('#191a1c'); // --fg: texto principal
   });
 
+  it.each(['--buteco-page-bg', '--buteco-surface-subtle'] as const)(
+    'declara %s nos dois esquemas de cor',
+    (variavel: `--${string}`) => {
+      const resolvido = cssVariablesResolver(DEFAULT_THEME);
+
+      // Papéis cuja cor troca de ponta da escala entre os esquemas não podem
+      // sair de um tom fixo da paleta: no claro a superfície sutil é mais clara
+      // que o card, no escuro é mais escura. Cravar um tom deixava a faixa de
+      // cabeçalho branca no tema escuro.
+      expect(resolvido.light?.[variavel]).toBeDefined();
+      expect(resolvido.dark?.[variavel]).toBeDefined();
+      expect(resolvido.light?.[variavel]).not.toBe(resolvido.dark?.[variavel]);
+    },
+  );
+
   it('mantém o fundo da página fora da escala neutra', () => {
     const pageBackground = cssVariablesResolver(DEFAULT_THEME).light?.['--buteco-page-bg'];
 
@@ -144,5 +159,30 @@ describe('theme — contraste das combinações em uso', () => {
 
     expect(contrastRatio(neutral[0], neutral[7])).toBeGreaterThanOrEqual(AA_TEXT);
     expect(contrastRatio(neutral[2], neutral[7])).toBeGreaterThanOrEqual(AA_TEXT);
+  });
+});
+
+describe('theme — padrão de componentes', () => {
+  it('declara a variante clara e a preservação da caixa como padrão do badge', () => {
+    const badge = theme.components?.Badge;
+
+    // Cobre os dezenove badges do painel sem editar nenhuma chamada. A variante
+    // clara também é o que faz o badge atingir o contraste mínimo: a preenchida
+    // em verde e em âmbar, com texto branco, não atinge.
+    expect(badge?.defaultProps).toMatchObject({ variant: 'light' });
+    expect(badge?.styles).toMatchObject({ label: { textTransform: 'none' } });
+  });
+
+  it.each([
+    ['green', 3.89],
+    ['yellow', 3.72],
+  ])('confirma que a variante preenchida de %s reprovaria com texto branco', (name, esperado) => {
+    // O número existe para que a razão do padrão fique verificável, e não só
+    // escrita em comentário: se alguém clarear o tom 6 achando que resolve, o
+    // teste mostra que continua abaixo do mínimo.
+    const preenchido = shades(name as 'green' | 'yellow')[6];
+
+    expect(contrastRatio('#ffffff', preenchido)).toBeCloseTo(esperado, 1);
+    expect(contrastRatio('#ffffff', preenchido)).toBeLessThan(AA_TEXT);
   });
 });

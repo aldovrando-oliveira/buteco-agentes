@@ -212,4 +212,17 @@ describe('McpServerEditPage', () => {
     expect(navigateMock).toHaveBeenCalledWith(`/mcp-servers/${mcpServer.id}`);
     expect(updateMcpServer).not.toHaveBeenCalled();
   });
+
+  it('volta para o registro que está sendo editado, e não para a listagem', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(mcpServer);
+
+    renderPage(mcpServer.id);
+
+    // De "editar X" quer-se voltar para X, que é de onde se veio — não para a
+    // lista inteira.
+    expect(await screen.findByRole('link', { name: 'Voltar ao servidor' })).toHaveAttribute(
+      'href',
+      `/mcp-servers/${mcpServer.id}`,
+    );
+  });
 });

@@ -1,15 +1,5 @@
-import {
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Loader,
-  Modal,
-  Stack,
-  Tabs,
-  Text,
-  Title,
-} from '@mantine/core';
+import { Alert, Badge, Button, Group, Loader, Modal, Stack, Tabs, Text } from '@mantine/core';
+import { DetailHeader } from '../../../components/layout/DetailHeader';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { Link, useParams, useSearchParams } from 'react-router';
@@ -128,39 +118,41 @@ export function AgentDetailPage() {
 
   return (
     <Stack gap="md" pb={80}>
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <Stack gap={4}>
-          <Group gap="xs">
-            <Title order={2}>{data.name}</Title>
+      <DetailHeader
+        backTo="/agents"
+        backLabel="Agentes"
+        title={data.name}
+        status={
+          <>
             {needsReconfiguration && <Badge color="yellow">Precisa de reconfiguração</Badge>}
             <Badge color={data.isActive ? 'green' : 'gray'}>
               {data.isActive ? 'Ativo' : 'Inativo'}
             </Badge>
-          </Group>
-          <Text size="sm" c={data.description ? undefined : 'dimmed'}>
-            {data.description ?? 'Sem descrição.'}
-          </Text>
-        </Stack>
-        <Group wrap="nowrap">
-          <Button component={Link} to={`/agents/${data.id}/edit`} variant="default">
-            Editar
-          </Button>
-          {data.isActive ? (
-            <Button color="red" variant="outline" onClick={openConfirm}>
-              Desativar
+          </>
+        }
+        description={data.description ?? undefined}
+        actions={
+          <>
+            <Button component={Link} to={`/agents/${data.id}/edit`} variant="default">
+              Editar
             </Button>
-          ) : (
-            <Button
-              color="green"
-              variant="outline"
-              onClick={handleActivate}
-              loading={activateMutation.isPending}
-            >
-              Ativar
-            </Button>
-          )}
-        </Group>
-      </Group>
+            {data.isActive ? (
+              <Button color="red" variant="outline" onClick={openConfirm}>
+                Desativar
+              </Button>
+            ) : (
+              <Button
+                color="green"
+                variant="outline"
+                onClick={handleActivate}
+                loading={activateMutation.isPending}
+              >
+                Ativar
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* keepMounted={false} é o que sustenta o modelo de rascunho: só a aba
           ativa existe no DOM, então no máximo uma guarda de navegação está

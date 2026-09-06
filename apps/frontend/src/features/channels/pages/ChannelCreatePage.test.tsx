@@ -207,4 +207,13 @@ describe('ChannelCreatePage', () => {
     expect(navigateMock).toHaveBeenCalledWith('/channels');
     expect(createChannel).not.toHaveBeenCalled();
   });
+
+  it('oferece volta para a listagem', async () => {
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: 'Canais' })).toHaveAttribute(
+      'href',
+      '/channels',
+    );
+  });
 });

@@ -1,16 +1,6 @@
 import { useState } from 'react';
-import {
-  Alert,
-  Badge,
-  Button,
-  Grid,
-  Group,
-  Loader,
-  Modal,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core';
+import { Alert, Badge, Button, Grid, Group, Loader, Modal, Stack, Text } from '@mantine/core';
+import { DetailHeader } from '../../../components/layout/DetailHeader';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { Link, useParams } from 'react-router';
@@ -126,41 +116,45 @@ export function McpServerDetailPage() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <Stack gap={4}>
-          <Group gap="xs">
-            <Title order={2}>{data.name}</Title>
-            <Badge color={data.isActive ? 'green' : 'gray'}>
-              {data.isActive ? 'Ativo' : 'Inativo'}
-            </Badge>
-          </Group>
-          <Text size="sm" c={data.description ? undefined : 'dimmed'}>
-            {data.description || 'Sem descrição.'}
-          </Text>
-        </Stack>
-        <Group wrap="nowrap">
-          <Button component={Link} to={`/mcp-servers/${data.id}/edit`} variant="default">
-            Editar
-          </Button>
-          <Button variant="outline" onClick={handleTestConnection} loading={testMutation.isPending}>
-            Testar conexão
-          </Button>
-          {data.isActive ? (
-            <Button color="red" variant="outline" onClick={openConfirm}>
-              Desativar
+      <DetailHeader
+        backTo="/mcp-servers"
+        backLabel="Servidores MCP"
+        title={data.name}
+        status={
+          <Badge color={data.isActive ? 'green' : 'gray'}>
+            {data.isActive ? 'Ativo' : 'Inativo'}
+          </Badge>
+        }
+        description={data.description ?? undefined}
+        actions={
+          <>
+            <Button component={Link} to={`/mcp-servers/${data.id}/edit`} variant="default">
+              Editar
             </Button>
-          ) : (
             <Button
-              color="green"
               variant="outline"
-              onClick={handleActivate}
-              loading={activateMutation.isPending}
+              onClick={handleTestConnection}
+              loading={testMutation.isPending}
             >
-              Ativar
+              Testar conexão
             </Button>
-          )}
-        </Group>
-      </Group>
+            {data.isActive ? (
+              <Button color="red" variant="outline" onClick={openConfirm}>
+                Desativar
+              </Button>
+            ) : (
+              <Button
+                color="green"
+                variant="outline"
+                onClick={handleActivate}
+                loading={activateMutation.isPending}
+              >
+                Ativar
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <ConnectionTestResultAlert result={testResult} />
 
@@ -184,8 +178,7 @@ export function McpServerDetailPage() {
 
           {affectedAgents.length > 0 ? (
             <Alert color="yellow" data-testid="deactivate-affected-agents">
-              Afeta {affectedAgents.length}{' '}
-              {affectedAgents.length === 1 ? 'agente' : 'agentes'}:{' '}
+              Afeta {affectedAgents.length} {affectedAgents.length === 1 ? 'agente' : 'agentes'}:{' '}
               {affectedAgents.map((usage) => usage.agent.name).join(', ')}
             </Alert>
           ) : (

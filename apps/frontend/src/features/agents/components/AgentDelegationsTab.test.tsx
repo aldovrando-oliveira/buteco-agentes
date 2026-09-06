@@ -144,7 +144,7 @@ describe('AgentDelegationsTab', () => {
     const user = userEvent.setup();
     renderTab();
 
-    await user.type(screen.getByLabelText(/buscar agente/i), 'cobr');
+    await user.type(screen.getByLabelText('Buscar por nome'), 'cobr');
 
     expect(checkboxFor('Cobrança')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: 'Financeiro' })).not.toBeInTheDocument();
@@ -154,7 +154,7 @@ describe('AgentDelegationsTab', () => {
     const user = userEvent.setup();
     renderTab();
 
-    await user.type(screen.getByLabelText(/buscar agente/i), 'inexistente');
+    await user.type(screen.getByLabelText('Buscar por nome'), 'inexistente');
 
     expect(screen.getByText('Nenhum agente corresponde à busca.')).toBeInTheDocument();
   });
@@ -164,7 +164,7 @@ describe('AgentDelegationsTab', () => {
     renderTab();
 
     await user.click(checkboxFor('Financeiro'));
-    const search = screen.getByLabelText(/buscar agente/i);
+    const search = screen.getByLabelText('Buscar por nome');
     await user.type(search, 'cobr');
     expect(screen.queryByRole('checkbox', { name: 'Financeiro' })).not.toBeInTheDocument();
 

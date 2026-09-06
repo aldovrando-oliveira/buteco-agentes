@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alert, Group, Loader, Stack, Text, Title } from '@mantine/core';
+import { BackLink } from '../../../components/layout/BackLink';
 import { notifications } from '@mantine/notifications';
 import { useNavigate, useParams } from 'react-router';
 import { useAgentQuery, useUpdateAgentMutation } from '../api/useAgents';
@@ -86,6 +87,7 @@ export function AgentEditPage() {
 
   return (
     <Stack>
+      <BackLink to={`/agents/${id}`} label="Voltar ao agente" />
       <Title order={2}>Editar agente</Title>
       <AgentForm
         onSubmit={handleSubmit}

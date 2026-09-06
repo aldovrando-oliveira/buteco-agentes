@@ -43,7 +43,7 @@ export function McpServerListPage() {
 
       {hasMcpServers && (
         <TextInput
-          label="Buscar"
+          aria-label="Buscar por nome ou url"
           placeholder="Buscar por nome ou url"
           value={search}
           onChange={(event) => setSearch(event.currentTarget.value)}

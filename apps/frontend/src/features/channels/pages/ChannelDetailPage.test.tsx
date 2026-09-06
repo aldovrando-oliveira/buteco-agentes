@@ -270,4 +270,16 @@ describe('ChannelDetailPage', () => {
       await screen.findByText('Não foi possível carregar as mensagens desta sessão.'),
     ).toBeInTheDocument();
   });
+
+  it('oferece volta para a listagem, inclusive em acesso direto pela URL', async () => {
+    vi.mocked(getChannel).mockResolvedValue(wahaChannel);
+
+    renderPage(`/channels/${wahaChannel.id}`);
+
+    // O harness monta a página de detalhe como primeira entrada do histórico:
+    // não há para onde voltar, e o link precisa funcionar mesmo assim.
+    const volta = await screen.findByRole('link', { name: 'Canais' });
+
+    expect(volta).toHaveAttribute('href', '/channels');
+  });
 });

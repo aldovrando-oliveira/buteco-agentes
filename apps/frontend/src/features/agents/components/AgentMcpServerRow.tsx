@@ -58,19 +58,28 @@ export function AgentMcpServerRow({
       : `${allowedTools.length} selecionadas`;
 
   return (
-    <Stack gap="xs" py="sm" data-testid={`agent-mcp-server-row-${mcpServer.id}`}>
+    <Stack gap="xs" data-testid={`agent-mcp-server-row-${mcpServer.id}`}>
       <Group justify="space-between" wrap="nowrap" align="flex-start">
-        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+        {/* A url fica ABAIXO do nome, e não ao lado: ao lado ela disputa a
+            linha com o nome e os avisos, e é o dado menos consultado dos três. */}
+        <Group gap="xs" wrap="nowrap" align="flex-start" style={{ minWidth: 0 }}>
           <Checkbox
-            label={mcpServer.name}
             checked={selected}
             onChange={(event) => onToggleSelected(event.currentTarget.checked)}
+            aria-label={mcpServer.name}
           />
-          {!mcpServer.isActive && <Badge color="gray">Inativo</Badge>}
-          {boundWithoutTools && <Badge color="yellow">Sem tools</Badge>}
-          <Text size="xs" ff="monospace" c="dimmed" truncate>
-            {mcpServer.url}
-          </Text>
+          <Stack gap={2} style={{ minWidth: 0 }}>
+            <Group gap="xs" wrap="nowrap">
+              <Text size="sm" fw={600}>
+                {mcpServer.name}
+              </Text>
+              {!mcpServer.isActive && <Badge color="gray">Inativo</Badge>}
+              {boundWithoutTools && <Badge color="yellow">Sem tools</Badge>}
+            </Group>
+            <Text size="xs" ff="monospace" c="dimmed" truncate>
+              {mcpServer.url}
+            </Text>
+          </Stack>
         </Group>
         <Group gap="sm" wrap="nowrap">
           <Text size="sm" c={boundWithoutTools ? 'yellow' : 'dimmed'}>
@@ -102,8 +111,7 @@ export function AgentMcpServerRow({
             <Alert color="red">
               <Stack gap="xs" align="flex-start">
                 <Text size="sm">
-                  {toolsQuery.data?.message ??
-                    'Não foi possível buscar as tools deste servidor.'}
+                  {toolsQuery.data?.message ?? 'Não foi possível buscar as tools deste servidor.'}
                 </Text>
                 <Button size="xs" variant="outline" onClick={() => toolsQuery.refetch()}>
                   Tentar novamente

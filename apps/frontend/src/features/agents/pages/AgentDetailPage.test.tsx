@@ -210,7 +210,7 @@ describe('AgentDetailPage', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByLabelText(/buscar agente/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Buscar por nome')).toBeInTheDocument();
   });
 
   it('endereço sem identificação de aba abre a visão geral sem alterar a URL', async () => {
@@ -245,11 +245,11 @@ describe('AgentDetailPage', () => {
     renderPage(activeAgent.id);
 
     await screen.findByRole('heading', { name: activeAgent.name });
-    expect(screen.queryByLabelText(/buscar agente/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Buscar por nome')).not.toBeInTheDocument();
 
     await user.click(tab(/delegações/i));
 
-    expect(await screen.findByLabelText(/buscar agente/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText('Buscar por nome')).toBeInTheDocument();
     expect(screen.queryByText(activeAgent.instructions)).not.toBeInTheDocument();
   });
 
@@ -399,5 +399,17 @@ describe('AgentDetailPage', () => {
     expect(
       await screen.findByText('Nenhum outro agente cadastrado para receber delegações.'),
     ).toBeInTheDocument();
+  });
+
+  it('oferece volta para a listagem, inclusive em acesso direto pela URL', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+    renderPage(activeAgent.id);
+
+    // O harness monta a página de detalhe como primeira entrada do histórico:
+    // não há para onde voltar, e o link precisa funcionar mesmo assim.
+    const volta = await screen.findByRole('link', { name: 'Agentes' });
+
+    expect(volta).toHaveAttribute('href', '/agents');
   });
 });

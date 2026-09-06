@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Alert, Button, Card, Divider, Stack, Text } from '@mantine/core';
+import { Alert, Button, Card, Stack, Text } from '@mantine/core';
+import { SectionedCard } from '../../../components/data/SectionedCard';
 import { notifications } from '@mantine/notifications';
 import { Link } from 'react-router';
 import { UnsavedChangesBar } from '../../../components/feedback/UnsavedChangesBar';
@@ -167,32 +168,29 @@ export function AgentToolsTab({ agent, mcpServers }: AgentToolsTabProps) {
         </Alert>
       )}
 
-      <Card withBorder p={0} px="md">
-        <Stack gap={0}>
-          {mcpServers.map((mcpServer, index) => (
-            <div key={mcpServer.id}>
-              {index > 0 && <Divider />}
-              <AgentMcpServerRow
-                mcpServer={mcpServer}
-                selected={mcpServer.id in draft}
-                allowedTools={draft[mcpServer.id] ?? []}
-                expanded={expanded[mcpServer.id] ?? false}
-                onToggleSelected={(selected) => handleToggleSelected(mcpServer.id, selected)}
-                onToggleExpanded={() =>
-                  setExpanded((previous) => ({
-                    ...previous,
-                    [mcpServer.id]: !(previous[mcpServer.id] ?? false),
-                  }))
-                }
-                onToggleTool={(toolName, checked) =>
-                  handleToggleTool(mcpServer.id, toolName, checked)
-                }
-                onToolsDiscovered={(toolNames) => handleToolsDiscovered(mcpServer.id, toolNames)}
-              />
-            </div>
-          ))}
-        </Stack>
-      </Card>
+      <SectionedCard>
+        {mcpServers.map((mcpServer) => (
+          <SectionedCard.Row key={mcpServer.id}>
+            <AgentMcpServerRow
+              mcpServer={mcpServer}
+              selected={mcpServer.id in draft}
+              allowedTools={draft[mcpServer.id] ?? []}
+              expanded={expanded[mcpServer.id] ?? false}
+              onToggleSelected={(selected) => handleToggleSelected(mcpServer.id, selected)}
+              onToggleExpanded={() =>
+                setExpanded((previous) => ({
+                  ...previous,
+                  [mcpServer.id]: !(previous[mcpServer.id] ?? false),
+                }))
+              }
+              onToggleTool={(toolName, checked) =>
+                handleToggleTool(mcpServer.id, toolName, checked)
+              }
+              onToolsDiscovered={(toolNames) => handleToolsDiscovered(mcpServer.id, toolNames)}
+            />
+          </SectionedCard.Row>
+        ))}
+      </SectionedCard>
 
       {(isDirty || mutation.isPending) && (
         <UnsavedChangesBar

@@ -1,4 +1,5 @@
-import { Card, Group, Stack, Text } from '@mantine/core';
+import { Group, Stack, Text } from '@mantine/core';
+import { SectionedCard } from '../../../components/data/SectionedCard';
 import type { McpServer } from '../types/mcpServer';
 
 interface McpServerConfigCardProps {
@@ -23,12 +24,8 @@ function ConfigRow({ label, children }: { label: string; children: React.ReactNo
 
 export function McpServerConfigCard({ mcpServer }: McpServerConfigCardProps) {
   return (
-    <Card withBorder>
-      <Stack gap="sm">
-        <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-          Configuração
-        </Text>
-
+    <SectionedCard title="Configuração">
+      <Stack gap="sm" px="md" py="sm">
         <ConfigRow label="Url">
           <Text size="sm" ff="monospace" ta="right" style={{ wordBreak: 'break-all' }}>
             {mcpServer.url}
@@ -65,6 +62,6 @@ export function McpServerConfigCard({ mcpServer }: McpServerConfigCardProps) {
           </Text>
         </ConfigRow>
       </Stack>
-    </Card>
+    </SectionedCard>
   );
 }

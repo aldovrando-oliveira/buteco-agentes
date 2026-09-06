@@ -1,4 +1,5 @@
-import { Alert, Card, Grid, Group, ScrollArea, Stack, Text, Typography } from '@mantine/core';
+import { Alert, Badge, Grid, Group, ScrollArea, Stack, Text, Typography } from '@mantine/core';
+import { SectionedCard } from '../../../components/data/SectionedCard';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AgentSkillsCard } from './AgentSkillsCard';
@@ -6,14 +7,6 @@ import type { Agent } from '../types/agent';
 
 interface AgentOverviewTabProps {
   agent: Agent;
-}
-
-function CardHeading({ children }: { children: string }) {
-  return (
-    <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-      {children}
-    </Text>
-  );
 }
 
 function DefinitionRow({ label, value }: { label: string; value: string }) {
@@ -40,9 +33,17 @@ export function AgentOverviewTab({ agent }: AgentOverviewTabProps) {
   return (
     <Grid gap="md" align="start">
       <Grid.Col span={{ base: 12, md: 7 }}>
-        <Card withBorder>
-          <Stack gap="sm">
-            <CardHeading>Instruções (system prompt)</CardHeading>
+        <SectionedCard
+          title="Instruções (system prompt)"
+          // O protótipo marca no cabeçalho que o campo aceita Markdown, que é
+          // informação que o operador só descobriria escrevendo.
+          action={
+            <Badge variant="default" radius="sm" fw={500} ff="monospace">
+              markdown
+            </Badge>
+          }
+        >
+          <SectionedCard.Body>
             {/* `height` (não `max-height`) é obrigatório aqui: o Viewport
                 interno do ScrollArea do Mantine é estilizado com
                 `height: 100%`, que só resolve contra uma altura explícita
@@ -53,15 +54,14 @@ export function AgentOverviewTab({ agent }: AgentOverviewTabProps) {
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{agent.instructions}</ReactMarkdown>
               </Typography>
             </ScrollArea>
-          </Stack>
-        </Card>
+          </SectionedCard.Body>
+        </SectionedCard>
       </Grid.Col>
 
       <Grid.Col span={{ base: 12, md: 5 }}>
         <Stack gap="md">
-          <Card withBorder>
-            <Stack gap="sm">
-              <CardHeading>Modelo</CardHeading>
+          <SectionedCard title="Modelo">
+            <Stack gap="sm" px="md" py="sm">
               <DefinitionRow label="Provedor" value={agent.provider ?? '—'} />
               <DefinitionRow label="Modelo" value={agent.model ?? 'não configurado'} />
               {needsReconfiguration && (
@@ -71,13 +71,12 @@ export function AgentOverviewTab({ agent }: AgentOverviewTabProps) {
                 </Alert>
               )}
             </Stack>
-          </Card>
+          </SectionedCard>
 
           <AgentSkillsCard skills={agent.skills} />
 
-          <Card withBorder>
-            <Stack gap="sm">
-              <CardHeading>Datas</CardHeading>
+          <SectionedCard title="Datas">
+            <Stack gap="sm" px="md" py="sm">
               <DefinitionRow
                 label="Criado em"
                 value={new Date(agent.createdAt).toLocaleString('pt-BR')}
@@ -87,7 +86,7 @@ export function AgentOverviewTab({ agent }: AgentOverviewTabProps) {
                 value={new Date(agent.updatedAt).toLocaleString('pt-BR')}
               />
             </Stack>
-          </Card>
+          </SectionedCard>
         </Stack>
       </Grid.Col>
     </Grid>

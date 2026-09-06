@@ -131,13 +131,17 @@ describe('McpServerListPage', () => {
   async function renderWithServers(servers: McpServer[]) {
     vi.mocked(listMcpServers).mockResolvedValue(servers);
     renderPage();
-    await screen.findByLabelText('Buscar');
+    await screen.findByLabelText('Buscar por nome ou url');
   }
 
   // Restrito à tabela: fora dela existe o link de cadastrar servidor.
   function visibleServerNames() {
     const table = screen.queryByRole('table');
-    return table ? within(table).getAllByRole('link').map((link) => link.textContent) : [];
+    return table
+      ? within(table)
+          .getAllByRole('link')
+          .map((link) => link.textContent)
+      : [];
   }
 
   it('exibe a quantidade de servidores cadastrados', async () => {
@@ -156,7 +160,7 @@ describe('McpServerListPage', () => {
     const user = userEvent.setup();
     await renderWithServers([mcpServer, outroServidor]);
 
-    await user.type(screen.getByLabelText('Buscar'), 'notas');
+    await user.type(screen.getByLabelText('Buscar por nome ou url'), 'notas');
 
     expect(visibleServerNames()).toEqual(['Notas Fiscais']);
   });
@@ -165,7 +169,7 @@ describe('McpServerListPage', () => {
     const user = userEvent.setup();
     await renderWithServers([mcpServer, outroServidor]);
 
-    await user.type(screen.getByLabelText('Buscar'), 'notas.example');
+    await user.type(screen.getByLabelText('Buscar por nome ou url'), 'notas.example');
 
     expect(visibleServerNames()).toEqual(['Notas Fiscais']);
   });
@@ -174,7 +178,7 @@ describe('McpServerListPage', () => {
     const user = userEvent.setup();
     await renderWithServers([mcpServer, outroServidor]);
 
-    await user.type(screen.getByLabelText('Buscar'), 'NOTAS FISCAIS');
+    await user.type(screen.getByLabelText('Buscar por nome ou url'), 'NOTAS FISCAIS');
 
     expect(visibleServerNames()).toEqual(['Notas Fiscais']);
   });
@@ -183,7 +187,7 @@ describe('McpServerListPage', () => {
     const user = userEvent.setup();
     await renderWithServers([mcpServer]);
 
-    await user.type(screen.getByLabelText('Buscar'), 'inexistente');
+    await user.type(screen.getByLabelText('Buscar por nome ou url'), 'inexistente');
 
     expect(screen.getByText('Nenhum servidor corresponde à busca.')).toBeInTheDocument();
     expect(screen.queryByText('Nenhum servidor MCP cadastrado ainda.')).not.toBeInTheDocument();
@@ -195,6 +199,15 @@ describe('McpServerListPage', () => {
     renderPage();
 
     await screen.findByText('Nenhum servidor MCP cadastrado ainda.');
-    expect(screen.queryByLabelText('Buscar')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Buscar por nome ou url')).not.toBeInTheDocument();
+  });
+
+  it('mantém a busca alcançável sem rótulo visível', async () => {
+    await renderWithServers([mcpServer]);
+
+    // O rótulo visível saiu; o texto de exemplo virou o nome acessível. Sem
+    // isto, a busca deixaria de ser alcançável por quem usa leitor de tela.
+    expect(screen.getByLabelText('Buscar por nome ou url')).toBeInTheDocument();
+    expect(screen.queryByText('Buscar')).not.toBeInTheDocument();
   });
 });

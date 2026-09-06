@@ -343,4 +343,16 @@ describe('McpServerDetailPage', () => {
 
     expect(await screen.findByText(/resultado não é persistido/)).toBeInTheDocument();
   });
+
+  it('oferece volta para a listagem, inclusive em acesso direto pela URL', async () => {
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+
+    renderPage(activeMcpServer.id);
+
+    // O harness monta a página de detalhe como primeira entrada do histórico:
+    // não há para onde voltar, e o link precisa funcionar mesmo assim.
+    const volta = await screen.findByRole('link', { name: 'Servidores MCP' });
+
+    expect(volta).toHaveAttribute('href', '/mcp-servers');
+  });
 });

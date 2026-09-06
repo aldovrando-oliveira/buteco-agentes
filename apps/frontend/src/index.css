@@ -24,3 +24,11 @@ body {
 body {
   background-color: var(--buteco-page-bg);
 }
+
+/* Divisor entre linhas do card seccionado. Regra de irmão adjacente, e não
+   estilo embutido, porque é a única forma de a borda sumir da primeira linha
+   sem o componente precisar saber a sua posição. O padding horizontal fica na
+   linha, não no card, para o divisor ir de borda a borda. */
+[data-sectioned-card-row] + [data-sectioned-card-row] {
+  border-top: 1px solid var(--mantine-color-default-border);
+}

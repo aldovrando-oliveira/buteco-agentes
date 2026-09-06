@@ -14,8 +14,8 @@ import {
   Tabs,
   Text,
   TextInput,
-  Title,
 } from '@mantine/core';
+import { DetailHeader } from '../../../components/layout/DetailHeader';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -63,7 +63,7 @@ function SessionsTab({ channelId, sessionId }: SessionsTabProps) {
     <Grid mt="md">
       <Grid.Col span={4}>
         <Paper withBorder radius="md" p="sm">
-          <ScrollArea h={500} type="auto">
+          <ScrollArea h="calc(100vh - 300px)" mih={320} type="auto">
             {sessionsQuery.isLoading && (
               <Group>
                 <Loader size="sm" />
@@ -85,7 +85,7 @@ function SessionsTab({ channelId, sessionId }: SessionsTabProps) {
       </Grid.Col>
       <Grid.Col span={8}>
         <Paper withBorder radius="md" p="sm">
-          <ScrollArea h={500} type="auto">
+          <ScrollArea h="calc(100vh - 300px)" mih={320} type="auto">
             {!sessionId && <Text c="dimmed">Selecione uma sessão para ver a conversa.</Text>}
             {sessionId && messagesQuery.isLoading && (
               <Group>
@@ -180,25 +180,38 @@ export function ChannelDetailPage() {
 
   return (
     <>
-      <Group mb="md">
-        <Button component={Link} to={`/channels/${data.id}/edit`} variant="default">
-          Editar
-        </Button>
-        {data.isActive ? (
-          <Button color="red" variant="outline" onClick={openConfirm}>
-            Desativar
-          </Button>
-        ) : (
-          <Button
-            color="green"
-            variant="outline"
-            onClick={handleActivate}
-            loading={activateMutation.isPending}
-          >
-            Ativar
-          </Button>
-        )}
-      </Group>
+      <DetailHeader
+        backTo="/channels"
+        backLabel="Canais"
+        title={data.name}
+        status={
+          <Badge color={data.isActive ? 'green' : 'gray'}>
+            {data.isActive ? 'Ativo' : 'Inativo'}
+          </Badge>
+        }
+        description={`Tipo: ${channelTypeLabels[data.channelType]} · Agente responsável: ${agentLabel}`}
+        actions={
+          <>
+            <Button component={Link} to={`/channels/${data.id}/edit`} variant="default">
+              Editar
+            </Button>
+            {data.isActive ? (
+              <Button color="red" variant="outline" onClick={openConfirm}>
+                Desativar
+              </Button>
+            ) : (
+              <Button
+                color="green"
+                variant="outline"
+                onClick={handleActivate}
+                loading={activateMutation.isPending}
+              >
+                Ativar
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <Tabs defaultValue="sessions">
         <Tabs.List>
@@ -213,16 +226,6 @@ export function ChannelDetailPage() {
         <Tabs.Panel value="config">
           <Card withBorder mt="md">
             <Stack gap="sm">
-              <Group justify="space-between">
-                <Title order={2}>{data.name}</Title>
-                <Badge color={data.isActive ? 'green' : 'gray'}>
-                  {data.isActive ? 'Ativo' : 'Inativo'}
-                </Badge>
-              </Group>
-              <Text size="sm" c="dimmed">
-                Tipo: {channelTypeLabels[data.channelType]} · Agente responsável: {agentLabel}
-              </Text>
-
               <Group align="flex-end" gap="xs">
                 <TextInput
                   label="URL de webhook"

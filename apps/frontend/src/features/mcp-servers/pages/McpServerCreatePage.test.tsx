@@ -119,4 +119,13 @@ describe('McpServerCreatePage', () => {
     expect(navigateMock).toHaveBeenCalledWith('/mcp-servers');
     expect(createMcpServer).not.toHaveBeenCalled();
   });
+
+  it('oferece volta para a listagem', async () => {
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: 'Servidores MCP' })).toHaveAttribute(
+      'href',
+      '/mcp-servers',
+    );
+  });
 });

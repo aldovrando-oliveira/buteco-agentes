@@ -1,4 +1,5 @@
-import { Badge, Card, Stack, Text } from '@mantine/core';
+import { Badge, Stack, Text } from '@mantine/core';
+import { SectionedCard } from '../../../components/data/SectionedCard';
 import type { AgentSkill } from '../types/agent';
 
 interface AgentSkillsCardProps {
@@ -10,11 +11,8 @@ interface AgentSkillsCardProps {
 // (Decision 4 do design.md da change frontend-agente-description-skills).
 export function AgentSkillsCard({ skills }: AgentSkillsCardProps) {
   return (
-    <Card withBorder data-testid="agent-skills-card">
-      <Stack gap="sm">
-        <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-          Skills
-        </Text>
+    <SectionedCard data-testid="agent-skills-card" title="Skills">
+      <SectionedCard.Body>
         {skills.length === 0 ? (
           <Text size="sm" c="dimmed">
             Nenhuma skill declarada.
@@ -35,7 +33,7 @@ export function AgentSkillsCard({ skills }: AgentSkillsCardProps) {
             ))}
           </Stack>
         )}
-      </Stack>
-    </Card>
+      </SectionedCard.Body>
+    </SectionedCard>
   );
 }

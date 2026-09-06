@@ -161,7 +161,9 @@ describe('AgentToolsTab', () => {
 
     expect(slackCheckbox).toBeChecked();
     await waitFor(() => expect(listMcpServerTools).toHaveBeenCalledWith('srv-2'));
-    expect(await (await row('srv-2')).findByRole('checkbox', { name: /^post/ })).toBeInTheDocument();
+    expect(
+      await (await row('srv-2')).findByRole('checkbox', { name: /^post/ }),
+    ).toBeInTheDocument();
   });
 
   it('expandir sem marcar busca as tools e as exibe desabilitadas', async () => {
@@ -397,9 +399,9 @@ describe('AgentToolsTab', () => {
     await user.click((await row('srv-3')).getByRole('button', { name: /tentar novamente/i }));
 
     await waitFor(() =>
-      expect(
-        vi.mocked(listMcpServerTools).mock.calls.filter(([id]) => id === 'srv-3').length,
-      ).toBe(callsBeforeRetry + 1),
+      expect(vi.mocked(listMcpServerTools).mock.calls.filter(([id]) => id === 'srv-3').length).toBe(
+        callsBeforeRetry + 1,
+      ),
     );
   });
 

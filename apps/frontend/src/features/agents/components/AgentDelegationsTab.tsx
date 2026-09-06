@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Card, Checkbox, Group, Stack, Text, TextInput } from '@mantine/core';
+import { Checkbox, Group, Stack, Text, TextInput } from '@mantine/core';
+import { SectionedCard } from '../../../components/data/SectionedCard';
 import { notifications } from '@mantine/notifications';
 import { UnsavedChangesBar } from '../../../components/feedback/UnsavedChangesBar';
 import { UnsavedChangesModal } from '../../../components/feedback/UnsavedChangesModal';
@@ -87,45 +88,48 @@ export function AgentDelegationsTab({ agent, agentsCatalog }: AgentDelegationsTa
         </Text>
       ) : (
         <>
+          {/* Sem rótulo visível e em largura cheia, como as buscas das
+              listagens: o texto de exemplo já diz o que a busca alcança e
+              permanece como nome acessível. */}
           <TextInput
-            label="Buscar agente"
+            aria-label="Buscar por nome"
             placeholder="Buscar por nome"
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
-            maw={340}
           />
 
-          <Card withBorder p={0}>
+          <SectionedCard>
             {visible.length === 0 ? (
-              <Text size="sm" c="dimmed" p="md">
-                Nenhum agente corresponde à busca.
-              </Text>
+              <SectionedCard.Body>
+                <Text size="sm" c="dimmed">
+                  Nenhum agente corresponde à busca.
+                </Text>
+              </SectionedCard.Body>
             ) : (
-              <Stack gap={0}>
+              <>
                 {visible.map((candidate) => (
-                  <Group
-                    key={candidate.id}
-                    justify="space-between"
-                    wrap="nowrap"
-                    px="md"
-                    py="xs"
-                    data-testid={`delegation-row-${candidate.id}`}
-                  >
-                    <Checkbox
-                      label={candidate.name}
-                      checked={selection.includes(candidate.id)}
-                      onChange={(event) =>
-                        handleToggle(candidate.id, event.currentTarget.checked)
-                      }
-                    />
-                    <Text size="sm" ff="monospace" c={candidate.isActive ? 'dimmed' : 'yellow'}>
-                      {candidate.isActive ? (candidate.model ?? 'não configurado') : '(inativo)'}
-                    </Text>
-                  </Group>
+                  <SectionedCard.Row key={candidate.id}>
+                    <Group
+                      justify="space-between"
+                      wrap="nowrap"
+                      data-testid={`delegation-row-${candidate.id}`}
+                    >
+                      <Checkbox
+                        label={candidate.name}
+                        checked={selection.includes(candidate.id)}
+                        onChange={(event) =>
+                          handleToggle(candidate.id, event.currentTarget.checked)
+                        }
+                      />
+                      <Text size="sm" ff="monospace" c={candidate.isActive ? 'dimmed' : 'yellow'}>
+                        {candidate.isActive ? (candidate.model ?? 'não configurado') : '(inativo)'}
+                      </Text>
+                    </Group>
+                  </SectionedCard.Row>
                 ))}
-              </Stack>
+              </>
             )}
-          </Card>
+          </SectionedCard>
         </>
       )}
 

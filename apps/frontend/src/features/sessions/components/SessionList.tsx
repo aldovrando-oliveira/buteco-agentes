@@ -23,7 +23,12 @@ export function SessionList({ sessions, selectedSessionId, onSelect }: SessionLi
             key={session.sessionId}
             onClick={() => onSelect(session.sessionId)}
             p="sm"
-            bg={isSelected ? 'gray.1' : undefined}
+            // Marcação de seleção lida da cor de destaque, e não de um tom
+            // fixo: `gray.1` é claro nos dois esquemas, então no escuro a
+            // sessão selecionada virava uma faixa branca com texto claro em
+            // cima. Mesmo defeito do fundo de página e da faixa de cabeçalho.
+            bg={isSelected ? 'var(--mantine-primary-color-light)' : undefined}
+            c={isSelected ? 'var(--mantine-primary-color-light-color)' : undefined}
             aria-current={isSelected ? 'true' : undefined}
           >
             <Stack gap={2}>

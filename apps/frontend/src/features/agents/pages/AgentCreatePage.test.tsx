@@ -162,4 +162,10 @@ describe('AgentCreatePage', () => {
     expect(await screen.findByText(/nenhum provedor de llm configurado/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/nome/i)).not.toBeInTheDocument();
   });
+
+  it('oferece volta para a listagem', async () => {
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: 'Agentes' })).toHaveAttribute('href', '/agents');
+  });
 });

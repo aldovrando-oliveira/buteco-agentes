@@ -72,9 +72,14 @@ export function AgentListPage() {
       </Group>
 
       {hasAgents && (
-        <Group align="flex-end" gap="sm">
+        <Group gap="sm" wrap="nowrap">
+          {/* Sem rótulo visível: o texto de exemplo já diz o que a busca
+              alcança, e permanece como nome acessível do campo. O controle
+              segmentado sobe para a mesma linha, compacto, com borda e sem os
+              separadores verticais que são default do Mantine e que o protótipo
+              não tem (design.md da change frontend-acabamento-telas, D5). */}
           <TextInput
-            label="Buscar"
+            aria-label="Buscar por nome ou descrição"
             placeholder="Buscar por nome ou descrição"
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
@@ -82,6 +87,9 @@ export function AgentListPage() {
             style={{ flex: 1 }}
           />
           <SegmentedControl
+            size="xs"
+            withItemsBorders={false}
+            style={{ border: '1px solid var(--mantine-color-default-border)', flexShrink: 0 }}
             value={status}
             onChange={(value) => setStatus(value as StatusFilter)}
             data={[

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alert, Group, Loader, Stack, Text, Title } from '@mantine/core';
+import { BackLink } from '../../../components/layout/BackLink';
 import { notifications } from '@mantine/notifications';
 import { useNavigate } from 'react-router';
 import { useCreateAgentMutation } from '../api/useAgents';
@@ -73,6 +74,7 @@ export function AgentCreatePage() {
 
   return (
     <Stack>
+      <BackLink to={'/agents'} label="Agentes" />
       <Title order={2}>Novo agente</Title>
       <AgentForm
         onSubmit={handleSubmit}

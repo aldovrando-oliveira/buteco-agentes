@@ -1,4 +1,6 @@
-import { Anchor, Badge, Group, Paper, Stack, Table, Text } from '@mantine/core';
+import { Anchor, Badge, Group, Stack, Table, Text } from '@mantine/core';
+import { SectionedCard } from '../../../components/data/SectionedCard';
+import { SectionLabel } from '../../../components/data/SectionLabel';
 import { Link } from 'react-router';
 import type { Agent } from '../types/agent';
 
@@ -49,20 +51,31 @@ function ToolsCell({ agent }: { agent: Agent }) {
   );
 }
 
-// Superfície própria: o fundo da página deixou de ser branco (change
-// frontend-tema-identidade-visual, D4/D12), então o conteúdo precisa declarar
-// a sua em vez de herdar o branco do body.
+// Faixa no cabeçalho e rótulos de coluna em maiúsculas com espaçamento entre
+// letras. O divisor entre as linhas já vinha de graça: o Mantine liga
+// withRowBorders por padrão e usa a mesma cor de borda da identidade visual
+// (design.md da change frontend-acabamento-telas, D1).
 export function AgentTable({ agents }: AgentTableProps) {
   return (
-    <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+    <SectionedCard>
       <Table>
-        <Table.Thead>
+        <Table.Thead bg="var(--buteco-surface-subtle)">
           <Table.Tr>
-            <Table.Th>Agente</Table.Th>
-            <Table.Th>Provedor / modelo</Table.Th>
-            <Table.Th>Ferramentas</Table.Th>
-            <Table.Th>Delega para</Table.Th>
-            <Table.Th>Estado</Table.Th>
+            <Table.Th>
+              <SectionLabel>Agente</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Provedor / modelo</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Ferramentas</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Delega para</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Estado</SectionLabel>
+            </Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -121,6 +134,6 @@ export function AgentTable({ agents }: AgentTableProps) {
           })}
         </Table.Tbody>
       </Table>
-    </Paper>
+    </SectionedCard>
   );
 }

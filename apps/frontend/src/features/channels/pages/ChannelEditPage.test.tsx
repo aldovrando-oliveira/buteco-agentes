@@ -231,4 +231,17 @@ describe('ChannelEditPage', () => {
 
     expect(await screen.findByText('Canal não encontrado.')).toBeInTheDocument();
   });
+
+  it('volta para o registro que está sendo editado, e não para a listagem', async () => {
+    vi.mocked(getChannel).mockResolvedValue(channel);
+
+    renderPage(channel.id);
+
+    // De "editar X" quer-se voltar para X, que é de onde se veio — não para a
+    // lista inteira.
+    expect(await screen.findByRole('link', { name: 'Voltar ao canal' })).toHaveAttribute(
+      'href',
+      `/channels/${channel.id}`,
+    );
+  });
 });

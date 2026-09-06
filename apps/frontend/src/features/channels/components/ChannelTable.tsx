@@ -1,4 +1,6 @@
-import { Anchor, Badge, Paper, Table } from '@mantine/core';
+import { Anchor, Badge, Table } from '@mantine/core';
+import { SectionedCard } from '../../../components/data/SectionedCard';
+import { SectionLabel } from '../../../components/data/SectionLabel';
 import { Link } from 'react-router';
 import type { Agent } from '../../agents/types/agent';
 import type { Channel, ChannelType } from '../types/channel';
@@ -21,19 +23,28 @@ function agentLabelFor(agents: Agent[], agentId: string): string {
   return agent.isActive ? agent.name : `${agent.name} (inativo)`;
 }
 
-// Superfície própria: o fundo da página deixou de ser branco (change
-// frontend-tema-identidade-visual, D4/D12), então o conteúdo precisa declarar
-// a sua em vez de herdar o branco do body.
+// Faixa no cabeçalho e rótulos de coluna em maiúsculas com espaçamento entre
+// letras. O divisor entre as linhas já vinha de graça: o Mantine liga
+// withRowBorders por padrão e usa a mesma cor de borda da identidade visual
+// (design.md da change frontend-acabamento-telas, D1).
 export function ChannelTable({ channels, agents }: ChannelTableProps) {
   return (
-    <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+    <SectionedCard>
       <Table>
-        <Table.Thead>
+        <Table.Thead bg="var(--buteco-surface-subtle)">
           <Table.Tr>
-            <Table.Th>Nome</Table.Th>
-            <Table.Th>Tipo</Table.Th>
-            <Table.Th>Agente responsável</Table.Th>
-            <Table.Th>Estado</Table.Th>
+            <Table.Th>
+              <SectionLabel>Nome</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Tipo</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Agente responsável</SectionLabel>
+            </Table.Th>
+            <Table.Th>
+              <SectionLabel>Estado</SectionLabel>
+            </Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -55,6 +66,6 @@ export function ChannelTable({ channels, agents }: ChannelTableProps) {
           ))}
         </Table.Tbody>
       </Table>
-    </Paper>
+    </SectionedCard>
   );
 }

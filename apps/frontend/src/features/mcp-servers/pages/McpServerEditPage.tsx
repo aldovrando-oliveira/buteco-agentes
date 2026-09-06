@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alert, Group, Loader, Stack, Text, Title } from '@mantine/core';
+import { BackLink } from '../../../components/layout/BackLink';
 import { notifications } from '@mantine/notifications';
 import { useNavigate, useParams } from 'react-router';
 import { useMcpServerQuery, useUpdateMcpServerMutation } from '../api/useMcpServers';
@@ -71,6 +72,7 @@ export function McpServerEditPage() {
 
   return (
     <Stack>
+      <BackLink to={`/mcp-servers/${id}`} label="Voltar ao servidor" />
       <Title order={2}>Editar servidor MCP</Title>
       <McpServerForm
         onSubmit={handleSubmit}

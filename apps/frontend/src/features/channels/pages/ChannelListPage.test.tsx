@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MantineProvider } from '@mantine/core';
 import { MemoryRouter } from 'react-router';
@@ -82,5 +83,44 @@ describe('ChannelListPage', () => {
     renderPage();
 
     expect(await screen.findByText('Não foi possível carregar os canais.')).toBeInTheDocument();
+  });
+
+  it('busca por nome, tipo ou agente, ignorando maiúsculas e acentuação', async () => {
+    const telegram: Channel = {
+      ...channel,
+      id: '88888888-8888-8888-8888-888888888888',
+      channelType: 'telegram',
+      name: 'Canal Telegram',
+    };
+    vi.mocked(listChannels).mockResolvedValue([channel, telegram]);
+
+    renderPage();
+    await screen.findByText(channel.name);
+
+    await userEvent.type(screen.getByLabelText('Buscar por nome, tipo ou agente'), 'telegram');
+
+    expect(screen.getByText(telegram.name)).toBeInTheDocument();
+    expect(screen.queryByText(channel.name)).not.toBeInTheDocument();
+  });
+
+  it('distingue lista vazia por busca de lista vazia por falta de cadastro', async () => {
+    vi.mocked(listChannels).mockResolvedValue([channel]);
+
+    renderPage();
+    await screen.findByText(channel.name);
+
+    await userEvent.type(screen.getByLabelText('Buscar por nome, tipo ou agente'), 'inexistente');
+
+    expect(screen.getByText('Nenhum canal corresponde à busca.')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhum canal cadastrado ainda.')).not.toBeInTheDocument();
+  });
+
+  it('não exibe o campo de busca com o catálogo vazio', async () => {
+    vi.mocked(listChannels).mockResolvedValue([]);
+
+    renderPage();
+    await screen.findByText('Nenhum canal cadastrado ainda.');
+
+    expect(screen.queryByLabelText('Buscar por nome, tipo ou agente')).not.toBeInTheDocument();
   });
 });

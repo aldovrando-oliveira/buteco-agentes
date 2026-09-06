@@ -105,13 +105,17 @@ describe('AgentListPage', () => {
   async function renderWithAgents(agents: Agent[]) {
     vi.mocked(listAgents).mockResolvedValue(agents);
     renderPage();
-    await screen.findByLabelText('Buscar');
+    await screen.findByLabelText('Buscar por nome ou descrição');
   }
 
   // Restrito à tabela: fora dela existe o link de cadastrar agente.
   function visibleAgentNames() {
     const table = screen.queryByRole('table');
-    return table ? within(table).getAllByRole('link').map((link) => link.textContent) : [];
+    return table
+      ? within(table)
+          .getAllByRole('link')
+          .map((link) => link.textContent)
+      : [];
   }
 
   it('exibe a quantidade de agentes cadastrados', async () => {
@@ -130,12 +134,12 @@ describe('AgentListPage', () => {
     const user = userEvent.setup();
     await renderWithAgents([agent, cobranca]);
 
-    await user.type(screen.getByLabelText('Buscar'), 'triagem');
+    await user.type(screen.getByLabelText('Buscar por nome ou descrição'), 'triagem');
 
     expect(screen.getByText('Nenhum agente corresponde à busca.')).toBeInTheDocument();
 
-    await user.clear(screen.getByLabelText('Buscar'));
-    await user.type(screen.getByLabelText('Buscar'), 'atendente');
+    await user.clear(screen.getByLabelText('Buscar por nome ou descrição'));
+    await user.type(screen.getByLabelText('Buscar por nome ou descrição'), 'atendente');
 
     expect(visibleAgentNames()).toContain('Atendente');
     expect(visibleAgentNames()).not.toContain('Cobrança Ativa');
@@ -145,7 +149,7 @@ describe('AgentListPage', () => {
     const user = userEvent.setup();
     await renderWithAgents([agent, cobranca]);
 
-    await user.type(screen.getByLabelText('Buscar'), 'dívidas');
+    await user.type(screen.getByLabelText('Buscar por nome ou descrição'), 'dívidas');
 
     expect(visibleAgentNames()).toEqual(['Cobrança Ativa']);
   });
@@ -154,7 +158,7 @@ describe('AgentListPage', () => {
     const user = userEvent.setup();
     await renderWithAgents([agent, cobranca]);
 
-    await user.type(screen.getByLabelText('Buscar'), 'COBRANCA');
+    await user.type(screen.getByLabelText('Buscar por nome ou descrição'), 'COBRANCA');
 
     expect(visibleAgentNames()).toEqual(['Cobrança Ativa']);
   });
@@ -186,7 +190,7 @@ describe('AgentListPage', () => {
     const user = userEvent.setup();
     await renderWithAgents([agent, cobranca, inativo]);
 
-    await user.type(screen.getByLabelText('Buscar'), 'a');
+    await user.type(screen.getByLabelText('Buscar por nome ou descrição'), 'a');
     await user.click(screen.getByRole('radio', { name: 'Inativos' }));
 
     expect(visibleAgentNames()).toEqual(['Triagem']);
@@ -196,7 +200,7 @@ describe('AgentListPage', () => {
     const user = userEvent.setup();
     await renderWithAgents([agent]);
 
-    await user.type(screen.getByLabelText('Buscar'), 'inexistente');
+    await user.type(screen.getByLabelText('Buscar por nome ou descrição'), 'inexistente');
 
     expect(screen.getByText('Nenhum agente corresponde à busca.')).toBeInTheDocument();
     expect(screen.queryByText('Nenhum agente cadastrado ainda.')).not.toBeInTheDocument();
@@ -208,7 +212,16 @@ describe('AgentListPage', () => {
     renderPage();
 
     await screen.findByText('Nenhum agente cadastrado ainda.');
-    expect(screen.queryByLabelText('Buscar')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Buscar por nome ou descrição')).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: 'Ativos' })).not.toBeInTheDocument();
+  });
+
+  it('mantém a busca alcançável sem rótulo visível', async () => {
+    await renderWithAgents([agent]);
+
+    // O rótulo visível saiu; o texto de exemplo virou o nome acessível. Sem
+    // isto, a busca deixaria de ser alcançável por quem usa leitor de tela.
+    expect(screen.getByLabelText('Buscar por nome ou descrição')).toBeInTheDocument();
+    expect(screen.queryByText('Buscar')).not.toBeInTheDocument();
   });
 });

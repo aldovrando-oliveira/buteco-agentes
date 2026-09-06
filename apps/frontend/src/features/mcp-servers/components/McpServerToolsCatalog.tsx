@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, Button, Card, Group, Loader, Stack, Text } from '@mantine/core';
+import { Alert, Box, Button, Group, Loader, Stack, Text } from '@mantine/core';
+import { SectionedCard } from '../../../components/data/SectionedCard';
 import { useMcpServerToolsQuery } from '../api/useMcpServers';
 import { agentsAllowingTool } from '../utils/agentUsage';
 import type { Agent } from '../../agents/types/agent';
@@ -30,37 +31,46 @@ export function McpServerToolsCatalog({ mcpServerId, agents }: McpServerToolsCat
   const tools = toolsQuery.data?.success ? toolsQuery.data.tools! : undefined;
   const discoveryFailed = toolsQuery.isError || toolsQuery.data?.success === false;
 
-  return (
-    <Card withBorder data-testid="mcp-server-tools-catalog">
-      <Stack gap="sm">
-        <Group justify="space-between" wrap="nowrap">
-          <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-            Catálogo de tools
-          </Text>
-          <Button
-            size="xs"
-            variant="default"
-            onClick={handleRefresh}
-            loading={toolsQuery.isFetching}
-          >
-            Atualizar
-          </Button>
-        </Group>
+  const mensagemAvulsa = (conteudo: React.ReactNode) => (
+    <Box px="md" py="sm">
+      {conteudo}
+    </Box>
+  );
 
-        {!requested && (
+  return (
+    <SectionedCard
+      data-testid="mcp-server-tools-catalog"
+      title="Catálogo de tools"
+      action={
+        <Button
+          size="compact-sm"
+          variant="default"
+          onClick={handleRefresh}
+          loading={toolsQuery.isFetching}
+        >
+          Atualizar
+        </Button>
+      }
+    >
+      {!requested &&
+        mensagemAvulsa(
           <Text size="sm" c="dimmed">
             As tools são descobertas ao vivo. Clique em Atualizar para consultar o servidor.
-          </Text>
+          </Text>,
         )}
 
-        {requested && toolsQuery.isLoading && (
+      {requested &&
+        toolsQuery.isLoading &&
+        mensagemAvulsa(
           <Group gap="xs">
             <Loader size="xs" />
             <Text size="sm">Buscando tools...</Text>
-          </Group>
+          </Group>,
         )}
 
-        {requested && discoveryFailed && (
+      {requested &&
+        discoveryFailed &&
+        mensagemAvulsa(
           <Alert color="red">
             <Stack gap="xs" align="flex-start">
               <Text size="sm">
@@ -70,51 +80,57 @@ export function McpServerToolsCatalog({ mcpServerId, agents }: McpServerToolsCat
                 Tentar novamente
               </Button>
             </Stack>
-          </Alert>
+          </Alert>,
         )}
 
-        {tools?.length === 0 && (
+      {tools?.length === 0 &&
+        mensagemAvulsa(
           <Text size="sm" c="dimmed">
             Este servidor não oferece nenhuma tool.
-          </Text>
+          </Text>,
         )}
 
-        {tools && tools.length > 0 && (
-          <Stack gap="xs">
-            {tools.map((tool) => {
-              const allowedIn = agents ? agentsAllowingTool(agents, mcpServerId, tool.name) : null;
+      {tools?.map((tool) => {
+        const allowedIn = agents ? agentsAllowingTool(agents, mcpServerId, tool.name) : null;
 
-              return (
-                <Group
-                  key={tool.name}
-                  justify="space-between"
-                  align="flex-start"
-                  wrap="nowrap"
-                  data-testid={`tool-row-${tool.name}`}
+        return (
+          <SectionedCard.Row key={tool.name}>
+            <Group
+              justify="space-between"
+              align="flex-start"
+              wrap="nowrap"
+              gap="md"
+              data-testid={`tool-row-${tool.name}`}
+            >
+              <Stack gap={0} style={{ minWidth: 0 }}>
+                <Text size="sm" ff="monospace">
+                  {tool.name}
+                </Text>
+                {tool.description && (
+                  <Text size="xs" c="dimmed">
+                    {tool.description}
+                  </Text>
+                )}
+              </Stack>
+              {allowedIn !== null && (
+                <Text
+                  size="xs"
+                  c={allowedIn > 0 ? 'butecoBlue' : 'dimmed'}
+                  ta="right"
+                  // Sem isto a descrição ao lado comprime este texto e ele
+                  // quebra em duas linhas — o defeito do achado 4, anterior ao
+                  // redesenho e só visível na comparação com o protótipo.
+                  style={{ flexShrink: 0 }}
                 >
-                  <Stack gap={0} style={{ minWidth: 0 }}>
-                    <Text size="sm" ff="monospace">
-                      {tool.name}
-                    </Text>
-                    {tool.description && (
-                      <Text size="xs" c="dimmed">
-                        {tool.description}
-                      </Text>
-                    )}
-                  </Stack>
-                  {allowedIn !== null && (
-                    <Text size="xs" c={allowedIn > 0 ? 'blue' : 'dimmed'} ta="right">
-                      {allowedIn > 0
-                        ? `permitida em ${allowedIn} ${allowedIn === 1 ? 'agente' : 'agentes'}`
-                        : 'não permitida em nenhum agente'}
-                    </Text>
-                  )}
-                </Group>
-              );
-            })}
-          </Stack>
-        )}
-      </Stack>
-    </Card>
+                  {allowedIn > 0
+                    ? `permitida em ${allowedIn} ${allowedIn === 1 ? 'agente' : 'agentes'}`
+                    : 'não permitida em nenhum agente'}
+                </Text>
+              )}
+            </Group>
+          </SectionedCard.Row>
+        );
+      })}
+    </SectionedCard>
   );
 }

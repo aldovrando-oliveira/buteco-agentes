@@ -1,4 +1,9 @@
-import { createTheme, type CSSVariablesResolver, type MantineColorsTuple } from '@mantine/core';
+import {
+  Badge,
+  createTheme,
+  type CSSVariablesResolver,
+  type MantineColorsTuple,
+} from '@mantine/core';
 
 // Identidade visual do painel (design.md da change
 // frontend-tema-identidade-visual). Os valores vêm do protótipo do handoff do
@@ -159,6 +164,23 @@ export const theme = createTheme({
   },
   defaultRadius: 'sm',
 
+  // A aparência do badge é decisão de produto, não de tela: o padrão vive aqui
+  // e cobre os dezenove badges do painel sem editar nenhuma chamada.
+  //
+  // A variante clara não é só estética. A preenchida usa o tom 6 com texto
+  // branco, que em verde dá 3,89:1 e em âmbar 3,72:1 — abaixo do mínimo de
+  // 4,5:1 que este mesmo tema exige. A clara dá 4,81:1 e 5,29:1.
+  //
+  // O text-transform em caixa alta e o negrito são defaults do Mantine, não
+  // nossos: os rótulos já são escritos em caixa de sentença, e o protótipo os
+  // mostra assim (design.md da change frontend-acabamento-telas, D3).
+  components: {
+    Badge: Badge.extend({
+      defaultProps: { variant: 'light' },
+      styles: { label: { textTransform: 'none' } },
+    }),
+  },
+
   // O protótipo tem uma sombra só, e nenhuma no escuro. As cinco entram na
   // mesma família para que Modal (que usa xl) não destoe do resto.
   shadows: {
@@ -183,8 +205,15 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     // Fundo da página (--bg do protótipo). Fora da paleta de propósito: ver o
     // comentário da escala `gray`. Consumido pelo body em index.css.
     '--buteco-page-bg': '#f6f5f3',
+    // Superfície sutil (--sf2 do protótipo): faixa de cabeçalho de card e de
+    // tabela. Precisa existir como variável, e não como um tom cravado, porque
+    // o papel troca de ponta da escala entre os esquemas — no claro é o tom
+    // mais claro que a superfície, no escuro é o mais escuro. Cravar `gray[1]`
+    // deixava a faixa branca no tema escuro.
+    '--buteco-surface-subtle': 'var(--mantine-color-gray-1)',
   },
   dark: {
     '--buteco-page-bg': 'var(--mantine-color-dark-9)',
+    '--buteco-surface-subtle': 'var(--mantine-color-dark-6)',
   },
 });

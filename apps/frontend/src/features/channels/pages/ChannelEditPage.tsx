@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alert, Group, Loader, Stack, Text, Title } from '@mantine/core';
+import { BackLink } from '../../../components/layout/BackLink';
 import { notifications } from '@mantine/notifications';
 import { useNavigate, useParams } from 'react-router';
 import { useAgentsQuery } from '../../agents/api/useAgents';
@@ -100,6 +101,7 @@ export function ChannelEditPage() {
 
   return (
     <Stack>
+      <BackLink to={`/channels/${id}`} label="Voltar ao canal" />
       <Title order={2}>Editar canal</Title>
       {submitError && (
         <Alert color="red" title={submitError.title}>

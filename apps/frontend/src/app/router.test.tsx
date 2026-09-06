@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MantineProvider } from '@mantine/core';
@@ -23,8 +23,7 @@ vi.mock('../features/agents/api/agentsApi', async (importOriginal) => {
 });
 
 vi.mock('../features/mcp-servers/api/mcpServersApi', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../features/mcp-servers/api/mcpServersApi')>();
+  const actual = await importOriginal<typeof import('../features/mcp-servers/api/mcpServersApi')>();
   return { ...actual, listMcpServers: vi.fn(), listMcpServerTools: vi.fn() };
 });
 
@@ -110,15 +109,20 @@ describe('appRoutes', () => {
     const user = userEvent.setup();
     renderRoutesFrom('/');
 
+    // O item de navegação é procurado dentro da barra lateral: a página de
+    // criação também tem um link chamado "Agentes", o de voltar para a
+    // listagem, e a asserção precisa dizer de qual dos dois fala.
+    const navegacao = () => within(screen.getByRole('navigation'));
+
     await screen.findByRole('heading', { name: 'Agentes' });
     expect(screen.getByText('Buteco Agentes')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Agentes' })).toBeInTheDocument();
+    expect(navegacao().getByRole('link', { name: 'Agentes' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('link', { name: 'Novo agente' }));
 
     expect(await screen.findByRole('heading', { name: 'Novo agente' })).toBeInTheDocument();
     expect(screen.getByText('Buteco Agentes')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Agentes' })).toBeInTheDocument();
+    expect(navegacao().getByRole('link', { name: 'Agentes' })).toBeInTheDocument();
   });
 
   it('navega para a listagem de canais pelo item de navegação "Canais"', async () => {

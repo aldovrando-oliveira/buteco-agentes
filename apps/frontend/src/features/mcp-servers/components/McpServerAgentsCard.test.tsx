@@ -52,7 +52,10 @@ describe('McpServerAgentsCard', () => {
       }),
     ]);
 
-    expect(screen.getByText('2 agentes usam este servidor')).toBeInTheDocument();
+    // A contagem saiu de dentro do rótulo e virou informação ao lado dele: o
+    // rótulo nomeia a seção, a contagem informa o estado dela.
+    expect(screen.getByText('Agentes que usam este servidor')).toBeInTheDocument();
+    expect(screen.getByText('2 agentes usam este servidor MCP')).toBeInTheDocument();
 
     const first = within(screen.getByTestId('server-agent-row-a1'));
     expect(first.getByRole('link', { name: 'Atendente' })).toHaveAttribute('href', '/agents/a1');
@@ -74,18 +77,18 @@ describe('McpServerAgentsCard', () => {
   });
 
   it('usa o singular quando apenas um agente usa o servidor', () => {
-    renderCard([
-      agent({ mcpServers: [{ id: MCP_SERVER_ID, name: 'x', allowedTools: ['read'] }] }),
-    ]);
+    renderCard([agent({ mcpServers: [{ id: MCP_SERVER_ID, name: 'x', allowedTools: ['read'] }] })]);
 
-    expect(screen.getByText('1 agente usa este servidor')).toBeInTheDocument();
+    expect(screen.getByText('1 agente usa este servidor MCP')).toBeInTheDocument();
   });
 
   it('informa que desativar não afeta ninguém quando nenhum agente usa o servidor', () => {
     renderCard([agent({ mcpServers: [{ id: 'outro', name: 'y', allowedTools: ['read'] }] })]);
 
     expect(
-      screen.getByText('Nenhum agente usa este servidor. Desativá-lo não afeta nenhum agente agora.'),
+      screen.getByText(
+        'Nenhum agente usa este servidor. Desativá-lo não afeta nenhum agente agora.',
+      ),
     ).toBeInTheDocument();
   });
 
