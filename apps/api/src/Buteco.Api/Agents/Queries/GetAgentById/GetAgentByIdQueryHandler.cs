@@ -1,13 +1,17 @@
+using Buteco.Api.A2A;
 using Buteco.Api.AgentDelegations;
 using Buteco.Api.AgentMcpBindings;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Options;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Buteco.Api.Agents.Queries.GetAgentById;
 
-public sealed class GetAgentByIdQueryHandler(AppDbContext dbContext) : IQueryHandler<GetAgentByIdQuery, AgentResponse?>
+public sealed class GetAgentByIdQueryHandler(AppDbContext dbContext,
+    IOptions<PublicUrlOptions> publicUrlOptions) : IQueryHandler<GetAgentByIdQuery, AgentResponse?>
 {
     public async ValueTask<AgentResponse?> Handle(GetAgentByIdQuery query, CancellationToken cancellationToken)
     {
@@ -23,6 +27,6 @@ public sealed class GetAgentByIdQueryHandler(AppDbContext dbContext) : IQueryHan
         var mcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
         var delegatesTo = await AgentDelegationLookup.GetDelegateTargetsAsync(dbContext, agent.Id, cancellationToken);
 
-        return AgentResponse.FromEntity(agent, mcpServers, delegatesTo);
+        return AgentResponse.FromEntity(agent, mcpServers, delegatesTo, AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id));
     }
 }

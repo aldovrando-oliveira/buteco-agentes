@@ -71,6 +71,28 @@ openspec/                 # Propostas, specs, design e tasks de cada mudança
   de desenvolvimento e para os testes de integração, que sobem Postgres/RabbitMQ
   efêmeros via [Testcontainers](https://testcontainers.com/)
 
+### Testcontainers com Podman
+
+O Testcontainers fala com o daemon indicado por `DOCKER_HOST`, e com Podman essa
+variável não é definida sozinha. Sem ela os testes de integração falham todos de
+uma vez, com erro de conexão ao daemon — que é fácil de confundir com o código
+estar quebrado.
+
+O trecho abaixo detecta o runtime disponível e só exporta a variável quando é o
+Podman que está no ar, então serve nas duas máquinas sem alteração:
+
+```bash
+if ! command -v docker >/dev/null && command -v podman >/dev/null; then
+  export DOCKER_HOST="unix://$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}' | head -1)"
+  export TESTCONTAINERS_RYUK_DISABLED=true
+fi
+```
+
+`TESTCONTAINERS_RYUK_DISABLED` é necessário porque o contêiner de limpeza do
+Testcontainers pressupõe socket do Docker. Sem Ryuk, os contêineres efêmeros são
+removidos ao fim da execução pelo próprio Testcontainers; se uma execução for
+interrompida, sobram contêineres a remover à mão com `podman ps -a`.
+
 ## Como subir as dependências (Postgres + RabbitMQ)
 
 ```bash

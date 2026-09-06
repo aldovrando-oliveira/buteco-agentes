@@ -18,6 +18,18 @@ export interface AgentSkill {
   description: string | null;
 }
 
+// Endereços públicos A2A do agente, montados pelo servidor. Nulos quando a URL
+// pública não está configurada lá — a ausência é caso legítimo, não erro, e o
+// painel a exibe como configuração faltando.
+//
+// Não existe campo dizendo se A2A está habilitado: todo agente tem os dois
+// endereços, sempre, e o que varia é aceitar trabalho, que é o isActive
+// (design.md da change agente-enderecos-a2a, D3).
+export interface AgentA2AAddresses {
+  url: string;
+  agentCardUrl: string;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -31,6 +43,11 @@ export interface Agent {
   updatedAt: string;
   mcpServers: AgentMcpServerSummary[];
   delegatesTo: AgentSummaryReference[];
+  // Opcional, e não só anulável: uma API que ainda não subiu com esta mudança
+  // omite o campo, e aí ele chega como undefined, não null. É a janela de
+  // migração — os dois lados implantam separado (design.md da change
+  // agente-enderecos-a2a, Migration Plan).
+  a2a?: AgentA2AAddresses | null;
 }
 
 export interface AgentMcpServerBinding {

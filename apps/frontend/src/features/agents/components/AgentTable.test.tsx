@@ -19,6 +19,7 @@ const activeAgent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  a2a: null,
 };
 
 const inactiveAgent: Agent = {
@@ -34,6 +35,7 @@ const inactiveAgent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  a2a: null,
 };
 
 function renderTable(agents: Agent[]) {
@@ -169,6 +171,7 @@ describe('AgentTable', () => {
           { id: 'd1', name: 'Cobrança' },
           { id: 'd2', name: 'Financeiro' },
         ],
+        a2a: null,
       },
     ]);
 

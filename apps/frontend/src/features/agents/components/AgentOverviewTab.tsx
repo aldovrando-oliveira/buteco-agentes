@@ -2,6 +2,7 @@ import { Alert, Badge, Grid, Group, ScrollArea, Stack, Text, Typography } from '
 import { SectionedCard } from '../../../components/data/SectionedCard';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { AgentA2ACard } from './AgentA2ACard';
 import { AgentSkillsCard } from './AgentSkillsCard';
 import type { Agent } from '../types/agent';
 
@@ -74,6 +75,8 @@ export function AgentOverviewTab({ agent }: AgentOverviewTabProps) {
           </SectionedCard>
 
           <AgentSkillsCard skills={agent.skills} />
+
+          <AgentA2ACard a2a={agent.a2a} isActive={agent.isActive} />
 
           <SectionedCard title="Datas">
             <Stack gap="sm" px="md" py="sm">

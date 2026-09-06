@@ -51,6 +51,10 @@ describe('request', () => {
     expect(getToken()).toBeNull();
     expect(window.location.href).toBe('/login');
 
-    Object.defineProperty(window, 'location', { value: originalLocation, writable: true, configurable: true });
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+      configurable: true,
+    });
   });
 });

@@ -40,6 +40,7 @@ const agent: Agent = {
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [{ id: 'srv-1', name: 'Zendesk MCP', allowedTools: ['read', 'ghost-tool'] }],
   delegatesTo: [],
+  a2a: null,
 };
 
 function mcpServer(overrides: Partial<McpServer>): McpServer {

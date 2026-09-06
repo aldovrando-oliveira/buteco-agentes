@@ -19,6 +19,7 @@ const activeAgent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  a2a: null,
 };
 
 const inactiveAgent: Agent = {

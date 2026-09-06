@@ -25,6 +25,7 @@ const agent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  a2a: null,
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -226,6 +227,7 @@ describe('useReplaceAgentDelegationsMutation', () => {
     const updated: Agent = {
       ...agent,
       delegatesTo: [{ id: targetAgent.id, name: targetAgent.name }],
+      a2a: null,
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(updated));
     vi.stubGlobal('fetch', fetchMock);

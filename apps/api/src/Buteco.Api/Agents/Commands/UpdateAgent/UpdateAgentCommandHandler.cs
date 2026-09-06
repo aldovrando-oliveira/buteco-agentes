@@ -1,16 +1,20 @@
+using Buteco.Api.A2A;
 using Buteco.Api.AgentDelegations;
 using Buteco.Api.AgentMcpBindings;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Options;
 using Buteco.Api.Providers;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Buteco.Api.Agents.Commands.UpdateAgent;
 
 public sealed class UpdateAgentCommandHandler(
     AppDbContext dbContext,
-    ProviderCatalogService providerCatalogService) : ICommandHandler<UpdateAgentCommand, UpdateAgentResult>
+    ProviderCatalogService providerCatalogService,
+    IOptions<PublicUrlOptions> publicUrlOptions) : ICommandHandler<UpdateAgentCommand, UpdateAgentResult>
 {
     public async ValueTask<UpdateAgentResult> Handle(UpdateAgentCommand command, CancellationToken cancellationToken)
     {
@@ -34,6 +38,6 @@ public sealed class UpdateAgentCommandHandler(
         var mcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
         var delegatesTo = await AgentDelegationLookup.GetDelegateTargetsAsync(dbContext, agent.Id, cancellationToken);
 
-        return UpdateAgentResult.Success(AgentResponse.FromEntity(agent, mcpServers, delegatesTo));
+        return UpdateAgentResult.Success(AgentResponse.FromEntity(agent, mcpServers, delegatesTo, AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id)));
     }
 }

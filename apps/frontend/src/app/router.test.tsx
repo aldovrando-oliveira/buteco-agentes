@@ -48,6 +48,7 @@ const agent: Agent = {
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
   delegatesTo: [],
+  a2a: null,
 };
 
 function renderProviders(children: React.ReactNode) {

@@ -8,8 +8,16 @@ using Testcontainers.PostgreSql;
 
 namespace Buteco.Api.Tests.Support;
 
-public sealed class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
+public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    // Url pública usada pelos testes. Fixada aqui pela mesma razão dos
+    // provedores logo abaixo: appsettings.Development.json é ajustado
+    // livremente por quem desenvolve e não deveria ser pré-requisito de
+    // nenhum teste. Sobrescrevível para exercitar o caso de ausência.
+    public const string PublicBaseUrl = "https://api.exemplo.test";
+
+    protected virtual string? ConfiguredPublicBaseUrl => PublicBaseUrl;
+
     // Compatibilidade com testes que já referenciavam estas constantes
     // diretamente nesta fixture — mesmos valores de TestAuthentication.
     public const string KnownOperatorUsername = TestAuthentication.KnownOperatorUsername;
@@ -33,6 +41,7 @@ public sealed class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLi
             {
                 ["Anthropic:ApiKey"] = string.Empty,
                 ["Gemini:ApiKey"] = string.Empty,
+                ["PublicUrl:BaseUrl"] = ConfiguredPublicBaseUrl,
             });
             config.AddInMemoryCollection(TestAuthentication.ConfigOverrides);
         });

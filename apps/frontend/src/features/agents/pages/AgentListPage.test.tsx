@@ -26,6 +26,7 @@ const agent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  a2a: null,
 };
 
 function renderPage() {

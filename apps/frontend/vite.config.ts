@@ -8,5 +8,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     globals: false,
+    // Precisa ser maior que o asyncUtilTimeout do setup: um teste que espera
+    // 5s por um dropdown não pode ser cortado pelo prazo do próprio teste.
+    testTimeout: 15000,
   },
 });

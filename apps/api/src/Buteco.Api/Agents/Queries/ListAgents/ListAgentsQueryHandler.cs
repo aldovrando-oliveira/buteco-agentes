@@ -1,12 +1,16 @@
+using Buteco.Api.A2A;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.McpServers.Responses;
+using Buteco.Api.Options;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Buteco.Api.Agents.Queries.ListAgents;
 
-public sealed class ListAgentsQueryHandler(AppDbContext dbContext) : IQueryHandler<ListAgentsQuery, IReadOnlyList<AgentResponse>>
+public sealed class ListAgentsQueryHandler(AppDbContext dbContext,
+    IOptions<PublicUrlOptions> publicUrlOptions) : IQueryHandler<ListAgentsQuery, IReadOnlyList<AgentResponse>>
 {
     public async ValueTask<IReadOnlyList<AgentResponse>> Handle(ListAgentsQuery query, CancellationToken cancellationToken)
     {
@@ -52,7 +56,8 @@ public sealed class ListAgentsQueryHandler(AppDbContext dbContext) : IQueryHandl
             .Select(agent => AgentResponse.FromEntity(
                 agent,
                 mcpServersByAgentId.GetValueOrDefault(agent.Id, []),
-                delegatesToBySourceAgentId.GetValueOrDefault(agent.Id, [])))
+                delegatesToBySourceAgentId.GetValueOrDefault(agent.Id, []),
+                AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id)))
             .ToList();
     }
 }

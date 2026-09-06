@@ -46,6 +46,7 @@ const activeAgent: Agent = {
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
   delegatesTo: [],
+  a2a: null,
 };
 
 const inactiveAgent: Agent = { ...activeAgent, isActive: false };
@@ -169,6 +170,7 @@ describe('AgentDetailPage', () => {
         { id: '99999999-9999-9999-9999-999999999999', name: 'Cobrança' },
         { id: '88888888-8888-8888-8888-888888888888', name: 'Financeiro' },
       ],
+      a2a: null,
     });
 
     renderPage(activeAgent.id);

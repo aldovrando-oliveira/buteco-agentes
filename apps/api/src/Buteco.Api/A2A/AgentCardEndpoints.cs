@@ -42,7 +42,12 @@ public static class AgentCardEndpoints
             return TypedResults.NotFound();
         }
 
-        var baseUrl = publicUrlOptions.Value.BaseUrl.TrimEnd('/');
+        // Mesmo ponto de montagem que a resposta de agente usa, para os dois
+        // nunca anunciarem endereços diferentes (design.md da change
+        // agente-enderecos-a2a, D1). Sem URL pública configurada, o endereço
+        // fica vazio aqui como sempre ficou — corrigir isso mudaria o contrato
+        // do card, que é outra change.
+        var addresses = AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id);
 
         var card = new AgentCard
         {
@@ -53,7 +58,7 @@ public static class AgentCardEndpoints
             [
                 new AgentInterface
                 {
-                    Url = $"{baseUrl}/agents/{agent.Id}/a2a",
+                    Url = addresses?.Url ?? string.Empty,
                     ProtocolBinding = "JSONRPC",
                     ProtocolVersion = "1.0",
                 },

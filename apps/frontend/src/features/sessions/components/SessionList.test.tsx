@@ -13,7 +13,11 @@ const sessionWithName: ChannelSession = {
   contactExternalId: '5511999999999',
   contactDisplayName: 'Maria',
   lastActivityAt: '2026-08-20T12:00:00Z',
-  lastMessage: { direction: 'Inbound', content: 'Olá, tudo bem?', occurredAt: '2026-08-20T12:00:00Z' },
+  lastMessage: {
+    direction: 'Inbound',
+    content: 'Olá, tudo bem?',
+    occurredAt: '2026-08-20T12:00:00Z',
+  },
 };
 
 const sessionWithoutName: ChannelSession = {

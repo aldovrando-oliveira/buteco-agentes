@@ -1,6 +1,17 @@
 import { afterEach } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+
+// O padrão de 1s das consultas assíncronas do Testing Library é curto para esta
+// suíte: os formulários abrem dropdowns do Mantine, que montam em portal depois
+// de uma transição, enquanto cinquenta e quatro arquivos de teste rodam em
+// paralelo. Sob contenção, a opção ainda não existe quando o prazo acaba.
+//
+// Era a causa da instabilidade que apareceu desde a etapa da casca do painel:
+// falhas em testes de formulário que somem quando rodados isolados. Não é
+// lógica de teste errada — os helpers já usam consulta assíncrona —, é prazo
+// padrão apertado.
+configure({ asyncUtilTimeout: 5000 });
 
 // Com `test.globals: false`, o auto-cleanup do Testing Library (que depende
 // de detectar um `afterEach` global) não é registrado sozinho — chamamos

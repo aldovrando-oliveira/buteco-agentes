@@ -43,6 +43,7 @@ function agent(overrides: Partial<Agent>): Agent {
     updatedAt: '2026-07-26T00:00:00Z',
     mcpServers: [],
     delegatesTo: [],
+    a2a: null,
     ...overrides,
   };
 }
@@ -82,8 +83,14 @@ describe('McpServerTable', () => {
     renderTable(
       [activeServer, inactiveServer],
       [
-        agent({ id: 'a1', mcpServers: [{ id: activeServer.id, name: 'x', allowedTools: ['read'] }] }),
-        agent({ id: 'a2', mcpServers: [{ id: activeServer.id, name: 'x', allowedTools: ['write'] }] }),
+        agent({
+          id: 'a1',
+          mcpServers: [{ id: activeServer.id, name: 'x', allowedTools: ['read'] }],
+        }),
+        agent({
+          id: 'a2',
+          mcpServers: [{ id: activeServer.id, name: 'x', allowedTools: ['write'] }],
+        }),
       ],
     );
 
@@ -105,7 +112,10 @@ describe('McpServerTable', () => {
       [activeServer],
       [
         agent({ id: 'a1', mcpServers: [{ id: activeServer.id, name: 'x', allowedTools: [] }] }),
-        agent({ id: 'a2', mcpServers: [{ id: activeServer.id, name: 'x', allowedTools: ['read'] }] }),
+        agent({
+          id: 'a2',
+          mcpServers: [{ id: activeServer.id, name: 'x', allowedTools: ['read'] }],
+        }),
       ],
     );
 
@@ -120,9 +130,7 @@ describe('McpServerTable', () => {
       [agent({ mcpServers: [{ id: activeServer.id, name: 'x', allowedTools: ['read'] }] })],
     );
 
-    expect(
-      screen.queryByTestId(`usage-without-tools-${activeServer.id}`),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId(`usage-without-tools-${activeServer.id}`)).not.toBeInTheDocument();
   });
 
   it('sem o catálogo de agentes, mantém as demais colunas sem afirmar uso', () => {

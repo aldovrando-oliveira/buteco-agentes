@@ -2,15 +2,18 @@ using Buteco.Api.A2A;
 using Buteco.Api.Agents.Entities;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Options;
 using Buteco.Api.Providers;
 using Mediator;
+using Microsoft.Extensions.Options;
 
 namespace Buteco.Api.Agents.Commands.CreateAgent;
 
 public sealed class CreateAgentCommandHandler(
     AppDbContext dbContext,
     IAgentA2AServerRegistry registry,
-    ProviderCatalogService providerCatalogService) : ICommandHandler<CreateAgentCommand, CreateAgentResult>
+    ProviderCatalogService providerCatalogService,
+    IOptions<PublicUrlOptions> publicUrlOptions) : ICommandHandler<CreateAgentCommand, CreateAgentResult>
 {
     public async ValueTask<CreateAgentResult> Handle(CreateAgentCommand command, CancellationToken cancellationToken)
     {
@@ -30,6 +33,6 @@ public sealed class CreateAgentCommandHandler(
         // responder sem precisar de uma consulta extra ao banco (ver RoutingA2ARequestHandler).
         registry.Register(agent.Id);
 
-        return CreateAgentResult.Success(AgentResponse.FromEntity(agent, [], []));
+        return CreateAgentResult.Success(AgentResponse.FromEntity(agent, [], [], AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id)));
     }
 }

@@ -1,13 +1,17 @@
+using Buteco.Api.A2A;
 using Buteco.Api.AgentDelegations.Entities;
 using Buteco.Api.AgentMcpBindings;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Options;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Buteco.Api.AgentDelegations.Commands.ReplaceAgentDelegations;
 
-public sealed class ReplaceAgentDelegationsCommandHandler(AppDbContext dbContext) : ICommandHandler<ReplaceAgentDelegationsCommand, ReplaceAgentDelegationsResult>
+public sealed class ReplaceAgentDelegationsCommandHandler(AppDbContext dbContext,
+    IOptions<PublicUrlOptions> publicUrlOptions) : ICommandHandler<ReplaceAgentDelegationsCommand, ReplaceAgentDelegationsResult>
 {
     public async ValueTask<ReplaceAgentDelegationsResult> Handle(ReplaceAgentDelegationsCommand command, CancellationToken cancellationToken)
     {
@@ -56,6 +60,6 @@ public sealed class ReplaceAgentDelegationsCommandHandler(AppDbContext dbContext
         var mcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
         var delegatesTo = await AgentDelegationLookup.GetDelegateTargetsAsync(dbContext, agent.Id, cancellationToken);
 
-        return ReplaceAgentDelegationsResult.Success(AgentResponse.FromEntity(agent, mcpServers, delegatesTo));
+        return ReplaceAgentDelegationsResult.Success(AgentResponse.FromEntity(agent, mcpServers, delegatesTo, AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id)));
     }
 }

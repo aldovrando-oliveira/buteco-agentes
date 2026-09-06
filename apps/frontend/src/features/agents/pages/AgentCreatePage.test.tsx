@@ -45,6 +45,7 @@ const createdAgent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  a2a: null,
 };
 
 const defaultProviders: ProviderCatalogEntry[] = [

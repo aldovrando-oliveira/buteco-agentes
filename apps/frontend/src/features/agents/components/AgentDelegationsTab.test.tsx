@@ -33,6 +33,7 @@ const agent: Agent = {
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
   delegatesTo: [],
+  a2a: null,
 };
 
 const delegateB: Agent = {
@@ -207,6 +208,7 @@ describe('AgentDelegationsTab', () => {
     vi.mocked(replaceAgentDelegations).mockResolvedValue({
       ...agent,
       delegatesTo: [{ id: delegateB.id, name: delegateB.name }],
+      a2a: null,
     });
     const user = userEvent.setup();
     const router = renderTab();

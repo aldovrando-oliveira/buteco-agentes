@@ -33,7 +33,11 @@ function renderPage() {
   );
 }
 
-async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>, username = 'operator', password = 'senha') {
+async function fillAndSubmit(
+  user: ReturnType<typeof userEvent.setup>,
+  username = 'operator',
+  password = 'senha',
+) {
   await user.type(screen.getByLabelText(/usuário/i), username);
   await user.type(screen.getByLabelText(/senha/i), password);
   await user.click(screen.getByRole('button', { name: /entrar/i }));
@@ -51,7 +55,10 @@ describe('LoginPage', () => {
   });
 
   it('em sucesso, armazena o token e redireciona para a área autenticada', async () => {
-    vi.mocked(login).mockResolvedValue({ token: 'token-emitido', expiresAt: '2026-08-22T12:30:00Z' });
+    vi.mocked(login).mockResolvedValue({
+      token: 'token-emitido',
+      expiresAt: '2026-08-22T12:30:00Z',
+    });
     const user = userEvent.setup();
     renderPage();
 

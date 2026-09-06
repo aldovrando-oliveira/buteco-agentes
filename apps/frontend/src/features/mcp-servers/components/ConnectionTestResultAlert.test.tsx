@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { theme } from '../../../theme';
-import {
-  ConnectionTestResultAlert,
-  type ConnectionTestResult,
-} from './ConnectionTestResultAlert';
+import { ConnectionTestResultAlert, type ConnectionTestResult } from './ConnectionTestResultAlert';
 
 function renderAlert(result: ConnectionTestResult | undefined) {
   return render(
