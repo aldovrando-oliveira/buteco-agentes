@@ -93,6 +93,15 @@ Testcontainers pressupõe socket do Docker. Sem Ryuk, os contêineres efêmeros 
 removidos ao fim da execução pelo próprio Testcontainers; se uma execução for
 interrompida, sobram contêineres a remover à mão com `podman ps -a`.
 
+As duas variáveis falham de formas diferentes, e a segunda engana mais. Sem
+`DOCKER_HOST` o erro é de conexão ao daemon. Sem `TESTCONTAINERS_RYUK_DISABLED`
+a conexão funciona e o Ryuk tenta bind-montar o socket do host dentro de um
+contêiner — o Podman no macOS responde `operation not supported`
+(`DockerApiException`, HTTP 500), e **toda** classe que usa Testcontainers
+reprova em ~1 s, o que parece falha de teste em massa. O sinal que distingue é a
+pilha terminar em `ResourceReaper.GetAndStartNewAsync` dentro do
+`InitializeAsync` da fixture: aí é infraestrutura, não código.
+
 ## Como subir as dependências (Postgres + RabbitMQ)
 
 ```bash

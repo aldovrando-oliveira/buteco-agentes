@@ -6,6 +6,9 @@ using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Auth;
 using Buteco.Api.Auth.Endpoints;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.KnowledgeBases.Endpoints;
+using Buteco.Api.KnowledgeDocuments.Endpoints;
+using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.McpServers.Connectivity;
 using Buteco.Api.McpServers.Endpoints;
 using Buteco.Api.McpServers.Security;
@@ -35,6 +38,13 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
 builder.Services.AddSingleton<ProviderCatalogService>();
 builder.Services.AddSingleton<IMcpCredentialCipher, AesGcmMcpCredentialCipher>();
+
+// Extratores de conteúdo por SourceType, via DI keyed — mesmo idioma dos
+// adapters de canal de apps/inbox. A completude do registro é garantida por
+// ValidateKnowledgeExtractorRegistrations logo abaixo, nos dois sentidos.
+builder.Services.AddKeyedSingleton<IKnowledgeSourceExtractor, MarkdownSourceExtractor>(KnowledgeSourceTypes.Markdown);
+builder.Services.AddScoped<KnowledgeContentProcessor>();
+builder.Services.ValidateKnowledgeExtractorRegistrations();
 builder.Services.AddHttpClient(McpConnectionTester.HttpClientName);
 builder.Services.AddSingleton<IMcpConnectionTester, McpConnectionTester>();
 builder.Services.AddSingleton<AgentA2AServerRegistry>();
@@ -79,6 +89,8 @@ app.MapProviderEndpoints();
 app.MapMcpServerEndpoints();
 app.MapAgentMcpBindingEndpoints();
 app.MapAgentDelegationEndpoints();
+app.MapKnowledgeBaseEndpoints();
+app.MapKnowledgeDocumentEndpoints();
 app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a");
 app.MapAgentCardEndpoint();
 

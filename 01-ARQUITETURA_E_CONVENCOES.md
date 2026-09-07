@@ -108,6 +108,86 @@ Os quatro enums de `Message` atravessam a API como **string**
 (`JsonStringEnumConverter` por enum, mesmo padrão de `McpServerAuthType`),
 nunca como inteiro ordinal.
 
+**`KnowledgeBase`** (`apps/api`): `Name`, `Description`, `IsActive`.
+`Description` **não é campo decorativo** — a partir da etapa de execução é o
+texto que vira a descrição da tool exposta ao modelo, e é por ele que o modelo
+decide se a base é relevante para a pergunta; por isso é obrigatória e não
+vazia, ao contrário de `McpServer.Description`. Segue o padrão da casa:
+`IsActive`, sem exclusão.
+
+**`KnowledgeDocument`** (`apps/api`): `KnowledgeBaseId`, `Title`, `SourceType`,
+`ExtractedText`, `ContentLengthBytes`, `IndexingStatus`, `IndexedAt` (nullable),
+`FailureReason` (nullable), `ContentRevision`. Quatro coisas que não se
+adivinham lendo os campos:
+
+- **`ContentLengthBytes` é coluna gerada pelo Postgres**
+  (`GENERATED ALWAYS AS (octet_length("ExtractedText")) STORED`), nunca escrita
+  pela aplicação — não existe caminho de escrita de conteúdo que a deixe
+  defasada. Está em **bytes UTF-8**, a mesma unidade do teto de 1 MiB validado
+  no cadastro, e mede a mesma string que a validação mede (o texto **já
+  extraído**: a extração remove BOM e normaliza `CRLF`, então validar a entrada
+  crua faria os dois números medirem coisas diferentes). Coluna gerada em vez de
+  projeção porque `string.Length` traduz para `length()`, que conta caracteres,
+  e o provider Npgsql não tem mapeamento LINQ para `octet_length`.
+- **`SourceType` é string aberta**, não enum fechado: identifica o extrator a
+  aplicar, resolvido via DI **keyed**, com checagem de integridade bidirecional
+  no startup — mesmo idioma de `Channel.ChannelType`. Extensão de arquivo e
+  `SourceType` são conceitos distintos (o cliente sugere `markdown` para
+  `.md`/`.markdown`/`.txt`; texto puro é markdown válido). A extração
+  **preserva a marcação**: é normalização, não conversão para texto puro, porque
+  a fragmentação da etapa de indexação divide por cabeçalho.
+- **`IndexingStatus` tem exatamente quatro valores** (`Pending`/`Indexing`/
+  `Indexed`/`Failed`) e **não** ganha um valor para reindexação: a distinção
+  entre "nunca indexado" e "há conteúdo indexado respondendo agora" é carregada
+  por `IndexedAt` (nulo × preenchido), em qualquer dos quatro estados. A regra
+  para a UI é uma só: informação derivada da indexação aparece sempre que
+  `IndexedAt` não for nulo, e é omitida quando for — nunca zerada, que afirmaria
+  que a indexação rodou e não achou nada.
+- **`ContentRevision` é coluna explícita, não `xmin`**, e incrementa **apenas**
+  quando `ExtractedText` muda. O consumidor de indexação muta a própria linha ao
+  transicionar de estado, e um token de linha invalidaria o próprio trabalho em
+  curso; esta coluna, que ele nunca escreve, permanece estável ao longo das
+  transições dele.
+
+Na etapa de catálogo, `Indexing`/`Indexed`/`Failed`, `IndexedAt` e
+`FailureReason` **nascem sem nenhum escritor** — não há fila nem consumidor, e
+todo documento criado ou atualizado permanece `Pending` indefinidamente. Isso é
+requisito declarado, não defeito: quem os escreve é o consumidor da etapa de
+indexação.
+
+**`KnowledgeDocument` é a única entidade do repositório com exclusão real**
+(`DELETE`, primeiro `MapDelete` da base). Ver "Exclusão: catálogo × conteúdo",
+abaixo.
+
+## Exclusão: catálogo × conteúdo
+
+O padrão da casa era, até aqui, **soft delete por `IsActive`** com o filtro
+aplicado no momento da resolução — e não havia nenhum `MapDelete` no
+repositório. Esse padrão não é uma regra sobre "tudo": ele se formou para
+**entidades de catálogo com vínculos apontando para elas**. Um `McpServer`
+desativado continua referenciado por `AgentMcpServer`, e o histórico de
+execuções que o usou precisa continuar fazendo sentido; apagá-lo quebraria
+leitura de passado.
+
+`KnowledgeDocument` é a primeira entidade que não se encaixa nisso: é
+**conteúdo**, nada aponta para ele além dos seus próprios fragmentos, e o caso
+de uso concreto — o operador subiu o arquivo errado, ou um com dado que não
+devia estar ali — é exatamente aquele em que "continua no banco, invisível" é a
+resposta errada. Some-se o custo medido: ~60 MB de vetores por 7.500 fragmentos.
+
+O critério, reutilizável para qualquer entidade futura, é esse: **catálogo
+referenciado → `IsActive`; conteúdo sem referência → exclusão real.** Duas
+consequências práticas registradas junto:
+
+- A FK de `KnowledgeDocument` para `KnowledgeBase` usa **`Restrict`**, não o
+  `Cascade` default do EF Core. Hoje é inerte (a base não tem exclusão); a
+  diferença é qual das duas falha de forma segura se alguém adicionar exclusão
+  de base um dia — `Restrict` obriga a decidir o destino dos documentos em vez
+  de os apagar em silêncio.
+- `DELETE` numa rota que não oferece o verbo responde **405**, não 404 — a
+  distinção entre "recurso inexistente" e "operação não oferecida" é
+  informação, e é ela que os testes afirmam.
+
 ## Autenticação
 
 **Token stateless assinado com HMAC**, sem biblioteca JWT e sem sessão em
@@ -319,14 +399,37 @@ de propor algo nesta base:
    feature que não `channels`.
 8. **Checagem de integridade no startup** é o padrão para todo registro
    que possa ficar incompleto em silêncio — não documentação em prosa. Já
-   aplicado a três casos de natureza diferente: DI keyed para pontos de
+   aplicado a quatro casos de natureza diferente: DI keyed para pontos de
    extensão tipo-plugin (contrato de canal), classificação de rotas
-   anônimas (autenticação), e configuração de fuso horário do sistema
+   anônimas (autenticação), configuração de fuso horário do sistema
    (`apps/workers` — valor resolvido vs. valor declarado em `TZ`, não só
-   presença da variável). A checagem vale nos **dois sentidos** quando
-   houver lista esperada e realidade mapeada: item declarado sem
-   contraparte real é tão problema quanto o inverso. DI keyed continua
-   sendo o padrão para pontos de extensão tipo-plugin.
+   presença da variável), e extratores de conteúdo por `SourceType`
+   (`apps/api`). A checagem vale nos **dois sentidos** quando houver lista
+   esperada e realidade mapeada: item declarado sem contraparte real é tão
+   problema quanto o inverso. DI keyed continua sendo o padrão para pontos
+   de extensão tipo-plugin.
+
+   **Existem duas formas do padrão, e a escolha entre elas tem
+   consequência de teste.** Três das quatro checagens rodam sobre o **host
+   construído** (`IHost`/`WebApplication`, depois do `Build()`) e derrubam
+   o boot de verdade. A quarta — e qualquer outra que inspecione
+   **descritores de DI keyed** — precisa rodar sobre a
+   `IServiceCollection`, **antes** do `Build()`, porque é ali que as
+   chaves registradas são enumeráveis; sobre o host seria preciso resolver
+   os serviços para descobri-las. `ValidateChannelAdapterRegistrations` já
+   tinha essa forma, sem que a distinção estivesse escrita.
+
+   O custo da forma `IServiceCollection` é que testar a checagem
+   diretamente verifica **a extensão**, não o caminho de boot: mover ou
+   remover a chamada do `Program.cs` deixa esses testes verdes e a
+   aplicação sobe com registro divergente. Quem usar essa forma paga um
+   teste a mais, que captura a `IServiceCollection` **real** pelo
+   `ConfigureServices` da `WebApplicationFactory` (que roda depois de
+   todos os registros do `Program.cs`) e afirma a coerência ali, sobre a
+   composição de produção. É barato — sem container, sub-segundo — e é o
+   único que pega o caso "chamada removida **e** registro divergente":
+   verificado reintroduzindo exatamente esse defeito, com os testes da
+   extensão ficando verdes e só esse reprovando.
 9. **Toda vez que a implementação diverge do `design.md` aprovado**
    (um achado técnico durante a implementação muda a decisão), o
    `design.md` é corrigido pra refletir a causa real — nunca fica só
@@ -418,3 +521,23 @@ de propor algo nesta base:
     que a própria identidade visual exige. Regra que o sistema já
     escreveu vence protótipo; a recusa vai para o `design.md` com o
     número que a sustenta.
+
+18. **Estimar tamanho de change por diffstat de commit anterior engana de
+    duas formas conhecidas**, e as duas foram medidas. Primeira: o headline de
+    um commit inclui os artefatos OpenSpec — `b5df504` tem 30 arquivos / 1593
+    linhas, mas 8 arquivos / 787 linhas são `openspec/`, então o código real
+    foram 21 / 592. Comparar trabalho de código contra esse número subestima
+    por construção. Segunda: cobertura de teste varia por uma ordem de
+    grandeza entre changes (`b5df504` tem 1 arquivo de teste;
+    `knowledge-base-catalogo-documentos` tem 11, com 42% de todo o trabalho
+    manual), e diffstat não distingue.
+
+    E a régua que mais corrige a intuição: **contagem de arquivo é dirigida
+    pelo número de operações CQRS, não por complexidade.** Numa change medida,
+    24 arquivos de comando/handler/result somaram 450 linhas — média de 19
+    linhas por arquivo. Uma etapa com muitas operações simples produz muitos
+    arquivos minúsculos; uma com poucas operações e lógica pesada produz
+    poucos arquivos longos. Projetar as duas com o mesmo fator é o erro.
+    Estimar por componente (custo por operação CQRS, por cenário de teste, por
+    grupo de endpoints), só sobre código, e citar a âncora **decomposta**, não
+    o headline dela.

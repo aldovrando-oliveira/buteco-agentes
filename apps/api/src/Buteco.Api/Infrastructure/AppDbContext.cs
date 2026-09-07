@@ -3,6 +3,8 @@ using Buteco.Api.A2A;
 using Buteco.Api.AgentDelegations.Entities;
 using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Entities;
+using Buteco.Api.KnowledgeBases.Entities;
+using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.McpServers.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -20,6 +22,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AgentMcpServer> AgentMcpServers => Set<AgentMcpServer>();
 
     public DbSet<AgentDelegation> AgentDelegations => Set<AgentDelegation>();
+
+    public DbSet<KnowledgeBase> KnowledgeBases => Set<KnowledgeBase>();
+
+    public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -122,6 +128,62 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(delegation => new { delegation.SourceAgentId, delegation.TargetAgentId });
             entity.HasOne<Agent>().WithMany().HasForeignKey(delegation => delegation.SourceAgentId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<Agent>().WithMany().HasForeignKey(delegation => delegation.TargetAgentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<KnowledgeBase>(entity =>
+        {
+            entity.ToTable("knowledge_bases");
+            entity.HasKey(knowledgeBase => knowledgeBase.Id);
+            entity.Property(knowledgeBase => knowledgeBase.Name).IsRequired();
+            entity.Property(knowledgeBase => knowledgeBase.Description).IsRequired();
+            entity.Property(knowledgeBase => knowledgeBase.IsActive).IsRequired().HasDefaultValue(true);
+            entity.Property(knowledgeBase => knowledgeBase.CreatedAt).IsRequired();
+            entity.Property(knowledgeBase => knowledgeBase.UpdatedAt).IsRequired();
+        });
+
+        modelBuilder.Entity<KnowledgeDocument>(entity =>
+        {
+            entity.ToTable("knowledge_documents");
+            entity.HasKey(document => document.Id);
+            entity.Property(document => document.Title).IsRequired();
+            entity.Property(document => document.SourceType).IsRequired();
+            entity.Property(document => document.ExtractedText).IsRequired();
+            entity.Property(document => document.IndexingStatus).IsRequired().HasConversion<string>();
+            entity.Property(document => document.IndexedAt).IsRequired(false);
+            entity.Property(document => document.FailureReason).IsRequired(false);
+            entity.Property(document => document.ContentRevision).IsRequired();
+            entity.Property(document => document.CreatedAt).IsRequired();
+            entity.Property(document => document.UpdatedAt).IsRequired();
+
+            // Coluna gerada pelo Postgres (design.md, D14):
+            // GENERATED ALWAYS AS (octet_length("ExtractedText")) STORED.
+            // A aplicação nunca a escreve — não há caminho de escrita de
+            // conteúdo que possa deixá-la defasada, e a garantia é do banco,
+            // não de disciplina. Verificado por spike: o EF gera o DDL
+            // nativamente (sem SQL cru na migration) e lê o valor de volta
+            // depois do INSERT e de cada UPDATE, sem Reload() explícito.
+            //
+            // Precisa ser octet_length e não length: length() conta
+            // caracteres, e o teto validado no cadastro é em bytes UTF-8 —
+            // expor uma unidade e validar outra divergiria de forma material
+            // em texto acentuado (D5). O provider não tem mapeamento LINQ
+            // para octet_length (confirmado por decompilação de
+            // NpgsqlStringMemberTranslator), o que descarta projetá-lo na
+            // consulta.
+            entity.Property(document => document.ContentLengthBytes)
+                .HasComputedColumnSql("octet_length(\"ExtractedText\")", stored: true);
+
+            entity.HasIndex(document => document.KnowledgeBaseId);
+
+            // Restrict, não o Cascade default do EF Core para FK obrigatória
+            // (design.md, D6). KnowledgeBase não tem rota de exclusão; aceitar
+            // Cascade por omissão deixaria a base pré-armada para o dia em que
+            // alguém adicionasse uma, com todos os documentos sumindo em
+            // silêncio. Restrict torna esse dia uma decisão explícita.
+            entity.HasOne<KnowledgeBase>()
+                .WithMany()
+                .HasForeignKey(document => document.KnowledgeBaseId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations.Entities;
 using Buteco.Workers.Agents.Entities;
+using Buteco.Workers.Knowledge.Entities;
 using Buteco.Workers.Mcp.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -27,6 +28,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AgentMcpServer> AgentMcpServers => Set<AgentMcpServer>();
 
     public DbSet<AgentDelegation> AgentDelegations => Set<AgentDelegation>();
+
+    public DbSet<KnowledgeBase> KnowledgeBases => Set<KnowledgeBase>();
+
+    public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -104,6 +109,46 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(delegation => new { delegation.SourceAgentId, delegation.TargetAgentId });
             entity.HasOne<Agent>().WithMany().HasForeignKey(delegation => delegation.SourceAgentId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<Agent>().WithMany().HasForeignKey(delegation => delegation.TargetAgentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<KnowledgeBase>(entity =>
+        {
+            entity.ToTable("knowledge_bases");
+            entity.HasKey(knowledgeBase => knowledgeBase.Id);
+            entity.Property(knowledgeBase => knowledgeBase.Name).IsRequired();
+            entity.Property(knowledgeBase => knowledgeBase.Description).IsRequired();
+            entity.Property(knowledgeBase => knowledgeBase.IsActive).IsRequired().HasDefaultValue(true);
+            entity.Property(knowledgeBase => knowledgeBase.CreatedAt).IsRequired();
+            entity.Property(knowledgeBase => knowledgeBase.UpdatedAt).IsRequired();
+        });
+
+        modelBuilder.Entity<KnowledgeDocument>(entity =>
+        {
+            entity.ToTable("knowledge_documents");
+            entity.HasKey(document => document.Id);
+            entity.Property(document => document.Title).IsRequired();
+            entity.Property(document => document.SourceType).IsRequired();
+            entity.Property(document => document.ExtractedText).IsRequired();
+            entity.Property(document => document.IndexingStatus).IsRequired().HasConversion<string>();
+            entity.Property(document => document.IndexedAt).IsRequired(false);
+            entity.Property(document => document.FailureReason).IsRequired(false);
+            entity.Property(document => document.ContentRevision).IsRequired();
+            entity.Property(document => document.CreatedAt).IsRequired();
+            entity.Property(document => document.UpdatedAt).IsRequired();
+
+            // Coluna gerada pelo Postgres — precisa ser declarada igual aqui,
+            // senão o modelo espelhado diverge do de apps/api e a migração
+            // equivalente sairia com uma coluna comum no lugar da gerada.
+            entity.Property(document => document.ContentLengthBytes)
+                .HasComputedColumnSql("octet_length(\"ExtractedText\")", stored: true);
+
+            entity.HasIndex(document => document.KnowledgeBaseId);
+
+            // Restrict, igual a apps/api (design.md, D6).
+            entity.HasOne<KnowledgeBase>()
+                .WithMany()
+                .HasForeignKey(document => document.KnowledgeBaseId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

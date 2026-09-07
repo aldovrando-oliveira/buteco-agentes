@@ -384,6 +384,13 @@ ambas explicadas abaixo, não celebradas sem entender a causa).
   falha nomeada
   (`AgentDeactivationTests.SendMessage_WithPushNotificationConfig_ForInactiveAgent_NeverPublishesJobOrCallsWebhook`).
   Pré-existente confirmado por nome, não por contagem.
+  **Causa confirmada em `knowledge-base-catalogo-documentos` (2026-09-07):**
+  não é flake de infraestrutura, é **dependência de ordem dentro da própria
+  classe** — `AgentDeactivationFixture.TaskJobPublisher` é instância única da
+  classe (`IClassFixture`) e `PublishedMessages` acumula; três testes fazem
+  `Assert.Empty` sobre ela e `SendMessage_AfterReactivation_PublishesNormally`
+  publica de verdade, então quem rodar depois dele reprova. Isolado, passa.
+  Carve próprio pendente — ver "Itens em aberto".
 - **`apps/inbox` (`Buteco.Inbox.Tests`)** — não-determinístico entre
   execuções: nesta coleta, a base teve 8 falhas nomeadas
   (`WebhookEndpointsTests` × 3, `MessagePersistenceTests` × 5, todas
@@ -1002,9 +1009,167 @@ risco de interface no mesmo diff.
   url pública, num ponto único que o card de descoberta também consome. Sem url
   pública configurada, os endereços vêm ausentes em vez de quebrados.
 
+### Bases de conhecimento (linha de trabalho em 5 etapas)
+
+`knowledge-base-catalogo-documentos` — **etapa 1 de 5**, aplicada em
+2026-09-07. Catálogo de bases e de documentos em `apps/api`, extração de
+markdown, espelho em `apps/workers`. Nada é indexado: documento nasce `Pending`
+e permanece `Pending`, porque não existe consumidor — requisito declarado, não
+defeito.
+
+Duas rodadas de exploração precederam a proposta e fecharam por **medição**, não
+por raciocínio: busca lexical pura (`tsvector`) reprovou com recall@5 de 47-52%
+em corpus real de 419 fragmentos mesmo com a query já reescrita como um modelo a
+emitiria, e `ts_rank_cd` não é comparável entre consultas — o score do topo de
+uma pergunta *sem resposta no corpus* ficou acima do de uma recuperação correta,
+então nenhum limiar separa acerto de ruído. Daí embedding vencer, indexação ser
+assíncrona, e `Pending` existir desde a etapa 1.
+
+O que entrou no `01-ARQUITETURA_E_CONVENCOES.md`: as duas entidades, a seção
+"Exclusão: catálogo × conteúdo" (o primeiro `MapDelete` do repositório, com o
+critério que o sustenta) e a segunda forma da convenção 8 (checagem sobre
+`IServiceCollection`, com o teste extra que ela obriga).
+
+#### Tamanho entregue e por que a projeção errou
+
+Projetado 30-40 arquivos / 1600-2200 linhas; entregue **62 arquivos / 2972
+linhas à mão** (mais 4 arquivos / 786 linhas de migração gerada). Decomposição
+real:
+
+| origem | arquivos | linhas |
+|---|---|---|
+| CQRS (12 comandos/queries: command + handler + result) | 24 | 450 |
+| Endpoints (2 grupos) | 2 | 303 |
+| Entidades de domínio | 3 | 222 |
+| Extração + checagem de startup | 6 | 221 |
+| Requests / Responses / Options | 8 | 124 |
+| Espelho `apps/workers` | 3 | 86 |
+| **Testes** (11 arquivos, 66 cenários) | 11 | 1265 |
+| Modificados (`AppDbContext` ×2, `Program.cs`, …) | 5 | 301 |
+| *(migrações geradas, não contam)* | *4* | *786* |
+
+**A projeção não errou por 55% — o método errou de duas formas independentes**,
+e por isso não existe "fator de correção" único:
+
+1. **A âncora misturava artefato de spec com código.** `b5df504` (catálogo +
+   vínculo de delegação) tem headline de 30 arquivos / 1593 linhas, mas **8
+   arquivos / 787 linhas são `openspec/`** — metade das linhas. O código real
+   foram 21 arquivos / 592 linhas. Comparar trabalho de código contra um número
+   que inclui proposal/design/tasks/specs subestima por construção.
+2. **A âncora tinha 1 arquivo de teste.** Esta change tem 11, com 1265 linhas —
+   **42% de todo o trabalho manual**. Cobertura de teste varia por uma ordem de
+   grandeza entre changes e não é capturada por diffstat de commit.
+
+Além disso, **contagem de arquivo é dirigida pelo número de operações CQRS, não
+por complexidade**: os 24 arquivos de CQRS somam 450 linhas — média de 19 linhas
+por arquivo. Uma etapa com muitas operações simples produz muitos arquivos
+minúsculos; uma etapa com poucas operações e lógica pesada produz poucos
+arquivos longos. Projetar as duas com o mesmo fator é o erro.
+
+Âncora certa para esta change era `da31b27` (catálogo + vínculo MCP), cujo
+**código** foi 66 arquivos / 2427 linhas — mesmo número de arquivos que
+entregamos, com menos linhas por causa de menos teste.
+
+#### Reprojeção das etapas seguintes (método corrigido)
+
+Projetado por componente, só **código** (artefatos OpenSpec fora da conta),
+usando os custos unitários medidos acima: ~2 arquivos e ~37 linhas por operação
+CQRS, ~19 linhas por cenário de teste, ~150 linhas por grupo de endpoints, ~200
+linhas de migração gerada por app.
+
+| etapa | drivers principais | arquivos | linhas |
+|---|---|---|---|
+| **2 — indexação** | 1 entidade nova, ~2 CQRS, chunker, resolver de embedding, fila + consumidor, checagem de startup bidirecional, `ContentHash`, contagem de fragmentos, ~45 cenários | **30-40** | **2400-3300** |
+| **3 — vínculo agente ↔ base** | 1 entidade de vínculo, ~2 CQRS (replace + list), 1 grupo de endpoints, espelho, ~20 cenários | **16-24** | **900-1400** |
+| **4 — resolvedor de tool** | 1 interface + 1 impl + registro + dedupe já resolvido em `0a`, ~25 cenários (inclui "não encontrei") | **14-20** | **1200-1800** |
+| **5a — UI catálogo + documentos** | 2 páginas, modal de duas abas com `FileReader`, orquestração de N chamadas, estado por linha, confirmação de exclusão, ~40 testes | **40-52** | **3000-4000** |
+| **5b — UI vínculo (quarta aba)** | 1 aba, 1-2 componentes, hooks, ~15 testes | **14-20** | **1000-1400** |
+| **5c — UI diagnóstico do índice** | 1 tela pequena, ~8 testes | **8-12** | **500-800** |
+
+Duas conclusões que mudam decisão, não só número:
+
+- **A etapa 2 continua cabendo numa change.** Ela tem menos operações CQRS que a
+  etapa 1 (poucos arquivos) e mais lógica (arquivos longos) — o oposto do perfil
+  desta etapa. A projeção antiga (40-55 / 2500-3500) estava mais certa por acaso
+  do que por método.
+- **A etapa 5a é a que não cabe.** A UI de catálogo MCP sozinha, sem upload
+  nenhum, foi 29 arquivos / 3088 linhas (`47c73a0`); a 5a acrescenta modal de
+  duas abas, leitura de arquivo no cliente, orquestração de N chamadas com
+  estado por item e confirmação de exclusão. **Recomendação: dividir a 5a em
+  duas changes** — "catálogo de bases" (lista, criação, edição, ativação) e
+  "gestão de documentos" (o modal, a listagem por documento, exclusão). A
+  fronteira é limpa: a segunda depende da primeira, e nenhuma das duas fica
+  pela metade.
+
+  **A ordem entre as duas é imposta, e a dependência é de navegação, não de
+  dado** (conferido no código, não suposto): as rotas de documento são
+  aninhadas em `/knowledge-bases/{knowledgeBaseId:guid}/documents`, e os
+  handlers só checam que a base **existe** — `KnowledgeDocumentResponse` não
+  carrega campo nenhum da base além de `KnowledgeBaseId`. Do lado da API as
+  duas superfícies são independentes. Do lado da tela não: para chegar à
+  listagem de documentos é preciso de um `knowledgeBaseId`, que vem da tela de
+  detalhe da base — entregue pela primeira. Então "gestão de documentos" vem
+  **depois** de "catálogo de bases", e a primeira precisa entregar a rota de
+  detalhe já navegável, com a área de documentos ausente (não um placeholder
+  vazio, que afirmaria que não há documentos — mesma regra da convenção 13 que
+  vale para a contagem de fragmentos).
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
+
+- **Migração de banco sai só de `apps/api`** — `apps/api` e `apps/workers`
+  compartilham o mesmo Postgres e têm migrações próprias que criam as
+  **mesmas** tabelas, com IDs diferentes e sem `MigrationsHistoryTable`
+  separada. As de `apps/workers` são ferramental de design-time: nada em
+  runtime as aplica (o único uso de `Database.` em `apps/workers/src` é o
+  lock consultivo de `ConversationContextLock`; não há `MigrateAsync`,
+  `GetPendingMigrations` nem `EnsureCreated`), e o `deploy/migrate/Dockerfile`
+  builda bundle só de `apps/api` e `apps/inbox`. Elas só rodam contra
+  Testcontainer descartável. **Nunca rodar `dotnet ef database update` a
+  partir de `apps/workers`**: verificado contra um Postgres limpo, `apps/api`
+  aplica com sucesso e `apps/workers` em seguida falha com
+  `42P07: relation "agents" already exists`; o `__EFMigrationsHistory` fica
+  com apenas os IDs de `apps/api`, porque a tentativa reverte inteira e não
+  deixa linha — a falha é ruidosa e não corrompe estado. Registro em vez de
+  checagem de startup porque não há checagem barata viável (nada em runtime
+  pergunta por migrações pendentes ali). Gatilho: qualquer mudança que toque
+  as migrações de `apps/workers`, ou um segundo app passar a compartilhar o
+  mesmo banco.
+- **`AgentDeactivationTests` depende da ordem de execução** — achado durante
+  `knowledge-base-catalogo-documentos`, pré-existente e não relacionado a ela.
+  `AgentDeactivationFixture.TaskJobPublisher` é uma instância única
+  compartilhada pela classe (`IClassFixture`) e `PublishedMessages` acumula;
+  três testes afirmam `Assert.Empty(...)` sobre ela, e
+  `SendMessage_AfterReactivation_PublishesNormally` publica de verdade. Quem
+  rodar depois dele falha. Isolado, cada teste passa. É guarda que aprova ou
+  reprova por sorte de ordenação, que é o defeito que a convenção 15 nomeia.
+  Gatilho: imediato — carve de defeito pré-existente, no mesmo idioma de
+  `inbox-enums-json-string` e dos dois encoders de codec. Correção provável:
+  limpar a coleção por teste, ou trocar `Assert.Empty` por contagem relativa.
+- **`.env` local com nomes obsoletos de provedor de LLM** — usa
+  `ChatClient__BaseUrl`/`ChatClient__ApiKey`/`ChatClient__Model`, mas
+  `ChatClientOptions.SectionName` é `"OpenAI"` e `Program.cs` de
+  `apps/workers` faz `GetSection("OpenAI")`. O `.env.example` (linhas 57-58) e
+  o `docker-compose.prod.yml` (80-81) já usam os nomes certos. As três
+  entradas do `.env` local não bindam em nada. Gatilho: imediato, change
+  própria pequena.
+- **Handoff de UI de bases de conhecimento (etapa 5a)** — três divergências
+  do protótipo, todas decididas e a corrigir na tela, não no backend
+  (convenção 17): (a) o rodapé do modal promete atomicidade ("2 documentos
+  serão criados") que o desenho de N chamadas independentes não sustenta;
+  (b) o contador do modal conta **caracteres** enquanto o teto validado é em
+  **bytes UTF-8** — o campo exposto é `contentLengthBytes`, e é ele que deve
+  ser comparado ao limite; (c) confirmação antes de excluir documento, que é
+  a contraparte de produto do risco R6 (a exclusão é real e irreversível, e
+  não tem contraparte técnica na etapa 1).
+- **Garantias de reindexação herdadas pela etapa 2** — substituição integral
+  (nunca diff de fragmento), fragmentos antigos sobrevivendo até a
+  reindexação terminar com sucesso, e falha preservando os antigos. Decididas
+  em `knowledge-base-catalogo-documentos` (`design.md`, D9) e deixadas **fora**
+  da spec daquela change de propósito, por não terem gatilho verificável lá.
+  Entram como ADDED requirements da etapa de indexação, com cenário real. A
+  etapa 2 não as redecide; se divergir, corrige D9 com a causa (convenção 9).
 
 - **Revogação antecipada de token** — token stateless não pode ser
   invalidado antes do TTL. Nem troca de senha do operador nem reinício do
@@ -1245,9 +1410,14 @@ Cada um tem gatilho de quando revisitar:
   startup resolveria de vez, ao custo de mudar o comportamento de inicialização
   de um sistema em uso. Registrado como candidata a change própria no
   `design.md` de `agente-enderecos-a2a`, não enfiado nela.
-- **`AgentDeactivationTests.SendMessage_WithPushNotificationConfig_ForInactiveAgent_NeverPublishesJobOrCallsWebhook`**
-  falha com o runtime de containers no ar, e falha igual sem as mudanças do
-  redesenho. Anterior a essa linha de trabalho e nunca investigada.
+- ~~**`AgentDeactivationTests.SendMessage_WithPushNotificationConfig_ForInactiveAgent_NeverPublishesJobOrCallsWebhook`**
+  ... nunca investigada~~ — **investigada em
+  `knowledge-base-catalogo-documentos` (2026-09-07); causa confirmada.** Não é
+  ruído de container: é dependência de ordem dentro da classe (fixture com
+  `FakeTaskJobPublisher` único e `PublishedMessages` acumulando, contra três
+  `Assert.Empty` e um teste que publica de verdade). Isolado, passa. Segue
+  aberto porque a **correção** é carve próprio, não porque falta diagnóstico —
+  ver "Itens em aberto".
 - **Formatação pendente em 18 arquivos do frontend**, todos já assim antes do
   redesenho. Deixados intactos de propósito em todos os commits, para não
   inchar diffs de mudança de comportamento. Duas vezes durante o redesenho um
@@ -1304,7 +1474,10 @@ correção proposta aqui, só o registro de que precisa de decisão**:
   consulta de candidatos, derrubando o processo via
   `BackgroundServiceExceptionBehavior.StopHost`.
 - `apps/api`: `AgentDeactivationTests.SendMessage_WithPushNotificationConfig_ForInactiveAgent_NeverPublishesJobOrCallsWebhook`
-  — falha nomeada consistente nas rodadas coletadas.
+  — falha nomeada consistente nas rodadas coletadas. **Causa confirmada
+  (2026-09-07): dependência de ordem dentro da classe, não infraestrutura.**
+  É o único item desta fila que já tem causa e ainda não tem correção; os
+  demais seguem sem diagnóstico.
 - ~~`tests/CrossAppTaskStoreCompatibility.Tests`~~ — **resolvido por
   `crossapp-session-codec-encoder`**, ver a subseção "Correção de
   encoder cross-app" acima. 2/2 verde.
