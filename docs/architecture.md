@@ -17,6 +17,7 @@ Para integrar um cliente externo via A2A, ver
 - [Isolamento entre apps](#isolamento-entre-apps)
 - [Modelo de domínio](#modelo-de-domínio)
 - [Regras de negócio transversais](#regras-de-negócio-transversais)
+- [Namespace de tools do agente](#namespace-de-tools-do-agente)
 - [Protocolo A2A](#protocolo-a2a)
 - [Contexto do agente](#contexto-do-agente)
 - [Contrato de plugin de canal](#contrato-de-plugin-de-canal)
@@ -287,6 +288,69 @@ edição vale o padrão "deixe em branco para manter a atual".
 A chave de `apps/inbox` é própria e nunca é a mesma de MCP — são segredos de
 domínios diferentes, cada um decifrável apenas pelo processo que o gerou. Ver
 [configuration.md](configuration.md).
+
+---
+
+## Namespace de tools do agente
+
+O conjunto de tools entregue ao LLM numa execução é a **união de dois
+conjuntos resolvidos separadamente**: as tools MCP (dos `McpServer`
+vinculados, filtradas por `AllowedTools`) e as tools de delegação (uma por
+`AgentDelegation`). Os dois dividem um único espaço de nome, e é `apps/workers`
+que garante a unicidade no ponto que os une — não cada resolvedor por si,
+porque nenhum dos dois sabe o que o outro produziu.
+
+```
+   tools MCP resolvidas          tools de delegação resolvidas
+   (McpServer + AllowedTools)    (uma por AgentDelegation)
+            │                                 │
+            └────────────┬────────────────────┘
+                         ▼
+              ToolNameDeduplicator          ← único ponto que sabe
+                         │                     que os conjuntos dividem
+                         ▼                     namespace
+            conjunto final entregue ao LLM
+```
+
+### Regras
+
+- **Colisão é resolvida renomeando, nunca descartando.** As duas tools
+  permanecem no conjunto e permanecem chamáveis de forma independente. Do
+  lado MCP a renomeação usa `WithName`, que troca só o nome exposto e mantém
+  a chamada remota usando o nome de protocolo original; do lado da delegação
+  a função é encapsulada, não reconstruída.
+- **Precedência declarada**: numa colisão entre os dois conjuntos, a tool MCP
+  mantém o nome pretendido e a de delegação é a renomeada. Dentro de um mesmo
+  conjunto, a primeira na ordem de resolução mantém o nome. Isso é propriedade
+  do deduplicador, não consequência da ordem de concatenação.
+- **Limite de 64 caracteres**, com o alfabeto `[a-zA-Z0-9_-]`. A garantia vale
+  **depois** do sufixo de dedupe: um sufixo aplicado a um nome já no limite
+  encurta a base para caber, nunca ultrapassa. A ordem de operações é fixa —
+  sanitizar, truncar, deduplicar.
+- **Comparação sensível a caixa** (`StringComparison.Ordinal`). `Search` e
+  `search` não colidem, porque é assim que o runtime que resolve a chamada
+  também compara.
+- **Conjunto estável entre execuções**: o mesmo cadastro produz sempre os
+  mesmos nomes, incluindo quais tools foram renomeadas e para quais nomes. A
+  consulta de `AgentMcpServer` é ordenada explicitamente por `McpServerId` —
+  por identificador e não por nome, porque o nome é editável e renomear um
+  servidor não deve reordenar o conjunto.
+- **Toda renomeação emite aviso no log**, com o agente, o nome pretendido, o
+  nome final e a origem de cada lado. É `Warning`, não `Error`: a execução
+  segue correta e completa.
+
+> **Por que a origem do limite importa.** Os 64 caracteres vêm de
+> `FunctionObject.name` na especificação OpenAPI do OpenAI, superfície **Chat
+> Completions** — a que `apps/workers` usa. O Gemini declara 128. O Anthropic
+> não publica o seu em nenhuma fonte primária, então o limite **não** é "o
+> mínimo entre os três provedores": está verificado contra dois. A restrição
+> de caractere inicial que o código aplica não vem de provedor nenhum — é
+> escolha do repositório, mantida para não alterar nomes já expostos.
+
+O caminho de colisão realmente alcançável é **intra-MCP**, não MCP contra
+delegação: dois `McpServer.Name` que diferem só em pontuação sanitizam para a
+mesma cadeia (`Zendesk MCP` e `Zendesk.MCP`), e dois nomes longos com o mesmo
+prefixo de 64 colidem na truncagem.
 
 ---
 

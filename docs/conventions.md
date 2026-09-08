@@ -259,9 +259,44 @@ teste.
 Escreva o teste, **reintroduza o defeito de propósito**, veja reprovar, e só
 então mantenha a correção.
 
-Guardas desta base já passaram verde **com o defeito presente** antes de
+Quatro guardas desta base passaram verde **com o defeito presente** antes de
 serem consertados. Guarda não verificado é pior que nenhum, porque dá
 impressão de cobertura sem ter.
+
+**O erro tem uma segunda forma, que só aparece na implementação: o guarda no
+lugar errado.** Um teste pode reprovar antes **e depois** da correção — e
+passar a impressão de estar funcionando, porque a primeira metade da
+verificação deu certo — quando ele afirma a garantia no componente errado.
+Já aconteceu com três guardas que afirmavam unicidade dentro de cada
+resolvedor de tools, enquanto a correção era global, no ponto que une os dois
+conjuntos.
+
+Ao escrever o guarda, cheque não só que ele reprova, mas que ele reprova **no
+componente que a correção vai tocar**.
+
+### "Pré-existente" e "ambiental" exigem a baseline
+
+Antes de classificar uma falha de teste como pré-existente ou ambiental,
+**rode a suíte contra a baseline num `git worktree` limpo**. É barato, não
+mexe na sua árvore de trabalho, e é a única coisa que separa "já estava
+assim" de "eu quebrei".
+
+Três vezes nesta base uma falha foi classificada como pré-existente ou
+ambiental e a classificação estava errada, cada vez por um motivo diferente:
+um `TimeoutException` lido como latência do Podman quando era o próprio
+timeout do teste cortando a espera; um `ObjectDisposedException` lido como
+corrida de disposal quando o mecanismo real era outro; e uma suíte reprovando
+em bloco lida como limite de contenção de containers quando a classe
+responsável era da própria mudança.
+
+**E a metade que a baseline não resolve:** uma baseline que *também* falha
+remove a hipótese de regressão, e **só** ela. Não promove o sintoma a
+"ambiental" nem dispensa achar a causa. Esse foi exatamente o erro de uma das
+três leituras acima — o bisect comparou base e HEAD, viu falha idêntica, e
+registrou "causa ambiental confirmada", quando a causa real só apareceu
+depois.
+
+> Baseline verde acusa regressão; baseline vermelha não absolve ninguém.
 
 ### Todo risco nomeado tem contraparte verificável
 
@@ -269,6 +304,42 @@ Um risco listado na seção de Risks de um `design.md` precisa de cenário na
 spec e teste, ou de justificativa explícita de por que não é testável. Risco
 listado e não coberto é o padrão de falha mais caro desta base, porque parece
 cuidado sem ser.
+
+---
+
+## Estimativa de tamanho de mudança
+
+**Estimar por diffstat de um commit anterior engana de duas formas conhecidas**,
+e as duas foram medidas nesta base:
+
+1. **O headline de um commit inclui os artefatos OpenSpec.** Um commit de
+   referência com 30 arquivos e 1593 linhas tinha 8 arquivos e 787 linhas em
+   `openspec/` — metade das linhas. O código real foram 21 arquivos e 592
+   linhas. Comparar trabalho de código contra o headline subestima por
+   construção.
+2. **Cobertura de teste varia por uma ordem de grandeza entre mudanças**, e o
+   diffstat não distingue. Uma âncora tinha 1 arquivo de teste; a mudança
+   estimada contra ela teve 11, com 42% de todo o trabalho manual.
+
+**A régua que mais corrige a intuição: contagem de arquivo é dirigida pelo
+número de operações CQRS, não por complexidade.** Numa mudança medida, 24
+arquivos de comando/handler/result somaram 450 linhas — média de 19 linhas por
+arquivo. Uma etapa com muitas operações simples produz muitos arquivos
+minúsculos; uma com poucas operações e lógica pesada produz poucos arquivos
+longos. Projetar as duas com o mesmo fator é o erro.
+
+Na prática: estime **por componente** (custo por operação CQRS, por cenário de
+teste, por grupo de endpoints), só sobre **código**, e cite a âncora
+**decomposta**, nunca o headline dela.
+
+**E projete só depois que a verificação fechar.** Uma projeção por componente
+feita antes do fim da verificação erra para baixo por construção — os
+componentes que a verificação ainda vai descobrir não estão nela para serem
+contados. Medido: uma projeção subiu ~15% entre a primeira redação do
+`design.md` e a revisão, sem nenhuma mudança de escopo, porque três itens só
+existiram depois de decompilar um SDK e consultar o banco. O número não é um
+fator a somar em projeções futuras; a lição é o **momento** de contar.
+Projeção feita durante a verificação é rascunho, não estimativa.
 
 ---
 

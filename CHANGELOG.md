@@ -174,6 +174,22 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Colisão silenciosa de nome de tool no conjunto entregue ao LLM**: as tools
+  MCP e as de delegação eram concatenadas sem que nenhum dos dois lados
+  soubesse que dividia espaço de nome com o outro, e o lado MCP não
+  deduplicava nem contra si mesmo. Quando dois nomes coincidiam, o primeiro
+  vencia sem erro e sem log — o operador cadastrava uma tool e o agente
+  chamava outra, sem rastro. O caminho alcançável era entre servidores MCP:
+  dois nomes que diferem só em pontuação sanitizam para a mesma cadeia, e dois
+  nomes longos com o mesmo prefixo colidem na truncagem de 64 caracteres.
+  Colisões passam a ser resolvidas renomeando (nunca descartando), com
+  precedência declarada, aviso no log e conjunto de nomes estável entre
+  execuções.
+- **Sufixo de dedupe ultrapassando o limite de 64 caracteres** na resolução de
+  tools de delegação, quando a base já estava no limite.
+- **Ordem não determinística na resolução de tools MCP**: a consulta de
+  vínculos não tinha ordenação, então a ordem vinha do plano do Postgres e com
+  ela mudava qual tool ganhava o nome-base num desempate.
 - **Perda silenciosa de dados na edição de agente pelo painel**: o `PUT` era
   enviado sem `description` e `skills`, e o endpoint trata ausência como
   "limpar", de modo que toda edição pelo painel apagava o que havia sido
@@ -202,4 +218,4 @@ o versionamento pretende seguir
   pontos do painel — fundo da página, faixa de cabeçalho e linha selecionada
   — por usar valor que não troca de ponta da escala entre temas.
 
-[Unreleased]: https://github.com/OWNER/buteco-agents/commits/main
+[Unreleased]: https://github.com/aldovrando-oliveira/buteco-agentes/commits/main
