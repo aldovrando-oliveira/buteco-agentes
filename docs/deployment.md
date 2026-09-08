@@ -2,7 +2,12 @@
 
 Este documento cobre como subir e atualizar `docker-compose.prod.yml`
 numa VM na cloud. Para o desenho e as decisões por trás disso, ver
-`openspec/changes/containerizacao-stack-servidor/design.md`.
+[`openspec/changes/archive/2026-08-26-containerizacao-stack-servidor/design.md`](../openspec/changes/archive/2026-08-26-containerizacao-stack-servidor/design.md).
+
+Documentos relacionados: [development.md](development.md) para construir as
+imagens (o build context é sempre a raiz do monorepo) e
+[configuration.md](configuration.md) para o inventário completo de variáveis
+de ambiente.
 
 > **Testando localmente com o compose de dev também rodando?** O nome de
 > projeto do compose (Docker/Podman) é derivado do nome do diretório por
@@ -29,9 +34,10 @@ numa VM na cloud. Para o desenho e as decisões por trás disso, ver
 
 ## 1. Primeiro deploy (VM do zero)
 
-1. Copie `.env.prod.example` para `.env.prod` na VM e preencha todos os
-   valores `changeme` (ver seção "Variáveis por processo" abaixo). Nunca
-   versionar `.env.prod`.
+1. Copie [`.env.prod.example`](../.env.prod.example) para `.env.prod` na VM e
+   preencha todos os valores `changeme` (ver seção "Variáveis por processo"
+   abaixo e [configuration.md](configuration.md)). Nunca versionar
+   `.env.prod`.
 2. `docker compose -f docker-compose.prod.yml up -d`
    - `postgres`/`rabbitmq` sobem primeiro (healthcheck).
    - `migrator` roda depois de `postgres` saudável, aplica as migrations
@@ -132,6 +138,7 @@ de falha de entrega de push notification atribuível a esse ir-e-volta.
 - **WAHA no compose** — instância externa já existente, tratada como
   dependência, não como serviço deste stack.
 - **Correção do setup desprotegido de `TaskJobConsumer`** (RabbitMQ) —
-  item em aberto já registrado em `02-HISTORICO_E_STATUS.md`; deve virar
+  item em aberto já registrado em
+  [`02-HISTORICO_E_STATUS.md`](../02-HISTORICO_E_STATUS.md); deve virar
   change própria sequenciada antes desta. Esta change assume que ela já
   rodou.

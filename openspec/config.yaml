@@ -4,23 +4,34 @@ schema: spec-driven
 
 context: |
   Plataforma de gestão de agentes de IA.
-  Monorepo com isolamento estrito entre apps: apps/api, apps/workers e apps/frontend
-  nunca referenciam código interno umas das outras. Compartilhamento real só via
-  libs/ explícita, pequena e versionada — nunca por padrão.
-  Backend: .NET 10. apps/api = ASP.NET Core (endpoints A2A via A2A/A2A.AspNetCore
-  — o pacote de conveniência Microsoft.Agents.AI.Hosting.A2A.AspNetCore registra um
-  único A2AServer por app via DI no startup, incompatível com agentes criados em
-  runtime, então apps/api compõe A2AServer diretamente; ver
-  openspec/changes/backend-agente-a2a-mvp/design.md — e webhooks dos canais).
+  Monorepo com isolamento estrito entre QUATRO apps: apps/api, apps/workers,
+  apps/inbox e apps/frontend nunca referenciam código interno umas das outras.
+  Compartilhamento real só via libs/ explícita, pequena e versionada — nunca por
+  padrão. Referência entre domínios de apps diferentes é sempre validada via HTTP
+  autenticado, nunca por FK.
+  Backend: .NET 10. apps/api = ASP.NET Core Minimal API (endpoints A2A via
+  A2A/A2A.AspNetCore — o pacote de conveniência
+  Microsoft.Agents.AI.Hosting.A2A.AspNetCore registra um único A2AServer por app
+  via DI no startup, incompatível com agentes criados em runtime, então apps/api
+  compõe A2AServer diretamente; ver
+  openspec/changes/archive/2026-07-26-backend-agente-a2a-mvp/design.md).
   apps/workers = Worker Service (executa os agentes via Microsoft Agent Framework,
-  chamando MCP e o LLM). RabbitMQ é o broker entre api e
-  workers. PostgreSQL com EF Core para o catálogo (agentes, servidores MCP, bindings,
-  inboxes) e para o store durável de tasks/eventos do protocolo A2A
-  (https://a2a-protocol.org/latest/) — nada de store em memória em produção.
+  chamando MCP e o LLM). apps/inbox = ASP.NET Core Minimal API, banco PRÓPRIO
+  (buteco_inbox), isolado: catálogo de canais, CRM de Contact/Session, histórico
+  de mensagens, orquestrador de debounce e adapters de canal. RabbitMQ é o broker
+  entre api e workers. PostgreSQL com EF Core para o catálogo (agentes, servidores
+  MCP, bindings, bases de conhecimento) e para o store durável de tasks/eventos do
+  protocolo A2A (https://a2a-protocol.org/latest/) — nada de store em memória em
+  produção.
   Frontend: apps/frontend = React + TypeScript + Vite + Mantine, seguindo o padrão
   visual e de composição de https://ui.mantine.dev.
-  Canais de entrada (inboxes) suportados hoje: ChatWoot e Waha, via adapters,
-  com mais canais a serem adicionados no futuro.
+  Adapters de canal implementados hoje: WAHA (WhatsApp HTTP API) e Telegram, sob
+  o contrato de plugin de apps/inbox (três contratos obrigatórios por ChannelType
+  mais um opcional de provisionamento de webhook), com mais canais a serem
+  adicionados no futuro.
+  Documentação: README.md e arquivos de vitrine/legal em inglês; docs/,
+  CONTRIBUTING.md e CHANGELOG.md em pt-BR. Ver docs/conventions.md. Link para
+  mudança arquivada usa sempre openspec/changes/archive/AAAA-MM-DD-<nome>/.
 
 
 rules:
