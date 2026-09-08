@@ -40,20 +40,19 @@ public sealed class AgentDelegationToolSetResolver(
             select new { delegation.TargetAgentId, TargetName = target.Name }
         ).ToListAsync(cancellationToken);
 
+        // Sem dedupe local: quem garante unicidade é ToolNameDeduplicator, no
+        // ponto que une este conjunto ao das tools MCP (design.md da change
+        // dedupe-global-nome-de-tool, Decisão 3). Manter os dois seria dois
+        // mecanismos para a mesma invariante — e o local era o que tinha o
+        // defeito de estourar os 64 ao concatenar o sufixo sem re-truncar.
+        // O `orderby delegation.TargetAgentId` acima é o que dá determinismo a
+        // este lado, e continua sendo necessário: é dele que sai a ordem em que
+        // o deduplicador desempata.
         var tools = new List<AITool>(delegations.Count);
-        var usedToolNames = new HashSet<string>();
 
         foreach (var delegation in delegations)
         {
-            var baseName = ToolNameSanitizer.Sanitize($"{ToolNamePrefix}{DelegationToolNameSlugifier.Slugify(delegation.TargetName)}");
-            var toolName = baseName;
-            var suffix = 2;
-            while (!usedToolNames.Add(toolName))
-            {
-                toolName = $"{baseName}-{suffix}";
-                suffix++;
-            }
-
+            var toolName = ToolNameSanitizer.Sanitize($"{ToolNamePrefix}{DelegationToolNameSlugifier.Slugify(delegation.TargetName)}");
             tools.Add(BuildDelegationTool(toolName, delegation.TargetAgentId, delegation.TargetName, sourceAgent.Id, contextId, currentDepth, messageInstant));
         }
 

@@ -23,6 +23,21 @@ risco opostos), `inbox-instante-mensagem` (instante da mensagem) e
 "Changes aplicadas" abaixo para o que entrou em cada uma e "Próximo passo"
 para o que vem a seguir.
 
+`dedupe-global-nome-de-tool` está **aplicada** — carve de defeito pré-existente
+de MCP + delegação (nome de tool sombreado em silêncio no conjunto entregue ao
+LLM), sequenciada antes da etapa 4 de bases de conhecimento pela convenção 12.
+Suíte de `apps/workers` em 168/168; censo de colisão em todos os agentes reais do
+sistema deu zero. Duas perguntas ficaram em aberto **com gatilho, sem bloquear**:
+o comportamento dos provedores diante de histórico citando função ausente da lista
+(R7) e o limite de nome de função do Anthropic (R8) — as duas dependem da mesma
+chave de API que `0b` espera. Ver "Itens em aberto".
+
+**Não existe ambiente de produção**: tudo está em desenvolvimento. Isso não é
+pendência, é o estado do projeto, e é o que permite fechar verificações como o
+censo de colisão contra dev sem ressalva — dev é onde estão os agentes reais. O
+que só faz sentido contra dados de produção está agrupado na subseção
+"Primeiro deploy em produção (checklist)".
+
 `inbox-session-indice-unico` fechou o último item da dívida de baseline
 com causa de produção conhecida (`ContactSessionResolver` sem índice
 único protegendo `Session` contra concorrência) — sequenciada antes da
@@ -96,6 +111,50 @@ Vínculo unidirecional Source→Target, execução real (um agente chama
 outro como tool interna, mesmo banco, sem HTTP externo — decisão
 consciente, diferente de um cliente A2A externo de verdade), controle de
 profundidade, UI inline no detalhe do agente.
+
+### Espaço de nome de tool (MCP + delegação)
+`dedupe-global-nome-de-tool`
+
+Carve de defeito pré-existente das duas linhas acima, sequenciada antes da etapa
+4 de bases de conhecimento pelo precedente de `inbox-enums-json-string`,
+`crossapp-session-codec-encoder` e `push-notification-config-codec-encoder`
+(convenção 12: defeito pertence a quem expõe, e se corrige lá, em change própria
+sequenciada antes).
+
+**O defeito.** O conjunto final de tools era `toolSet.Tools.Concat(delegationTools)`
+e nenhum dos dois lados sabia que dividia espaço de nome — o lado MCP não
+deduplicava nem contra si mesmo. `FunctionInvokingChatClient.FindTool` resolve
+pelo primeiro match ordinal e sombreia o resto **em silêncio**, enquanto as duas
+declarações vão no payload para o provedor com o mesmo nome. O caminho alcançável
+não era MCP × delegação (impossível pela composição normal: o slug de delegação
+nunca contém `__` e o nome MCP sempre contém): era **intra-MCP**, com dois
+`McpServer.Name` que só diferem em caractere fora de `[a-zA-Z0-9_-]`
+(`"Zendesk MCP"` / `"Zendesk.MCP"` → mesma cadeia), ou dois nomes longos
+compartilhando o prefixo de 64 depois da truncagem.
+
+**A correção.** `ToolNameDeduplicator` no ponto de concatenação — o único que sabe
+que os conjuntos dividem namespace. Renomeia em vez de descartar (verificado:
+`McpClientTool.WithName` preserva `ProtocolTool.Name` e a chamada remota, e
+`DelegatingAIFunction` encapsula a função de delegação sem precisar do delegate
+capturado no closure). Sufixo numérico global no idioma que a delegação já usava,
+agora com a base encurtando para caber nos 64. Precedência declarada (MCP mantém o
+nome, delegação é a renomeada) em vez de herdada da ordem de dois operandos.
+`orderby` explícito por `McpServerId` na consulta de MCP, que não tinha nenhum.
+Aviso em `LogWarning` a cada renomeação, com agente, os dois nomes e as duas
+origens.
+
+**Defeitos corrigidos de passagem:** o dedupe local da delegação fazia
+`$"{baseName}-{suffix}"` sem re-truncar, produzindo 66 caracteres quando a base já
+estava nos 64; e `ToolNameSanitizer` — compartilhado pelos dois resolvedores e
+sítio da truncagem — não tinha arquivo de teste.
+
+**Fonte do limite de 64, verificada.** `FunctionObject.name` da especificação
+OpenAPI publicada pelo OpenAI, superfície **Chat Completions** (a que
+`ChatClientResolver.BuildOpenAi` usa). A Responses API do mesmo provedor permite
+128; o Gemini declara 128; o Anthropic não publica o seu. Ver os itens em aberto.
+
+Suíte de `apps/workers`: **168/168**. Censo de colisão em todos os agentes reais
+do sistema: **zero**.
 
 ### Protocolo A2A — descoberta e notificação
 `backend-agente-description-skills` → `backend-a2a-agent-card` →
@@ -1081,10 +1140,22 @@ linhas de migração gerada por app.
 |---|---|---|---|
 | **2 — indexação** | 1 entidade nova, ~2 CQRS, chunker, resolver de embedding, fila + consumidor, checagem de startup bidirecional, `ContentHash`, contagem de fragmentos, ~45 cenários | **30-40** | **2400-3300** |
 | **3 — vínculo agente ↔ base** | 1 entidade de vínculo, ~2 CQRS (replace + list), 1 grupo de endpoints, espelho, ~20 cenários | **16-24** | **900-1400** |
-| **4 — resolvedor de tool** | 1 interface + 1 impl + registro + dedupe já resolvido em `0a`, ~25 cenários (inclui "não encontrei") | **14-20** | **1200-1800** |
+| **4 — resolvedor de tool** | 1 interface + 1 impl + registro + dedupe já resolvido em `0a`, ~25 cenários (inclui "não encontrei"), **+ repetição do censo de inventário** | **14-20** | **1200-1800** |
 | **5a — UI catálogo + documentos** | 2 páginas, modal de duas abas com `FileReader`, orquestração de N chamadas, estado por linha, confirmação de exclusão, ~40 testes | **40-52** | **3000-4000** |
 | **5b — UI vínculo (quarta aba)** | 1 aba, 1-2 componentes, hooks, ~15 testes | **14-20** | **1000-1400** |
 | **5c — UI diagnóstico do índice** | 1 tela pequena, ~8 testes | **8-12** | **500-800** |
+
+**Tarefa prevista da etapa 4, herdada de `0a`
+(`dedupe-global-nome-de-tool`):** rodar de novo o censo de inventário de nomes de
+tool — a consulta de V8 do `design.md` daquela change —, **estendida às tools de
+conhecimento**. Não é para validar o dedupe: ele já está validado pelos guardas
+que reprovaram antes e passaram depois, e a etapa 4 não introduz colisão por si só
+(só um terceiro conjunto no mesmo namespace; colisão depende de cadastro). É para
+ter o inventário, e há chance real de colisão nova ali pelo padrão que o censo já
+encontrou: o servidor MCP chamado *"Informações Gerais"* produz
+`Informa__es_Gerais__get_menu_info`, onde o `__` **não é o separador** — `ç` e `õ`
+viram um `_` cada. Uma base de conhecimento com nome equivalente cai no mesmo
+padrão, e o `__` deixa de distinguir os conjuntos.
 
 Duas conclusões que mudam decisão, não só número:
 
@@ -1350,7 +1421,9 @@ Cada um tem gatilho de quando revisitar:
   (que resolve o efeito, `DebounceSweepService` não derruba mais o host),
   este item deixa de ser urgente, mas continua correto de qualquer forma.
   Gatilho: antes ou junto da próxima change que toque
-  `apps/inbox/tests`.
+  `apps/inbox/tests`. **Mesma família que o item `WorkerHostCollection` de
+  `dedupe-global-nome-de-tool`** (abaixo): fixture de teste construindo host mais
+  cedo, ou mais vezes, do que devia. Os dois provavelmente são uma change só.
 - **`TaskJobConsumer` (`apps/workers`) com setup inicial desprotegido**
   (achado por `inbox-sweep-service-resiliencia`, design.md, Decisão 4) —
   a sequência de `CreateConnectionAsync`/`CreateChannelAsync`/
@@ -1402,6 +1475,30 @@ Cada um tem gatilho de quando revisitar:
   coloque texto não controlado pelo sistema em um bloco de contexto
   delimitado por esse marcador (ou por um análogo).
 
+### Primeiro deploy em produção (checklist)
+
+**Não existe ambiente de produção hoje** — o projeto está todo em
+desenvolvimento. Duas verificações da lista acima não são pendências: são coisas
+que só fazem sentido contra dados de produção e que, por isso, ficam agrupadas
+aqui em vez de espalhadas. Quem fizer o primeiro deploy vai querer ler as duas
+juntas.
+
+1. **Aplicar a migration `AddUniqueOpenSessionIndex`** (`inbox-session-indice-unico`),
+   com a query de diagnóstico antes de aplicar e o saneamento retroativo que a
+   migration já embute. Detalhes completos no item
+   "Aplicação em produção da migration `AddUniqueOpenSessionIndex`" acima —
+   incluindo a referência de dev (1 contato com 2 sessões abertas, fronteira de
+   inatividade legítima) e o que esperar do resultado.
+2. **Rodar o censo de colisão de nome de tool** (`dedupe-global-nome-de-tool`,
+   `design.md`, V8 — o SQL está lá). Em dev, com todos os agentes reais do
+   sistema, o resultado foi **zero colisões**: 12 nomes, todos distintos, o mais
+   longo com 41 caracteres. Em produção o cadastro será outro. Se o censo achar
+   colisão, **o dedupe já corrige** — as tools deixam de se sombrear —, mas o
+   histórico de conversa daquele `contextId` passa a citar um nome que não existe
+   mais na lista, que é o item de R7 registrado abaixo. Rodar **antes** do
+   primeiro deploy, para saber se R7 tem alvo desde o dia zero em vez de
+   descobrir pelo log.
+
 ### Abertos pelo redesenho do painel
 
 - **Validar a url pública no startup.** Sem ela configurada, o card de
@@ -1425,9 +1522,166 @@ Cada um tem gatilho de quando revisitar:
 - **Densidade compacta/confortável e card "Primeiros passos"** do protótipo
   seguem adiados por decisão de 2026-09-05, nunca propostos.
 
+### Achados de `dedupe-global-nome-de-tool` (2026-09-08)
+
+- **Quarto caso de guarda verde com o defeito presente (convenção 15).** O
+  requisito "Distinção de tools com nomes iguais entre servidores diferentes"
+  (`mcp-tool-execution`) promete que uma tool não oculte a outra, mas o cenário
+  que o guardava usava dois servidores de nomes **diferentes** (`"Servidor A"` /
+  `"Servidor B"`). `ToolNameSanitizer` mapeia todo caractere fora de
+  `[a-zA-Z0-9_-]` para `_`, então `"Zendesk MCP"` e `"Zendesk.MCP"` produzem o
+  mesmo nome — requisito violado, guarda verde. Contador da convenção 15 subiu
+  de três para quatro.
+- **Segunda forma do mesmo erro (convenção 15): guarda no lugar errado.** Três guardas
+  desta change reprovaram contra o defeito **e continuaram reprovando depois da
+  correção**, porque afirmavam unicidade dentro de cada resolvedor enquanto a
+  correção é global no ponto de concatenação. Reprovar antes não basta: tem de
+  reprovar no componente que a correção vai tocar. Registrado na convenção 15.
+- **A leitura "pré-existente/ambiental" errou pela terceira vez, e agora virou
+  convenção 19.** `TaskJobConsumerTests` reprovando em bloco foi lido como
+  "limite pré-existente de contenção de containers" — desmentido por baseline em
+  `git worktree` limpo de `6956d79`, que passa 132/132 em paralelo: a 13ª classe
+  de host era da própria change. Somado ao `TimeoutException` do
+  `InboxOrchestratorRoundTrip` lido como latência do podman e à
+  `ObjectDisposedException` de `apps/inbox` lida como corrida de disposal do
+  xUnit, são três instâncias medidas — bar suficiente para virar regra
+  (convenção 19 no `01-ARQUITETURA_E_CONVENCOES.md`).
+  **A convenção carrega as duas metades, porque uma delas veio do próprio
+  histórico:** rodar a baseline antes de classificar, **e** não tratar baseline
+  vermelha como prova de "ambiental". Foi exatamente isso que a segunda leitura do
+  `TimeoutException` (`inbox-instante-mensagem`) fez — bisect em worktree, falha
+  idêntica nos dois lados, "causa ambiental confirmada por evidência direta" — e a
+  causa real só apareceu na terceira leitura. Baseline verde acusa regressão;
+  baseline vermelha não absolve ninguém.
+- **`ToolNameSanitizer` não tinha arquivo de teste** apesar de ser compartilhado
+  pelos dois resolvedores e ser o sítio da truncagem em 64. O primeiro teste dele
+  pegou uma expectativa errada minha na primeira redação (`Sanitize(" tool")` dá
+  `_tool`, não `__tool` — a substituição de caracteres roda antes da checagem de
+  inicial).
+- **O limite de 64 tinha número certo e fonte errada.** Verificado agora em fonte
+  primária: `FunctionObject.name` da especificação OpenAPI publicada pelo OpenAI,
+  superfície **Chat Completions** (a que `ChatClientResolver.BuildOpenAi` usa).
+  A Responses API do mesmo provedor permite 128; o Gemini declara 128; e o
+  **Anthropic não publica o seu** — nem nos docs de tool use nem no `ToolParam`
+  do SDK. O argumento "mínimo entre os três" está verificado em dois.
+- **Defeito de estouro corrigido de passagem:** o dedupe local de
+  `AgentDelegationToolSetResolver` fazia `$"{baseName}-{suffix}"` sem
+  re-truncar, produzindo 66 caracteres quando a base já estava nos 64.
+
+#### Tamanho entregue vs. projeção por componente (convenção 18)
+
+Diffstat **decomposto**, que é a forma que a convenção 18 exige — o headline
+(33 arquivos / +2930) misturaria as três categorias e não serviria de âncora
+para nada:
+
+| categoria | projetado | entregue | erro |
+|---|---|---|---|
+| produção (`apps/workers/src`) | 6 arq. / ~137 | **8 arq. / +285 −24** | +33% arq., +108% linhas |
+| teste | 5 arq. / ~600 | **16 arq. / +993 −3** | +220% arq., +65% linhas |
+| **subtotal código** | **11 / ~737** | **24 / +1278 −27** | **+118% arq., +73% linhas** |
+| artefatos OpenSpec | 6 / ~600 | 7 / +1573 | +162% linhas |
+| docs de raiz | não projetado | 2 / +79 −2 | — |
+
+Três causas, todas identificáveis e nenhuma delas "complexidade a mais":
+
+1. **A contagem de arquivos de teste errou por 3x, e por um motivo mecânico que
+   a projeção não tinha como ver:** injetar uma dependência nova em
+   `AgentExecutionService` obriga a registrá-la em **todo** harness de teste que
+   constrói esse serviço — 12 arquivos, 2 linhas cada. Nenhum deles é trabalho
+   de teste; são 24 linhas de custo de DI espalhadas. **Régua nova: injetar uma
+   dependência num serviço central custa um arquivo por harness que o constrói,
+   e isso é contável antes** (`grep -c "AddSingleton<Serviço>"`).
+2. **Produção dobrou em linhas por comentário, não por lógica.** `ToolOrigin` e
+   `RenamedAIFunction` (52 linhas somadas) não estavam projetados como arquivos
+   próprios, e mais da metade das 285 linhas é documentação de decisão com fonte
+   primária — o estilo desta base. Projetar por "linhas de lógica" subestima aqui
+   por construção.
+3. **Os artefatos OpenSpec quase triplicaram** por três rodadas de revisão, cada
+   uma acrescentando verificação (V6, V7, V8), correção de fonte e registro de
+   divergência. É a categoria mais volátil e a que a convenção 18 já mandava
+   contar à parte.
+
+E o dado que confirma a regra da própria convenção 18: a projeção subiu ~15% de
+uma rodada de revisão para a outra, e depois errou +73% no código mesmo assim.
+**A lição não é um fator de correção — é que projeção feita antes de a
+verificação fechar é rascunho.** Aqui a verificação só fechou durante a
+implementação (o custo de DI da causa 1 não era visível antes de injetar).
+
+### Abertos por `dedupe-global-nome-de-tool` (2026-09-08)
+
+- **A renomeação por colisão de nome de tool é invisível na UI.** Quando dois
+  nomes colidem no conjunto entregue ao LLM, um é renomeado e o aviso vai só para
+  o log; o painel continua mostrando o nome cadastrado em `AllowedTools`. É a
+  convenção 13 na direção fraca — a UI não mente, mas não sabe. **Gatilho: quando
+  a UI de tools for tocada**, exibir o nome efetivo ao lado do pretendido para
+  agentes com colisão. Fora daquela change por convenção 1 (backend primeiro, UI
+  depois).
+- **R7 — histórico gravado citando tool renomeada: risco esvaziado, detector
+  construído.** O censo de V8 achou **zero** agentes colidentes, e não há
+  produção, então não existe hoje histórico de conversa que possa ser rejeitado.
+  A metade local está verificada: o pipeline
+  `FunctionInvokingChatClient`/`ChatClientAgent` é transparente a um histórico que
+  referencia função ausente da lista atual (V7 + cenário próprio em
+  `AgentToolNamespaceTests`, que produz o histórico de verdade em vez de forjá-lo).
+  **A pergunta que fica: algum provedor rejeita esse histórico?** Saída já
+  desenhada, caso rejeite: limpar o `conversationSession` do `contextId` afetado
+  no primeiro encontro de colisão — change própria, não remendo no consumidor.
+  **Gatilho: o primeiro aviso de renomeação que aparecer no log** (o aviso da
+  Decisão 7 existe justamente para ser esse detector). **O que falta é observação
+  com chave de provedor, não análise.**
+- **R8 — limite de nome de função do Anthropic não verificado em fonte
+  primária.** Nem a documentação de tool use nem o tipo `ToolParam` do SDK
+  publicado declaram comprimento ou padrão. Por isso o argumento "64 é o mínimo
+  entre os três provedores" está verificado em **dois** (OpenAI Chat Completions
+  64, Gemini 128) e o comentário de `ToolNameSanitizer.MaxToolNameLength` diz
+  isso em vez de citar terceiro como autoridade. Independe de ambiente — é
+  pergunta de fonte. **Gatilho: quando o argumento do mínimo voltar a ser
+  necessário** — mudança de limite de algum provedor, provedor novo, ou migração
+  de `ChatClientResolver.BuildOpenAi` para a Responses API, onde o limite do
+  próprio OpenAI é 128.
+- **`WorkerHostCollection` é mitigação, e esconde o que não resolve.** Cada classe
+  de teste que sobe um `IHost` completo usa
+  `IClassFixture<WorkerInfrastructureFixture>` — **containers próprios** de
+  Postgres e RabbitMQ por classe. Medido: `6956d79` passava 132/132 em paralelo;
+  a 13ª classe de host (`AgentToolNamespaceTests`) fez `TaskJobConsumerTests`
+  reprovar em bloco na inicialização da fixture. A `[CollectionDefinition]` nova
+  serializa entre si as 7 classes de host e a suíte volta a 168/168 em paralelo,
+  ao custo de **28 s** e — o que importa mais — da **perda do paralelismo como
+  detector**: a próxima classe com o mesmo problema entra na coleção e o sintoma
+  desaparece de novo sem a causa ser tratada. A correção é uma
+  `ICollectionFixture` compartilhando UM par de containers entre todas elas.
+  **Mesma família que o item `InboxFactoryFixture.InitializeAsync` acessa
+  `Services` antes de migrar** (acima): fixture de teste construindo host mais
+  cedo, ou mais vezes, do que devia. Provavelmente uma change só, com os dois.
+  **Gatilho: a próxima classe de teste que precise subir um host** — em qualquer
+  um dos dois apps.
+- **Repetir o censo de inventário na etapa 4 de bases de conhecimento.** O teste
+  integrado com as bases prontas **não valida o dedupe** — a etapa 4 não introduz
+  colisão por si só, só um terceiro conjunto no mesmo namespace, e colisão depende
+  de cadastro; o dedupe já está validado pelos guardas que reprovaram antes e
+  passaram depois. O que vale carregar é o **inventário**: rodar de novo a consulta
+  de V8, estendida às tools de conhecimento. E há chance real de colisão nova ali,
+  pelo padrão que o próprio censo encontrou: o servidor MCP chamado
+  *"Informações Gerais"* produz `Informa__es_Gerais__get_menu_info`, onde o `__`
+  **não é o separador** (`ç` e `õ` viram um `_` cada). Uma base de conhecimento
+  com nome equivalente cai no mesmo padrão. **Gatilho: a proposta da etapa 4** —
+  entra como tarefa prevista dela, não como lembrança.
+
+
 ## Próximo passo
 
-**Concluído nesta sessão**: o redesenho do painel foi fechado nas **oito
+**Concluído nesta sessão**: `dedupe-global-nome-de-tool` (`0a` da fila) —
+aplicada, suíte de `apps/workers` em 168/168, censo de colisão zerado. Com ela
+fora do caminho, **a etapa 2 da linha de bases de conhecimento (indexação) é o
+próximo passo**, e continua esperando `0b` (head-to-head semântico), que precisa
+de uma chave de embedding real — a mesma sessão que fechar `0b` fecha também R7 e
+R8 desta change, porque os três dependem de chave de provedor. Quando houver
+chave, rodar `0b` com **bar de recall declarado antes de medir** e corpus do
+domínio (política de atendimento, faixas de desconto, casos de aprovação humana),
+não o corpus de arquitetura: é ele que decide o mecanismo do "não encontrei", que
+é requisito da etapa 4.
+
+**Concluído em sessões anteriores**: o redesenho do painel foi fechado nas **oito
 etapas**, da identidade visual ao card A2A, mais a change de CORS de
 desenvolvimento que a conferência visual exigiu. Todas propostas, aplicadas,
 conferidas à mão, sincronizadas, arquivadas e commitadas.

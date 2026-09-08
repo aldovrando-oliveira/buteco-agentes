@@ -375,6 +375,142 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
             () => tool.InvokeAsync(new AIFunctionArguments(), CancellationToken.None).AsTask());
     }
 
+    [Fact]
+    public async Task ResolveAsync_TwoServersWhoseNamesSanitizeToTheSameString_ComposesTheSameName()
+    {
+        // Guarda da change dedupe-global-nome-de-tool (design.md, V5): o
+        // requisito "Distinção de tools com nomes iguais entre servidores
+        // diferentes" já promete que uma não oculte a outra, mas o cenário que o
+        // guardava usava servidores de nomes DIFERENTES. Sanitize mapeia todo
+        // caractere fora de [a-zA-Z0-9_-] para "_", então dois nomes que só
+        // diferem em pontuação colidem — e McpToolSetResolver não tem dedupe
+        // nenhum. Este é o caminho de colisão mais alcançável hoje.
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+
+        var urlA = UniqueServerUrl();
+        var urlB = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(urlA, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("search")] });
+        handler.ConfigureServer(urlB, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("search")] });
+
+        var serverAId = await SeedMcpServerAsync("Zendesk MCP", urlA);
+        var serverBId = await SeedMcpServerAsync("Zendesk.MCP", urlB);
+        await SeedAgentMcpServerAsync(agentId, serverAId, ["search"]);
+        await SeedAgentMcpServerAsync(agentId, serverBId, ["search"]);
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        // As duas tools estão no conjunto, com o MESMO nome — e isso é o
+        // contrato deste resolvedor, não um defeito dele: ele compõe e
+        // sanitiza, e a unicidade é garantida no ponto que une este conjunto ao
+        // de delegação (ToolNameDeduplicator, Decisão 1). A distinção que o
+        // requisito de mcp-tool-execution promete é verificada no seam de
+        // produção, em AgentToolNamespaceTests.
+        Assert.Equal(2, toolSet.Tools.Count);
+        Assert.All(toolSet.Tools, tool => Assert.Equal("Zendesk_MCP__search", tool.Name));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_TwoServersSharingTheFirst64CharactersOfTheirNames_ComposesTheSameTruncatedName()
+    {
+        // Segunda brecha de V5: Sanitize trunca em 64, então dois McpServer.Name
+        // que compartilham o prefixo de 64 caracteres produzem exatamente o
+        // mesmo nome de tool — e o "__" separador nem sobrevive à truncagem.
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+
+        var sharedPrefix = new string('s', ToolNameSanitizer.MaxToolNameLength);
+        var urlA = UniqueServerUrl();
+        var urlB = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(urlA, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("search")] });
+        handler.ConfigureServer(urlB, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("search")] });
+
+        var serverAId = await SeedMcpServerAsync($"{sharedPrefix}-alfa", urlA);
+        var serverBId = await SeedMcpServerAsync($"{sharedPrefix}-beta", urlB);
+        await SeedAgentMcpServerAsync(agentId, serverAId, ["search"]);
+        await SeedAgentMcpServerAsync(agentId, serverBId, ["search"]);
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        // Mesma fronteira de contrato do teste acima: a truncagem apaga a
+        // diferença entre os dois nomes de servidor, e o resolvedor entrega os
+        // dois nomes iguais. Quem resolve é o deduplicador global.
+        Assert.Equal(2, toolSet.Tools.Count);
+        var names = toolSet.Tools.Select(tool => tool.Name).ToList();
+        Assert.All(names, name => Assert.Equal(ToolNameSanitizer.MaxToolNameLength, name.Length));
+        Assert.Single(names.Distinct(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_SameBindingSet_ProducesToolsInTheSameOrder_AcrossExecutions()
+    {
+        // Cenário da spec (mcp-tool-execution, "Ordem determinística da
+        // resolução de tools MCP"). Pode passar sem o orderby: ausência de
+        // ordenação não garante ordem ERRADA, só não garante ordem NENHUMA — o
+        // que este teste prende é a ordem que a Decisão 8 estabelece.
+        var agentId = Guid.NewGuid();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        await SeedFourServersAsync(agentId, handler);
+
+        await using var dbContext = CreateDbContext();
+        var resolver = CreateResolver(handler);
+
+        await using var first = await resolver.ResolveAsync(dbContext, agentId, CancellationToken.None);
+        var firstNames = first.Tools.Select(tool => tool.Name).ToList();
+        await using var second = await resolver.ResolveAsync(dbContext, agentId, CancellationToken.None);
+        var secondNames = second.Tools.Select(tool => tool.Name).ToList();
+
+        Assert.Equal(firstNames, secondNames);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_SameBindingSet_OrdersToolsByMcpServerId()
+    {
+        // Decisão 8: a ordenação é por McpServerId, não por nome (o nome é
+        // editável, o identificador não). A ordem esperada é lida do próprio
+        // banco com ORDER BY "McpServerId" — e não de Guid.CompareTo do .NET,
+        // que ordena uuid de forma diferente do Postgres (o .NET compara os
+        // três primeiros grupos como inteiros little-endian, o Postgres compara
+        // byte a byte). Comparar contra a ordenação do .NET faria este teste
+        // reprovar mesmo com o orderby correto no lugar.
+        var agentId = Guid.NewGuid();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        await SeedFourServersAsync(agentId, handler);
+
+        await using var dbContext = CreateDbContext();
+        var expectedNames = await dbContext.Database
+            .SqlQuery<string>($"""
+                 SELECT s."Name" AS "Value"
+                 FROM agent_mcp_servers b
+                 JOIN mcp_servers s ON s."Id" = b."McpServerId"
+                 WHERE b."AgentId" = {agentId}
+                 ORDER BY b."McpServerId"
+                 """)
+            .ToListAsync();
+
+        await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        Assert.Equal(
+            expectedNames.Select(name => ToolNameSanitizer.Sanitize($"{name}__search")).ToList(),
+            toolSet.Tools.Select(tool => tool.Name).ToList());
+    }
+
+    private async Task SeedFourServersAsync(Guid agentId, FakeMcpServerHttpMessageHandler handler)
+    {
+        await SeedAgentAsync(agentId);
+        foreach (var index in Enumerable.Range(0, 4))
+        {
+            var url = UniqueServerUrl();
+            handler.ConfigureServer(url, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("search")] });
+            var serverId = await SeedMcpServerAsync($"Servidor {index}", url);
+            await SeedAgentMcpServerAsync(agentId, serverId, ["search"]);
+        }
+    }
+
     private static string UniqueServerUrl() => $"https://fake-mcp-{Guid.NewGuid():N}.test/mcp";
 
     private static McpToolSetResolver CreateResolver(FakeMcpServerHttpMessageHandler handler, string encryptionKey = EncryptionKey)

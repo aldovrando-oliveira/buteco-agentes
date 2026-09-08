@@ -245,6 +245,7 @@ public class ChannelContextMessageTests(WorkerInfrastructureFixture fixture) : I
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
         builder.Services.AddSingleton<PushNotificationSender>();
         builder.Services.AddSingleton(timeProvider);
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

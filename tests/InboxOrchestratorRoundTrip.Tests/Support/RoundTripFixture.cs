@@ -26,6 +26,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Buteco.Workers.Mcp;
 
 namespace InboxOrchestratorRoundTrip.Tests.Support;
 
@@ -256,6 +257,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
         // AgentExecutionService/TaskJobConsumer passaram a exigir
         // TimeProvider (change apps-workers-contexto-temporal).
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

@@ -21,6 +21,7 @@ public sealed class AgentExecutionService(
     IChatClientResolver chatClientResolver,
     IMcpToolSetResolver mcpToolSetResolver,
     IAgentDelegationToolSetResolver delegationToolSetResolver,
+    ToolNameDeduplicator toolNameDeduplicator,
     PushNotificationSender pushNotificationSender,
     TimeProvider timeProvider,
     ILogger<AgentExecutionService> logger)
@@ -205,7 +206,19 @@ public sealed class AgentExecutionService(
             var aiAgent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
             {
                 Name = agent.Name,
-                ChatOptions = new ChatOptions { Instructions = instructionsWithContext, Tools = toolSet.Tools.Concat(delegationTools).ToList() },
+                // Dedupe global no ponto de concatenação (design.md da change
+                // dedupe-global-nome-de-tool, Decisão 1): é o único ponto que
+                // sabe que os dois conjuntos dividem espaço de nome. Antes era
+                // `toolSet.Tools.Concat(delegationTools)` cru, e um nome
+                // duplicado era sombreado em silêncio por
+                // FunctionInvokingChatClient.FindTool. A ordem dos argumentos é
+                // a precedência declarada (Decisão 5): MCP mantém o nome, a
+                // tool de delegação é a renomeada.
+                ChatOptions = new ChatOptions
+                {
+                    Instructions = instructionsWithContext,
+                    Tools = [.. toolNameDeduplicator.Deduplicate(message.AgentId, toolSet.Tools, delegationTools)],
+                },
                 ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
                 {
                     ChatReducer = new RecentMessageChatReducer(MaxHistoryMessages),

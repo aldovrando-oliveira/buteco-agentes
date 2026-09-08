@@ -39,6 +39,7 @@ namespace Buteco.Workers.Tests;
 /// <see cref="IChatClient"/> por <c>(provider, model)</c> exatamente como o
 /// resolver real faz, nunca "esta instância só processa o Source".
 /// </summary>
+[Collection(WorkerHostCollection.Name)]
 public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture) : IClassFixture<WorkerInfrastructureFixture>
 {
     private const string SourceProvider = "openai";
@@ -258,6 +259,7 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
         builder.Services.AddSingleton<PushNotificationSender>();
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

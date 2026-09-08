@@ -33,7 +33,7 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
     }
 
     [Fact]
-    public async Task ResolveAsync_TwoTargetsWithCollidingName_ProducesDistinctToolNames()
+    public async Task ResolveAsync_TwoTargetsWithCollidingName_ProducesTheSameBaseName()
     {
         var sourceId = Guid.NewGuid();
         var targetAId = Guid.NewGuid();
@@ -51,10 +51,17 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
 
         var tools = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), currentDepth: 0, messageInstant: null, CancellationToken.None);
 
+        // Mudança de dono, não de comportamento: o dedupe por sufixo saiu deste
+        // resolvedor e virou global (change dedupe-global-nome-de-tool,
+        // Decisão 3), porque dentro dele a unicidade nunca cobria colisão com
+        // uma tool MCP — e o sufixo local estourava os 64 caracteres. Aqui fica
+        // o contrato do resolvedor: nome-base determinístico por Target. A
+        // unicidade que o requisito "Nome estável e sem colisão para a tool de
+        // delegação" promete é verificada no seam de produção, em
+        // AgentToolNamespaceTests.
         Assert.Equal(2, tools.Count);
         var names = tools.Select(t => t.Name).ToList();
-        Assert.Equal(names.Count, names.Distinct().Count());
-        Assert.All(names, name => Assert.StartsWith("delegate_to_atendimento", name, StringComparison.Ordinal));
+        Assert.All(names, name => Assert.Equal("delegate_to_atendimento", name));
     }
 
     [Fact]

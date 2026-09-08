@@ -20,6 +20,7 @@ using TaskStatus = A2A.TaskStatus;
 
 namespace Buteco.Workers.Tests;
 
+[Collection(WorkerHostCollection.Name)]
 public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassFixture<WorkerInfrastructureFixture>
 {
     [Fact]
@@ -234,6 +235,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
         builder.Services.AddSingleton<PushNotificationSender>();
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 
@@ -264,6 +266,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
         builder.Services.AddSingleton<PushNotificationSender>();
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

@@ -41,6 +41,7 @@ public class WorkerTests(WorkerInfrastructureFixture fixture) : IClassFixture<Wo
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
         builder.Services.AddSingleton<PushNotificationSender>();
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

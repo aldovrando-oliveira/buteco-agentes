@@ -30,6 +30,7 @@ namespace Buteco.Workers.Tests.Mcp;
 /// automaticamente (design.md, Decision 1). Mesmo estilo de
 /// <c>HistorySummarizationTests</c>.
 /// </summary>
+[Collection(WorkerHostCollection.Name)]
 public class McpToolExecutionEndToEndTests(WorkerInfrastructureFixture fixture) : IClassFixture<WorkerInfrastructureFixture>
 {
     private const string EncryptionKey = "NtxqjqnKG3sqy52PFRh/SGk573bsE9TrDtKOsDiR8uc=";
@@ -262,6 +263,7 @@ public class McpToolExecutionEndToEndTests(WorkerInfrastructureFixture fixture) 
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
         builder.Services.AddSingleton<PushNotificationSender>();
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

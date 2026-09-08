@@ -25,6 +25,7 @@ namespace Buteco.Workers.Tests;
 /// <c>SummarizationCompactionStrategy</c> (ver design.md e
 /// specs/a2a-task-lifecycle/spec.md daquela change).
 /// </summary>
+[Collection(WorkerHostCollection.Name)]
 public class HistorySummarizationTests(WorkerInfrastructureFixture fixture) : IClassFixture<WorkerInfrastructureFixture>
 {
     // Devem bater com as constantes privadas de AgentExecutionService (não
@@ -392,6 +393,7 @@ public class HistorySummarizationTests(WorkerInfrastructureFixture fixture) : IC
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
         builder.Services.AddSingleton<PushNotificationSender>();
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

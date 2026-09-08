@@ -355,6 +355,7 @@ public class ConversationHistoryTests(WorkerInfrastructureFixture fixture) : ICl
         // (design.md da change apps-workers-contexto-temporal, Decisão 6) —
         // mesmo padrão já usado acima para IChatClientResolver/IMcpToolSetResolver.
         builder.Services.AddSingleton(timeProvider ?? new FakeTimeProvider());
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

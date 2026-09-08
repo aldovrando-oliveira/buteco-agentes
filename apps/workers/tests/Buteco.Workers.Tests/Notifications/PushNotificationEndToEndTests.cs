@@ -27,6 +27,7 @@ namespace Buteco.Workers.Tests.Notifications;
 /// recebendo (ou não) a chamada de notificação — ver design.md, Decisions
 /// 1/2/3/6 e specs/a2a-push-notifications/spec.md.
 /// </summary>
+[Collection(WorkerHostCollection.Name)]
 public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) : IClassFixture<WorkerInfrastructureFixture>
 {
     private const string WebhookUrl = "https://cliente.example.com/webhooks/a2a";
@@ -411,6 +412,7 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
         // AgentExecutionService/TaskJobConsumer passaram a exigir TimeProvider
         // (change apps-workers-contexto-temporal).
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

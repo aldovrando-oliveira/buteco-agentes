@@ -49,6 +49,7 @@ namespace Buteco.Workers.Tests;
 /// oposto do que a arquitetura garante e produz falhas espúrias quando o
 /// RabbitMQ entrega a mensagem errada para a instância "errada".
 /// </summary>
+[Collection(WorkerHostCollection.Name)]
 public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) : IClassFixture<WorkerInfrastructureFixture>
 {
     private const string SourceProvider = "openai";
@@ -715,6 +716,7 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
         builder.Services.AddSingleton<PushNotificationSender>();
+        builder.Services.AddSingleton<ToolNameDeduplicator>();
         builder.Services.AddSingleton<AgentExecutionService>();
         builder.Services.AddHostedService<TaskJobConsumer>();
 

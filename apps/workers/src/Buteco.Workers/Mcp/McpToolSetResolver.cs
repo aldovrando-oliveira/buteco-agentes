@@ -21,23 +21,36 @@ public sealed class McpToolSetResolver(
     // Bug em produção: McpServer.Name é texto livre (sem validação de
     // formato em apps/api) e alimentava sem sanitização o nome exposto ao
     // LLM via WithName — um nome como "Zendesk MCP" (com espaço) violava a
-    // regra de nome de function declaration do Gemini
-    // ("^[a-zA-Z_][a-zA-Z0-9_.:-]{0,127}$") e a chamada falhava 100% das
-    // vezes para qualquer McpServer com caractere fora desse conjunto no
-    // nome. O resolver não sabe qual provedor o agente usa (Decision 7 do
-    // design.md da change backend-multi-provedor-llm resolve o
-    // IChatClient só depois, em ChatClientResolver), então o nome
-    // sanitizado precisa satisfazer o mais restritivo dos três provedores
-    // suportados incondicionalmente — sanitização em ToolNameSanitizer,
-    // reaproveitada também pela resolução de tools de delegação (ver
-    // design.md da change apps-workers-delegacao-execucao, Decision 9).
+    // regra de nome de function declaration do Gemini (que o documento de
+    // descoberta oficial declara como "a-z, A-Z, 0-9, or contain underscores,
+    // colons, dots, and dashes, with a maximum length of 128" — a âncora de
+    // caractere inicial que este comentário afirmava antes NÃO está na fonte
+    // primária, ver V4 do design.md da change dedupe-global-nome-de-tool) e a
+    // chamada falhava 100% das vezes para qualquer McpServer com caractere fora
+    // desse conjunto no nome. O resolver não sabe qual provedor o agente usa
+    // (Decision 7 do design.md da change backend-multi-provedor-llm resolve o
+    // IChatClient só depois, em ChatClientResolver), então o nome sanitizado
+    // precisa satisfazer o limite mais apertado entre os provedores suportados —
+    // 64 caracteres e [a-zA-Z0-9_-], verificado em fonte primária apenas para
+    // OpenAI (Chat Completions) e Gemini; o Anthropic não publica o seu (ver o
+    // comentário de ToolNameSanitizer.MaxToolNameLength e R8). Sanitização em
+    // ToolNameSanitizer, reaproveitada também pela resolução de tools de
+    // delegação (ver design.md da change apps-workers-delegacao-execucao,
+    // Decision 9).
 
     public async Task<McpToolSet> ResolveAsync(AppDbContext dbContext, Guid agentId, CancellationToken cancellationToken)
     {
+        // orderby explícito (design.md da change dedupe-global-nome-de-tool,
+        // Decisão 8): sem ele a ordem era a que o Postgres devolvesse, e com
+        // ela mudava qual tool mantém o nome-base num desempate de dedupe — o
+        // conjunto de nomes deixava de ser estável entre execuções. Por
+        // McpServerId, e não por Name, porque o nome é editável: renomear um
+        // servidor não deve reordenar o conjunto.
         var bindings = await (
             from binding in dbContext.AgentMcpServers.AsNoTracking()
             join server in dbContext.McpServers.AsNoTracking() on binding.McpServerId equals server.Id
             where binding.AgentId == agentId && server.IsActive
+            orderby binding.McpServerId
             select new { binding.AllowedTools, Server = server }
         ).ToListAsync(cancellationToken);
 

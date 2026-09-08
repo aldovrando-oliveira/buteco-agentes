@@ -494,13 +494,27 @@ de propor algo nesta base:
     certa.
 15. **Um guarda só vale depois de ter falhado contra o defeito real** —
     escrever o teste, reintroduzir o defeito de propósito, ver reprovar, e
-    só então manter a correção. Três guardas desta base passaram verde
+    só então manter a correção. **Quatro** guardas desta base passaram verde
     **com o defeito presente** antes de serem consertados: o que varre
     tons fixos de superfície (a expressão não cobria valor dentro de
     ternário, que era justamente a forma do caso real), o que prende a
-    altura da faixa de cabeçalho, e o que afirma o nome do campo no fio.
+    altura da faixa de cabeçalho, o que afirma o nome do campo no fio, e o de
+    "Distinção de tools com nomes iguais entre servidores diferentes"
+    (`mcp-tool-execution`), que cobria só servidores de nomes **diferentes**
+    enquanto o requisito já estava violado por dois `McpServer.Name` que
+    sanitizam para a mesma cadeia (`dedupe-global-nome-de-tool`).
     Guarda não verificado é pior que nenhum, porque dá impressão de
     cobertura sem ter.
+
+    **E o erro tem uma segunda forma, que só aparece na implementação: guarda
+    no lugar errado.** Um teste pode reprovar antes e depois da correção — e
+    passar a impressão de estar funcionando na primeira metade — quando ele
+    afirma a garantia no componente errado. Em `dedupe-global-nome-de-tool`
+    três guardas reprovaram contra o defeito **e continuaram reprovando depois
+    da correção**, porque afirmavam unicidade dentro de cada resolvedor,
+    enquanto a correção é global no ponto que une os dois conjuntos. Ao escrever
+    o guarda, checar não só que ele reprova, mas que ele reprova **no
+    componente que a correção vai tocar**.
 16. **Papel visual que troca de ponta da escala precisa de variável
     declarada por esquema** — `gray[n]` é claro nos dois esquemas e
     `dark[n]` é escuro nos dois, então um tom fixo usado como fundo de
@@ -532,6 +546,17 @@ de propor algo nesta base:
     `knowledge-base-catalogo-documentos` tem 11, com 42% de todo o trabalho
     manual), e diffstat não distingue.
 
+    **E projetar só depois que a verificação fecha.** Uma projeção por componente
+    feita antes do fim da verificação erra para baixo por construção, porque os
+    componentes que a verificação ainda vai descobrir não estão nela para serem
+    contados. Medido em `dedupe-global-nome-de-tool`: a projeção subiu ~15% entre
+    a primeira redação do `design.md` e a revisão, sem nenhuma mudança de escopo
+    — três itens (uma subclasse de wrapper do SDK, um cenário de comparação de
+    caixa, um cenário de histórico persistido) só existiram depois de decompilar
+    o SDK e consultar o banco. O número **não** é um fator a somar em projeções
+    futuras; a lição é o momento de contar. Projeção feita durante a verificação
+    é rascunho, não estimativa.
+
     E a régua que mais corrige a intuição: **contagem de arquivo é dirigida
     pelo número de operações CQRS, não por complexidade.** Numa change medida,
     24 arquivos de comando/handler/result somaram 450 linhas — média de 19
@@ -541,3 +566,33 @@ de propor algo nesta base:
     Estimar por componente (custo por operação CQRS, por cenário de teste, por
     grupo de endpoints), só sobre código, e citar a âncora **decomposta**, não
     o headline dela.
+
+19. **"Pré-existente" e "ambiental" são conclusões que exigem a baseline, e a
+    baseline não fecha sozinha.** Três vezes nesta base uma falha de teste foi
+    classificada como pré-existente ou ambiental e a classificação estava errada,
+    cada vez por um motivo diferente:
+
+    - `TimeoutException` do `InboxOrchestratorRoundTrip` lido como "latência do
+      `podman`", porque o tempo (~21s) parecia próximo do limite. O número não era
+      evidência de nada: era o próprio timeout de 20s do teste cortando a espera.
+    - `ObjectDisposedException` de `apps/inbox` lida como corrida de disposal do
+      `WebApplicationFactory` entre classes. O mecanismo real era outro
+      (`InboxFactoryFixture` construindo o host antes de migrar).
+    - Em `dedupe-global-nome-de-tool`, `TaskJobConsumerTests` reprovando em bloco
+      lido como "limite pré-existente de contenção de containers". **Desmentido
+      por baseline**: `git worktree` limpo em `6956d79` passa 132/132 em paralelo.
+      A 13ª classe de host era da própria change.
+
+    Daí a regra: **antes de classificar uma falha como pré-existente ou ambiental,
+    rodar a suíte contra a baseline num `git worktree` limpo** — é barato, não
+    mexe na árvore de trabalho, e é a única coisa que separa "já estava assim" de
+    "eu quebrei".
+
+    **E a metade que a baseline não resolve:** uma baseline que *também* falha
+    remove a hipótese de regressão, e **só** ela. Não promove o sintoma a
+    "ambiental" nem dispensa achar a causa. Foi exatamente esse o erro da segunda
+    leitura do `TimeoutException` (`inbox-instante-mensagem`): o bisect em
+    worktree comparou base e HEAD, viu falha idêntica, e registrou "causa
+    ambiental confirmada por evidência direta" — e a causa real só apareceu na
+    terceira leitura. Baseline verde acusa regressão; baseline vermelha não
+    absolve ninguém.

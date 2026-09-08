@@ -48,6 +48,11 @@ builder.Services.AddSingleton<IMcpToolSetResolver, McpToolSetResolver>();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
 builder.Services.AddSingleton<IAgentDelegationToolSetResolver, AgentDelegationToolSetResolver>();
 
+// Dedupe global do espaço de nome de tool, aplicado no ponto que une os dois
+// conjuntos acima (change dedupe-global-nome-de-tool, Decisão 1) — sem estado,
+// singleton como os resolvedores.
+builder.Services.AddSingleton<ToolNameDeduplicator>();
+
 // Timeout curto e fixo (design.md, Decision 3) — primeiro HttpClient nomeado
 // do projeto com Timeout customizado, aditivo, sem afetar o cliente MCP.
 builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
