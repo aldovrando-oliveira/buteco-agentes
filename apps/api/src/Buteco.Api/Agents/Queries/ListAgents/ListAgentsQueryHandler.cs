@@ -1,6 +1,8 @@
 using Buteco.Api.A2A;
+using Buteco.Api.AgentKnowledgeBindings;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.KnowledgeBases.Responses;
 using Buteco.Api.McpServers.Responses;
 using Buteco.Api.Options;
 using Mediator;
@@ -52,11 +54,35 @@ public sealed class ListAgentsQueryHandler(AppDbContext dbContext,
                     .Select(delegation => AgentSummaryResponse.FromEntity(delegation.TargetAgent))
                     .ToList());
 
+        // Terceira consulta em lote, mesmo espírito das duas acima: sem ela,
+        // chamar AgentKnowledgeBaseLookup por agente dentro do Select abaixo
+        // seria N+1 na listagem inteira.
+        var knowledgeBindings = await dbContext.AgentKnowledgeBases
+            .AsNoTracking()
+            .Join(dbContext.KnowledgeBases, binding => binding.KnowledgeBaseId, knowledgeBase => knowledgeBase.Id, (binding, knowledgeBase) => new { binding.AgentId, KnowledgeBase = knowledgeBase })
+            .ToListAsync(cancellationToken);
+
+        var knowledgeBasesByAgentId = knowledgeBindings
+            .GroupBy(binding => binding.AgentId)
+            .ToDictionary(
+                group => group.Key,
+                // O ThenBy carrega o mesmo desempate de
+                // AgentKnowledgeBaseLookup (design.md, D13): o agrupamento é
+                // feito em memória, mas a ordem de entrada vem do banco e é
+                // igualmente indefinida entre bases de nome igual — que o
+                // catálogo permite existirem.
+                group => (IReadOnlyList<KnowledgeBaseSummaryResponse>)group
+                    .OrderBy(binding => binding.KnowledgeBase.Name)
+                    .ThenBy(binding => binding.KnowledgeBase.Id)
+                    .Select(binding => KnowledgeBaseSummaryResponse.FromEntity(binding.KnowledgeBase))
+                    .ToList());
+
         return agents
             .Select(agent => AgentResponse.FromEntity(
                 agent,
                 mcpServersByAgentId.GetValueOrDefault(agent.Id, []),
                 delegatesToBySourceAgentId.GetValueOrDefault(agent.Id, []),
+                knowledgeBasesByAgentId.GetValueOrDefault(agent.Id, []),
                 AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id)))
             .ToList();
     }

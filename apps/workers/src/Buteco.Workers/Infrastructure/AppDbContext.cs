@@ -33,6 +33,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
 
+    public DbSet<AgentKnowledgeBase> AgentKnowledgeBases => Set<AgentKnowledgeBase>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Agent>(entity =>
@@ -149,6 +151,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(document => document.KnowledgeBaseId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AgentKnowledgeBase>(entity =>
+        {
+            entity.ToTable("agent_knowledge_bases");
+            entity.HasKey(binding => new { binding.AgentId, binding.KnowledgeBaseId });
+
+            // Cascade nas duas FKs, igual a apps/api (design.md, D10) — e
+            // deliberadamente diferente do Restrict que KnowledgeDocument usa
+            // para a base. Se este mapeamento divergir do de lá, a migração
+            // equivalente sai com regra de exclusão diferente e os dois
+            // schemas deixam de bater; é o que KnowledgeSchemaMirrorTests
+            // afirma.
+            entity.HasOne<Agent>().WithMany().HasForeignKey(binding => binding.AgentId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<KnowledgeBase>().WithMany().HasForeignKey(binding => binding.KnowledgeBaseId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

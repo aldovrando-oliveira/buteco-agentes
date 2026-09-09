@@ -38,8 +38,8 @@ autenticadas (ver "Autenticação", abaixo).
 `Model` (nullable — agente "precisa de reconfiguração" quando nulos),
 `Description` (nullable), `Skills` (jsonb, `{ Name, Description? }`),
 vínculos N:N: `McpServers` (via `AgentMcpServer`, com `AllowedTools`
-jsonb por vínculo) e `DelegatesTo` (via `AgentDelegation`, **unidirecional**
-— A→B não implica B→A).
+jsonb por vínculo), `DelegatesTo` (via `AgentDelegation`, **unidirecional**
+— A→B não implica B→A) e `KnowledgeBases` (via `AgentKnowledgeBase`).
 
 **`McpServer`** (`apps/api`): `Name`, `Description`, `Url`, `AuthType`
 (`None`/`BearerToken`), `EncryptedCredential` (AES-GCM).
@@ -154,6 +154,36 @@ Na etapa de catálogo, `Indexing`/`Indexed`/`Failed`, `IndexedAt` e
 todo documento criado ou atualizado permanece `Pending` indefinidamente. Isso é
 requisito declarado, não defeito: quem os escreve é o consumidor da etapa de
 indexação.
+
+**`AgentKnowledgeBase`** (`apps/api`): vínculo N:N entre `Agent` e
+`KnowledgeBase` — `AgentId`, `KnowledgeBaseId`, e **nada mais**. A ausência de
+coluna extra é decisão com causa, não omissão: `AgentMcpServer.AllowedTools`
+existe porque as tools de um servidor MCP **não são catálogo persistido em lugar
+nenhum** (são descobertas ao vivo via `tools/list`), então a seleção precisa
+morar no vínculo; bases de conhecimento têm id e são catálogo persistido, e a
+seleção é o próprio conjunto de ids. Consequências registradas junto, para que a
+etapa de execução não as reabra:
+
+- Sem análogo de `AllowedTools` (seleção de documentos permitidos): quem precisa
+  de granularidade menor cria outra base. `TopK` e limiar de similaridade são
+  constante em `apps/workers` até haver dois consumidores reais querendo valores
+  diferentes (convenção 2). Não há flag "injetar sempre" — o acesso é sob
+  demanda, decidido pelo modelo a partir de `KnowledgeBase.Description`.
+- **Base inativa continua vinculável e editável**; o filtro por `IsActive`
+  pertence à resolução (`where kb.IsActive`, idioma de `McpToolSetResolver`),
+  não à remoção do vínculo. Vale igual para **agente** inativo: desativar um
+  agente impede que ele execute, não que o operador configure os vínculos dele
+  — mesmo raciocínio que permite criar e atualizar documento em base inativa.
+- FKs em `Cascade` nos dois lados, como `AgentMcpServer` e `AgentDelegation` — e
+  deliberadamente diferente do `Restrict` de `KnowledgeDocument` para a base.
+  Não há conflito: enquanto existir documento, o `Restrict` bloqueia a exclusão
+  da base antes de o `Cascade` do vínculo ser alcançado. Hoje as duas cascatas
+  são inertes (nem `Agent` nem `KnowledgeBase` têm rota de exclusão).
+- A lista exposta em `AgentResponse.knowledgeBases` é ordenada por nome **com
+  desempate por id**. Não é preciosismo: nome de base não é único por requisito,
+  e sem o desempate a ordem entre homônimas é a que o plano do Postgres
+  devolver. Ver o item em aberto sobre os quatro sites que ainda não desempatam,
+  em `02-HISTORICO_E_STATUS.md`.
 
 **`KnowledgeDocument` é a única entidade do repositório com exclusão real**
 (`DELETE`, primeiro `MapDelete` da base). Ver "Exclusão: catálogo × conteúdo",
@@ -556,6 +586,52 @@ de propor algo nesta base:
     o SDK e consultar o banco. O número **não** é um fator a somar em projeções
     futuras; a lição é o momento de contar. Projeção feita durante a verificação
     é rascunho, não estimativa.
+
+    **E as duas dimensões erram por motivos diferentes — registrar a direção
+    sozinha não serve de nada.** A projeção por componente conta os componentes
+    que a etapa parece precisar; a verificação pode tanto **acrescentar** um que
+    ela não tinha (e aí a projeção errou para baixo) quanto **eliminar** um que
+    ela previa, ao descobrir que o repositório já resolveu aquilo de outro jeito
+    (e aí errou para cima). A causa que vale carregar é estrutural, não
+    direcional: **projeção por operação CQRS conta arquivos criados, não
+    modificados**, e o blast radius de um record compartilhado é todo em
+    modificação. Isso vale muito além do caso que o mostrou: qualquer change que
+    acrescente um campo a um response usado por N handlers tem contagem de
+    arquivo dominada por modificação — em `knowledge-base-vinculo-agente`, 12
+    arquivos modificados, 11 deles por uma a três linhas. O dado já estava à
+    vista na decomposição acima e ninguém o usou como custo unitário: a linha
+    "Modificados" é 5 arquivos / 301 linhas, e nenhum custo por operação CQRS a
+    produz. **Projetar "modificados" separado, a partir do blast radius lido no
+    código**, não a partir do número de operações.
+
+    **E esse método foi medido e acertou — o que fecha a convenção pelos dois
+    lados.** `knowledge-base-vinculo-agente` projetou 25 arquivos à mão e
+    entregou **25**, o primeiro acerto de contagem de arquivo da série, depois
+    de duas medições que erraram. Uma convenção construída só de casos em que se
+    errou diz o que evitar, não o que fazer; esta agora diz as duas coisas:
+
+    - **o que errava** — projetar por operação CQRS, que conta arquivos
+      *criados* e é cega aos *modificados*;
+    - **o que acertou** — contar criados e modificados **separadamente**, com o
+      blast radius verificado no código **antes** de projetar. Na medição, os 8
+      sites de construção de `AgentResponse` saíram com 1 a 3 linhas cada
+      (3,3,3,3,3,3,2,1), exatamente o perfil previsto.
+
+    **Refinamento do custo unitário, com a causa e não só o número**: o custo de
+    ~19-21 linhas por cenário de teste **subestima cenário que precisa de
+    arranjo próprio**. Os três mais caros daquela change — desempate com ordem
+    de inserção invertida, listagem com três agentes e vínculos cruzados, e dois
+    `PUT` vizinhos com catálogo MCP montado — custaram 25-40 linhas cada. É
+    ajuste de custo unitário, não erro de método: a projeção de linhas ficou
+    7,5% acima do topo da faixa, e a diferença estava inteira nos testes.
+
+    **E a razão de headline chegou a 3,1x** (39 arquivos / 2922 linhas de
+    commit contra 25 / 935 à mão) — a mais extrema já medida aqui. A causa é
+    específica e vale saber: o `.Designer.cs` de uma migração carrega o
+    snapshot **inteiro** do modelo, não só a tabela nova, então 6 arquivos
+    gerados somaram 860 linhas contra 150-200 projetadas. É por isso que
+    contagem de headline não serve para nada nesta base, e o diffstat
+    decomposto é a única medição útil.
 
     E a régua que mais corrige a intuição: **contagem de arquivo é dirigida
     pelo número de operações CQRS, não por complexidade.** Numa change medida,

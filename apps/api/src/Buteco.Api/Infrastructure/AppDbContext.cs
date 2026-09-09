@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Buteco.Api.A2A;
 using Buteco.Api.AgentDelegations.Entities;
+using Buteco.Api.AgentKnowledgeBindings.Entities;
 using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Entities;
 using Buteco.Api.KnowledgeBases.Entities;
@@ -26,6 +27,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<KnowledgeBase> KnowledgeBases => Set<KnowledgeBase>();
 
     public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
+
+    public DbSet<AgentKnowledgeBase> AgentKnowledgeBases => Set<AgentKnowledgeBase>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -184,6 +187,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(document => document.KnowledgeBaseId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AgentKnowledgeBase>(entity =>
+        {
+            entity.ToTable("agent_knowledge_bases");
+            entity.HasKey(binding => new { binding.AgentId, binding.KnowledgeBaseId });
+
+            // Cascade, e não o Restrict que KnowledgeDocument usa para a base
+            // (design.md, D10). A distinção é entre conteúdo e vínculo: o
+            // Restrict de KnowledgeDocument existe para obrigar quem for
+            // adicionar exclusão de base um dia a decidir o destino dos
+            // documentos, e continua valendo — enquanto houver documento, ele
+            // bloqueia a exclusão da base antes de este Cascade ser alcançado.
+            // Uma linha de vínculo não é conteúdo e não tem valor sem os dois
+            // lados, então Cascade é o comportamento certo, e é o dos dois
+            // precedentes (AgentMcpServer, AgentDelegation). Hoje as duas
+            // cascatas são inertes: nem Agent nem KnowledgeBase têm rota de
+            // exclusão.
+            entity.HasOne<Agent>().WithMany().HasForeignKey(binding => binding.AgentId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<KnowledgeBase>().WithMany().HasForeignKey(binding => binding.KnowledgeBaseId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

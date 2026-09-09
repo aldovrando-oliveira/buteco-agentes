@@ -1,5 +1,6 @@
 using Buteco.Api.A2A;
 using Buteco.Api.AgentDelegations;
+using Buteco.Api.AgentKnowledgeBindings;
 using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Responses;
 using Buteco.Api.Infrastructure;
@@ -92,8 +93,9 @@ public sealed class ReplaceAgentMcpServersCommandHandler(
 
         var linkedMcpServers = await AgentMcpServerLookup.GetLinkedMcpServersAsync(dbContext, agent.Id, cancellationToken);
         var delegatesTo = await AgentDelegationLookup.GetDelegateTargetsAsync(dbContext, agent.Id, cancellationToken);
+        var knowledgeBases = await AgentKnowledgeBaseLookup.GetLinkedKnowledgeBasesAsync(dbContext, agent.Id, cancellationToken);
 
-        return ReplaceAgentMcpServersResult.Success(AgentResponse.FromEntity(agent, linkedMcpServers, delegatesTo, AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id)));
+        return ReplaceAgentMcpServersResult.Success(AgentResponse.FromEntity(agent, linkedMcpServers, delegatesTo, knowledgeBases, AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id)));
     }
 
     private async Task<(McpServerHandshakeFailure? Failure, IReadOnlyList<string>? AvailableToolNames)> DiscoverToolsAsync(McpServer mcpServer, CancellationToken cancellationToken)
