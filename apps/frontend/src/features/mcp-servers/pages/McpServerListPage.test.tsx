@@ -102,6 +102,7 @@ describe('McpServerListPage', () => {
       updatedAt: '2026-07-26T00:00:00Z',
       mcpServers: [{ id: mcpServer.id, name: mcpServer.name, allowedTools: [] }],
       delegatesTo: [],
+      knowledgeBases: [],
       a2a: null,
     };
     vi.mocked(listAgents).mockResolvedValue([agent]);

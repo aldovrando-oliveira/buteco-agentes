@@ -26,6 +26,7 @@ const agent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  knowledgeBases: [],
   a2a: null,
 };
 

@@ -11,6 +11,15 @@ interface DetailHeaderProps {
   /** Badge de estado, exibido ao lado do título. */
   status?: ReactNode;
   description?: string;
+  /**
+   * Quando falso, o cabeçalho não reserva linha para a descrição — diferente de
+   * `description` vazia, que rende "Sem descrição.". Existe para o detalhe da
+   * base de conhecimento, cuja descrição tem card próprio e NÃO pode aparecer
+   * como subtítulo: ali o fallback afirmaria que a base não tem descrição,
+   * quando a API a exige não vazia (design.md da change
+   * frontend-knowledge-base-catalogo, D7).
+   */
+  showDescription?: boolean;
   /** Ações do registro, alinhadas à direita. */
   actions?: ReactNode;
 }
@@ -26,6 +35,7 @@ export function DetailHeader({
   title,
   status,
   description,
+  showDescription = true,
   actions,
 }: DetailHeaderProps) {
   return (
@@ -37,9 +47,11 @@ export function DetailHeader({
             <Title order={2}>{title}</Title>
             {status}
           </Group>
-          <Text size="sm" c={description ? undefined : 'dimmed'}>
-            {description || 'Sem descrição.'}
-          </Text>
+          {showDescription && (
+            <Text size="sm" c={description ? undefined : 'dimmed'}>
+              {description || 'Sem descrição.'}
+            </Text>
+          )}
         </Stack>
         {actions && (
           <Group wrap="nowrap" gap="sm">

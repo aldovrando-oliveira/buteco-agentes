@@ -59,4 +59,21 @@ describe('DetailHeader', () => {
 
     expect(screen.getByText('Sem descrição.')).toBeInTheDocument();
   });
+
+  // Sem a linha, e não com a linha dizendo "Sem descrição.": o detalhe da base
+  // de conhecimento tem a descrição em card próprio, e o fallback aqui
+  // afirmaria que a base não tem descrição, quando a API a exige não vazia
+  // (design.md da change frontend-knowledge-base-catalogo, D7).
+  it('omite a linha de descrição quando showDescription é falso', () => {
+    renderHeader({ showDescription: false });
+
+    expect(screen.queryByText('Sem descrição.')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Servidor Financeiro' })).toBeInTheDocument();
+  });
+
+  it('omite a linha de descrição mesmo quando há descrição a exibir', () => {
+    renderHeader({ showDescription: false, description: 'Tools de saldo e extrato.' });
+
+    expect(screen.queryByText('Tools de saldo e extrato.')).not.toBeInTheDocument();
+  });
 });

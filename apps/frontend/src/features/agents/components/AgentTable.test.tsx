@@ -19,6 +19,7 @@ const activeAgent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  knowledgeBases: [],
   a2a: null,
 };
 
@@ -35,6 +36,7 @@ const inactiveAgent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  knowledgeBases: [],
   a2a: null,
 };
 

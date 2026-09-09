@@ -19,6 +19,7 @@ const activeAgent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  knowledgeBases: [],
   a2a: null,
 };
 

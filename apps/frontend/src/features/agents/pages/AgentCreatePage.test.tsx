@@ -45,6 +45,7 @@ const createdAgent: Agent = {
   description: null,
   skills: [],
   delegatesTo: [],
+  knowledgeBases: [],
   a2a: null,
 };
 
