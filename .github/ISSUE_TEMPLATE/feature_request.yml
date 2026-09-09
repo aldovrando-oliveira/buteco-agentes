@@ -1,0 +1,73 @@
+name: Proposta de funcionalidade
+description: Sugerir uma capacidade nova ou uma mudança de comportamento
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Este projeto trabalha com fluxo spec-driven: uma funcionalidade passa
+        por exploração e proposta antes da implementação. Esta issue é o ponto
+        de partida dessa conversa, não uma especificação — descreva o problema
+        com mais cuidado do que a solução, porque a solução costuma mudar
+        durante a exploração.
+
+        Ver [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) para o fluxo
+        completo.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema isso resolve
+      description: O que hoje não é possível, ou é possível de um jeito ruim. Descreva a situação concreta que te levou até aqui.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: O que você imagina
+      description: Sua ideia de solução, se tiver uma. Tudo bem não ter.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: app
+    attributes:
+      label: Apps provavelmente envolvidos
+      description: Melhor palpite. A exploração pode descobrir outros.
+      multiple: true
+      options:
+        - apps/api
+        - apps/workers
+        - apps/inbox
+        - apps/frontend
+        - stack de deploy
+        - documentação
+        - não sei
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas que você considerou
+      description: Inclusive "não fazer nada" — saber por que isso não serve ajuda a dimensionar a proposta.
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ### Antes de enviar
+
+        Vale conferir contra as premissas em
+        [`docs/conventions.md`](../blob/main/docs/conventions.md). Duas que
+        costumam decidir o destino de uma proposta:
+
+        - **Sequenciamento**: catálogo/cadastro → vínculo → execução → UI.
+          Uma proposta que começa pela tela geralmente precisa ser
+          sequenciada, não recusada.
+        - **Sem abstração prematura**: código compartilhado espera dois ou
+          três consumidores reais, e uma opção de configuração só existe
+          quando há cenário real de alguém precisar de outro valor.

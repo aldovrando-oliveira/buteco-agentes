@@ -1,0 +1,90 @@
+name: Relato de defeito
+description: Reportar comportamento incorreto em algum dos apps
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por reportar. Antes de continuar:
+
+        **Vulnerabilidade de segurança não vai aqui.** Siga a
+        [política de segurança](../blob/main/SECURITY.md) e reporte de forma
+        privada.
+
+        Se você usa Podman e *todos* os testes de integração falharam de uma
+        vez, veja o
+        [troubleshooting de Testcontainers](../blob/main/docs/development.md#testcontainers-com-podman)
+        antes de abrir a issue — esse sintoma costuma ser infraestrutura, não
+        defeito de código.
+
+  - type: dropdown
+    id: app
+    attributes:
+      label: App afetado
+      description: Onde o comportamento incorreto aparece. Marque mais de um se o defeito for de contrato entre apps.
+      multiple: true
+      options:
+        - apps/api
+        - apps/workers
+        - apps/inbox
+        - apps/frontend
+        - libs/ProviderCatalog
+        - stack de deploy (docker-compose.prod.yml, deploy/)
+        - documentação
+        - não sei
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: O que aconteceu
+      description: Descreva o comportamento observado. Inclua mensagem de erro e stack trace, se houver.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: O que você esperava
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Como reproduzir
+      description: Passos mínimos. Se envolver requisição HTTP, cole o `curl` — sem token, chave de API ou credencial.
+      placeholder: |
+        1. Suba apps/api e apps/workers
+        2. Cadastre um agente com provider X
+        3. Envie SendMessage com ...
+        4. A task fica em TASK_STATE_WORKING indefinidamente
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ambiente
+      description: O que for relevante ao defeito.
+      value: |
+        - Commit ou branch:
+        - Sistema operacional:
+        - `dotnet --version`:
+        - Node (se for frontend):
+        - Docker ou Podman:
+        - Provedor de LLM (se relevante):
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Não incluí token, chave de API, credencial ou qualquer segredo neste relato
+          required: true
+        - label: Verifiquei que não existe issue aberta para o mesmo defeito
+          required: false
