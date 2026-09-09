@@ -1185,6 +1185,120 @@ Duas conclusões que mudam decisão, não só número:
   vazio, que afirmaria que não há documentos — mesma regra da convenção 13 que
   vale para a contagem de fragmentos).
 
+#### Etapa 3 — vínculo agente ↔ base
+
+`knowledge-base-vinculo-agente`, aplicada em 2026-09-08. `AgentKnowledgeBase`
+em `apps/api` (`AgentId` + `KnowledgeBaseId`, sem coluna extra),
+`PUT /agents/{id}/knowledge-bases` replace-all, `knowledgeBases` em todas as
+respostas de agente, espelho em `apps/workers`. Nenhuma tool, nenhum resolvedor,
+nenhuma UI. Suítes: `apps/workers` **174/174**; `apps/api` **258/259**, com a
+única falha sendo o flake pré-existente de `AgentDeactivationTests` — **e a
+classificação foi feita por baseline**, não por reconhecimento: `git worktree`
+limpo em `515a245` reprova exatamente o mesmo teste (237/238). Baseline vermelha
+remove a hipótese de regressão e só isso; a causa mecânica já estava achada e
+está registrada abaixo, então não houve sintoma promovido a "ambiental".
+
+**A verificação anterior à proposta produziu quatro achados que mudaram o
+desenho**, todos lidos no código:
+
+1. **`AllowedTools` existe porque tools MCP não são catálogo persistido** — são
+   descobertas ao vivo por `tools/list`. Bases têm id, então não sobra nada para
+   uma coluna guardar. Isso transformou "vínculo sem colunas extras" de decisão
+   herdada em decisão com causa, e é o que a etapa 4 não deve reabrir.
+2. **Não existe rota inversa no repositório.** `McpServerEndpoints` mapeia só
+   `/`, `/{id}` e `/{id}/tools`; o card "Agentes que usam este servidor" filtra
+   `GET /agents` no cliente. Isso **removeu uma operação CQRS inteira** da
+   projeção herdada ("replace + list").
+3. **Blast radius de 8 sites** de `AgentResponse.FromEntity`, mais o handler
+   novo (nono) e `AgentResponseWireFormatTests` (décimo, que constrói o record
+   posicionalmente e quebra a compilação).
+4. **Estado inativo não é filtrado no vínculo em nenhum precedente** — o filtro
+   vive na resolução (`McpToolSetResolver.cs:52`).
+
+**Duas verificações de guarda que valem além desta change** (convenção 15):
+
+- **A convenção 12 foi demonstrada ao vivo.** Com a chave do fio deliberadamente
+  errada (`knowledge_bases` em vez de `knowledgeBases`), os **19 testes de
+  endpoint que desserializam para `AgentResponse` passaram** e só o que inspeciona
+  o texto do JSON reprovou. É a **prova empírica** da cláusula que
+  `agente-enderecos-a2a` escreveu a partir do `a2A`/`a2a` — lá a conclusão veio
+  de um defeito real encontrado; aqui o defeito foi injetado de propósito e a
+  cegueira foi medida. **Destino: é a referência a citar** quando alguém
+  questionar por que existe um teste que lê JSON bruto em vez de desserializar,
+  em qualquer change futura.
+- **Reintroduzir divergência de schema no espelho exige defeito
+  auto-consistente.** Mexer só no `AppDbContext` de `apps/workers` derruba as 21
+  classes do teste de espelho em 74 ms — falha de fixture, não de asserção,
+  porque o EF barra a migração quando o modelo diverge do snapshot. Para o
+  guarda provar o que promete é preciso alterar os **quatro**: `AppDbContext`,
+  migração, `AppDbContextModelSnapshot` e o `.Designer.cs`. Aí reprova
+  exatamente um teste. **Destino: etapa 4**, que repete esse guarda ao estender
+  o espelho e tropeça exatamente aqui — e qualquer change futura que mexa no
+  modelo espelhado.
+
+**E um achado sobre o próprio método**: a rodada de verificação de guardas
+encontrou um defeito **no teste**, não na produção — uma asserção que ordenava
+ids por valor e comparava contra a ordem de criação, flake por construção porque
+`Guid` é aleatório. Passou na suíte cheia e reprovou na rodada do guarda. A
+verificação da convenção 15 não serve só para provar que o guarda pega o defeito
+de produção; ela expõe teste mal escrito de graça. **Destino: este registro é o
+que sustenta o custo da rodada de guardas nas próximas changes** — sem ele, a
+etapa que estiver com pressa corta a verificação por parecer cerimônia, e é
+justamente ela que devolveu um defeito que nenhuma outra etapa do processo
+pegaria.
+
+##### Tamanho entregue — terceira medição da série da convenção 18
+
+Headline do commit: **39 arquivos / 2922 linhas**. Trabalho real à mão:
+**25 arquivos / 935 linhas** — o headline é **3,1x**, a razão mais extrema já
+medida nesta base.
+
+| origem | arquivos | linhas |
+|---|---|---|
+| Produção (10 novos + 11 modificados) | 21 | 398 |
+| **Testes** (1 novo + 3 modificados) | 4 | 537 |
+| *(migração gerada ×2 apps)* | *6* | *860* |
+| *(artefatos OpenSpec + docs)* | *8* | *1127* |
+
+**Projetado 25 arquivos / 690-870 linhas. Arquivos: exato.** É o primeiro acerto
+de contagem de arquivo da série, e o método que produziu foi novo: **projetar
+"modificados" separado, a partir do blast radius lido no código**, em vez de
+derivar tudo do número de operações CQRS. Os 8 sites saíram com 1 a 3 linhas
+cada (3,3,3,3,3,3,2,1), como o perfil previa.
+
+**Linhas: 935, 7,5% acima do topo, e a diferença está inteira nos testes** (537
+contra 370-470 projetados; produção veio 398, dentro da faixa). Causa: o custo
+de ~19-21 linhas por cenário **subestima cenário que precisa de arranjo
+próprio** — os três mais caros desta change (desempate com ordem de inserção
+invertida, listagem com três agentes e vínculos cruzados, e os dois `PUT`
+vizinhos com catálogo MCP montado) custaram 25-40 linhas cada.
+
+**A migração gerada errou por 4x** (860 contra 150-200 projetadas) porque o
+`.Designer.cs` carrega o snapshot **inteiro** do modelo, não só a tabela nova.
+Não afeta o trabalho à mão — mas é o que explica a razão de 3,1x do headline, e
+é a terceira confirmação da primeira metade da convenção 18.
+
+**O que entrou no `01-ARQUITETURA_E_CONVENCOES.md`**: a entidade
+`AgentKnowledgeBase` no modelo de domínio, com as quatro consequências
+registradas (sem coluna extra e por quê, inativo dos dois lados, `Cascade` vs. o
+`Restrict` de `KnowledgeDocument`, desempate de ordenação), e a leitura causal da
+convenção 18 acima.
+
+##### Herdado decidido pelas etapas seguintes
+
+- **Etapa 4**: base inativa **não é oferecida ao agente** — filtro
+  `where kb.IsActive` no resolvedor, idioma de `McpToolSetResolver.cs:52`.
+  Decidido no `design.md` desta change (D6) e deliberadamente **fora da spec**
+  dela, por não ter gatilho verificável aqui; entra lá como *ADDED requirement*.
+  Mesma forma que a etapa 1 usou para as três garantias de reindexação.
+- **Etapa 5b**: (a) precisa do aviso "base vinculada e inativa explica a
+  consequência", no molde do cenário equivalente de `agent-mcp-binding-ui` — é a
+  contraparte de produto de aceitar vínculo com base inativa; (b) deriva
+  "agentes que usam esta base" **no cliente** a partir de `GET /agents`, como
+  `McpServerAgentsCard` já faz. Se descobrir que precisa de rota de API, é
+  achado a sequenciar, nunca backend improvisado dentro da change de tela
+  (convenção 1, corolário).
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -1207,6 +1321,35 @@ Cada um tem gatilho de quando revisitar:
   pergunta por migrações pendentes ali). Gatilho: qualquer mudança que toque
   as migrações de `apps/workers`, ou um segundo app passar a compartilhar o
   mesmo banco.
+- **Ordenação de vínculo por nome, sem desempate, em quatro sites de
+  `apps/api`** — achado durante a revisão da proposta de
+  `knowledge-base-vinculo-agente`, pré-existente e não introduzido por ela.
+  `AgentDelegationLookup.cs:23`, `AgentMcpServerLookup.cs:22` e as duas
+  agregações em lote de `ListAgentsQueryHandler.cs:34` e `:51` fazem
+  `OrderBy(... .Name)` sem `ThenBy` por identificador. **Nome não é único em
+  nenhum catálogo desta base**: verificado que o `AppDbContext` de `apps/api`
+  não tem nenhum índice único de nome (os únicos `HasIndex` são
+  `a2a_tasks.ContextId`, `a2a_tasks.State` e
+  `knowledge_documents.KnowledgeBaseId`) e que nenhum handler de criação valida
+  nome duplicado. Logo a ordem entre homônimos é a que o plano do PostgreSQL
+  devolver, e a mesma requisição pode responder em ordens diferentes sem nada
+  ter mudado no cadastro. É a mesma classe de defeito que
+  `dedupe-global-nome-de-tool` corrigiu em `McpToolSetResolver.cs:47`, com **duas
+  diferenças que baixam a severidade**: lá a consequência era semântica (mudava
+  qual tool mantinha o nome-base no dedupe), aqui é de apresentação; e **nenhuma
+  spec existente promete ordem** para `mcpServers` ou `delegatesTo` — conferido,
+  a palavra não aparece em `agent-catalog`, `agent-mcp-binding` nem
+  `agent-delegation-binding` —, então é não-determinação silenciosa, sem
+  contrato violado. Não corrigido de carona em
+  `knowledge-base-vinculo-agente` (convenção 12: defeito pertence a quem expõe e
+  se corrige em change própria); lá o vínculo novo já nasce com
+  `.ThenBy(kb => kb.Id)` e com o desempate **na spec**. **Gatilho**: a etapa 5b
+  (UI de vínculo de conhecimento), que renderiza as três listas lado a lado e é
+  onde a ordem instável fica visível ao operador — ou qualquer change que passe
+  a prometer ordem para esses dois campos. Conferir junto, quando for feito, o
+  `OrderBy(agent => agent.CreatedAt)` de `ListAgentsQueryHandler.cs:19`:
+  `CreatedAt` também não é único por construção, embora a colisão exija dois
+  agentes criados no mesmo tick.
 - **`AgentDeactivationTests` depende da ordem de execução** — achado durante
   `knowledge-base-catalogo-documentos`, pré-existente e não relacionado a ela.
   `AgentDeactivationFixture.TaskJobPublisher` é uma instância única

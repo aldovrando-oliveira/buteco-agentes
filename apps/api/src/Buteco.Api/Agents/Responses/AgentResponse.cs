@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Buteco.Api.A2A;
 using Buteco.Api.Agents.Entities;
+using Buteco.Api.KnowledgeBases.Responses;
 using Buteco.Api.McpServers.Responses;
 
 namespace Buteco.Api.Agents.Responses;
@@ -18,6 +19,7 @@ public record AgentResponse(
     DateTimeOffset UpdatedAt,
     IReadOnlyList<McpServerSummaryResponse> McpServers,
     IReadOnlyList<AgentSummaryResponse> DelegatesTo,
+    IReadOnlyList<KnowledgeBaseSummaryResponse> KnowledgeBases,
     // Endereços públicos A2A do agente, montados no servidor a partir da URL
     // pública configurada. Nulo quando ela não está configurada: sem ela não
     // existe endereço público, e devolver um relativo faria o painel montar a
@@ -37,6 +39,7 @@ public record AgentResponse(
         Agent agent,
         IReadOnlyList<McpServerSummaryResponse> mcpServers,
         IReadOnlyList<AgentSummaryResponse> delegatesTo,
+        IReadOnlyList<KnowledgeBaseSummaryResponse> knowledgeBases,
         AgentA2AAddresses? a2a) =>
         new(
             agent.Id,
@@ -51,5 +54,6 @@ public record AgentResponse(
             agent.UpdatedAt,
             mcpServers,
             delegatesTo,
+            knowledgeBases,
             a2a);
 }

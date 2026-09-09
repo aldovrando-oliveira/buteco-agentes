@@ -77,6 +77,21 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.ToTable("agent_delegations", (string)null);
                 });
 
+            modelBuilder.Entity("Buteco.Api.AgentKnowledgeBindings.Entities.AgentKnowledgeBase", b =>
+                {
+                    b.Property<Guid>("AgentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("KnowledgeBaseId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("AgentId", "KnowledgeBaseId");
+
+                    b.HasIndex("KnowledgeBaseId");
+
+                    b.ToTable("agent_knowledge_bases", (string)null);
+                });
+
             modelBuilder.Entity("Buteco.Api.AgentMcpBindings.Entities.AgentMcpServer", b =>
                 {
                     b.Property<Guid>("AgentId")
@@ -288,6 +303,21 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.HasOne("Buteco.Api.Agents.Entities.Agent", null)
                         .WithMany()
                         .HasForeignKey("TargetAgentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Api.AgentKnowledgeBindings.Entities.AgentKnowledgeBase", b =>
+                {
+                    b.HasOne("Buteco.Api.Agents.Entities.Agent", null)
+                        .WithMany()
+                        .HasForeignKey("AgentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Buteco.Api.KnowledgeBases.Entities.KnowledgeBase", null)
+                        .WithMany()
+                        .HasForeignKey("KnowledgeBaseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

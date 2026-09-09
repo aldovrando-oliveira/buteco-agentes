@@ -59,6 +59,25 @@ public class RouteAuthenticationTests(ApiFactoryFixture factory) : IClassFixture
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task PutAgentKnowledgeBases_WithoutToken_ReturnsUnauthorized()
+    {
+        var authenticated = factory.CreateClient();
+        var agentId = await CreateAgentAsync(authenticated);
+
+        var response = await UnauthenticatedClient().PutAsJsonAsync(
+            $"/agents/{agentId}/knowledge-bases",
+            new { knowledgeBaseIds = Array.Empty<Guid>() });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        // Nada foi executado: o agente continua sem vínculo, e a asserção
+        // negativa é o que separa "respondeu 401" de "respondeu 401 depois de
+        // ter feito o trabalho".
+        var agent = await authenticated.GetFromJsonAsync<System.Text.Json.JsonElement>($"/agents/{agentId}");
+        Assert.Empty(agent.GetProperty("knowledgeBases").EnumerateArray());
+    }
+
     private HttpClient UnauthenticatedClient()
     {
         var client = factory.CreateClient();

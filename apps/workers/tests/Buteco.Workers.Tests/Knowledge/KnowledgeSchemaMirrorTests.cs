@@ -111,6 +111,78 @@ public class KnowledgeSchemaMirrorTests(WorkerInfrastructureFixture fixture) : I
         Assert.True(indexes >= 1, "a FK para a base precisa de índice próprio");
     }
 
+    // --- Vínculo agente x base (change knowledge-base-vinculo-agente, R1) ---
+
+    [Fact]
+    public async Task Migrations_CreateTheAgentKnowledgeBindingTable()
+    {
+        var tables = await ScalarAsync<long>(
+            "select count(*) from information_schema.tables " +
+            "where table_schema = 'public' and table_name = 'agent_knowledge_bases';");
+
+        Assert.Equal(1, tables);
+    }
+
+    [Theory]
+    [InlineData("AgentId", "uuid", "NO")]
+    [InlineData("KnowledgeBaseId", "uuid", "NO")]
+    public async Task AgentKnowledgeBindingColumns_HaveTheExpectedTypeAndNullability(
+        string column, string expectedType, string expectedNullable)
+    {
+        var actual = await ScalarAsync<string>(
+            $"select data_type || '|' || is_nullable from information_schema.columns " +
+            $"where table_name = 'agent_knowledge_bases' and column_name = '{column}';");
+
+        Assert.Equal($"{expectedType}|{expectedNullable}", actual);
+    }
+
+    // O vínculo não tem coluna extra por decisão (design.md, D2) — nada de
+    // análogo a AgentMcpServer.AllowedTools. A asserção é NEGATIVA de
+    // propósito: é ela que impede o espelho de ganhar coluna que apps/api não
+    // tem, que é a forma da divergência difícil de enxergar.
+    [Fact]
+    public async Task AgentKnowledgeBindingTable_HasExactlyTheTwoKeyColumns()
+    {
+        var columns = await ScalarAsync<string>(
+            "select string_agg(column_name, ',' order by column_name) " +
+            "from information_schema.columns where table_name = 'agent_knowledge_bases';");
+
+        Assert.Equal("AgentId,KnowledgeBaseId", columns);
+    }
+
+    [Fact]
+    public async Task AgentKnowledgeBinding_HasCompositePrimaryKeyOnBothColumns()
+    {
+        var keyColumns = await ScalarAsync<string>(
+            "select string_agg(kcu.column_name, ',' order by kcu.ordinal_position) " +
+            "from information_schema.table_constraints tc " +
+            "join information_schema.key_column_usage kcu on kcu.constraint_name = tc.constraint_name " +
+            "where tc.table_name = 'agent_knowledge_bases' and tc.constraint_type = 'PRIMARY KEY';");
+
+        Assert.Equal("AgentId,KnowledgeBaseId", keyColumns);
+    }
+
+    // Cascade nas DUAS FKs (design.md, D10) — e deliberadamente diferente do
+    // RESTRICT que knowledge_documents usa para a base. Trocar um pelo outro
+    // no mapeamento espelhado precisa reprovar aqui.
+    [Fact]
+    public async Task AgentKnowledgeBindingForeignKeys_UseCascade()
+    {
+        var deleteRules = await ScalarAsync<string>(
+            "select string_agg(distinct rc.delete_rule, ',') " +
+            "from information_schema.referential_constraints rc " +
+            "join information_schema.table_constraints tc on tc.constraint_name = rc.constraint_name " +
+            "where tc.table_name = 'agent_knowledge_bases';");
+
+        Assert.Equal("CASCADE", deleteRules);
+
+        var foreignKeyCount = await ScalarAsync<long>(
+            "select count(*) from information_schema.table_constraints " +
+            "where table_name = 'agent_knowledge_bases' and constraint_type = 'FOREIGN KEY';");
+
+        Assert.Equal(2, foreignKeyCount);
+    }
+
     // O modelo espelhado não pode ter drift em relação às migrações: se
     // divergisse, o EF acusaria mudanças pendentes de modelo.
     [Fact]

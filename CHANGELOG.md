@@ -122,6 +122,13 @@ o versionamento pretende seguir
   real".
 - A indexação em si ainda não tem consumidor: todo documento nasce e
   permanece `Pending`.
+- Vínculo N:N entre agente e base de conhecimento em `apps/api`, definido por
+  `PUT /agents/{id}/knowledge-bases` com substituição integral do conjunto.
+  Base inativa continua vinculável, e agente inativo continua configurável.
+- As respostas de agente passam a incluir `knowledgeBases`, com id e nome de
+  cada base vinculada, ordenados por nome e desempatados por identificador.
+- O vínculo ainda não é oferecido ao agente em execução: não há tool nem
+  resolvedor de conhecimento.
 
 **Entrega containerizada**
 
