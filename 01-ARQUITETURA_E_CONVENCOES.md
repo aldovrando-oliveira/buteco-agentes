@@ -643,6 +643,39 @@ de propor algo nesta base:
     grupo de endpoints), só sobre código, e citar a âncora **decomposta**, não
     o headline dela.
 
+    **Quarta medição (`frontend-knowledge-base-catalogo`), e ela obriga a separar
+    três causas que somadas mentem.** Entregue 52 arquivos / 3078 linhas contra 23
+    projetados. Ler isso como "a projeção errou 2x" produziria um fator de
+    correção inventado na quinta medição — o erro exato que esta convenção existe
+    para não repetir. Decomposto:
+
+    - **Os 21 criados projetados bateram exatos** (21 / 2364 contra 21 / ~2310;
+      linhas +2,3%). **Segundo acerto seguido** do método de contar criados e
+      modificados separadamente a partir do blast radius lido no código, depois
+      dos 25 contra 25 de `knowledge-base-vinculo-agente`. Essa metade está
+      confirmada.
+    - **21 arquivos modificados a mais, e a causa é reutilizável**: o blast radius
+      de um **campo obrigatório acrescentado a um tipo de domínio compartilhado no
+      frontend** é a contagem de **fixtures de teste**, não a de componentes.
+      Acrescentar `knowledgeBases` ao tipo `Agent` não obrigou a mudar componente
+      nenhum e obrigou a tocar 21 arquivos de teste, com **uma linha cada**
+      (`knowledgeBases: []`). Quem projetar isso lendo o código de produção erra
+      por fator de 20. É a mesma forma do caso já registrado acima do lado do
+      backend (12 modificados, 11 deles por uma a três linhas, ao acrescentar
+      campo a um response usado por N handlers) — a régua vale nos dois apps.
+      **O `tsc` enumera de graça**: tornar o campo obrigatório e ler a lista de
+      erros custa menos que qualquer leitura manual.
+    - **Escopo acrescentado durante a implementação**, que a projeção não podia
+      conter: duas decisões tomadas na conferência manual (card de agentes e
+      coluna de uso derivada) valeram +4 criados e +21 modificados. Não é erro de
+      projeção; é escopo que não existia quando ela foi feita. **Medição de
+      método só compara o escopo que estava projetado.**
+
+    E um refinamento menor da régua de modificados: **todo arquivo modificado
+    arrasta o teste dele.** A projeção de modificados desta change (2 arquivos)
+    contou os de produção e foi cega aos testes deles; os três testes modificados
+    somaram 60 das 99 linhas do escopo original. Projetar modificados em pares.
+
 19. **"Pré-existente" e "ambiental" são conclusões que exigem a baseline, e a
     baseline não fecha sozinha.** Três vezes nesta base uma falha de teste foi
     classificada como pré-existente ou ambiental e a classificação estava errada,

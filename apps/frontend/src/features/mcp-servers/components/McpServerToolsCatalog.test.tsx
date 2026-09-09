@@ -29,6 +29,7 @@ function agent(overrides: Partial<Agent>): Agent {
     updatedAt: '2026-07-26T00:00:00Z',
     mcpServers: [],
     delegatesTo: [],
+    knowledgeBases: [],
     a2a: null,
     ...overrides,
   };

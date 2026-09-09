@@ -7,13 +7,18 @@ import {
   ScrollArea,
   Text,
 } from '@mantine/core';
-import { Bot, MessagesSquare, Moon, Server, Sun } from 'lucide-react';
+import { BookOpen, Bot, MessagesSquare, Moon, Server, Sun } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
 import { useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
 
 const navItems = [
   { to: '/agents', label: 'Agentes', icon: Bot },
   { to: '/mcp-servers', label: 'Servidores MCP', icon: Server },
+  // Terceira posição, antes de Canais, como no protótipo. O ícone é BookOpen do
+  // lucide-react, e não o placeholder de letra "K" do protótipo nem o Tabler que
+  // o README do handoff supõe: o painel usa lucide desde a change da casca
+  // (design.md da change frontend-knowledge-base-catalogo, D8).
+  { to: '/knowledge-bases', label: 'Conhecimento', icon: BookOpen },
   { to: '/channels', label: 'Canais', icon: MessagesSquare },
 ];
 

@@ -11,6 +11,10 @@ import { McpServerListPage } from '../features/mcp-servers/pages/McpServerListPa
 import { McpServerCreatePage } from '../features/mcp-servers/pages/McpServerCreatePage';
 import { McpServerDetailPage } from '../features/mcp-servers/pages/McpServerDetailPage';
 import { McpServerEditPage } from '../features/mcp-servers/pages/McpServerEditPage';
+import { KnowledgeBaseListPage } from '../features/knowledge-bases/pages/KnowledgeBaseListPage';
+import { KnowledgeBaseCreatePage } from '../features/knowledge-bases/pages/KnowledgeBaseCreatePage';
+import { KnowledgeBaseDetailPage } from '../features/knowledge-bases/pages/KnowledgeBaseDetailPage';
+import { KnowledgeBaseEditPage } from '../features/knowledge-bases/pages/KnowledgeBaseEditPage';
 import { ChannelListPage } from '../features/channels/pages/ChannelListPage';
 import { ChannelCreatePage } from '../features/channels/pages/ChannelCreatePage';
 import { ChannelDetailPage } from '../features/channels/pages/ChannelDetailPage';
@@ -52,6 +56,12 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
           <Route path="new" element={<McpServerCreatePage />} />
           <Route path=":id" element={<McpServerDetailPage />} />
           <Route path=":id/edit" element={<McpServerEditPage />} />
+        </Route>
+        <Route path="knowledge-bases">
+          <Route index element={<KnowledgeBaseListPage />} />
+          <Route path="new" element={<KnowledgeBaseCreatePage />} />
+          <Route path=":id" element={<KnowledgeBaseDetailPage />} />
+          <Route path=":id/edit" element={<KnowledgeBaseEditPage />} />
         </Route>
         <Route path="channels">
           <Route index element={<ChannelListPage />} />

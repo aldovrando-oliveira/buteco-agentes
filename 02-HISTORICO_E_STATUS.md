@@ -1299,6 +1299,214 @@ convenção 18 acima.
   achado a sequenciar, nunca backend improvisado dentro da change de tela
   (convenção 1, corolário).
 
+##### Etapa 5a-1 — catálogo de bases na UI (aplicada e arquivada em 2026-09-09)
+
+`frontend-knowledge-base-catalogo` — primeira etapa de UI da linha, só
+`apps/frontend`, consumindo as seis rotas que a etapa 1 já entregava. Listagem
+com busca sem acento e filtro por estado, detalhe, criação e edição, card de
+agentes que consultam a base, coluna `Consultada por`, e o quarto item de
+navegação. Arquivada em
+`openspec/changes/archive/2026-09-09-frontend-knowledge-base-catalogo/`; spec viva
+em `openspec/specs/knowledge-base-catalog-ui/` (10 requisitos, 45 cenários).
+
+Entregue: 52 arquivos / 3078 linhas de código (25 criados / 2949; 27 modificados
+/ 129). Suíte do frontend passou de 54 arquivos / 451 testes para **66 / 574**.
+
+**Os protótipos do handoff ficaram anexados na change arquivada**, em `design/`:
+`Buteco Agentes.dc.html` (protótipo navegável, com `support.js` ao lado),
+`CONHECIMENTO.md` (revisão 2 de 09/09/2026 — a especificação válida das telas das
+**quatro** etapas de UI, 5a-1, 5a-2, 5b e 5c) e `README-painel.md`. Dois arquivos
+do handoff foram **removidos de propósito** e o motivo está em D15: um mandava
+tratar o protótipo como fonte da identidade visual (falso desde
+`frontend-tema-identidade-visual`) e o outro especificava quatro coisas contra
+decisões já fechadas, entre elas o multipart que a etapa 1 recusou.
+
+**Vinte e duas decisões (D1–D22)**, das quais nove são recusas do protótipo
+sustentadas pela convenção 13 — a mais consequente sendo que contagem de
+fragmentos e nome de tool de base **não existem em campo nenhum**, e a UI não os
+inventa. As quatro rodadas de conferência manual estão registradas em D22, com o
+custo de cada uma.
+
+##### "Fora de escopo por dependência" sem conferir a dependência (uma ocorrência)
+
+Duas coisas desta change estavam declaradas **fora de escopo** na proposta — o
+card "agentes que consultam esta base" e a coluna `Consultada por` — pelo motivo
+de dependerem da derivação a partir de `GET /agents`, tratada como etapa
+posterior. A conferê​ncia manual mostrou que a dependência **já estava
+satisfeita**: `AgentResponse.KnowledgeBases` é populado desde
+`knowledge-base-vinculo-agente`, então as duas custam **uma** requisição, não N.
+Entraram (D20 e D21), e a segunda não criou arquivo nenhum — reusou o módulo que
+a primeira escreveu.
+
+**A decisão de trazê-las está certa. O que interessa registrar é o padrão, e ele
+tem dois lados:**
+
+- **A conferência corrigiu uma exclusão errada.** É o inverso da convenção 1: ela
+  protege contra backend improvisado dentro de change de tela, e aqui não houve
+  backend nenhum — houve uma dependência **julgada pendente sem verificação**. A
+  proposta escreveu "depende de X, fica para depois" sem abrir o código para ver
+  se X existia.
+- **Essa conferência pertence à proposta, não à conferência manual.** Deu certo
+  desta vez porque o custo era uma requisição. Se a dependência realmente não
+  existisse, a mesma descoberta na mesma hora teria produzido ou uma change
+  inchada com backend improvisado, ou trabalho jogado fora.
+
+**Não vira convenção ainda, e o motivo é que o repositório tem exatamente uma
+ocorrência — e um contra-exemplo que a delimita.** O caso que parecia o segundo
+não é: o card "Protocolo A2A" também foi removido do protótipo por dependência
+ausente, mas ali a dependência **estava mesmo ausente** — `AgentResponse` não
+tinha os endereços, e `agente-enderecos-a2a` foi proposta para acrescentá-los,
+sequenciando backend antes de UI exatamente como a convenção 1 manda. Ou seja: o
+repositório tem **um caso certo** (A2A: dependência conferida, ausente,
+sequenciada) e **um errado** (esta change: dependência não conferida, presente,
+excluída à toa). O contraste é o que dá o formato da regra futura, se ela vier.
+
+**Gatilho para virar corolário da convenção 1:** a segunda ocorrência de exclusão
+por dependência não verificada. O corolário candidato, já escrito para não
+precisar ser reconstruído: *"fora de escopo por dependência" exige conferir a
+dependência no código, do mesmo jeito que "precisa de backend" exige sequenciar.*
+
+##### Quarta medição da convenção 18 (`frontend-knowledge-base-catalogo`)
+
+| | projetado | entregue | erro |
+|---|---|---|---|
+| criados | 21 arquivos / ~2310 linhas | **21 / 2364** | arquivo **exato**; linhas +2,3% |
+| modificados | 2 / ~20 | **6 / 99** | arquivo 3x; linhas ~5x |
+| total | 23 / ~2330 | **27 / 2463** | arquivo +17%; linhas +5,7% |
+
+**Segundo acerto seguido na contagem de criados** — 21 contra 21, depois dos 25
+contra 25 de `knowledge-base-vinculo-agente`. O método (contar por componente,
+criados e modificados separados, depois de fechar a verificação) está confirmado
+nessa metade.
+
+**Duas coisas novas, as duas sobre a metade dos modificados:**
+
+1. **Todo arquivo modificado arrasta o teste dele.** A projeção leu o blast
+   radius no código, como a convenção pede, e ainda errou 3x porque contou os
+   arquivos de **produção** tocados (`routes.tsx`, `AppShell.tsx`) e foi cega aos
+   testes deles. Os três testes modificados somam 60 das 99 linhas alteradas. É a
+   mesma forma do erro que a convenção já registra (projetar por operação CQRS é
+   cego aos modificados), um nível abaixo. **Projetar modificados em pares.**
+2. **Verificação não pega o que a implementação pega.** A convenção manda projetar
+   depois de fechar a verificação, e foi feito — dois componentes da projeção só
+   existiram por causa dela. Mas os outros 2 arquivos modificados
+   (`DetailHeader.tsx` + teste) vieram da **montagem**: o componente
+   compartilhado renderiza "Sem descrição." quando a prop é omitida, e o detalhe
+   da base precisava de cabeçalho **sem** subtítulo, porque o que o protótipo
+   propunha ali depende dos dois dados que a change não tem. Verificação lê o que
+   o código expõe; só a montagem revela o que ele **assume**. A lição não é
+   "verificar mais" — é que a faixa de modificados carrega uma incerteza que a de
+   criados não tem, e citar as duas com a mesma precisão é falsa confiança. Ver
+   D17 do `design.md` daquela change.
+
+**Terceira coisa, e é confirmação de algo que a convenção já previa.** O escopo
+mudou no meio (o card de agentes entrou por decisão na conferência), e com ele
+veio acrescentar `knowledgeBases` ao tipo `Agent` do frontend, **obrigatório**.
+Isso tocou **21 arquivos de teste com uma linha cada** — a fixture ganhando
+`knowledgeBases: []`. É exatamente o perfil que esta convenção registrou de
+`knowledge-base-vinculo-agente` ("12 arquivos modificados, 11 deles por uma a
+três linhas", ao acrescentar campo a um response usado por N handlers), agora
+repetido no frontend. **Refinamento:** o blast radius de um campo obrigatório num
+tipo compartilhado é a contagem de **fixtures**, não a de componentes — nenhum
+componente precisou mudar, 21 arquivos de teste precisaram. Quem projetar isso
+lendo o código de produção erra por um fator de 20. O `tsc` enumera de graça.
+
+**Entregue total, com o escopo já mudado:** 52 arquivos / 3078 linhas (25 criados
+/ 2949; 27 modificados / 129).
+
+**Baseline da suíte do frontend depois desta change:** 66 arquivos / 574 testes
+(era 54 / 451).
+
+##### Handoff da etapa 5a-1 (`frontend-knowledge-base-catalogo`, 2026-09-09)
+
+A primeira etapa de UI da linha conferiu o protótipo do handoff de design contra
+o código, tela a tela (convenção 17), e o que ela **não pôde implementar** gera
+requisito para as etapas seguintes. Os protótipos ficaram anexados em
+`openspec/changes/.../frontend-knowledge-base-catalogo/design/` — `CONHECIMENTO.md`
+revisão 2 é a especificação válida das telas das quatro etapas.
+
+**Para a etapa 2 (indexação):**
+
+- **`FailureReason` legível por operador**, não exceção crua. O campo já existe
+  (`string?`, nos dois responses de documento); o que falta é a decisão de que
+  texto ele carrega. A tela de documentos mostra o motivo **completo, sem
+  truncar** — é a única cópia de falha que ela tem.
+- **Contagem de tentativas e instante da última tentativa persistidos.** O
+  protótipo diz "429 nas três tentativas, a última em 01/09/2026 às 03:14", e
+  nenhum dos dois existe em `KnowledgeDocument`. É política de retry com contador
+  e carimbo, não formatação de tela.
+- **Campo de contagem de fragmentos.** Não existe em lugar nenhum da API:
+  `grep -ri "fragment\|chunk"` em `apps/api/src` e `apps/workers/src` só acha
+  comentários sobre a fragmentação futura. A coluna `Fragmentos` da 5a-2 não tem
+  o que exibir em **nenhum** dos quatro estados até a etapa 2 entregar o campo.
+- **Rota de reindexação de documento.** `KnowledgeDocumentEndpoints` tem `POST /`,
+  `GET /`, `GET /{id}`, `PUT /{id}` e `DELETE /{id}`, mais nada. O botão
+  "Reindexar documento" do protótipo não tem rota. É backend, e pela convenção 1
+  não nasce dentro de change de tela.
+
+**Para a 5a-1 de dados (a etapa 2 também destrava):**
+
+- **Contagem de documentos e resumo de indexação em `KnowledgeBaseResponse`** (ou
+  rota de resumo). Sem isso as colunas `Documentos` e `Indexação` do catálogo e a
+  quarta opção do filtro (`Com falha`) não podem existir: hoje os documentos
+  vivem em `GET /knowledge-bases/{knowledgeBaseId}/documents`, uma requisição
+  **por base**, contra as 100+ bases que o handoff declara como volume real. O
+  catálogo entregou duas colunas (Base, Estado) e três opções de filtro, com
+  asserção negativa na spec para impedir que alguém as "complete" com zero.
+
+**Correções de protótipo para a 5a-2:**
+
+- **`0 fragmentos` → célula vazia.** O protótipo faz
+  `st === 'failed' ? '0 fragmentos' : '—'`, ou seja zera no estado `failed`. Isso
+  contraria a spec viva de `knowledge-document-catalog`: informação derivada da
+  indexação é exibida quando `indexedAt` não é nulo e **omitida** quando é nulo,
+  nunca zerada — zerada afirmaria que a indexação rodou e não achou nada.
+- **A frase "documentos muito grandes tendem a bater no limite" sai.** É conselho
+  que o sistema não verifica: nada correlaciona tamanho com falha de embedding, e
+  a própria semente do protótipo aplica essa cópia a um documento pequeno
+  (convenção 13). Não vira nem texto estático de ajuda.
+- **O upload é `FileReader` + corpo JSON, não `multipart/form-data`.** O prompt de
+  implementação do handoff pedia rota `/documents/upload`, `FormData` e modificar
+  o `request<T>` de cada feature para omitir `Content-Type` — contra a **D3 da
+  etapa 1, "Zero multipart, com gatilho registrado"**: markdown e `.txt` são
+  texto, o cliente lê com `FileReader` e envia string no mesmo corpo JSON.
+  Multipart obrigaria a mexer no `Content-Type` fixo de cada `request<T>`, mais
+  `IFormFile`, mais validação de tipo binário, mais limite separado.
+  **Gatilho para multipart nascer:** o primeiro tipo de origem binário (PDF),
+  junto com o extrator que precisa dos bytes — não antes.
+
+**Para a 5b, o que já está pronto — e o que a 5a-1 já entregou:**
+
+- A dependência declarada ("deriva agentes que usam esta base no cliente a partir
+  de `GET /agents`") **já estava satisfeita**: `AgentResponse.KnowledgeBases`
+  existe e é populado desde `knowledge-base-vinculo-agente`. O campo **não é
+  opcional** — `knowledgeBases?:` com tratamento de `undefined` não se justifica,
+  ao contrário de `a2a?:`, porque os dois lados já implantaram.
+- **O card "agentes que consultam esta base" saiu da 5b e entrou na 5a-1**,
+  decidido na conferência manual: a dependência estava pronta e custava uma
+  requisição, não N. Com ele vieram, prontos para a 5b reusar: o campo
+  `knowledgeBases` no tipo `Agent` do frontend (que não existia, e cuja
+  obrigatoriedade tocou 22 fixtures em 21 arquivos) e
+  `features/knowledge-bases/utils/agentUsage.ts`. A 5b herda a derivação pronta e
+  fica com a aba, o modal de vincular e as mutações.
+- **A coluna `Consultada por` do catálogo continua fora** — usa a mesma
+  derivação, mas não foi pedida.
+- O vínculo é `PUT /agents/{id}/knowledge-bases`, **substituição do conjunto
+  inteiro**. Não há `PUT` nem `DELETE` por base, ao contrário do que o handoff
+  supõe. Vale a saída que o próprio handoff previu: manter a UI de ação por
+  linha, enviando o conjunto resultante a cada ação.
+- A revisão 2 do handoff mudou o desenho: o vínculo é a **quarta aba** do detalhe
+  do agente (`?tab=conhecimento`), a lista mostra **só as bases vinculadas**, e
+  vincular é modal com busca que não fecha ao vincular. Motivo registrado lá: a
+  coluna direita da Visão geral tem quatro cards (o de A2A entrou depois) e
+  empurra qualquer seção inline para fora da dobra.
+
+**Dívida assumida, não introduzida:** `GET /knowledge-bases` não tem `?q=` nem
+paginação, então busca e filtro do catálogo rodam no cliente sobre a resposta
+inteira. Com as 100+ bases que o handoff declara, essa é a primeira lista do
+painel em que a ausência incomoda — pedir `?q=` e paginação ao backend, e trocar
+a filtragem local por requisição com debounce.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -1522,17 +1730,30 @@ Cada um tem gatilho de quando revisitar:
   `apps/workers` de fora dele) só apareceu na validação estendida do
   apply, não na varredura original. Ver Achado 10 do `design.md` daquela
   change, arquivada.
-- **Testes do frontend falhando de forma pré-existente e não-determinística**
+- ~~**Testes do frontend falhando de forma pré-existente e não-determinística**
   (`AgentForm`/`ChannelForm`/`McpServerForm.test.tsx` e as páginas de
   criação/edição que os usam — timing de `userEvent` embaralhando texto
-  digitado ou perdendo timeout numa navegação), achados ao rodar a
-  suíte completa do monorepo durante o apply de
-  `apps-workers-contexto-temporal`. A contagem variou entre rodadas (14
-  numa sessão, 15 na baseline nomeada pós-archive) — não é um número
-  fixo, é a assinatura da própria não-determinismo. Sem relação com
-  aquela change — `apps/frontend` não foi tocado. Gatilho: qualquer
-  trabalho futuro em `apps/frontend`, ou se continuarem vermelhos e
-  atrapalharem CI.
+  digitado ou perdendo timeout numa navegação)~~ — **resolvido por
+  `agente-enderecos-a2a`** (D8 e tarefa 4.6), que o fechou de arrasto por
+  estar impedindo verificar a própria change. A causa era **prazo, não
+  lógica**: os testes de formulário abrem dropdowns que montam em portal
+  depois de uma transição, enquanto 54 arquivos rodam em paralelo, e o
+  prazo padrão de **um segundo** das consultas assíncronas do Testing
+  Library acabava antes de a opção existir. O prazo das consultas subiu
+  para cinco segundos e o do teste para quinze.
+
+  **Este item ficou obsoleto sem ser riscado** desde 06/09, porque a
+  correção entrou dentro de uma change de outro assunto. A contagem
+  registrada aqui antes (14 numa sessão, 15 na baseline nomeada
+  pós-archive) era a assinatura do não-determinismo, e a leitura de que
+  não tinha relação com `apps-workers-contexto-temporal` estava certa.
+
+  Confirmado por medição em duas sessões: **cinco execuções completas
+  verdes** logo depois da correção (`notes.md` de `agente-enderecos-a2a`)
+  e **quatro** em `main` limpo ao propor
+  `frontend-knowledge-base-catalogo` — 54 arquivos / 451 testes —, nove no
+  total. A medição é confirmação, não a causa: baseline verde não promove
+  sintoma a resolvido (convenção 19).
 - ~~`InboxOrchestratorRoundTrip.Tests.MessageReceived_TriggersFullRoundTrip_...`
   não completa contra `podman`~~ — **resolvido por
   `inbox-push-notification-decrypt-resiliente`**, ver a seção "Correção
@@ -1810,6 +2031,45 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   com nome equivalente cai no mesmo padrão. **Gatilho: a proposta da etapa 4** —
   entra como tarefa prevista dela, não como lembrança.
 
+- **Lacuna dupla na spec da etapa 1: as datas da base não têm requisito nem
+  teste.** `KnowledgeBaseResponse` expõe `createdAt` e `updatedAt`
+  (`KnowledgeBaseResponse.cs:10-11`, populados por `FromEntity`), mas a spec viva
+  de `knowledge-base-catalog` não os menciona em cenário nenhum — os de listagem
+  e de consulta por id dizem "id, nome, descrição e `isActive`" — e
+  `grep -rn "createdAt\|CreatedAt"` nos testes de conhecimento de `apps/api`
+  não devolve nada (`KnowledgeWireFormatTests` cobre `indexingStatus`,
+  `sourceType` e `contentLengthBytes`, que são campos de documento).
+
+  Achado ao propor `frontend-knowledge-base-catalogo` (D16), que precisava saber
+  se as datas existiam para decidir se o detalhe podia exibi-las: existem, então
+  a tela as exibe e a spec da UI as requer. **O risco é a assimetria**: essa
+  change passou a ser o primeiro lugar do repositório com requisito sobre as
+  datas, e ele está do lado da UI. Se alguém removesse `CreatedAt` do response,
+  nenhum teste de `apps/api` reprovaria — só o painel quebraria, por um campo
+  que a spec do backend nunca prometeu (convenção 12: contrato entre lados
+  inclui o campo, e defeito de formato pertence a quem expõe). **Gatilho:** a
+  etapa 2, que já mexe em `knowledge-base-catalog`, ou qualquer change que toque
+  `KnowledgeBaseResponse`.
+
+  **Agravado em 09/09/2026, na conferência da 5a-1:** o card de datas saiu do
+  detalhe da base (fidelidade ao protótipo, que não tem datas nessa tela), então
+  a spec de UI deixou de requerê-las. `createdAt` e `updatedAt` passam a não ter
+  **nenhum** requisito nem asserção em lugar nenhum do repositório — dois campos
+  no fio que nada promete e nada verifica.
+
+- **Pastas de handoff desaparecendo de `~/Downloads` durante a sessão.**
+  Registrado em 09/09/2026, ao propor `frontend-knowledge-base-catalogo`:
+  `sistema_gestao/`, `design_handoff_butecando/` e
+  `design_handoff_painel_agentes_mcp/` (mais os dois `.zip` correspondentes)
+  existiam no primeiro `ls` da sessão e não existiam minutos depois, com só
+  leituras tendo sido feitas no intervalo (`ls`, `find`, `grep`, `sed`, `cat`).
+  Não teve consequência: a versão viva do projeto Claude Design
+  *Sistema Gestão de Agentes*
+  (`e4f9bbd6-dd31-4ff1-954b-0e686d2eaa54`) é a autoritativa, e é dela que os
+  anexos de `design/` foram tirados — a cópia local era de 05/09 e nem tinha as
+  telas de conhecimento. **Não há causa conhecida e não há ação pedida.** Fica
+  registrado só para que, se repetir, se saiba que já aconteceu antes e quando.
+
 
 ## Próximo passo
 
@@ -1893,14 +2153,19 @@ correção proposta aqui, só o registro de que precisa de decisão**:
   gatilho completo).
 - `TaskJobConsumer` (`apps/workers`) com setup inicial desprotegido —
   não corrigido ainda (ver "Itens em aberto" para o gatilho completo).
-- `apps/frontend` — `AgentForm`/`ChannelForm`/`McpServerForm` e páginas
+- ~~`apps/frontend` — `AgentForm`/`ChannelForm`/`McpServerForm` e páginas
   de criação/edição, timing de `userEvent`; contagem não-determinística
-  entre rodadas (14–15).
+  entre rodadas (14–15)~~ — **resolvido por `agente-enderecos-a2a`** (D8):
+  prazo padrão de um segundo das consultas assíncronas, curto para
+  dropdowns em portal sob paralelismo. 9/9 verde somando as duas
+  sessões de medição; ver "Itens em aberto" para a leitura completa.
 
 Com `inbox-session-indice-unico` aplicada, `apps/inbox` (`Buteco.Inbox.Tests`)
 não tem mais nenhum flake conhecido — 164/164 (160/160 depois de
 `inbox-session-indice-unico`, +1 de `inbox-push-notification-decrypt-resiliente`,
-+1 desta sessão). O ruído que resta na fila acima é só cross-app/frontend.
++1 desta sessão). O ruído que resta na fila acima é só cross-app: com o item de
+`apps/frontend` resolvido por `agente-enderecos-a2a`, `apps/frontend` também não
+tem mais flake conhecido — 54 arquivos / 451 testes, 9/9 verde.
 
 A linha de trabalho de contexto temporal e de canal (`apps-workers-contexto-temporal`
 → `inbox-instante-mensagem` → `inbox-contexto-canal`) está **concluída**.

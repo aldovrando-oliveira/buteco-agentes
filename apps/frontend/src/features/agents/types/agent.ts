@@ -43,6 +43,12 @@ export interface Agent {
   updatedAt: string;
   mcpServers: AgentMcpServerSummary[];
   delegatesTo: AgentSummaryReference[];
+  // Obrigatório, e não opcional como `a2a`: o campo está em AgentResponse desde
+  // a change knowledge-base-vinculo-agente, que já foi implantada — não há
+  // janela de migração a cobrir aqui. É `id + name` porque
+  // KnowledgeBaseSummaryResponse é só isso, deliberadamente: o estado da base
+  // sai do catálogo, não do vínculo.
+  knowledgeBases: AgentSummaryReference[];
   // Opcional, e não só anulável: uma API que ainda não subiu com esta mudança
   // omite o campo, e aí ele chega como undefined, não null. É a janela de
   // migração — os dois lados implantam separado (design.md da change

@@ -12,6 +12,7 @@ import { listMcpServers } from '../features/mcp-servers/api/mcpServersApi';
 import type { Agent } from '../features/agents/types/agent';
 import { listProviders } from '../features/agents/api/providersApi';
 import { listChannels } from '../features/channels/api/channelsApi';
+import { listKnowledgeBases } from '../features/knowledge-bases/api/knowledgeBasesApi';
 import { clearToken, setToken } from '../auth/token';
 
 // importOriginal preserva ApiError: o detalhe do agente faz `instanceof
@@ -35,6 +36,12 @@ vi.mock('../features/channels/api/channelsApi', () => ({
   listChannels: vi.fn(),
 }));
 
+vi.mock('../features/knowledge-bases/api/knowledgeBasesApi', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../features/knowledge-bases/api/knowledgeBasesApi')>();
+  return { ...actual, listKnowledgeBases: vi.fn() };
+});
+
 const agent: Agent = {
   id: '55555555-5555-5555-5555-555555555555',
   name: 'Atendente',
@@ -48,6 +55,7 @@ const agent: Agent = {
   updatedAt: '2026-07-26T00:00:00Z',
   mcpServers: [],
   delegatesTo: [],
+  knowledgeBases: [],
   a2a: null,
 };
 
@@ -80,6 +88,8 @@ describe('appRoutes', () => {
     vi.mocked(listProviders).mockResolvedValue([{ id: 'openai', models: ['gpt-5.6-sol'] }]);
     vi.mocked(listChannels).mockReset();
     vi.mocked(listChannels).mockResolvedValue([]);
+    vi.mocked(listKnowledgeBases).mockReset();
+    vi.mocked(listKnowledgeBases).mockResolvedValue([]);
     vi.mocked(getAgent).mockReset();
     vi.mocked(getAgent).mockResolvedValue(agent);
     vi.mocked(listMcpServers).mockReset();
@@ -135,6 +145,28 @@ describe('appRoutes', () => {
 
     expect(await screen.findByRole('heading', { name: 'Canais' })).toBeInTheDocument();
     expect(screen.getByText('Buteco Agentes')).toBeInTheDocument();
+  });
+
+  it('navega para o catálogo de bases pelo item de navegação "Conhecimento"', async () => {
+    const user = userEvent.setup();
+    renderRoutesFrom('/');
+
+    await screen.findByRole('heading', { name: 'Agentes' });
+    await user.click(screen.getByRole('link', { name: 'Conhecimento' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Bases de conhecimento' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Buteco Agentes')).toBeInTheDocument();
+  });
+
+  it('monta as quatro rotas do grupo de conhecimento', async () => {
+    renderRoutesFrom('/knowledge-bases/new');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Nova base de conhecimento' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Servidores MCP' })).toBeInTheDocument();
   });
 
   it('a rota antiga de gestão do vínculo leva à aba de ferramentas do detalhe', async () => {

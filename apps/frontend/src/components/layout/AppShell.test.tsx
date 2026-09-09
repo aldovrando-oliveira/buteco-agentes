@@ -38,11 +38,15 @@ describe('AppShell', () => {
     window.localStorage.clear();
   });
 
-  it('lista os itens de navegação Agentes, Servidores MCP e Canais', () => {
+  it('lista os itens de navegação Agentes, Servidores MCP, Conhecimento e Canais', () => {
     renderAppShell();
 
     expect(screen.getByRole('link', { name: 'Agentes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Servidores MCP' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Conhecimento' })).toHaveAttribute(
+      'href',
+      '/knowledge-bases',
+    );
     expect(screen.getByRole('link', { name: 'Canais' })).toBeInTheDocument();
     expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
     expect(screen.queryByText('Inboxes')).not.toBeInTheDocument();
@@ -98,7 +102,7 @@ describe('AppShell', () => {
     const { container } = renderAppShell();
 
     // O rótulo textual continua sendo o nome acessível; o ícone é decoração.
-    for (const label of ['Agentes', 'Servidores MCP', 'Canais']) {
+    for (const label of ['Agentes', 'Servidores MCP', 'Conhecimento', 'Canais']) {
       const link = screen.getByRole('link', { name: label });
       const icon = link.querySelector('svg');
 
@@ -106,13 +110,17 @@ describe('AppShell', () => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     }
 
-    expect(container.querySelectorAll('a svg')).toHaveLength(3);
+    expect(container.querySelectorAll('a svg')).toHaveLength(4);
   });
 
   it.each([
     ['/agents/abc-123', 'Agentes'],
     ['/agents/new', 'Agentes'],
     ['/mcp-servers/abc-123/edit', 'Servidores MCP'],
+    ['/knowledge-bases', 'Conhecimento'],
+    ['/knowledge-bases/abc-123', 'Conhecimento'],
+    ['/knowledge-bases/new', 'Conhecimento'],
+    ['/knowledge-bases/abc-123/edit', 'Conhecimento'],
     ['/channels/abc-123', 'Canais'],
   ])('mantém o item ativo em %s', (rota, ativo) => {
     renderAppShell(rota);
@@ -121,7 +129,9 @@ describe('AppShell', () => {
     // não só a raiz dele.
     expect(screen.getByRole('link', { name: ativo })).toHaveAttribute('data-active', 'true');
 
-    for (const outro of ['Agentes', 'Servidores MCP', 'Canais'].filter((l) => l !== ativo)) {
+    for (const outro of ['Agentes', 'Servidores MCP', 'Conhecimento', 'Canais'].filter(
+      (l) => l !== ativo,
+    )) {
       expect(screen.getByRole('link', { name: outro })).not.toHaveAttribute('data-active');
     }
   });
