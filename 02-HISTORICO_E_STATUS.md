@@ -1299,6 +1299,63 @@ convenção 18 acima.
   achado a sequenciar, nunca backend improvisado dentro da change de tela
   (convenção 1, corolário).
 
+##### Etapa 5b — aba Conhecimento no detalhe do agente (aplicada em 2026-09-09)
+
+`frontend-agente-aba-conhecimento` — só `apps/frontend`, consumindo
+`PUT /agents/{id}/knowledge-bases`, `GET /knowledge-bases` e
+`AgentResponse.knowledgeBases`, todos já implantados. Quarta aba do detalhe do
+agente (terceira posição, `?tab=conhecimento`), lista das bases vinculadas,
+modal de vincular com busca, estado vazio explicativo e aviso de base inativa.
+Suíte do frontend passou de **66 arquivos / 574 testes** para **69 / 617**.
+
+**A decisão que muda o desenho, e que contraria o handoff (convenção 17):** o
+vínculo usa **rascunho + `UnsavedChangesBar` + guarda de navegação**, como
+`AgentToolsTab` e `AgentDelegationsTab`, e não a requisição por linha que a
+regra 4 do handoff pedia — nem a saída que o próprio handoff previa ("manter a
+UI por ação enviando o conjunto resultante"). Três motivos, o primeiro sendo o
+que decide: **feedback por linha sobre operação de conjunto mente sobre o que
+falhou** (se o `PUT` falha, falhou a escrita do conjunto e nada mudou no
+servidor); ação por linha sob replace-all **perde escrita concorrente**, e o
+protótipo deixa isso acontecer — percorrido ao vivo, os botões das outras linhas
+seguem habilitados durante a requisição, então dois cliques rápidos produzem dois
+`PUT` calculados do mesmo estado anterior; e as duas outras abas de vínculo do
+**mesmo detalhe** já usam este idioma.
+
+**O protótipo foi percorrido, não só lido.** Chrome headless dirigido por CDP,
+clique real, captura por estado, nos dois esquemas. Dois defeitos do protótipo
+saíram daí e **nenhum estava na prosa do `CONHECIMENTO.md`** — ver a lista de
+correções de protótipo acima, que passou de três para cinco.
+
+**E a conferência manual declarou convergência cedo demais — refinamento da
+convenção 14.** Quatro rodadas fecharam sem achado novo, e o usuário achou, na
+tela dele, uma **largura errada**: o container da aba com `maw={860}` quando o
+protótipo deixa o card em largura cheia e limita **a descrição** em 620px, as
+duas coisas invertidas. Duas causas, as duas viram regra para a próxima etapa de
+UI:
+
+- **A conferência comparou estados, nunca dimensões.** Lista, vazio, aviso,
+  modal — todos conferidos; largura e altura, nenhuma vez. Comparar dimensão
+  contra o protótipo precisa ser passo explícito.
+- **O viewport de captura era mais estreito que o do operador** (1440 contra
+  ~1860). Num card de 860 a diferença quase não aparece a 1440 e é gritante a
+  1860. Capturar pelo menos na largura em que o painel é usado.
+
+O erro de origem foi **reusar o idioma da aba vizinha sem conferir**: as três
+abas do detalhe têm larguras **deliberadamente diferentes** no protótipo —
+Delegações 620px (lista de checkbox), Ferramentas e Conhecimento em largura
+cheia. `AgentDelegationsTab` está fiel; quem copiou errado foi a 5b. É a mesma
+forma da convenção 2 ao contrário: reusar padrão observado é certo, reusar sem
+conferir que o caso é o mesmo não.
+
+**Validação manual pelo operador: realizada em 09/09/2026**, depois da correção
+de largura. Vale como o dado que a convenção 14 pede — e como reforço dela: a
+automação de conferência (Chrome via CDP) achou três defeitos reais em quatro
+rodadas e ainda assim **declarou convergência com um defeito visível na tela**.
+Ela reduz o número de rodadas humanas; não substitui nenhuma.
+
+**Item aberto tocado:** o gatilho do carve de ordenação foi **corrigido**, não
+consumido — ver o item correspondente.
+
 ##### Etapa 5a-1 — catálogo de bases na UI (aplicada e arquivada em 2026-09-09)
 
 `frontend-knowledge-base-catalogo` — primeira etapa de UI da linha, só
@@ -1365,6 +1422,53 @@ excluída à toa). O contraste é o que dá o formato da regra futura, se ela vi
 por dependência não verificada. O corolário candidato, já escrito para não
 precisar ser reconstruído: *"fora de escopo por dependência" exige conferir a
 dependência no código, do mesmo jeito que "precisa de backend" exige sequenciar.*
+
+##### Quinta medição da convenção 18 (`frontend-agente-aba-conhecimento`)
+
+| | projetado | entregue | erro |
+|---|---|---|---|
+| criados | 6 arquivos / ~920 linhas | **6 / 1025** | arquivo **exato**; linhas +11,4% |
+| modificados | 8 / ~225 | **8 / 302** | arquivo **exato**; linhas +34% |
+| total | 14 / ~1145 | **14 / 1327** | arquivo **exato**; linhas +15,9% |
+
+**Terceiro acerto seguido na contagem de arquivo, e o primeiro em que as duas
+metades acertam juntas** (25/25 total em `knowledge-base-vinculo-agente`; 21/21
+só nos criados em `frontend-knowledge-base-catalogo`, com os modificados errando
+3x; agora 6/6 e 8/8). O método está confirmado para contagem de arquivo: contar
+por componente, criados e modificados separados, **em pares com o teste**, a
+partir do blast radius lido no código.
+
+**O erro de linha está quase todo em teste, e a causa é contagem de cenário, não
+custo por cenário.** Projetados 13 + 7 = **20** cenários nos dois arquivos de
+componente; entregues 16 + 12 = **28**. O custo unitário se comportou (aba ~22
+linhas/cenário, dentro da faixa de ~25 já registrada; modal ~16, mais barato
+porque as asserções compartilham um helper de render). A régua de custo está
+calibrada; o que errou foi **quantos**.
+
+**Hipótese para a sexta medição, barata de testar:** a spec desta change tem
+**28 cenários** — o mesmo número de testes entregues nos dois arquivos de
+componente. A correspondência **não é item a item** (os 5 testes de unidade de
+`knowledgeBaseRows` não são cenários de spec, e alguns cenários caíram em
+`AgentDetailPage.test.tsx`), então o casamento exato dos totais tem componente de
+coincidência. Mas a regra candidata é clara: **projetar linhas de teste a partir
+da contagem de `#### Scenario:` da spec, não da intuição.**
+
+**E o obstáculo é de ordem, que é o que esta medição acrescenta à convenção.** A
+projeção mora no `design.md`, escrito **antes** da spec. A convenção já manda
+projetar depois de fechar a verificação; falta dizer que **a spec é o artefato
+que fixa a contagem de cenário, e cenário é o que domina o custo de teste**. Ou
+se projeta depois da spec, ou se contam os cenários que as decisões do design já
+implicam.
+
+**Um desvio isolado, com causa própria:** `useAgents.test.ts` saiu 51 linhas
+contra ~25 projetadas (2x). Foi projetado "um cenário de cache" quando o padrão
+da casa é o par sucesso + erro — **convenção 5, que já estava escrita**. Custo de
+não aplicar régua existente, não de régua faltando.
+
+**Escopo acrescentado durante a implementação** (não entra na conta do erro de
+método): scroll interno do modal e duas correções de truncagem, todas vindas da
+conferência manual; mais dois cenários de teste que só existiram quando a
+asserção original se mostrou não discriminante.
 
 ##### Quarta medição da convenção 18 (`frontend-knowledge-base-catalogo`)
 
@@ -1454,7 +1558,14 @@ revisão 2 é a especificação válida das telas das quatro etapas.
   catálogo entregou duas colunas (Base, Estado) e três opções de filtro, com
   asserção negativa na spec para impedir que alguém as "complete" com zero.
 
-**Correções de protótipo para a 5a-2:**
+**Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
+
+São **cinco**, achadas em duas etapas diferentes. As três primeiras saíram da
+5a-1 e valem para a 5a-2; as duas últimas saíram do percurso do protótipo feito
+ao propor a 5b (`frontend-agente-aba-conhecimento`) e valem para **qualquer**
+etapa que leia o modal de vincular — o protótipo continua sendo a fonte da 5a-2
+e da 5c, e defeito que fica só na spec de uma change é reproduzido pela
+seguinte.
 
 - **`0 fragmentos` → célula vazia.** O protótipo faz
   `st === 'failed' ? '0 fragmentos' : '—'`, ou seja zera no estado `failed`. Isso
@@ -1474,6 +1585,25 @@ revisão 2 é a especificação válida das telas das quatro etapas.
   `IFormFile`, mais validação de tipo binário, mais limite separado.
   **Gatilho para multipart nascer:** o primeiro tipo de origem binário (PDF),
   junto com o extrator que precisa dos bytes — não antes.
+- **A busca do modal de vincular normaliza acento.** O protótipo compara com
+  `indexOf` cru sobre `nome + descrição`: percorrido ao vivo, `cardapio` devolve
+  "Nenhuma base corresponde à busca." e só `Cardápio` acha. Todas as buscas do
+  painel usam `matchesSearch` (`utils/searchText.ts`) desde
+  `frontend-listas-busca-e-colunas`, inclusive a do catálogo de bases que a
+  própria 5a-1 entregou. Regra que o sistema já escreveu vence protótipo
+  (convenção 17). Achado no percurso da 5b, corrigido lá (D6).
+- **O modal de vincular marca base inativa.** `Rotinas Internas`, a única base
+  inativa da semente, aparece na lista de seleção **sem nenhum sinal** de que
+  está desativada; o aviso só nasce depois, na linha da lista de vinculadas. O
+  operador vincula às cegas uma base que o agente não vai consultar. É
+  convenção 13 **na direção da omissão** — a UI não afirma nada falso, mas
+  esconde justamente o dado que decide a ação, e `isActive` está no catálogo que
+  a tela já busca. Achado no percurso da 5b, corrigido lá (D5).
+
+Os dois últimos vieram de **abrir o protótipo e clicar**, não de ler a
+especificação escrita: nenhum dos dois está na prosa do `CONHECIMENTO.md`. Vale
+como método, não só como achado — a revisão 2 foi lida inteira na 5a-1 sem que
+nenhum aparecesse.
 
 **Para a 5b, o que já está pronto — e o que a 5a-1 já entregou:**
 
@@ -1551,10 +1681,32 @@ Cada um tem gatilho de quando revisitar:
   contrato violado. Não corrigido de carona em
   `knowledge-base-vinculo-agente` (convenção 12: defeito pertence a quem expõe e
   se corrige em change própria); lá o vínculo novo já nasce com
-  `.ThenBy(kb => kb.Id)` e com o desempate **na spec**. **Gatilho**: a etapa 5b
-  (UI de vínculo de conhecimento), que renderiza as três listas lado a lado e é
-  onde a ordem instável fica visível ao operador — ou qualquer change que passe
-  a prometer ordem para esses dois campos. Conferir junto, quando for feito, o
+  `.ThenBy(kb => kb.Id)` e com o desempate **na spec**.
+
+  **Gatilho CORRIGIDO em 09/09/2026, ao aplicar a etapa 5b.** O gatilho
+  registrado era "a etapa 5b, que renderiza as três listas lado a lado".
+  Conferido no código, **a premissa é falsa** e a 5b não disparou nada:
+
+  - **As três listas não ficam lado a lado.** São três abas, e
+    `AgentDetailPage` monta com `keepMounted={false}` — o conteúdo das outras
+    abas não existe no DOM.
+  - **A aba de conhecimento não renderiza nenhuma das duas ordenações
+    instáveis.** Ela usa `agent.knowledgeBases`, que **já tem** `ThenBy(Id)`, e
+    ordena o rascunho pelo mesmo critério no cliente. Os contadores das outras
+    abas são `length`, não ordem.
+
+  Sequenciar um carve de `apps/api` antes de uma change de tela que não depende
+  dele seria inflar escopo por gatilho que não disparou. **Gatilho novo:** uma
+  tela que renderize `mcpServers` ou `delegatesTo` **em lista** — não em
+  contador —, ou qualquer change que passe a prometer ordem para esses dois
+  campos.
+
+  **Quinto site, achado no mesmo percurso:** `ListKnowledgeBasesQueryHandler`
+  ordena por `CreatedAt`, sem desempate, e `CreatedAt` também não é único por
+  construção. O modal de vincular da 5b passa a renderizar essa ordem ao
+  operador. Mesma classe e mesma severidade (apresentação, sem contrato
+  violado); entra no mesmo carve, não em change de tela (convenção 12: defeito
+  pertence a quem expõe). Conferir junto, quando for feito, o
   `OrderBy(agent => agent.CreatedAt)` de `ListAgentsQueryHandler.cs:19`:
   `CreatedAt` também não é único por construção, embora a colisão exija dois
   agentes criados no mesmo tick.
@@ -1787,7 +1939,11 @@ Cada um tem gatilho de quando revisitar:
   Gatilho: antes ou junto da próxima change que toque
   `apps/inbox/tests`. **Mesma família que o item `WorkerHostCollection` de
   `dedupe-global-nome-de-tool`** (abaixo): fixture de teste construindo host mais
-  cedo, ou mais vezes, do que devia. Os dois provavelmente são uma change só.
+  cedo, ou mais vezes, do que devia. Os dois provavelmente são uma change só. O
+  terceiro da família — a sensibilidade da suíte de `apps/frontend` a contenção
+  de CPU **externa** — está registrado junto do `WorkerHostCollection`, e tem
+  mecanismo oposto: ali o recurso é construído pela própria suíte, aqui é
+  disputado por outro processo.
 - **`TaskJobConsumer` (`apps/workers`) com setup inicial desprotegido**
   (achado por `inbox-sweep-service-resiliencia`, design.md, Decisão 4) —
   a sequência de `CreateConnectionAsync`/`CreateChannelAsync`/
@@ -2018,7 +2174,59 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   `Services` antes de migrar** (acima): fixture de teste construindo host mais
   cedo, ou mais vezes, do que devia. Provavelmente uma change só, com os dois.
   **Gatilho: a próxima classe de teste que precise subir um host** — em qualquer
-  um dos dois apps.
+  um dos dois apps. **Terceiro item da mesma família, com mecanismo diferente:**
+  a sensibilidade da suíte de `apps/frontend` a contenção de CPU externa, logo
+  abaixo.
+- **A suíte de `apps/frontend` reprova sob contenção de CPU externa, com
+  assinatura própria.** Achado ao propor `frontend-agente-aba-conhecimento`
+  (5b). Medido, quatro execuções no mesmo commit `2e5f750`, com a carga externa
+  anotada **antes** de cada uma:
+
+  | Carga externa antes | Configuração | Resultado |
+  |---|---|---|
+  | load 14,5; VM do Podman ~289% + `ReportCrash` ~77% | padrão | 21 reprovados |
+  | load ~11,7; mesma VM | padrão | 26 reprovados |
+  | load ~11,5; mesma VM | `--maxWorkers=3` | 573/574 |
+  | load 3,1; sem a VM, nada acima de ~40% | padrão | **574/574, 103 s** |
+
+  **Assinatura:** sempre `Test timed out in 15000ms`, sempre em testes que
+  digitam em formulário (`userEvent`), nunca uma asserção falhando. Qualquer
+  outro sintoma **não** é este item.
+
+  **A discriminação, para não ser redescoberta do zero:** (1) rodar cada arquivo
+  reprovado isolado — se reprovar isolado, é defeito, não contenção; (2) rodar a
+  suíte com `--maxWorkers=3`; (3) se `--maxWorkers=3` também reprovar com a
+  máquina descarregada, a hipótese caiu e a investigação recomeça.
+
+  **O que a quarta execução corrige na intuição, e é o que mais vale aqui:** a
+  suíte **não** é sensível a load alto em si. No paralelismo padrão ela sozinha
+  leva o load de 3,1 para **57,6** em 12 núcleos e passa 574/574 assim. O que a
+  derruba é **competição externa** por núcleo — ~2,9 núcleos em outro processo
+  bastaram. Logo o limiar se mede **antes** de começar, sobre quem mais está na
+  máquina; o número durante a execução é a própria suíte trabalhando e não diz
+  nada. Limiar declarado na change: load prévio de 1 min **< 5,0** e **nenhum
+  processo alheio ≥ 100%** (um núcleo cheio). Verde medido em 3,1-4,2; vermelho
+  medido em 11,5-14,5; entre os dois não há medição, e o limiar é conservador
+  por escolha.
+
+  **Mesma família que `WorkerHostCollection` (acima) e
+  `InboxFactoryFixture.InitializeAsync` acessa `Services` antes de migrar** —
+  suíte que reprova por **recurso**, não por defeito, e que por isso convida à
+  classificação errada de "ambiental". **Mas o mecanismo é o oposto, e a
+  distinção é o que torna o cruzamento útil:** naqueles dois a suíte é
+  derrubada pelo recurso que **ela mesma** constrói (fixture subindo host cedo
+  demais, containers demais por classe), e a correção é no código de teste;
+  neste a suíte está correta e é derrubada por um consumidor **externo**, e não
+  há o que corrigir — há o que medir antes. Por isso a discriminação também é
+  outra: lá, `git worktree` limpo na base; aqui, execução isolada mais
+  `--maxWorkers=3`.
+
+  **Gatilho: a primeira vez que a suíte de `apps/frontend` reprovar em bloco com
+  essa assinatura** — conferir este item antes de investigar qualquer outra
+  coisa. E, se um dia reprovar com a máquina comprovadamente descarregada,
+  **este item deixa de explicar** e vira change própria (candidata óbvia: subir
+  o `testTimeout`, hoje 15 s, ou reduzir o paralelismo por padrão — nenhuma das
+  duas justificada enquanto a máquina ociosa passa 574/574 em 103 s).
 - **Repetir o censo de inventário na etapa 4 de bases de conhecimento.** O teste
   integrado com as bases prontas **não valida o dedupe** — a etapa 4 não introduz
   colisão por si só, só um terceiro conjunto no mesmo namespace, e colisão depende

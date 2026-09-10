@@ -13,10 +13,7 @@ interface KnowledgeBaseAgentsCardProps {
   agents?: Agent[];
 }
 
-export function KnowledgeBaseAgentsCard({
-  knowledgeBaseId,
-  agents,
-}: KnowledgeBaseAgentsCardProps) {
+export function KnowledgeBaseAgentsCard({ knowledgeBaseId, agents }: KnowledgeBaseAgentsCardProps) {
   if (!agents) {
     return (
       <SectionedCard title="Agentes que consultam esta base">
@@ -35,14 +32,16 @@ export function KnowledgeBaseAgentsCard({
     <SectionedCard title="Agentes que consultam esta base">
       {consulting.length === 0 ? (
         <SectionedCard.Body>
-          {/* O protótipo manda "Vincule-a na Visão geral de um agente". Duas
-              coisas erradas nisso hoje: a revisão 2 do próprio handoff moveu o
-              vínculo da Visão geral para uma aba, e essa aba é a etapa 5b — não
-              existe tela nenhuma para vincular ainda. Mandar o operador para um
-              lugar que não existe afirma capacidade que o painel não tem
-              (design.md, D20). */}
+          {/* A tela de vínculo passou a existir (change
+              frontend-agente-aba-conhecimento), então a copy deixa de anunciar
+              etapa futura e diz onde vincular. O protótipo mandava "Vincule-a na
+              Visão geral de um agente", e isso continua errado: a revisão 2 do
+              próprio handoff moveu o vínculo da Visão geral para uma aba
+              própria. Sem link para um agente específico — não há qual escolher
+              a partir daqui. */}
           <Text size="sm" c="dimmed" ta="center" py="lg" data-testid="agents-empty">
-            Nenhum agente consulta esta base. O vínculo com agentes chega na próxima etapa.
+            Nenhum agente consulta esta base. O vínculo é feito na aba Conhecimento do detalhe do
+            agente.
           </Text>
         </SectionedCard.Body>
       ) : (

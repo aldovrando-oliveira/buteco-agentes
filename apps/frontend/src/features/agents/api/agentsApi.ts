@@ -1,4 +1,9 @@
-import type { Agent, AgentMcpServerBinding, CreateAgentInput, UpdateAgentInput } from '../types/agent';
+import type {
+  Agent,
+  AgentMcpServerBinding,
+  CreateAgentInput,
+  UpdateAgentInput,
+} from '../types/agent';
 import { clearToken, getToken } from '../../../auth/token';
 
 export interface ValidationProblemDetails {
@@ -99,12 +104,24 @@ export function replaceAgentMcpServers(
   });
 }
 
-export function replaceAgentDelegations(
-  agentId: string,
-  targetAgentIds: string[],
-): Promise<Agent> {
+export function replaceAgentDelegations(agentId: string, targetAgentIds: string[]): Promise<Agent> {
   return request<Agent>(`/agents/${agentId}/delegations`, {
     method: 'PUT',
     body: JSON.stringify({ targetAgentIds }),
+  });
+}
+
+// Substituição do conjunto inteiro, não vínculo por base: a API expõe uma rota
+// só, PUT, e ela troca todo o conjunto (AgentKnowledgeBindingEndpoints). Enviar
+// uma lista vazia é como se removem todos os vínculos — omitir o campo faz o
+// servidor responder 400, então `knowledgeBaseIds` sempre vai no corpo
+// (design.md, D3).
+export function replaceAgentKnowledgeBases(
+  agentId: string,
+  knowledgeBaseIds: string[],
+): Promise<Agent> {
+  return request<Agent>(`/agents/${agentId}/knowledge-bases`, {
+    method: 'PUT',
+    body: JSON.stringify({ knowledgeBaseIds }),
   });
 }

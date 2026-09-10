@@ -76,15 +76,16 @@ describe('KnowledgeBaseAgentsCard', () => {
     );
   });
 
-  // O protótipo manda "Vincule-a na Visão geral de um agente". A revisão 2 do
-  // próprio handoff moveu o vínculo para uma aba, e essa aba é a etapa 5b —
-  // não existe tela para vincular ainda (design.md, D20).
-  it('não manda o operador para uma tela de vínculo que não existe', () => {
+  // A aba de vínculo passou a existir, então a copy aponta para ela em vez de
+  // anunciar etapa futura. O "não Visão geral" continua valendo: a revisão 2 do
+  // handoff moveu o vínculo para uma aba própria, e o protótipo não acompanhou.
+  it('aponta a aba Conhecimento do detalhe do agente, e não a visão geral', () => {
     renderCard([]);
 
     const vazio = screen.getByTestId('agents-empty');
+    expect(vazio).toHaveTextContent(/aba Conhecimento do detalhe do agente/i);
     expect(vazio).not.toHaveTextContent(/visão geral/i);
-    expect(vazio).toHaveTextContent(/próxima etapa/i);
+    expect(vazio).not.toHaveTextContent(/próxima etapa/i);
   });
 
   // Falha ao carregar agentes não pode virar "nenhum agente consulta": seria

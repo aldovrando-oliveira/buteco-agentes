@@ -9,6 +9,8 @@ import { theme } from '../../../theme';
 import { AgentDetailPage } from './AgentDetailPage';
 import { ApiError, activateAgent, deactivateAgent, getAgent, listAgents } from '../api/agentsApi';
 import { listMcpServers, listMcpServerTools } from '../../mcp-servers/api/mcpServersApi';
+import { listKnowledgeBases } from '../../knowledge-bases/api/knowledgeBasesApi';
+import type { KnowledgeBase } from '../../knowledge-bases/types/knowledgeBase';
 import type { Agent } from '../types/agent';
 import type { McpServer } from '../../mcp-servers/types/mcpServer';
 
@@ -26,6 +28,12 @@ vi.mock('../api/agentsApi', async (importOriginal) => {
 vi.mock('../../mcp-servers/api/mcpServersApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../mcp-servers/api/mcpServersApi')>();
   return { ...actual, listMcpServers: vi.fn(), listMcpServerTools: vi.fn() };
+});
+
+vi.mock('../../knowledge-bases/api/knowledgeBasesApi', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../knowledge-bases/api/knowledgeBasesApi')>();
+  return { ...actual, listKnowledgeBases: vi.fn() };
 });
 
 vi.mock('@mantine/notifications', async (importOriginal) => {
@@ -69,6 +77,15 @@ const mcpServer: McpServer = {
   updatedAt: '2026-07-26T00:00:00Z',
 };
 
+const knowledgeBase: KnowledgeBase = {
+  id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+  name: 'Cardápio',
+  description: 'Pratos, porções e preços.',
+  isActive: true,
+  createdAt: '2026-08-01T00:00:00Z',
+  updatedAt: '2026-09-01T00:00:00Z',
+};
+
 function renderPage(id: string, search = '') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createMemoryRouter(
@@ -103,6 +120,8 @@ describe('AgentDetailPage', () => {
     vi.mocked(listAgents).mockResolvedValue([activeAgent]);
     vi.mocked(listMcpServers).mockReset();
     vi.mocked(listMcpServers).mockResolvedValue([mcpServer]);
+    vi.mocked(listKnowledgeBases).mockReset();
+    vi.mocked(listKnowledgeBases).mockResolvedValue([knowledgeBase]);
     vi.mocked(listMcpServerTools).mockReset();
     vi.mocked(listMcpServerTools).mockResolvedValue({
       success: true,
@@ -149,7 +168,7 @@ describe('AgentDetailPage', () => {
     expect(await screen.findByText('Sem descrição.')).toBeInTheDocument();
   });
 
-  it('exibe as três abas, com a visão geral ativa por padrão', async () => {
+  it('exibe as quatro abas na ordem certa, com a visão geral ativa por padrão', async () => {
     vi.mocked(getAgent).mockResolvedValue(activeAgent);
 
     renderPage(activeAgent.id);
@@ -159,7 +178,15 @@ describe('AgentDetailPage', () => {
       'true',
     );
     expect(tab(/ferramentas/i)).toBeInTheDocument();
+    expect(tab(/conhecimento/i)).toBeInTheDocument();
     expect(tab(/delegações/i)).toBeInTheDocument();
+    // Conhecimento é a terceira, entre Ferramentas e Delegações.
+    expect(screen.getAllByRole('tab').map((element) => element.textContent)).toEqual([
+      'Visão geral',
+      'Ferramentas',
+      'Conhecimento',
+      'Delegações',
+    ]);
     expect(screen.getByText(activeAgent.instructions)).toBeInTheDocument();
   });
 
@@ -171,6 +198,7 @@ describe('AgentDetailPage', () => {
         { id: '99999999-9999-9999-9999-999999999999', name: 'Cobrança' },
         { id: '88888888-8888-8888-8888-888888888888', name: 'Financeiro' },
       ],
+      knowledgeBases: [{ id: knowledgeBase.id, name: knowledgeBase.name }],
       a2a: null,
     });
 
@@ -178,6 +206,7 @@ describe('AgentDetailPage', () => {
 
     await screen.findByRole('heading', { name: activeAgent.name });
     expect(within(tab(/ferramentas/i)).getByText('1')).toBeInTheDocument();
+    expect(within(tab(/conhecimento/i)).getByText('1')).toBeInTheDocument();
     expect(within(tab(/delegações/i)).getByText('2')).toBeInTheDocument();
   });
 
@@ -188,6 +217,7 @@ describe('AgentDetailPage', () => {
 
     await screen.findByRole('heading', { name: activeAgent.name });
     expect(within(tab(/ferramentas/i)).queryByText('0')).not.toBeInTheDocument();
+    expect(within(tab(/conhecimento/i)).queryByText('0')).not.toBeInTheDocument();
     expect(within(tab(/delegações/i)).queryByText('0')).not.toBeInTheDocument();
   });
 
@@ -414,5 +444,98 @@ describe('AgentDetailPage', () => {
     const volta = await screen.findByRole('link', { name: 'Agentes' });
 
     expect(volta).toHaveAttribute('href', '/agents');
+  });
+});
+
+describe('AgentDetailPage — aba Conhecimento', () => {
+  // beforeEach próprio: o do describe acima não alcança este bloco, e sem o
+  // reset as contagens de chamada acumulam entre os testes daqui.
+  beforeEach(() => {
+    vi.mocked(getAgent).mockReset();
+    vi.mocked(listAgents).mockReset();
+    vi.mocked(listAgents).mockResolvedValue([activeAgent]);
+    vi.mocked(listMcpServers).mockReset();
+    vi.mocked(listMcpServers).mockResolvedValue([mcpServer]);
+    vi.mocked(listKnowledgeBases).mockReset();
+    vi.mocked(listKnowledgeBases).mockResolvedValue([knowledgeBase]);
+  });
+
+  it('abre a aba pelo endereço e lista as bases vinculadas', async () => {
+    vi.mocked(getAgent).mockResolvedValue({
+      ...activeAgent,
+      knowledgeBases: [{ id: knowledgeBase.id, name: knowledgeBase.name }],
+    });
+
+    renderPage(activeAgent.id, '?tab=conhecimento');
+
+    expect(await screen.findByRole('tab', { name: /conhecimento/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByTestId(`knowledge-row-${knowledgeBase.id}`)).toBeInTheDocument();
+  });
+
+  it('acionar a aba passa a identificá-la na URL', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+    const user = userEvent.setup();
+
+    const router = renderPage(activeAgent.id);
+
+    await screen.findByRole('heading', { name: activeAgent.name });
+    await user.click(tab(/conhecimento/i));
+
+    await waitFor(() => expect(router.state.location.search).toBe('?tab=conhecimento'));
+  });
+
+  // Guarda de D7: são 100+ bases declaradas, e as outras três abas não precisam
+  // delas. O `enabled` de useKnowledgeBasesQuery existe desde a 5a-1 justamente
+  // para isto.
+  it('não requisita o catálogo de bases enquanto a aba não está ativa', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+    renderPage(activeAgent.id);
+
+    await screen.findByRole('heading', { name: activeAgent.name });
+    expect(listKnowledgeBases).not.toHaveBeenCalled();
+  });
+
+  it('requisita o catálogo ao abrir a aba', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+    const user = userEvent.setup();
+
+    renderPage(activeAgent.id);
+
+    await screen.findByRole('heading', { name: activeAgent.name });
+    await user.click(tab(/conhecimento/i));
+
+    await waitFor(() => expect(listKnowledgeBases).toHaveBeenCalled());
+  });
+
+  it('falha ao carregar o catálogo informa o erro e não exibe a lista pela metade', async () => {
+    vi.mocked(getAgent).mockResolvedValue({
+      ...activeAgent,
+      knowledgeBases: [{ id: knowledgeBase.id, name: knowledgeBase.name }],
+    });
+    vi.mocked(listKnowledgeBases).mockRejectedValue(new Error('falhou'));
+
+    renderPage(activeAgent.id, '?tab=conhecimento');
+
+    expect(
+      await screen.findByText('Não foi possível carregar as bases de conhecimento.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId(`knowledge-row-${knowledgeBase.id}`)).not.toBeInTheDocument();
+  });
+
+  it('conteúdo da aba de conhecimento não está na página enquanto ela não é a ativa', async () => {
+    vi.mocked(getAgent).mockResolvedValue({
+      ...activeAgent,
+      knowledgeBases: [{ id: knowledgeBase.id, name: knowledgeBase.name }],
+    });
+
+    renderPage(activeAgent.id);
+
+    await screen.findByRole('heading', { name: activeAgent.name });
+    expect(screen.queryByTestId('knowledge-summary')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bases vinculadas')).not.toBeInTheDocument();
   });
 });
