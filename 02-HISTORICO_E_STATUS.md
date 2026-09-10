@@ -1659,12 +1659,31 @@ Cada um tem gatilho de quando revisitar:
   pergunta por migrações pendentes ali). Gatilho: qualquer mudança que toque
   as migrações de `apps/workers`, ou um segundo app passar a compartilhar o
   mesmo banco.
-- **Ordenação de vínculo por nome, sem desempate, em quatro sites de
-  `apps/api`** — achado durante a revisão da proposta de
-  `knowledge-base-vinculo-agente`, pré-existente e não introduzido por ela.
-  `AgentDelegationLookup.cs:23`, `AgentMcpServerLookup.cs:22` e as duas
-  agregações em lote de `ListAgentsQueryHandler.cs:34` e `:51` fazem
-  `OrderBy(... .Name)` sem `ThenBy` por identificador. **Nome não é único em
+- **Ordenação sem desempate, em cinco sites de `apps/api`** — achado durante a
+  revisão da proposta de `knowledge-base-vinculo-agente`, pré-existente e não
+  introduzido por ela. **Linhas reconferidas em 09/09/2026** — as registradas
+  antes (`:34` e `:51`) já estavam defasadas, e um carve que as consumisse iria
+  ao lugar errado:
+
+  | # | Site | Ordena por |
+  |---|---|---|
+  | 1 | `AgentDelegations/AgentDelegationLookup.cs:23` | `agent.Name` |
+  | 2 | `AgentMcpBindings/AgentMcpServerLookup.cs:22` | `joined.McpServer.Name` |
+  | 3 | `Agents/Queries/ListAgents/ListAgentsQueryHandler.cs:36` | `binding.McpServer.Name` |
+  | 4 | `Agents/Queries/ListAgents/ListAgentsQueryHandler.cs:53` | `delegation.TargetAgent.Name` |
+  | 5 | `KnowledgeBases/Queries/ListKnowledgeBases/ListKnowledgeBasesQueryHandler.cs:20` | `knowledgeBase.CreatedAt` |
+
+  **Sexto site a conferir junto, de severidade menor:**
+  `ListAgentsQueryHandler.cs:21` ordena a listagem inteira por
+  `agent.CreatedAt`, que também não é único por construção — mas a colisão exige
+  dois agentes criados no mesmo tick.
+
+  **O molde da correção já existe no repositório**, escrito pela etapa 3 e com o
+  motivo no código: `AgentKnowledgeBindings/AgentKnowledgeBaseLookup.cs:31-32` e
+  `ListAgentsQueryHandler.cs:75-76` fazem `OrderBy(Name).ThenBy(Id)`. O carve é
+  estender esse mesmo par aos cinco sites acima.
+
+  **Nome não é único em
   nenhum catálogo desta base**: verificado que o `AppDbContext` de `apps/api`
   não tem nenhum índice único de nome (os únicos `HasIndex` são
   `a2a_tasks.ContextId`, `a2a_tasks.State` e
@@ -1696,20 +1715,66 @@ Cada um tem gatilho de quando revisitar:
     abas são `length`, não ordem.
 
   Sequenciar um carve de `apps/api` antes de uma change de tela que não depende
-  dele seria inflar escopo por gatilho que não disparou. **Gatilho novo:** uma
-  tela que renderize `mcpServers` ou `delegatesTo` **em lista** — não em
-  contador —, ou qualquer change que passe a prometer ordem para esses dois
-  campos.
+  dele seria inflar escopo por gatilho que não disparou. O quinto site apareceu
+  nesse mesmo percurso: o modal de vincular da 5b renderiza a ordem de
+  `ListKnowledgeBasesQueryHandler` ao operador — e mesmo assim se corrige em
+  change própria, não na change de tela (convenção 12: defeito pertence a quem
+  expõe).
 
-  **Quinto site, achado no mesmo percurso:** `ListKnowledgeBasesQueryHandler`
-  ordena por `CreatedAt`, sem desempate, e `CreatedAt` também não é único por
-  construção. O modal de vincular da 5b passa a renderizar essa ordem ao
-  operador. Mesma classe e mesma severidade (apresentação, sem contrato
-  violado); entra no mesmo carve, não em change de tela (convenção 12: defeito
-  pertence a quem expõe). Conferir junto, quando for feito, o
-  `OrderBy(agent => agent.CreatedAt)` de `ListAgentsQueryHandler.cs:19`:
-  `CreatedAt` também não é único por construção, embora a colisão exija dois
-  agentes criados no mesmo tick.
+  **GATILHO ATUAL: imediato — change própria, a ser proposta.** O gatilho
+  reescrito em 09/09/2026 ("uma tela que renderize `mcpServers` ou
+  `delegatesTo` em lista") apontava para uma tela que ninguém planeja, o que na
+  prática é o mesmo que não ter gatilho: item aberto sem gatilho não é
+  revisitado. Fica em aberto **por decisão de sequenciamento**, não por falta de
+  diagnóstico — o diagnóstico está completo acima.
+
+  **O teste já foi desenhado, e o carve o herda em vez de reinventar.** A etapa 3
+  escreveu `KnowledgeBasesWithEqualNames_AreTieBrokenByIdDeterministically` em
+  `AgentKnowledgeBindingEndpointsTests.cs:354`, com três decisões que valem para
+  os cinco sites:
+
+  - **A asserção é sobre ordem crescente de id, nunca sobre "duas consultas
+    devolvem a mesma ordem".** A segunda forma é asserção sobre
+    não-determinação: passa com o defeito presente sempre que o plano do
+    Postgres calhar de ser estável, que é exatamente o perfil dos guardas que
+    esta base já teve de consertar (convenção 15).
+  - **A inserção é feita em ordem deliberadamente oposta à de id**, para a ordem
+    "natural" do banco não coincidir por acidente com a esperada.
+  - **O guarda fica separado do teste de ordenação geral**, para que remover o
+    `ThenBy` reprove ESTE e não aquele — guarda que reprova os dois está
+    afirmando a garantia no componente errado (convenção 15, segunda metade).
+
+  Cada um dos cinco sites tem duas superfícies a cobrir onde couber, como o
+  teste da etapa 3 faz: a rota de item (`GET /agents/{id}`) e a de listagem
+  (`GET /agents`).
+- **39 das 43 capabilities estão com `Purpose` placeholder** — registrado em
+  09/09/2026, ao escrever o `Purpose` de `agent-knowledge-binding-ui` depois do
+  archive da 5b. O texto do placeholder é
+  `TBD - defined by change <nome>. Update Purpose after archive.`, ou seja
+  **carrega a própria instrução do que fazer com ele** — e foi ignorado 39
+  vezes. Isso é evidência de que o mecanismo não funciona: "escrever depois do
+  archive" é um passo sem dono, que acontece quando a change já foi encerrada e
+  ninguém está mais olhando.
+
+  Têm `Purpose` real hoje apenas quatro: `agent-knowledge-binding`,
+  `inbox-message-orchestration`, `knowledge-base-catalog-ui` e
+  `agent-knowledge-binding-ui`. As duas últimas são as duas etapas mais recentes
+  da linha de bases de conhecimento — ou seja, o hábito começou a se formar, e é
+  isso que dá o gatilho abaixo em vez de uma change de mutirão.
+
+  **Por que importa:** spec viva sem `Purpose` é spec que a próxima pessoa lê
+  sem saber **qual pergunta ela responde**. Os requisitos dizem o que o sistema
+  faz; o `Purpose` diz por que a capability existe e o que a distingue das
+  vizinhas — que é exatamente o que não se recupera lendo os cenários.
+
+  **Gatilho: toda change que criar ou modificar uma spec viva escreve o
+  `Purpose` dela na mesma passada**, antes do archive e não depois. Custa
+  minutos, e quem está mexendo na capability é quem sabe responder. Não vira
+  change de mutirão: 39 `Purpose` escritos de uma vez por quem não tocou o
+  código de nenhuma delas produziria prosa genérica, que é pior que o
+  placeholder porque parece preenchido. **Corolário:** o placeholder deixa de
+  ser aceitável em spec nova — quem cria a capability escreve o `Purpose`.
+
 - **`AgentDeactivationTests` depende da ordem de execução** — achado durante
   `knowledge-base-catalogo-documentos`, pré-existente e não relacionado a ela.
   `AgentDeactivationFixture.TaskJobPublisher` é uma instância única

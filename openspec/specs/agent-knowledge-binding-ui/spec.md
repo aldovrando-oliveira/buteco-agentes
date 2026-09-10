@@ -2,7 +2,32 @@
 
 ## Purpose
 
-TBD - defined by change frontend-agente-aba-conhecimento. Update Purpose after archive.
+A aba **Conhecimento** do detalhe do agente, em `apps/frontend`: ler quais bases
+de conhecimento um agente consulta e mudar esse conjunto, consumindo
+`PUT /agents/{id}/knowledge-bases` e `GET /knowledge-bases`. É a contraparte de
+tela de `agent-knowledge-binding`, que cobre o mesmo vínculo do lado do cadastro
+em `apps/api`.
+
+A capability existe por uma pergunta de operação, não por CRUD: **por que este
+agente está respondendo sem contexto?** É o sintoma que traz o operador até
+aqui, e por isso o estado vazio explica a consequência de não haver vínculo em
+vez de só informar a ausência, e a base vinculada e inativa recebe aviso próprio
+— o backend aceita esse vínculo de propósito, porque o filtro por estado pertence
+à resolução em runtime, e sem a tela dizer isso o operador não tem como saber por
+que a consulta não devolve nada.
+
+Duas escolhas de contrato moldam tudo o mais aqui, e é por elas que esta
+capability se distingue das outras duas abas de vínculo do mesmo detalhe:
+
+- **O vínculo é substituição do conjunto inteiro**, não operação por base. Daí a
+  gravação acontecer uma vez, pela barra de alterações não salvas, e não a cada
+  clique: indicar progresso ou falha por linha afirmaria sobre uma base
+  específica algo que o contrato não distingue.
+- **A tela não sabe nada sobre documentos nem indexação.**
+  `KnowledgeBaseResponse` carrega identificador, nome, descrição, estado e datas;
+  contagem de documento exigiria uma requisição por base vinculada. Os requisitos
+  de asserção negativa daqui existem para impedir que alguém "complete" a linha
+  com zero mais tarde — zero afirmaria que a contagem foi feita.
 
 ## Requirements
 
