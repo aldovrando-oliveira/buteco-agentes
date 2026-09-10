@@ -256,9 +256,10 @@ ser derivada no cliente a partir de `GET /agents`, que já devolve as bases
 vinculadas a cada agente — não existe consulta inversa na API, e isso é decisão
 registrada do backend.
 
-Quando nenhum agente consulta a base, o sistema SHALL dizer isso e SHALL NOT
-direcionar o operador a uma tela de vínculo: a tela que vincula base a agente não
-existe nesta etapa.
+Quando nenhum agente consulta a base, o sistema SHALL dizer isso e SHALL
+indicar onde o vínculo é feito — a aba Conhecimento do detalhe do agente. A
+proibição anterior de direcionar o operador a uma tela de vínculo existia
+porque essa tela não existia; ela passa a existir.
 
 Quando o catálogo de agentes não puder ser carregado, o sistema SHALL informar a
 indisponibilidade e SHALL NOT afirmar que nenhum agente consulta a base — uma
@@ -279,7 +280,8 @@ requisição que não respondeu não é evidência de ausência de vínculo.
 
 #### Scenario: Nenhum agente consulta a base
 - **WHEN** nenhum agente está vinculado à base
-- **THEN** a tela informa isso, sem indicar uma tela de vínculo
+- **THEN** a tela informa isso e diz que o vínculo é feito na aba Conhecimento
+  do detalhe do agente, sem anunciar etapa futura
 
 #### Scenario: Catálogo de agentes indisponível
 - **WHEN** a consulta de agentes falha

@@ -6,10 +6,16 @@ import {
   getAgent,
   listAgents,
   replaceAgentDelegations,
+  replaceAgentKnowledgeBases,
   replaceAgentMcpServers,
   updateAgent,
 } from './agentsApi';
-import type { Agent, AgentMcpServerBinding, CreateAgentInput, UpdateAgentInput } from '../types/agent';
+import type {
+  Agent,
+  AgentMcpServerBinding,
+  CreateAgentInput,
+  UpdateAgentInput,
+} from '../types/agent';
 
 export function useAgentsQuery() {
   return useQuery({ queryKey: ['agents'], queryFn: listAgents });
@@ -84,6 +90,22 @@ export function useReplaceAgentDelegationsMutation(agentId: string) {
 
   return useMutation({
     mutationFn: (targetAgentIds: string[]) => replaceAgentDelegations(agentId, targetAgentIds),
+    onSuccess: (updated: Agent) => {
+      queryClient.setQueryData(['agents', updated.id], updated);
+      void queryClient.invalidateQueries({ queryKey: ['agents'] });
+    },
+  });
+}
+
+// Mesmo molde das outras duas mutações de vínculo: a resposta já traz o agente
+// inteiro atualizado, então o detalhe não precisa de um segundo GET, e a
+// listagem é invalidada porque `knowledgeBases` aparece em cada agente dela.
+export function useReplaceAgentKnowledgeBasesMutation(agentId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (knowledgeBaseIds: string[]) =>
+      replaceAgentKnowledgeBases(agentId, knowledgeBaseIds),
     onSuccess: (updated: Agent) => {
       queryClient.setQueryData(['agents', updated.id], updated);
       void queryClient.invalidateQueries({ queryKey: ['agents'] });

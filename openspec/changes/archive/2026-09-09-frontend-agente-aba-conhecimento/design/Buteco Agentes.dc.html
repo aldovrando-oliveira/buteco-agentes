@@ -1,0 +1,1874 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"><style>
+body{margin:0;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:var(--ac);text-decoration:none}
+a:hover{color:var(--ac);text-decoration:underline}
+[data-t=light]{--bg:#f6f5f3;--sf:#ffffff;--sf2:#faf9f8;--bd:rgba(20,18,15,.11);--bd2:rgba(20,18,15,.06);--fg:#191a1c;--mut:#686d74;--mut2:#8b9097;--ac:var(--accent);--acsf:color-mix(in oklch, var(--accent), transparent 92%);--ok:#1a7a49;--okbg:#e9f6ee;--wa:#8a5a00;--wabg:#fbf1de;--da:#b02a1f;--dabg:#fdeceb;--sh:0 1px 2px rgba(16,14,10,.05)}
+[data-t=dark]{--bg:#121316;--sf:#1b1d21;--sf2:#22252b;--bd:rgba(255,255,255,.11);--bd2:rgba(255,255,255,.06);--fg:#e9eaec;--mut:#9aa0a8;--mut2:#7d838b;--ac:color-mix(in oklch, var(--accent), white 26%);--acsf:color-mix(in oklch, var(--accent), transparent 86%);--ok:#4cc38a;--okbg:rgba(76,195,138,.13);--wa:#e2a63f;--wabg:rgba(226,166,63,.13);--da:#f0766a;--dabg:rgba(240,118,106,.13);--sh:none}
+[data-d=compacta]{--ry:7px;--fs:12.5px}
+[data-d=confortável]{--ry:11px;--fs:13.5px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style></helmet>
+<div data-t="{{ theme }}" data-d="{{ dens }}" style="--accent:{{ accent }};display:flex;min-height:100vh;background:var(--bg);color:var(--fg);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:13px;line-height:1.45">
+
+<aside style="width:{{ navW }};flex:none;border-right:1px solid var(--bd);background:var(--sf);display:flex;flex-direction:column;position:sticky;top:0;height:100vh">
+<div style="padding:16px 14px 14px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--bd2)">
+<div style="width:24px;height:24px;flex:none;border-radius:6px;background:var(--ac);color:#fff;display:grid;place-items:center;font:700 12px 'IBM Plex Mono',monospace">B</div>
+<sc-if value="{{ navFull }}" hint-placeholder-val="{{ true }}"><div style="font:600 13px/1.1 'IBM Plex Sans',sans-serif;letter-spacing:-.01em;white-space:nowrap">Buteco Agentes</div></sc-if>
+</div>
+<nav style="padding:10px 8px;display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ navItems }}" as="n" hint-placeholder-count="3">
+<button onClick="{{ n.go }}" title="{{ n.label }}" style="display:flex;align-items:center;gap:9px;padding:7px 8px;border:0;border-radius:7px;background:{{ n.bg }};color:{{ n.fg }};font:{{ n.weight }} 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer;text-align:left;width:100%">
+<span style="width:20px;height:20px;flex:none;border-radius:5px;border:1px solid var(--bd);display:grid;place-items:center;font:600 10px 'IBM Plex Mono',monospace;color:var(--mut)">{{ n.mono }}</span>
+<sc-if value="{{ navFull }}" hint-placeholder-val="{{ true }}"><span style="white-space:nowrap">{{ n.label }}</span></sc-if>
+</button>
+</sc-for>
+</nav>
+<div style="margin-top:auto;padding:10px 8px;border-top:1px solid var(--bd2);display:flex;flex-direction:column;gap:6px">
+<button onClick="{{ toggleTheme }}" style="display:flex;align-items:center;gap:9px;padding:7px 8px;border:0;border-radius:7px;background:transparent;color:var(--mut);font:500 12px 'IBM Plex Sans',sans-serif;cursor:pointer;text-align:left">
+<span style="width:20px;height:20px;flex:none;border-radius:5px;border:1px solid var(--bd);display:grid;place-items:center;font-size:10px">{{ themeIcon }}</span>
+<sc-if value="{{ navFull }}" hint-placeholder-val="{{ true }}"><span style="white-space:nowrap">{{ themeLabel }}</span></sc-if>
+</button>
+</div>
+</aside>
+
+<main style="flex:1;min-width:0;display:flex;flex-direction:column;padding:0 0 96px">
+<sc-if value="{{ isAgents }}" hint-placeholder-val="{{ true }}">
+<div style="padding:22px 26px 0;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+<div><h1 style="margin:0;font:600 21px/1.15 'IBM Plex Sans',sans-serif;letter-spacing:-.015em">Agentes</h1>
+<p style="margin:4px 0 0;font-size:12px;color:var(--mut)">{{ agentCount }} agentes cadastrados · atendem mensagens de Telegram e WhatsApp</p></div>
+<button onClick="{{ newAgent }}" style="padding:7px 13px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Novo agente</button>
+</div>
+
+<sc-if value="{{ firstRun }}" hint-placeholder-val="{{ false }}">
+<div style="margin:18px 26px 0;padding:14px 16px;border:1px solid var(--bd);border-left:3px solid var(--ac);border-radius:9px;background:var(--sf)">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+<div style="font:600 12.5px 'IBM Plex Sans',sans-serif">Primeiros passos</div>
+<button onClick="{{ dismissFirstRun }}" style="border:0;background:transparent;color:var(--mut2);font-size:11px;cursor:pointer;padding:2px 4px">Ocultar</button>
+</div>
+<div style="display:flex;gap:10px;margin-top:11px;flex-wrap:wrap">
+<sc-for list="{{ steps }}" as="st" hint-placeholder-count="3">
+<div style="flex:1 1 210px;min-width:0;display:flex;gap:9px;align-items:flex-start;opacity:{{ st.op }}">
+<span style="width:18px;height:18px;flex:none;border-radius:50%;background:{{ st.bg }};color:{{ st.fg }};display:grid;place-items:center;font:600 10px 'IBM Plex Mono',monospace">{{ st.mono }}</span>
+<div style="min-width:0"><div style="font:500 12px 'IBM Plex Sans',sans-serif">{{ st.label }}</div><div style="font-size:11px;color:var(--mut2)">{{ st.hint }}</div></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<div style="margin:18px 26px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+<input value="{{ agentQ }}" onChange="{{ onAgentQ }}" placeholder="Buscar por nome ou descrição" style="flex:1 1 260px;max-width:340px;padding:6px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<div style="display:flex;gap:3px;padding:3px;border-radius:8px;background:var(--sf2);border:1px solid var(--bd2)">
+<sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+<button onClick="{{ f.pick }}" style="padding:4px 10px;border-radius:6px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ f.label }}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="margin:14px 26px 0;border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,1.3fr) minmax(0,1.5fr) minmax(0,1.2fr) 190px;gap:12px;padding:8px 14px;background:var(--sf2);border-bottom:1px solid var(--bd);font:600 10.5px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">
+<div>Agente</div><div>Provedor / modelo</div><div>Ferramentas</div><div>Delega para</div><div>Estado</div>
+</div>
+<sc-for list="{{ agentRows }}" as="a" hint-placeholder-count="4">
+<div onClick="{{ a.open }}" style="display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,1.3fr) minmax(0,1.5fr) minmax(0,1.2fr) 190px;gap:12px;padding:var(--ry) 14px;border-bottom:1px solid var(--bd2);cursor:pointer;align-items:center" style-hover="background:var(--sf2)">
+<div style="min-width:0"><div style="font:600 13px 'IBM Plex Sans',sans-serif;color:var(--ac);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.name }}</div><div style="font-size:11px;color:var(--mut2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.description }}</div></div>
+<div style="min-width:0;font:400 11.5px 'IBM Plex Mono',monospace;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.provider }} / {{ a.model }}</div>
+<div style="min-width:0"><div style="font-size:12px;color:var(--mut)">{{ a.tools }}</div>
+<sc-if value="{{ a.toolWarn }}" hint-placeholder-val="{{ false }}"><div style="font:500 11px 'IBM Plex Sans',sans-serif;color:var(--wa)">⚠ {{ a.toolWarn }}</div></sc-if></div>
+<div style="min-width:0;font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.deleg }}</div>
+<div style="display:flex;gap:5px;flex-wrap:wrap">
+<sc-for list="{{ a.badges }}" as="b" hint-placeholder-count="1">
+<span style="padding:2px 7px;border-radius:5px;background:{{ b.bg }};color:{{ b.fg }};font:600 10.5px 'IBM Plex Sans',sans-serif;white-space:nowrap">{{ b.label }}</span>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ emptyAgents }}" hint-placeholder-val="{{ false }}">
+<div style="padding:34px 14px;text-align:center;color:var(--mut2);font-size:12.5px">{{ emptyMsg }}</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAgent }}" hint-placeholder-val="{{ false }}">
+<div style="padding:20px 26px 0">
+<button onClick="{{ backAgents }}" style="border:0;background:transparent;padding:0;color:var(--mut2);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">← Agentes</button>
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:8px">
+<div style="min-width:0">
+<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+<h1 style="margin:0;font:600 21px/1.15 'IBM Plex Sans',sans-serif;letter-spacing:-.015em">{{ aName }}</h1>
+<sc-for list="{{ aBadges }}" as="b" hint-placeholder-count="1">
+<span style="padding:2px 7px;border-radius:5px;background:{{ b.bg }};color:{{ b.fg }};font:600 10.5px 'IBM Plex Sans',sans-serif">{{ b.label }}</span>
+</sc-for>
+</div>
+<p style="margin:5px 0 0;font-size:12px;color:var(--mut)">{{ aDesc }}</p>
+</div>
+<div style="display:flex;gap:7px">
+<button onClick="{{ editAgent }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Editar</button>
+<button onClick="{{ aToggle }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:{{ aToggleFg }};font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ aToggleLabel }}</button>
+</div>
+</div>
+<div style="display:flex;gap:2px;margin-top:16px;border-bottom:1px solid var(--bd)">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+<button onClick="{{ t.pick }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:0;border-bottom:2px solid {{ t.bd }};background:transparent;color:{{ t.fg }};font:{{ t.w }} 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ t.label }}
+<sc-if value="{{ t.hasN }}" hint-placeholder-val="{{ false }}"><span style="padding:1px 6px;border-radius:9px;background:var(--sf2);border:1px solid var(--bd2);font:600 10.5px 'IBM Plex Mono',monospace;color:var(--mut)">{{ t.n }}</span></sc-if>
+</button>
+</sc-for>
+</div>
+</div>
+
+<sc-if value="{{ tabOverview }}" hint-placeholder-val="{{ true }}">
+<div style="padding:18px 26px 0;display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:16px;align-items:start">
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2);display:flex;align-items:center;justify-content:space-between">
+<span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Instruções (system prompt)</span>
+<span style="font:500 10px 'IBM Plex Mono',monospace;color:var(--mut2);border:1px solid var(--bd);border-radius:4px;padding:1px 5px">markdown</span>
+</div>
+<div style="padding:14px;height:calc(100vh - 360px);min-height:220px;overflow:auto">{{ aInstructions }}</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden"><div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2)"><span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Modelo</span></div>
+<div style="padding:13px 14px"><div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--mut)">Provedor</span><span style="font-family:'IBM Plex Mono',monospace">{{ aProvider }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--mut)">Modelo</span><span style="font-family:'IBM Plex Mono',monospace">{{ aModel }}</span></div>
+</div>
+<sc-if value="{{ aNeedsCfg }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:10px;padding:8px 10px;border-radius:7px;background:var(--wabg);color:var(--wa);font:500 11.5px 'IBM Plex Sans',sans-serif">Este agente foi criado antes do multi-provedor. Escolha provedor e modelo em Editar.</div>
+</sc-if>
+</div>
+</div>
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden"><div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2)"><span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Skills</span></div>
+<div style="padding:13px 14px"><div style="display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ aSkills }}" as="k" hint-placeholder-count="2">
+<div>
+<span style="display:inline-block;padding:3px 8px;border-radius:6px;background:var(--sf2);border:1px solid var(--bd2);font:500 11.5px 'IBM Plex Sans',sans-serif">{{ k.name }}</span>
+<sc-if value="{{ k.hasDesc }}" hint-placeholder-val="{{ false }}">
+<p style="margin:3px 0 0;font-size:11.5px;color:var(--mut);line-height:1.5">{{ k.description }}</p>
+</sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ aNoSkills }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;color:var(--mut2)">Nenhuma skill declarada.</span></sc-if>
+</div>
+</div>
+</div>
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden"><div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2)"><span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Protocolo A2A</span></div>
+<div style="padding:13px 14px"><sc-if value="{{ aHasA2A }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:11px">
+<sc-for list="{{ aA2ARows }}" as="r" hint-placeholder-count="2">
+<div>
+<div style="font-size:11px;color:var(--mut2);margin-bottom:3px">{{ r.label }}</div>
+<div style="display:flex;align-items:center;gap:8px">
+<span style="min-width:0;font:400 11px 'IBM Plex Mono',monospace;word-break:break-all">{{ r.value }}</span>
+<div style="flex:none;display:flex;align-items:center;gap:5px">
+<button onClick="{{ r.copy }}" style="padding:2px 7px;border-radius:5px;border:1px solid var(--bd);background:var(--sf);color:var(--mut);font:500 10.5px 'IBM Plex Sans',sans-serif;cursor:pointer;white-space:nowrap">{{ r.copyLabel }}</button>
+<sc-if value="{{ r.canOpen }}" hint-placeholder-val="{{ false }}">
+<a href="{{ r.value }}" target="_blank" rel="noreferrer" title="Abrir card de descoberta" style="color:var(--ac);font-size:12px;text-decoration:none">↗</a>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ aNoA2A }}" hint-placeholder-val="{{ false }}">
+<p style="margin:0;font-size:11.5px;color:var(--mut2);line-height:1.5">O endereço público do servidor não está configurado, então não há como exibir os endereços deste agente.</p>
+</sc-if>
+<sc-if value="{{ aA2AInactive }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:10px;padding:8px 10px;border-radius:7px;background:var(--wabg);color:var(--wa);font:500 11.5px 'IBM Plex Sans',sans-serif;line-height:1.45">Este agente continua descobrível por estes endereços, mas rejeita as mensagens que receber enquanto estiver inativo.</div>
+</sc-if>
+</div>
+</div>
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden"><div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2)"><span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Datas</span></div>
+<div style="padding:13px 14px"><div style="font-size:11.5px;color:var(--mut)">
+<div style="display:flex;justify-content:space-between;gap:10px"><span>Criado em</span><span>{{ aCreated }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:10px;margin-top:4px"><span>Atualizado em</span><span>{{ aUpdated }}</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ tabKb }}" hint-placeholder-val="{{ false }}">
+<div style="padding:18px 26px 0;display:flex;flex-direction:column;gap:11px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+<p style="margin:0;font-size:12px;color:var(--mut)">{{ kbLinkSummary }}</p>
+<button onClick="{{ kbPickOpen }}" style="padding:6px 12px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Vincular base</button>
+</div>
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+<span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Bases vinculadas</span>
+<span style="font-size:11.5px;color:var(--mut2)">{{ kbCatalogNote }}</span>
+</div>
+<sc-for list="{{ kbLinkRows }}" as="k" hint-placeholder-count="3">
+<div style="border-bottom:1px solid var(--bd2)">
+<div style="display:flex;align-items:flex-start;gap:12px;padding:11px 14px">
+<div style="min-width:0;flex:1">
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<button onClick="{{ k.open }}" style="border:0;background:transparent;padding:0;font:600 12.5px 'IBM Plex Sans',sans-serif;color:var(--ac);cursor:pointer">{{ k.name }}</button>
+<sc-if value="{{ k.saving }}" hint-placeholder-val="{{ false }}">
+<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--mut2)"><span style="width:11px;height:11px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .7s linear infinite"></span>salvando…</span>
+</sc-if>
+</div>
+<div style="font-size:11.5px;color:var(--mut);max-width:620px;margin-top:2px">{{ k.description }}</div>
+</div>
+<span style="font-size:11.5px;color:{{ k.statsFg }};white-space:nowrap;margin-top:2px">{{ k.stats }}</span>
+<button onClick="{{ k.toggle }}" style="flex:none;padding:4px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--sf);color:var(--mut);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Desvincular</button>
+</div>
+<sc-if value="{{ k.hasWarn }}" hint-placeholder-val="{{ false }}">
+<div style="margin:0 14px 11px;padding:7px 10px;border-radius:6px;background:var(--wabg);color:var(--wa);font:500 11.5px 'IBM Plex Sans',sans-serif">{{ k.warn }}</div>
+</sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ kbLinkEmpty }}" hint-placeholder-val="{{ true }}">
+<div style="margin:14px;padding:30px 14px;text-align:center;border:1px dashed var(--bd);border-radius:9px">
+<p style="margin:0 0 4px;font:600 13px 'IBM Plex Sans',sans-serif">Nenhuma base vinculada</p>
+<p style="margin:0 0 13px;font-size:12px;color:var(--mut);max-width:420px;display:inline-block">Sem vínculo, este agente responde só com o system prompt: ele não tem onde consultar horários, cardápio ou políticas.</p>
+<div><button onClick="{{ kbPickOpen }}" style="padding:6px 12px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Vincular base</button></div>
+</div>
+</sc-if>
+<div style="padding:9px 14px 10px">
+<button onClick="{{ kbWhyToggle }}" style="border:0;background:transparent;padding:0;color:var(--mut2);font:500 11px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ kbWhyLabel }}</button>
+<sc-if value="{{ kbWhyOpen }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:7px;max-width:760px;font-size:11.5px;color:var(--mut);line-height:1.55">
+<p style="margin:0 0 6px"><strong>A lista mostra só o que está vinculado.</strong> O catálogo passa de cem bases e um agente usa poucas. Listar tudo com toggle obriga o operador a varrer o catálogo inteiro para descobrir o vínculo atual — a informação que ele vem conferir. Vincular é a ação menos frequente e vai para um seletor com busca.</p>
+<p style="margin:0 0 6px"><strong>Aba própria, não seção na Visão geral.</strong> O system prompt costuma ser longo e o card de A2A cresceu na coluna direita; qualquer seção abaixo desse par fica fora da dobra e a posição varia por agente. Como aba, o vínculo tem endereço fixo e a contagem aparece na barra sem precisar rolar.</p>
+<p style="margin:0"><strong>Divergência:</strong> não há rascunho nem barra de salvamento. Cada vínculo é uma requisição própria, porque é atômico e sem semântica de conjunto. Criar e editar documentos continua só em Conhecimento; aqui o agente apenas vincula.</p>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+<sc-if value="{{ kbPick }}" hint-placeholder-val="{{ false }}">
+<div style="position:fixed;inset:0;z-index:70;background:rgba(10,10,12,.45);display:grid;place-items:center;padding:24px">
+<div style="width:100%;max-width:560px;background:var(--sf);border:1px solid var(--bd);border-radius:11px;box-shadow:0 18px 48px rgba(0,0,0,.28);display:flex;flex-direction:column;max-height:80vh;overflow:hidden">
+<div style="padding:16px 18px 12px;border-bottom:1px solid var(--bd2)">
+<h3 style="margin:0 0 3px;font:600 14.5px 'IBM Plex Sans',sans-serif">Vincular base de conhecimento</h3>
+<p style="margin:0 0 11px;font-size:11.5px;color:var(--mut)">{{ kbPickNote }}</p>
+<input value="{{ kbPickQ }}" onChange="{{ onKbPickQ }}" placeholder="Buscar por nome ou descrição" style="width:100%;box-sizing:border-box;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif">
+</div>
+<div style="overflow:auto;flex:1">
+<sc-for list="{{ kbPickRows }}" as="k" hint-placeholder-count="4">
+<div style="display:flex;align-items:flex-start;gap:12px;padding:11px 18px;border-bottom:1px solid var(--bd2)">
+<div style="min-width:0;flex:1">
+<div style="font:600 12.5px 'IBM Plex Sans',sans-serif">{{ k.name }}</div>
+<div style="font-size:11.5px;color:var(--mut);margin-top:2px">{{ k.description }}</div>
+<div style="font-size:11px;color:{{ k.statsFg }};margin-top:3px">{{ k.stats }}</div>
+</div>
+<button onClick="{{ k.toggle }}" style="flex:none;padding:4px 10px;border-radius:6px;border:1px solid {{ k.btnBd }};background:{{ k.btnBg }};color:{{ k.btnFg }};font:600 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ k.btnLabel }}</button>
+</div>
+</sc-for>
+<sc-if value="{{ kbPickEmpty }}" hint-placeholder-val="{{ false }}">
+<p style="margin:0;padding:26px 18px;text-align:center;font-size:12px;color:var(--mut)">{{ kbPickEmptyText }}</p>
+</sc-if>
+</div>
+<div style="padding:11px 18px;border-top:1px solid var(--bd2);display:flex;align-items:center;justify-content:space-between;gap:10px">
+<button onClick="{{ goNewKb }}" style="border:0;background:transparent;padding:0;color:var(--ac);font:500 12px 'IBM Plex Sans',sans-serif;cursor:pointer">Criar nova base</button>
+<button onClick="{{ kbPickClose }}" style="padding:6px 13px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Concluir</button>
+</div>
+</div>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ tabTools }}" hint-placeholder-val="{{ false }}">
+<div style="padding:18px 26px 0;display:flex;flex-direction:column;gap:11px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap">
+<p style="margin:0;font-size:12px;color:var(--mut)">{{ bindSummary }} · as tools são descobertas ao vivo em cada servidor</p>
+</div>
+<sc-if value="{{ bindError }}" hint-placeholder-val="{{ false }}">
+<div style="padding:11px 13px;border:1px solid var(--dabg);border-left:3px solid var(--da);border-radius:8px;background:var(--dabg)">
+<div style="font:600 12.5px 'IBM Plex Sans',sans-serif;color:var(--da)">{{ bindError }}</div>
+<div style="font-size:12px;color:var(--da);opacity:.85;margin-top:2px">{{ bindErrorDetail }}</div>
+</div>
+</sc-if>
+<sc-if value="{{ zeroWarn }}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px 13px;border:1px solid var(--wabg);border-left:3px solid var(--wa);border-radius:8px;background:var(--wabg);color:var(--wa);font:500 12px 'IBM Plex Sans',sans-serif">Vinculado sem tools — {{ zeroWarnText }} Nenhuma ferramenta desse servidor será oferecida ao modelo em runtime.</div>
+</sc-if>
+<sc-if value="{{ noServers }}" hint-placeholder-val="{{ false }}">
+<div style="padding:34px;text-align:center;border:1px dashed var(--bd);border-radius:10px">
+<p style="margin:0 0 12px;font-size:12.5px;color:var(--mut)">Nenhum servidor MCP cadastrado ainda.</p>
+<button onClick="{{ goNewServer }}" style="padding:6px 12px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Cadastrar servidor MCP</button>
+</div>
+</sc-if>
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<sc-for list="{{ bindRows }}" as="r" hint-placeholder-count="4">
+<div style="border-bottom:1px solid var(--bd2)">
+<div style="display:flex;align-items:center;gap:11px;padding:10px 14px">
+<input type="checkbox" checked="{{ r.linked }}" onChange="{{ r.toggleLink }}" style="width:15px;height:15px;flex:none;accent-color:var(--ac);cursor:pointer">
+<div style="min-width:0;flex:1">
+<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+<span style="font:600 12.5px 'IBM Plex Sans',sans-serif">{{ r.name }}</span>
+<sc-for list="{{ r.badges }}" as="b" hint-placeholder-count="0">
+<span style="padding:1px 6px;border-radius:5px;background:{{ b.bg }};color:{{ b.fg }};font:600 10px 'IBM Plex Sans',sans-serif">{{ b.label }}</span>
+</sc-for>
+</div>
+<div style="font:400 11px 'IBM Plex Mono',monospace;color:var(--mut2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.url }}</div>
+</div>
+<span style="font-size:11.5px;color:{{ r.countFg }};white-space:nowrap">{{ r.count }}</span>
+<button onClick="{{ r.expand }}" style="padding:4px 9px;border-radius:6px;border:1px solid var(--bd);background:var(--sf);color:var(--mut);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer;white-space:nowrap">{{ r.expandLabel }}</button>
+</div>
+<sc-if value="{{ r.inactiveNote }}" hint-placeholder-val="{{ false }}">
+<div style="margin:0 14px 10px 40px;padding:7px 10px;border-radius:6px;background:var(--wabg);color:var(--wa);font:500 11.5px 'IBM Plex Sans',sans-serif">Servidor inativo: as tools marcadas aqui não estão sendo oferecidas ao agente até que ele seja reativado.</div>
+</sc-if>
+<sc-if value="{{ r.expanded }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 14px 12px 40px">
+<sc-if value="{{ r.loading }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:12px;color:var(--mut)">
+<span style="width:12px;height:12px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .7s linear infinite"></span>Buscando tools...</div>
+</sc-if>
+<sc-if value="{{ r.error }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;background:var(--dabg);color:var(--da);font-size:12px">
+<span>⚠ Não foi possível buscar as tools deste servidor.</span>
+<button onClick="{{ r.retry }}" style="padding:3px 9px;border-radius:6px;border:1px solid var(--da);background:transparent;color:var(--da);font:600 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Tentar novamente</button>
+</div>
+</sc-if>
+<sc-if value="{{ r.emptyTools }}" hint-placeholder-val="{{ false }}">
+<div style="padding:8px 0;font-size:12px;color:var(--mut2)">Este servidor não oferece nenhuma tool.</div>
+</sc-if>
+<sc-if value="{{ r.hasTools }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px">
+<sc-for list="{{ r.tools }}" as="t" hint-placeholder-count="3">
+<label style="display:flex;gap:9px;align-items:flex-start;padding:6px 8px;border-radius:7px;opacity:{{ t.op }};cursor:pointer" style-hover="background:var(--sf2)">
+<input type="checkbox" checked="{{ t.checked }}" disabled="{{ t.disabled }}" onChange="{{ t.toggle }}" style="width:14px;height:14px;flex:none;margin-top:2px;accent-color:var(--ac);cursor:pointer">
+<span style="min-width:0"><span style="font:500 12px 'IBM Plex Mono',monospace;display:block">{{ t.name }}</span><span style="font-size:11px;color:var(--mut2)">{{ t.description }}</span></span>
+</label>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ tabDeleg }}" hint-placeholder-val="{{ false }}">
+<div style="padding:18px 26px 0;display:flex;flex-direction:column;gap:11px;max-width:620px">
+<p style="margin:0;font-size:12px;color:var(--mut)">{{ delegSummary }}</p>
+<input value="{{ delegQ }}" onChange="{{ onDelegQ }}" placeholder="Buscar agente" style="padding:6px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<sc-for list="{{ delegRows }}" as="d" hint-placeholder-count="3">
+<label style="display:flex;align-items:center;gap:11px;padding:9px 14px;border-bottom:1px solid var(--bd2);cursor:pointer" style-hover="background:var(--sf2)">
+<input type="checkbox" checked="{{ d.checked }}" onChange="{{ d.toggle }}" style="width:15px;height:15px;flex:none;accent-color:var(--ac);cursor:pointer">
+<span style="font:500 12.5px 'IBM Plex Sans',sans-serif">{{ d.name }}</span>
+<span style="margin-left:auto;font-size:11.5px;color:{{ d.noteFg }};font-family:'IBM Plex Mono',monospace">{{ d.note }}</span>
+</label>
+</sc-for>
+<sc-if value="{{ delegEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="padding:28px 14px;text-align:center;color:var(--mut2);font-size:12.5px">Nenhum outro agente disponível.</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ barVisible }}" hint-placeholder-val="{{ false }}">
+<div style="position:fixed;left:0;right:0;bottom:0;z-index:50;padding:11px 26px;background:var(--sf);border-top:1px solid var(--bd);box-shadow:0 -6px 20px rgba(0,0,0,.07);display:flex;align-items:center;gap:12px">
+<sc-if value="{{ barSaving }}" hint-placeholder-val="{{ false }}">
+<span style="width:13px;height:13px;flex:none;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .7s linear infinite"></span>
+</sc-if>
+<span style="font:500 12.5px 'IBM Plex Sans',sans-serif">{{ barText }}</span>
+<div style="margin-left:auto;display:flex;gap:8px">
+<button onClick="{{ barDiscard }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--mut);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Descartar</button>
+<button onClick="{{ barSave }}" style="padding:6px 14px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ barSaveLabel }}</button>
+</div>
+</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{ isServers }}" hint-placeholder-val="{{ false }}">
+<div style="padding:22px 26px 0;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+<div><h1 style="margin:0;font:600 21px/1.15 'IBM Plex Sans',sans-serif;letter-spacing:-.015em">Servidores MCP</h1>
+<p style="margin:4px 0 0;font-size:12px;color:var(--mut)">{{ serverCount }} servidores · fontes de tools para os agentes</p></div>
+<button onClick="{{ newServer }}" style="padding:7px 13px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Novo servidor MCP</button>
+</div>
+<div style="margin:18px 26px 0">
+<input value="{{ serverQ }}" onChange="{{ onServerQ }}" placeholder="Buscar por nome ou url" style="width:100%;max-width:340px;padding:6px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+</div>
+<div style="margin:14px 26px 0;border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,2fr) 130px minmax(0,1.2fr) 110px;gap:12px;padding:8px 14px;background:var(--sf2);border-bottom:1px solid var(--bd);font:600 10.5px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">
+<div>Servidor</div><div>Url</div><div>Autenticação</div><div>Usado por</div><div>Estado</div>
+</div>
+<sc-for list="{{ serverRows }}" as="sv" hint-placeholder-count="4">
+<div onClick="{{ sv.open }}" style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,2fr) 130px minmax(0,1.2fr) 110px;gap:12px;padding:var(--ry) 14px;border-bottom:1px solid var(--bd2);cursor:pointer;align-items:center" style-hover="background:var(--sf2)">
+<div style="min-width:0;font:600 13px 'IBM Plex Sans',sans-serif;color:var(--ac);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sv.name }}</div>
+<div style="min-width:0;font:400 11.5px 'IBM Plex Mono',monospace;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sv.url }}</div>
+<div style="font-size:12px;color:var(--mut)">{{ sv.auth }}</div>
+<div style="min-width:0"><div style="font-size:12px;color:var(--mut)">{{ sv.used }}</div>
+<sc-if value="{{ sv.usedWarn }}" hint-placeholder-val="{{ false }}"><div style="font:500 11px 'IBM Plex Sans',sans-serif;color:var(--wa)">⚠ {{ sv.usedWarn }}</div></sc-if></div>
+<div style="display:flex;gap:5px">
+<sc-for list="{{ sv.badges }}" as="b" hint-placeholder-count="1">
+<span style="padding:2px 7px;border-radius:5px;background:{{ b.bg }};color:{{ b.fg }};font:600 10.5px 'IBM Plex Sans',sans-serif">{{ b.label }}</span>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ emptyServers }}" hint-placeholder-val="{{ false }}">
+<div style="padding:34px 14px;text-align:center;color:var(--mut2);font-size:12.5px">{{ emptyServerMsg }}</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isServer }}" hint-placeholder-val="{{ false }}">
+<div style="padding:20px 26px 0">
+<button onClick="{{ backServers }}" style="border:0;background:transparent;padding:0;color:var(--mut2);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">← Servidores MCP</button>
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:8px">
+<div style="min-width:0">
+<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+<h1 style="margin:0;font:600 21px/1.15 'IBM Plex Sans',sans-serif;letter-spacing:-.015em">{{ svName }}</h1>
+<sc-for list="{{ svBadges }}" as="b" hint-placeholder-count="1">
+<span style="padding:2px 7px;border-radius:5px;background:{{ b.bg }};color:{{ b.fg }};font:600 10.5px 'IBM Plex Sans',sans-serif">{{ b.label }}</span>
+</sc-for>
+</div>
+<p style="margin:5px 0 0;font-size:12px;color:var(--mut)">{{ svDesc }}</p>
+</div>
+<div style="display:flex;gap:7px">
+<button onClick="{{ editServer }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Editar</button>
+<button onClick="{{ svTest }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Testar conexão</button>
+<button onClick="{{ svToggle }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:{{ svToggleFg }};font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ svToggleLabel }}</button>
+</div>
+</div>
+</div>
+<div style="padding:14px 26px 0;display:flex;flex-direction:column;gap:12px">
+<sc-if value="{{ testLoading }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:9px;padding:10px 13px;border:1px solid var(--bd);border-radius:8px;background:var(--sf);font-size:12.5px;color:var(--mut)">
+<span style="width:13px;height:13px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .7s linear infinite"></span>Conectando ao servidor MCP…</div>
+</sc-if>
+<sc-if value="{{ testOk }}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px 13px;border:1px solid var(--okbg);border-left:3px solid var(--ok);border-radius:8px;background:var(--okbg)">
+<div style="font:600 12.5px 'IBM Plex Sans',sans-serif;color:var(--ok)">{{ testOkText }}</div>
+<div style="font-size:11px;color:var(--ok);opacity:.8;margin-top:2px">{{ testAt }}</div>
+</div>
+</sc-if>
+<sc-if value="{{ testErr }}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px 13px;border:1px solid var(--dabg);border-left:3px solid var(--da);border-radius:8px;background:var(--dabg)">
+<div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px 'IBM Plex Sans',sans-serif;color:var(--da)">Falha na conexão</span><span style="font:500 10px 'IBM Plex Mono',monospace;color:var(--da);border:1px solid var(--da);border-radius:4px;padding:1px 5px;opacity:.8">{{ testErrReason }}</span></div>
+<div style="font-size:12px;color:var(--da);opacity:.9;margin-top:3px">{{ testErrText }}</div>
+<div style="font-size:11px;color:var(--da);opacity:.7;margin-top:2px">{{ testAt }}</div>
+</div>
+</sc-if>
+
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:14px;align-items:start">
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);padding:13px 14px;box-shadow:var(--sh)">
+<div style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2);margin-bottom:9px">Configuração</div>
+<div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
+<div><div style="color:var(--mut);font-size:11px">Url</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;word-break:break-all">{{ svUrl }}</div></div>
+<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--mut)">Autenticação</span><span>{{ svAuth }}</span></div>
+<sc-if value="{{ svHasCred }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--mut)">Credencial</span><span style="font-family:'IBM Plex Mono',monospace;color:var(--mut2)">•••••••• cifrada</span></div>
+</sc-if>
+<div style="display:flex;justify-content:space-between;gap:10px;color:var(--mut2);font-size:11.5px;margin-top:4px"><span>Criado em</span><span>{{ svCreated }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:10px;color:var(--mut2);font-size:11.5px"><span>Atualizado em</span><span>{{ svUpdated }}</span></div>
+</div>
+</div>
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2);display:flex;align-items:center;justify-content:space-between;gap:10px">
+<span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Catálogo de tools</span>
+<button onClick="{{ catDiscover }}" style="padding:3px 9px;border-radius:6px;border:1px solid var(--bd);background:var(--sf);color:var(--mut);font:500 11px 'IBM Plex Sans',sans-serif;cursor:pointer">Atualizar</button>
+</div>
+<sc-if value="{{ catIdle }}" hint-placeholder-val="{{ true }}">
+<div style="padding:20px 14px;text-align:center;font-size:12px;color:var(--mut2)">As tools são descobertas ao vivo. Clique em Atualizar para consultar o servidor.</div>
+</sc-if>
+<sc-if value="{{ catLoading }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:8px;padding:16px 14px;font-size:12px;color:var(--mut)"><span style="width:12px;height:12px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .7s linear infinite"></span>Buscando tools...</div>
+</sc-if>
+<sc-if value="{{ catError }}" hint-placeholder-val="{{ false }}">
+<div style="padding:14px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--da)">⚠ Não foi possível buscar as tools deste servidor.
+<button onClick="{{ catDiscover }}" style="padding:3px 9px;border-radius:6px;border:1px solid var(--da);background:transparent;color:var(--da);font:600 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Tentar novamente</button></div>
+</sc-if>
+<sc-if value="{{ catEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="padding:20px 14px;text-align:center;font-size:12px;color:var(--mut2)">Este servidor não oferece nenhuma tool.</div>
+</sc-if>
+<sc-for list="{{ catTools }}" as="c" hint-placeholder-count="0">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2);display:flex;gap:12px;align-items:baseline">
+<div style="min-width:0;flex:1"><div style="font:500 12px 'IBM Plex Mono',monospace">{{ c.name }}</div><div style="font-size:11px;color:var(--mut2)">{{ c.description }}</div></div>
+<span style="font-size:11px;color:{{ c.usedFg }};white-space:nowrap">{{ c.used }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2)">
+<span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Agentes que usam este servidor</span>
+<span style="font-size:11px;color:var(--mut2);margin-left:8px">{{ inverseSummary }}</span>
+</div>
+<sc-for list="{{ inverseRows }}" as="iv" hint-placeholder-count="2">
+<div onClick="{{ iv.open }}" style="padding:10px 14px;border-bottom:1px solid var(--bd2);display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,2.4fr) 90px;gap:12px;align-items:center;cursor:pointer" style-hover="background:var(--sf2)">
+<div style="min-width:0;font:600 12.5px 'IBM Plex Sans',sans-serif;color:var(--ac);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ iv.name }}</div>
+<div style="display:flex;gap:5px;flex-wrap:wrap;min-width:0">
+<sc-for list="{{ iv.tools }}" as="tt" hint-placeholder-count="2">
+<span style="padding:2px 7px;border-radius:5px;background:var(--sf2);border:1px solid var(--bd2);font:400 11px 'IBM Plex Mono',monospace">{{ tt.n }}</span>
+</sc-for>
+<sc-if value="{{ iv.warn }}" hint-placeholder-val="{{ false }}">
+<span style="padding:2px 7px;border-radius:5px;background:var(--wabg);color:var(--wa);font:600 10.5px 'IBM Plex Sans',sans-serif">Vinculado sem tools</span>
+</sc-if>
+</div>
+<span style="font-size:11.5px;color:{{ iv.stateFg }}">{{ iv.state }}</span>
+</div>
+</sc-for>
+<sc-if value="{{ inverseEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="padding:26px 14px;text-align:center;font-size:12px;color:var(--mut2)">Nenhum agente usa este servidor. Desativá-lo não afeta ninguém agora.</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAgentForm }}" hint-placeholder-val="{{ false }}">
+<div style="padding:20px 26px 0;max-width:660px">
+<button onClick="{{ formBack }}" style="border:0;background:transparent;padding:0;color:var(--mut2);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ formBackLabel }}</button>
+<h1 style="margin:8px 0 18px;font:600 21px/1.15 'IBM Plex Sans',sans-serif;letter-spacing:-.015em">{{ formTitle }}</h1>
+<div style="display:flex;flex-direction:column;gap:14px">
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Nome *</span>
+<input value="{{ fName }}" onChange="{{ onFName }}" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<sc-if value="{{ fErrName }}" hint-placeholder-val="{{ false }}"><span style="display:block;font-size:11px;color:var(--da);margin-top:3px">{{ fErrName }}</span></sc-if></label>
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Descrição</span>
+<span style="display:block;font-size:11px;color:var(--mut2);margin-bottom:5px">Uso interno: ajuda o operador a identificar o agente nas listas.</span>
+<textarea value="{{ fDesc }}" onChange="{{ onFDesc }}" rows="2" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none;resize:vertical"></textarea></label>
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Instruções * <span style="font-weight:400;color:var(--mut2)">— system prompt, aceita Markdown</span></span>
+<textarea value="{{ fInstructions }}" onChange="{{ onFInstructions }}" rows="12" style="width:100%;padding:9px 11px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12px/1.6 'IBM Plex Mono',monospace;outline:none;resize:vertical"></textarea>
+<span style="display:block;font-size:11px;color:var(--mut2);margin-top:3px">{{ fChars }}</span></label>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Provedor *</span>
+<select value="{{ fProvider }}" onChange="{{ onFProvider }}" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<sc-for list="{{ providerOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+</select></label>
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Modelo *</span>
+<select value="{{ fModel }}" onChange="{{ onFModel }}" disabled="{{ modelDisabled }}" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<sc-for list="{{ modelOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+</select></label>
+</div>
+<div><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Skills</span>
+<span style="display:block;font-size:11px;color:var(--mut2);margin-bottom:6px">Rótulos do que o agente sabe fazer. Não afetam o runtime.</span>
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px">
+<sc-for list="{{ fSkills }}" as="k" hint-placeholder-count="0">
+<span style="display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:6px;background:var(--sf2);border:1px solid var(--bd2);font-size:11.5px">{{ k.name }}
+<button onClick="{{ k.remove }}" style="border:0;background:transparent;padding:0;color:var(--mut2);cursor:pointer;font-size:12px">×</button></span>
+</sc-for>
+</div>
+<div style="display:flex;gap:7px">
+<input value="{{ fNewSkill }}" onChange="{{ onFNewSkill }}" placeholder="ex.: Segunda via de boleto" style="flex:1;max-width:280px;padding:6px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<button onClick="{{ addSkill }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Adicionar</button>
+</div>
+</div>
+<div style="display:flex;gap:8px;padding-top:4px">
+<button onClick="{{ formSubmit }}" style="padding:7px 14px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ formSubmitLabel }}</button>
+<button onClick="{{ formCancel }}" style="padding:7px 13px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--mut);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Cancelar</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isServerForm }}" hint-placeholder-val="{{ false }}">
+<div style="padding:20px 26px 0;max-width:560px">
+<button onClick="{{ formBack }}" style="border:0;background:transparent;padding:0;color:var(--mut2);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ formBackLabel }}</button>
+<h1 style="margin:8px 0 18px;font:600 21px/1.15 'IBM Plex Sans',sans-serif;letter-spacing:-.015em">{{ formTitle }}</h1>
+<div style="display:flex;flex-direction:column;gap:14px">
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Nome *</span>
+<input value="{{ fName }}" onChange="{{ onFName }}" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<sc-if value="{{ fErrName }}" hint-placeholder-val="{{ false }}"><span style="display:block;font-size:11px;color:var(--da);margin-top:3px">{{ fErrName }}</span></sc-if></label>
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Descrição</span>
+<textarea value="{{ fDesc }}" onChange="{{ onFDesc }}" rows="3" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none;resize:vertical"></textarea></label>
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Url *</span>
+<input value="{{ fUrl }}" onChange="{{ onFUrl }}" placeholder="https://mcp.exemplo.com/sse" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12px 'IBM Plex Mono',monospace;outline:none">
+<sc-if value="{{ fErrUrl }}" hint-placeholder-val="{{ false }}"><span style="display:block;font-size:11px;color:var(--da);margin-top:3px">{{ fErrUrl }}</span></sc-if></label>
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Tipo de autenticação *</span>
+<select value="{{ fAuth }}" onChange="{{ onFAuth }}" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<sc-for list="{{ authOpts }}" as="o" hint-placeholder-count="2"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+</select></label>
+<sc-if value="{{ fNeedsCred }}" hint-placeholder-val="{{ false }}">
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Credencial *</span>
+<input type="password" value="{{ fCred }}" onChange="{{ onFCred }}" placeholder="••••••••" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Mono',monospace;outline:none">
+<span style="display:block;font-size:11px;color:var(--mut2);margin-top:3px">{{ credHint }}</span></label>
+</sc-if>
+<sc-if value="{{ fTestSavedNote }}" hint-placeholder-val="{{ false }}">
+<div style="padding:8px 11px;border-radius:7px;background:var(--sf2);border:1px solid var(--bd2);font-size:11.5px;color:var(--mut)">{{ fTestSavedNote }}</div>
+</sc-if>
+<sc-if value="{{ fTestLoading }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid var(--bd);border-radius:8px;font-size:12.5px;color:var(--mut)"><span style="width:13px;height:13px;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .7s linear infinite"></span>Testando a configuração…</div>
+</sc-if>
+<sc-if value="{{ fTestOk }}" hint-placeholder-val="{{ false }}">
+<div style="padding:9px 12px;border:1px solid var(--okbg);border-left:3px solid var(--ok);border-radius:8px;background:var(--okbg);color:var(--ok);font:600 12.5px 'IBM Plex Sans',sans-serif">{{ fTestOkText }}</div>
+</sc-if>
+<sc-if value="{{ fTestErr }}" hint-placeholder-val="{{ false }}">
+<div style="padding:9px 12px;border:1px solid var(--dabg);border-left:3px solid var(--da);border-radius:8px;background:var(--dabg);color:var(--da);font-size:12px">{{ fTestErrText }}</div>
+</sc-if>
+<div style="display:flex;gap:8px;padding-top:4px">
+<button onClick="{{ formSubmit }}" style="padding:7px 14px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ formSubmitLabel }}</button>
+<button onClick="{{ formCancel }}" style="padding:7px 13px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--mut);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Cancelar</button>
+<button onClick="{{ fTest }}" style="margin-left:auto;padding:7px 13px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Testar conexão</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isKbs }}" hint-placeholder-val="{{ false }}">
+<div style="padding:22px 26px 0;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+<div><h1 style="margin:0;font:600 21px/1.15 'IBM Plex Sans',sans-serif;letter-spacing:-.015em">Bases de conhecimento</h1>
+<p style="margin:4px 0 0;font-size:12px;color:var(--mut)">{{ kbSubtitle }}</p></div>
+<button onClick="{{ newKb }}" style="padding:7px 13px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Nova base</button>
+</div>
+<sc-if value="{{ kbCatalogEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="margin:18px 26px 0;padding:44px 20px;text-align:center;border:1px dashed var(--bd);border-radius:10px">
+<p style="margin:0 0 4px;font:600 13px 'IBM Plex Sans',sans-serif">Nenhuma base de conhecimento cadastrada ainda.</p>
+<p style="margin:0 0 14px;font-size:12px;color:var(--mut);max-width:440px;display:inline-block">Uma base guarda documentos markdown que o agente consulta durante a conversa, quando julga que o assunto está ali.</p>
+<div><button onClick="{{ newKb }}" style="padding:7px 13px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Criar a primeira base</button></div>
+</div>
+</sc-if>
+<sc-if value="{{ kbHasCatalog }}" hint-placeholder-val="{{ true }}">
+<div style="margin:18px 26px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+<input value="{{ kbQ }}" onChange="{{ onKbQ }}" placeholder="Buscar por nome ou descrição" style="flex:1 1 260px;max-width:340px;padding:6px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<div style="display:flex;gap:3px;padding:3px;border-radius:8px;background:var(--sf2);border:1px solid var(--bd2)">
+<sc-for list="{{ kbFilters }}" as="f" hint-placeholder-count="4">
+<button onClick="{{ f.pick }}" style="padding:4px 10px;border-radius:6px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ f.label }}</button>
+</sc-for>
+</div>
+</div>
+<div style="margin:14px 26px 0;border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="display:grid;grid-template-columns:minmax(0,2.4fr) 140px minmax(0,1.5fr) minmax(0,1.4fr) 150px;gap:12px;padding:8px 14px;background:var(--sf2);border-bottom:1px solid var(--bd);font:600 10.5px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">
+<div>Base</div><div>Documentos</div><div>Indexação</div><div>Consultada por</div><div>Estado</div>
+</div>
+<sc-for list="{{ kbRows }}" as="k" hint-placeholder-count="3">
+<div onClick="{{ k.open }}" style="display:grid;grid-template-columns:minmax(0,2.4fr) 140px minmax(0,1.5fr) minmax(0,1.4fr) 150px;gap:12px;padding:var(--ry) 14px;border-bottom:1px solid var(--bd2);cursor:pointer;align-items:center" style-hover="background:var(--sf2)">
+<div style="min-width:0"><div style="font:600 13px 'IBM Plex Sans',sans-serif;color:var(--ac);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.name }}</div><div style="font-size:11px;color:var(--mut2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.description }}</div></div>
+<div style="font-size:12px;color:var(--mut)">{{ k.docs }}</div>
+<div style="min-width:0;font-size:12px;color:{{ k.idxFg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.idx }}</div>
+<div style="min-width:0;font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.agents }}</div>
+<div style="display:flex;gap:5px;flex-wrap:wrap">
+<sc-for list="{{ k.badges }}" as="b" hint-placeholder-count="1">
+<span style="padding:2px 7px;border-radius:5px;background:{{ b.bg }};color:{{ b.fg }};font:600 10.5px 'IBM Plex Sans',sans-serif;white-space:nowrap">{{ b.label }}</span>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ kbNoResults }}" hint-placeholder-val="{{ false }}">
+<div style="padding:34px 14px;text-align:center;color:var(--mut2);font-size:12.5px">Nenhuma base corresponde à busca.</div>
+</sc-if>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ isKb }}" hint-placeholder-val="{{ false }}">
+<div style="padding:20px 26px 0">
+<button onClick="{{ backKbs }}" style="border:0;background:transparent;padding:0;color:var(--mut2);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">← Bases de conhecimento</button>
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:8px">
+<div style="min-width:0">
+<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+<h1 style="margin:0;font:600 21px/1.15 'IBM Plex Sans',sans-serif;letter-spacing:-.015em">{{ kName }}</h1>
+<sc-for list="{{ kBadges }}" as="b" hint-placeholder-count="1">
+<span style="padding:2px 7px;border-radius:5px;background:{{ b.bg }};color:{{ b.fg }};font:600 10.5px 'IBM Plex Sans',sans-serif">{{ b.label }}</span>
+</sc-for>
+</div>
+<p style="margin:5px 0 0;font-size:12px;color:var(--mut)">{{ kSub }}</p>
+</div>
+<div style="display:flex;gap:7px">
+<button onClick="{{ editKb }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Editar</button>
+<button onClick="{{ kToggle }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:{{ kToggleFg }};font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ kToggleLabel }}</button>
+</div>
+</div>
+<div style="display:flex;gap:2px;margin-top:16px;border-bottom:1px solid var(--bd)">
+<sc-for list="{{ kTabs }}" as="t" hint-placeholder-count="2">
+<button onClick="{{ t.pick }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:0;border-bottom:2px solid {{ t.bd }};background:transparent;color:{{ t.fg }};font:{{ t.w }} 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ t.label }}
+<sc-if value="{{ t.hasN }}" hint-placeholder-val="{{ false }}"><span style="padding:1px 6px;border-radius:9px;background:var(--sf2);border:1px solid var(--bd2);font:600 10.5px 'IBM Plex Mono',monospace;color:var(--mut)">{{ t.n }}</span></sc-if>
+</button>
+</sc-for>
+</div>
+</div>
+
+<sc-if value="{{ kTabDocs }}" hint-placeholder-val="{{ true }}">
+<div style="padding:18px 26px 0;display:flex;flex-direction:column;gap:13px">
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+<span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Descrição — texto lido pelo modelo</span>
+<button onClick="{{ editKb }}" style="padding:3px 9px;border-radius:6px;border:1px solid var(--bd);background:var(--sf);color:var(--mut);font:500 11px 'IBM Plex Sans',sans-serif;cursor:pointer">Editar descrição</button>
+</div>
+<div style="padding:13px 14px">
+<sc-if value="{{ kHasDesc }}" hint-placeholder-val="{{ true }}">
+<p style="margin:0;padding-left:11px;border-left:3px solid var(--ac);font-size:12.5px;line-height:1.6;max-width:820px">{{ kDesc }}</p>
+</sc-if>
+<sc-if value="{{ kNoDesc }}" hint-placeholder-val="{{ false }}">
+<div style="padding:9px 11px;border-radius:7px;background:var(--wabg);color:var(--wa);font:500 12px 'IBM Plex Sans',sans-serif;max-width:820px">Sem descrição. O modelo recebe apenas o nome da base e vai decidir por conta própria quando consultá-la — na prática, consulta na hora errada ou nunca.</div>
+</sc-if>
+<p style="margin:9px 0 0;font-size:11px;color:var(--mut2);max-width:820px">Este texto não é mostrado ao cliente. Ele é a descrição da ferramenta que o agente vê: é por ele que o modelo decide se a pergunta pertence a esta base.</p>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+<p style="margin:0;font-size:12px;color:var(--mut);max-width:600px">A indexação roda em segundo plano: um documento novo fica pendente por alguns instantes antes de ficar utilizável.</p>
+<button onClick="{{ addDoc }}" style="padding:6px 12px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Adicionar documento</button>
+</div>
+<sc-if value="{{ pendingNote }}" hint-placeholder-val="{{ false }}">
+<div style="padding:9px 12px;border:1px solid var(--wabg);border-left:3px solid var(--wa);border-radius:8px;background:var(--wabg);color:var(--wa);font:500 12px 'IBM Plex Sans',sans-serif">{{ pendingNote }}</div>
+</sc-if>
+
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="display:grid;grid-template-columns:minmax(0,2.2fr) 130px 150px 170px;gap:12px;padding:8px 14px;background:var(--sf2);border-bottom:1px solid var(--bd);font:600 10.5px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">
+<div>Documento</div><div>Fragmentos</div><div>Indexação</div><div>Ações</div>
+</div>
+<sc-for list="{{ docRows }}" as="d" hint-placeholder-count="3">
+<div style="border-bottom:1px solid var(--bd2)">
+<div style="display:grid;grid-template-columns:minmax(0,2.2fr) 130px 150px 170px;gap:12px;padding:10px 14px;align-items:center">
+<div style="min-width:0">
+<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font:600 12.5px 'IBM Plex Sans',sans-serif">{{ d.title }}</span>
+<span style="padding:1px 5px;border-radius:4px;border:1px solid var(--bd);font:500 10px 'IBM Plex Mono',monospace;color:var(--mut2)">{{ d.source }}</span></div>
+<sc-if value="{{ d.note }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px;color:var(--mut2)">{{ d.note }}</div></sc-if>
+</div>
+<div style="font:400 11.5px 'IBM Plex Mono',monospace;color:{{ d.chunksFg }}">{{ d.chunks }}</div>
+<div style="display:flex;align-items:center;gap:6px">
+<sc-if value="{{ d.spinner }}" hint-placeholder-val="{{ false }}">
+<span style="width:11px;height:11px;flex:none;border:2px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .7s linear infinite"></span>
+</sc-if>
+<span style="padding:2px 7px;border-radius:5px;background:{{ d.statusBg }};color:{{ d.statusFg }};font:600 10.5px 'IBM Plex Sans',sans-serif;white-space:nowrap">{{ d.statusLabel }}</span>
+</div>
+<div style="display:flex;gap:6px">
+<button onClick="{{ d.edit }}" style="padding:4px 9px;border-radius:6px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Atualizar</button>
+<button onClick="{{ d.del }}" style="padding:4px 9px;border-radius:6px;border:1px solid var(--bd);background:var(--sf);color:var(--da);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Excluir</button>
+</div>
+</div>
+<sc-if value="{{ d.hasReason }}" hint-placeholder-val="{{ false }}">
+<div style="margin:0 14px 11px;padding:10px 12px;border-radius:8px;background:var(--dabg);border-left:3px solid var(--da)">
+<div style="font:600 11.5px 'IBM Plex Sans',sans-serif;color:var(--da);margin-bottom:3px">Falhou ao indexar</div>
+<p style="margin:0;font-size:12px;line-height:1.55;color:var(--da);max-width:820px">{{ d.reason }}</p>
+<button onClick="{{ d.retry }}" style="margin-top:9px;padding:4px 10px;border-radius:6px;border:1px solid var(--da);background:transparent;color:var(--da);font:600 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Reindexar documento</button>
+</div>
+</sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ docsEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="padding:40px 18px;text-align:center">
+<p style="margin:0 0 4px;font:600 13px 'IBM Plex Sans',sans-serif">Nenhum documento nesta base.</p>
+<p style="margin:0 0 14px;font-size:12px;color:var(--mut);max-width:440px;display:inline-block">{{ docsEmptyNote }}</p>
+<div><button onClick="{{ addDoc }}" style="padding:6px 12px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Adicionar documento</button></div>
+</div>
+</sc-if>
+</div>
+
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2)">
+<span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Agentes que consultam esta base</span>
+</div>
+<sc-for list="{{ kbAgentRows }}" as="a" hint-placeholder-count="1">
+<div onClick="{{ a.open }}" style="display:grid;grid-template-columns:minmax(0,1fr) 90px;gap:12px;padding:9px 14px;border-bottom:1px solid var(--bd2);align-items:center;cursor:pointer" style-hover="background:var(--sf2)">
+<span style="min-width:0;font:600 12.5px 'IBM Plex Sans',sans-serif;color:var(--ac);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.name }}</span>
+<span style="font-size:11.5px;color:{{ a.stateFg }}">{{ a.state }}</span>
+</div>
+</sc-for>
+<sc-if value="{{ kbAgentsEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="padding:26px 14px;text-align:center;font-size:12px;color:var(--mut2)">Nenhum agente consulta esta base. Vincule-a na Visão geral de um agente.</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ kTabDiag }}" hint-placeholder-val="{{ false }}">
+<div style="padding:18px 26px 0;display:flex;flex-direction:column;gap:13px;max-width:860px">
+<div style="padding:10px 13px;border:1px solid var(--bd);border-left:3px solid var(--mut2);border-radius:8px;background:var(--sf);font-size:12px;color:var(--mut);line-height:1.55">Somente leitura. Provedor, modelo e dimensão de embedding são configuração de processo, validada no boot do servidor — não há formulário aqui. Trocar o modelo exigiria reindexar todo o acervo.</div>
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2)">
+<span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Como o índice foi construído</span>
+</div>
+<sc-if value="{{ diagEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="padding:14px 14px 0"><div style="padding:9px 11px;border-radius:7px;background:var(--sf2);border:1px solid var(--bd2);font-size:12px;color:var(--mut);max-width:700px">Nada indexado nesta base. Provedor, modelo e dimensão passam a aparecer quando o primeiro documento terminar de indexar — são lidos do índice, não da configuração pretendida.</div></div>
+</sc-if>
+<div style="padding:6px 14px 12px">
+<sc-for list="{{ diagRows }}" as="g" hint-placeholder-count="5">
+<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--bd2)">
+<span style="font-size:12px;color:var(--mut)">{{ g.label }}</span>
+<span style="font:500 12px 'IBM Plex Mono',monospace">{{ g.value }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="border:1px solid var(--bd);border-radius:10px;background:var(--sf);box-shadow:var(--sh);overflow:hidden">
+<div style="padding:9px 14px;border-bottom:1px solid var(--bd2);background:var(--sf2)">
+<span style="font:600 11px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2)">Documentos que falharam ao indexar</span>
+</div>
+<sc-for list="{{ diagFails }}" as="x" hint-placeholder-count="0">
+<div style="padding:11px 14px;border-bottom:1px solid var(--bd2)">
+<div style="font:600 12.5px 'IBM Plex Sans',sans-serif">{{ x.title }}</div>
+<p style="margin:4px 0 0;font-size:12px;line-height:1.55;color:var(--da);max-width:760px">{{ x.reason }}</p>
+<button onClick="{{ x.retry }}" style="margin-top:9px;padding:4px 10px;border-radius:6px;border:1px solid var(--da);background:transparent;color:var(--da);font:600 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Reindexar documento</button>
+</div>
+</sc-for>
+<sc-if value="{{ diagNoFails }}" hint-placeholder-val="{{ true }}">
+<div style="padding:22px 14px;text-align:center;font-size:12px;color:var(--mut2)">Nenhuma falha de indexação nesta base.</div>
+</sc-if>
+</div>
+<p style="margin:0 0 4px;font-size:11px;color:var(--mut2);max-width:700px">O sistema registra o estado de cada documento, não o percentual de conclusão, e não coleta consultas por base — por isso não há barra de progresso nem número de acessos nesta tela.</p>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ isKbForm }}" hint-placeholder-val="{{ false }}">
+<div style="padding:20px 26px 0;max-width:680px">
+<button onClick="{{ kfBack }}" style="border:0;background:transparent;padding:0;color:var(--mut2);font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">← Bases de conhecimento</button>
+<h1 style="margin:8px 0 18px;font:600 21px/1.15 'IBM Plex Sans',sans-serif;letter-spacing:-.015em">{{ kfTitle }}</h1>
+<div style="display:flex;flex-direction:column;gap:14px">
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Nome *</span>
+<span style="display:block;font-size:11px;color:var(--mut2);margin-bottom:5px">Identifica a base nas listas e no vínculo com o agente.</span>
+<input value="{{ kfName }}" onChange="{{ onKfName }}" placeholder="ex.: Políticas de cobrança" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<sc-if value="{{ kfErrName }}" hint-placeholder-val="{{ false }}"><span style="display:block;font-size:11px;color:var(--da);margin-top:3px">{{ kfErrName }}</span></sc-if></label>
+
+<div style="border:1px solid var(--bd);border-left:3px solid var(--ac);border-radius:9px;background:var(--sf);padding:14px 15px">
+<div style="font:600 12.5px 'IBM Plex Sans',sans-serif;margin-bottom:3px">Descrição * — é o que o modelo lê para decidir se consulta esta base</div>
+<p style="margin:0 0 10px;font-size:11.5px;color:var(--mut);line-height:1.55;max-width:600px">Não é um resumo para o operador. Durante a conversa, o agente vê apenas o nome e este texto, e decide a partir deles se vale abrir a base. Diga <strong>que assunto está aqui</strong> e <strong>em que situação consultar</strong>. Evite “documentos diversos”, “materiais da equipe” e afins.</p>
+<textarea value="{{ kfDesc }}" onChange="{{ onKfDesc }}" rows="5" placeholder="ex.: Regras de negociação de faturas em atraso: prazos, descontos por faixa de atraso, parcelamento mínimo e o que exige aprovação humana. Consulte antes de prometer qualquer condição de pagamento." style="width:100%;padding:9px 11px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px/1.6 'IBM Plex Sans',sans-serif;outline:none;resize:vertical"></textarea>
+<div style="display:flex;justify-content:space-between;gap:10px;margin-top:4px">
+<span style="font-size:11px;color:{{ kfCharsFg }}">{{ kfChars }}</span>
+</div>
+<sc-if value="{{ kfErrDesc }}" hint-placeholder-val="{{ false }}"><span style="display:block;font-size:11px;color:var(--da);margin-top:3px">{{ kfErrDesc }}</span></sc-if>
+<div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--sf2);border:1px solid var(--bd2)">
+<div style="font:600 10.5px 'IBM Plex Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--mut2);margin-bottom:6px">Como o agente vê esta base</div>
+<div style="font:500 12px 'IBM Plex Mono',monospace;color:var(--ac)">consultar_base — {{ kfPreviewName }}</div>
+<p style="margin:4px 0 0;font:400 11.5px/1.6 'IBM Plex Mono',monospace;color:var(--mut)">{{ kfPreviewDesc }}</p>
+</div>
+</div>
+
+<div style="padding:9px 12px;border-radius:8px;background:var(--sf2);border:1px solid var(--bd2);font-size:11.5px;color:var(--mut);line-height:1.55">Documentos são carregados depois de criar a base, na tela de detalhe. Por enquanto só markdown: mídia binária não é armazenada, o que fica guardado é o texto.</div>
+
+<div style="display:flex;gap:8px;padding-top:4px">
+<button onClick="{{ kfSubmit }}" style="padding:7px 14px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ kfSubmitLabel }}</button>
+<button onClick="{{ kfCancel }}" style="padding:7px 13px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--mut);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Cancelar</button>
+</div>
+</div>
+</div>
+</sc-if>
+</main>
+
+<sc-if value="{{ modal }}" hint-placeholder-val="{{ false }}">
+<div style="position:fixed;inset:0;z-index:70;background:rgba(10,10,12,.45);display:grid;place-items:center;padding:24px">
+<div style="width:100%;max-width:420px;background:var(--sf);border:1px solid var(--bd);border-radius:11px;padding:18px;box-shadow:0 18px 48px rgba(0,0,0,.28)">
+<h3 style="margin:0 0 8px;font:600 14.5px 'IBM Plex Sans',sans-serif">{{ modalTitle }}</h3>
+<p style="margin:0;font-size:12.5px;color:var(--mut);line-height:1.55">{{ modalBody }}</p>
+<sc-if value="{{ modalExtra }}" hint-placeholder-val="{{ false }}">
+<p style="margin:10px 0 0;padding:8px 10px;border-radius:7px;background:var(--wabg);color:var(--wa);font:500 11.5px 'IBM Plex Sans',sans-serif">{{ modalExtra }}</p>
+</sc-if>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+<button onClick="{{ modalCancel }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Cancelar</button>
+<button onClick="{{ modalConfirm }}" style="padding:6px 12px;border-radius:7px;border:1px solid transparent;background:var(--da);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ modalConfirmLabel }}</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ docModal }}" hint-placeholder-val="{{ false }}">
+<div style="position:fixed;inset:0;z-index:70;background:rgba(10,10,12,.45);display:grid;place-items:center;padding:24px">
+<div style="width:100%;max-width:580px;background:var(--sf);border:1px solid var(--bd);border-radius:11px;padding:18px;box-shadow:0 18px 48px rgba(0,0,0,.28);max-height:86vh;overflow:auto">
+<h3 style="margin:0 0 12px;font:600 14.5px 'IBM Plex Sans',sans-serif">{{ docModalTitle }}</h3>
+<div style="display:flex;gap:3px;padding:3px;border-radius:8px;background:var(--sf2);border:1px solid var(--bd2);margin-bottom:14px;width:fit-content">
+<sc-for list="{{ docModes }}" as="m" hint-placeholder-count="2">
+<button onClick="{{ m.pick }}" style="padding:5px 12px;border-radius:6px;border:1px solid {{ m.bd }};background:{{ m.bg }};color:{{ m.fg }};font:500 11.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ m.label }}</button>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:13px">
+
+<sc-if value="{{ docUpload }}" hint-placeholder-val="{{ false }}">
+<label onDrop="{{ onDrop }}" onDragOver="{{ onDragOver }}" onDragLeave="{{ onDragLeave }}" style="display:block;padding:24px 18px;text-align:center;border:1px dashed {{ dropBd }};border-radius:9px;background:{{ dropBg }};cursor:pointer">
+<input type="file" multiple="{{ dfMulti }}" accept=".md,.markdown,.txt" onChange="{{ onPickFiles }}" style="display:none">
+<div style="font:600 12.5px 'IBM Plex Sans',sans-serif">{{ dropTitle }}</div>
+<div style="font-size:11.5px;color:var(--mut);margin-top:3px">ou clique para escolher no computador</div>
+<div style="font:400 11px 'IBM Plex Mono',monospace;color:var(--mut2);margin-top:7px">.md · .markdown · .txt</div>
+</label>
+<p style="margin:0;font-size:11px;color:var(--mut2);line-height:1.5">PDF, DOCX e imagens não são aceitos: a base guarda texto markdown, e mídia binária não é armazenada. Converta o arquivo antes de subir.</p>
+<sc-for list="{{ dfFiles }}" as="fl" hint-placeholder-count="0">
+<div style="border:1px solid var(--bd);border-radius:8px;background:var(--sf);padding:9px 11px">
+<div style="display:flex;align-items:center;gap:10px">
+<span style="font:400 11px 'IBM Plex Mono',monospace;color:var(--mut2);min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ fl.file }}</span>
+<span style="font-size:11px;color:var(--mut2);white-space:nowrap">{{ fl.size }}</span>
+<button onClick="{{ fl.remove }}" style="border:0;background:transparent;padding:0 2px;color:var(--mut2);font-size:14px;cursor:pointer">×</button>
+</div>
+<sc-if value="{{ fl.ok }}" hint-placeholder-val="{{ true }}">
+<div style="margin-top:7px"><span style="display:block;font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--mut2);margin-bottom:3px">Título do documento</span>
+<input value="{{ fl.title }}" onChange="{{ fl.onTitle }}" style="width:100%;padding:6px 9px;border-radius:6px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12px 'IBM Plex Sans',sans-serif;outline:none"></div>
+</sc-if>
+<sc-if value="{{ fl.error }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:6px;padding:6px 9px;border-radius:6px;background:var(--dabg);color:var(--da);font:500 11.5px 'IBM Plex Sans',sans-serif;line-height:1.5">{{ fl.error }}</div>
+</sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ dfFilesSummary }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:11.5px;color:var(--mut)">{{ dfFilesSummary }}</div>
+</sc-if>
+<sc-if value="{{ dfErrFiles }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:11px;color:var(--da)">{{ dfErrFiles }}</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ docManual }}" hint-placeholder-val="{{ true }}">
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Título *</span>
+<input value="{{ dfTitle }}" onChange="{{ onDfTitle }}" placeholder="ex.: Faixas de atraso e descontos" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12.5px 'IBM Plex Sans',sans-serif;outline:none">
+<sc-if value="{{ dfErrTitle }}" hint-placeholder-val="{{ false }}"><span style="display:block;font-size:11px;color:var(--da);margin-top:3px">{{ dfErrTitle }}</span></sc-if></label>
+<div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:12px;align-items:end">
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Tipo de origem</span>
+<select disabled="{{ true }}" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf2);color:var(--mut);font:400 12.5px 'IBM Plex Mono',monospace;outline:none"><option>markdown</option></select></label>
+<span style="font-size:11px;color:var(--mut2);line-height:1.5;padding-bottom:7px">Único tipo suportado por enquanto. Mídia binária não é armazenada — o que fica na base é texto.</span>
+</div>
+<label style="display:block"><span style="display:block;font:600 11.5px 'IBM Plex Sans',sans-serif;margin-bottom:4px">Conteúdo (markdown)</span>
+<textarea value="{{ dfContent }}" onChange="{{ onDfContent }}" rows="10" style="width:100%;padding:9px 11px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:400 12px/1.6 'IBM Plex Mono',monospace;outline:none;resize:vertical"></textarea>
+<span style="display:block;font-size:11px;color:var(--mut2);margin-top:3px">{{ dfChars }}</span></label>
+</sc-if>
+<sc-if value="{{ docReindexNote }}" hint-placeholder-val="{{ false }}">
+<div style="padding:9px 11px;border-radius:7px;background:var(--wabg);color:var(--wa);font:500 11.5px 'IBM Plex Sans',sans-serif;line-height:1.5">Salvar reindexa o documento: ele volta para pendente e sai das consultas do agente até a indexação terminar. Os fragmentos antigos são descartados.</div>
+</sc-if>
+<sc-if value="{{ docNewNote }}" hint-placeholder-val="{{ true }}">
+<div style="padding:9px 11px;border-radius:7px;background:var(--sf2);border:1px solid var(--bd2);font-size:11.5px;color:var(--mut);line-height:1.5">Ao adicionar, o documento entra como <strong>pendente</strong> e a indexação começa em segundo plano. Ele só aparece nas consultas do agente depois de indexado.</div>
+</sc-if>
+</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+<button onClick="{{ docCancel }}" style="padding:6px 12px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font:500 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">Cancelar</button>
+<button onClick="{{ docSubmit }}" style="padding:6px 13px;border-radius:7px;border:1px solid transparent;background:var(--ac);color:#fff;font:600 12.5px 'IBM Plex Sans',sans-serif;cursor:pointer">{{ docSubmitLabel }}</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+<div style="position:fixed;right:18px;bottom:18px;z-index:60;max-width:330px;padding:10px 13px;border-radius:9px;border:1px solid var(--bd);background:var(--sf);box-shadow:0 6px 24px rgba(0,0,0,.14);animation:up .18s ease-out;display:flex;gap:9px;align-items:flex-start">
+<span style="width:15px;height:15px;flex:none;margin-top:1px;border-radius:50%;background:{{ toastBg }};color:{{ toastFg }};display:grid;place-items:center;font:700 9px 'IBM Plex Mono',monospace">{{ toastIcon }}</span>
+<span style="font-size:12.5px">{{ toast }}</span>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860},&quot;navegacao&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Lateral completa&quot;,&quot;Lateral compacta&quot;],&quot;default&quot;:&quot;Lateral completa&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;densidade&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;compacta&quot;,&quot;confortável&quot;],&quot;default&quot;:&quot;compacta&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;options&quot;:[&quot;#2a6ecb&quot;,&quot;#1f7a5c&quot;,&quot;#7b4bc4&quot;,&quot;#b4531f&quot;],&quot;default&quot;:&quot;#2a6ecb&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;simular502&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Simulação&quot;},&quot;simularFalhaIndexacao&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Simulação&quot;},&quot;catalogoVazio&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Simulação&quot;}}">
+class Component extends DCLogic {
+  providers = [
+    { id: 'openai', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1'] },
+    { id: 'anthropic', models: ['claude-sonnet-4', 'claude-haiku-4'] },
+    { id: 'google', models: ['gemini-2.5-pro'] }
+  ];
+  catalog = {
+    s1: [
+      { name: 'consultar_saldo', description: 'Consulta o saldo atual da conta do cliente.' },
+      { name: 'transferir', description: 'Realiza transferência entre contas.' },
+      { name: 'extrato', description: 'Lista lançamentos dos últimos 30 dias.' },
+      { name: 'gerar_boleto', description: 'Emite segunda via de boleto.' }
+    ],
+    s2: [
+      { name: 'buscar_cliente', description: 'Busca cliente por CPF, e-mail ou telefone.' },
+      { name: 'criar_ticket', description: 'Abre um ticket de suporte.' },
+      { name: 'atualizar_cadastro', description: 'Atualiza dados cadastrais.' }
+    ],
+    s3: [
+      { name: 'listar_eventos', description: 'Lista compromissos de um período.' },
+      { name: 'criar_evento', description: 'Agenda um novo compromisso.' }
+    ],
+    s4: []
+  };
+  testMap = { s1: null, s2: 'CredentialRejected', s3: null, s4: 'CredentialDecryptionFailed' };
+
+  state = {
+    theme: 'light', route: { n: 'agents' }, tab: 'overview', q: '', filter: 'Todos', sq: '',
+    discovery: {}, attempts: {}, draft: null, saving: null, toast: null, toastKind: 'ok',
+    modal: null, tests: {}, form: null, firstRun: true,
+    ktab: 'docs', kq: '', kfilter: 'Todas', docModal: null, docForm: null, kform: null, linkSaving: {}, kbWhy: false, copied: null, kbPick: false, kbq: '',
+    kbs: [
+      {
+        id: 'k1', name: 'Políticas de Cobrança', isActive: true, createdAt: '14/07/2026', updatedAt: '02/09/2026',
+        description: 'Regras de negociação de faturas em atraso: prazos, descontos permitidos por faixa de atraso, parcelamento mínimo e o que exige aprovação humana. Consulte antes de prometer qualquer condição de pagamento ao cliente.',
+        docs: [
+          { id: 'd1', title: 'Faixas de atraso e descontos', source: 'markdown', chars: 8420, chunks: 14, status: 'indexed', updatedAt: '02/09/2026', content: '# Faixas de atraso\n- 1 a 30 dias: sem desconto, apenas juros suspensos.\n- 31 a 90 dias: até 10% sobre o saldo.\n- acima de 90 dias: até 25%, com aprovação.' },
+          { id: 'd2', title: 'Parcelamento — regras gerais', source: 'markdown', chars: 5110, chunks: 9, status: 'indexed', updatedAt: '28/08/2026', content: '# Parcelamento\nParcela mínima de R$ 80. Máximo de 12 parcelas sem aprovação.' },
+          { id: 'd3', title: 'Casos que exigem aprovação humana', source: 'markdown', chars: 2740, chunks: 5, status: 'indexed', updatedAt: '28/08/2026', content: '# Aprovação humana\n- Desconto acima de 25%.\n- Cliente com acordo rompido nos últimos 6 meses.' },
+          { id: 'd4', title: 'Histórico de campanhas 2025', source: 'markdown', chars: 196400, chunks: 0, status: 'failed', updatedAt: '01/09/2026', content: '# Campanhas 2025\nRelatório consolidado por mês.', reason: 'O provedor de embedding devolveu 429 (rate limit) nas três tentativas de indexação deste documento, a última em 01/09/2026 às 03:14. O texto continua armazenado na base, mas nenhum fragmento dele está no índice e ele não aparece nas consultas do agente. Reindexar volta a enfileirá-lo; documentos muito grandes tendem a bater no limite de requisições do provedor.' }
+        ]
+      },
+      {
+        id: 'k2', name: 'Catálogo de Produtos', isActive: true, createdAt: '20/08/2026', updatedAt: '06/09/2026',
+        description: 'Planos vendidos hoje: o que cada um inclui, preço de tabela, prazo de ativação e regras de troca de plano. Consulte para responder o que está incluso ou quanto custa.',
+        docs: [
+          { id: 'd5', title: 'Planos e preços de tabela', source: 'markdown', chars: 6300, chunks: 11, status: 'indexed', updatedAt: '04/09/2026', content: '# Planos\n- Essencial: R$ 89/mês.\n- Pro: R$ 149/mês.' },
+          { id: 'd6', title: 'Regras de troca de plano', source: 'markdown', chars: 3900, chunks: 0, status: 'indexing', updatedAt: '06/09/2026', content: '# Troca de plano\nUpgrade é imediato; downgrade vale no próximo ciclo.' },
+          { id: 'd7', title: 'Prazos de ativação por região', source: 'markdown', chars: 2100, chunks: 0, status: 'pending', updatedAt: '06/09/2026', content: '# Ativação\nSudeste: 2 dias úteis. Norte: 5 dias úteis.' }
+        ]
+      },
+      { id: 'k3', name: 'Rotinas Internas', isActive: false, createdAt: '05/09/2026', updatedAt: '05/09/2026', description: '', docs: [] },
+      { id: 'k4', name: 'Horários e Endereço', isActive: true, createdAt: '02/08/2026', updatedAt: '05/09/2026', description: 'Horário de funcionamento por dia, feriados, endereço e referências de como chegar.', docs: [{ id: 'd8', title: 'Funcionamento por dia', source: 'markdown', chars: 1800, chunks: 4, status: 'indexed', updatedAt: '05/09/2026', content: '# Horários\nSeg a qui: 17h às 00h.' }, { id: 'd9', title: 'Como chegar', source: 'markdown', chars: 900, chunks: 2, status: 'indexed', updatedAt: '02/08/2026', content: '# Endereço\nRua Coronel Bento, 214.' }] },
+      { id: 'k5', name: 'Cardápio A La Carte', isActive: true, createdAt: '02/08/2026', updatedAt: '06/09/2026', description: 'Pratos, porções, acompanhamentos e preços do cardápio à la carte.', docs: [{ id: 'd10', title: 'Porções e petiscos', source: 'markdown', chars: 5400, chunks: 10, status: 'indexed', updatedAt: '06/09/2026', content: '# Porções\nEspeto misto: R$ 42.' }] },
+      { id: 'k6', name: 'Rodízio', isActive: true, createdAt: '02/08/2026', updatedAt: '03/09/2026', description: 'Regras do rodízio: valor por pessoa, dias em que roda, cortes servidos e política para crianças.', docs: [{ id: 'd11', title: 'Regras e valores', source: 'markdown', chars: 3200, chunks: 6, status: 'indexed', updatedAt: '03/09/2026', content: '# Rodízio\nR$ 89 por pessoa, sex a dom.' }] },
+      { id: 'k7', name: 'Promoções Vigentes', isActive: true, createdAt: '18/08/2026', updatedAt: '06/09/2026', description: 'Promoções ativas na semana, com data de validade. Confira a validade antes de oferecer.', docs: [{ id: 'd12', title: 'Semana 36', source: 'markdown', chars: 1200, chunks: 3, status: 'indexing', updatedAt: '06/09/2026', content: '# Semana 36\nChope em dobro na quinta.' }] },
+      { id: 'k8', name: 'Reservas e Eventos', isActive: true, createdAt: '11/08/2026', updatedAt: '01/09/2026', description: 'Capacidade das mesas, antecedência mínima, sinal para eventos fechados e política de cancelamento.', docs: [{ id: 'd13', title: 'Política de reservas', source: 'markdown', chars: 2600, chunks: 5, status: 'indexed', updatedAt: '01/09/2026', content: '# Reservas\nGrupos acima de 8 pessoas exigem sinal.' }] },
+      { id: 'k9', name: 'Delivery e Retirada', isActive: true, createdAt: '11/08/2026', updatedAt: '29/08/2026', description: 'Áreas atendidas, taxa por bairro, tempo médio e regras de retirada no balcão.', docs: [{ id: 'd14', title: 'Taxas por bairro', source: 'markdown', chars: 2000, chunks: 4, status: 'indexed', updatedAt: '29/08/2026', content: '# Taxas\nCentro: R$ 6.' }] }
+    ],
+    agents: [
+      { id: 'a1', name: 'Atendimento Financeiro', description: 'Responde dúvidas de cobrança e envia extratos no WhatsApp.', provider: 'openai', model: 'gpt-4o-mini', isActive: true, createdAt: '12/03/2026', updatedAt: '28/08/2026', skills: [{ name: 'Consulta de saldo', description: 'Informa o saldo em aberto do cliente e a data de vencimento da próxima fatura.' }, { name: 'Segunda via de boleto', description: null }], instructions: '# Papel\nVocê é o agente de atendimento financeiro do Buteco. Responda em pt-BR, de forma direta e cordial.\n\n## Regras\n- Sempre confirme a identidade do cliente antes de consultar saldo.\n- Nunca inicie transferências; apenas explique como o cliente pode fazê-la.\n- Se o assunto for técnico, delegue para **Suporte Técnico**.\n\n## Ferramentas\nUse `consultar_saldo` para o saldo atual e `extrato` para lançamentos dos últimos 30 dias.', mcpServers: [{ id: 's1', allowedTools: ['consultar_saldo', 'extrato'] }, { id: 's3', allowedTools: [] }], delegatesTo: ['a2'], knowledgeBases: ['k1', 'k2', 'k4', 'k6', 'k8'], a2a: { url: 'https://agentes.buteco.app/a2a/atendimento-financeiro', agentCardUrl: 'https://agentes.buteco.app/a2a/atendimento-financeiro/.well-known/agent-card.json' } },
+      { id: 'a2', name: 'Suporte Técnico', description: 'Primeiro nível de suporte para problemas de acesso e integração.', provider: 'anthropic', model: 'claude-sonnet-4', isActive: true, createdAt: '02/04/2026', updatedAt: '19/08/2026', skills: [{ name: 'Diagnóstico de acesso', description: 'Percorre o roteiro de verificação de login e integração antes de abrir ticket.' }], instructions: '# Papel\nAgente de **suporte técnico**. Peça sempre o número do pedido antes de abrir ticket.\n\n## Escalonamento\n- Problemas de cobrança vão para o Atendimento Financeiro.\n- Use `criar_ticket` só depois de tentar as soluções do roteiro.', mcpServers: [{ id: 's2', allowedTools: ['buscar_cliente', 'criar_ticket'] }], delegatesTo: [], knowledgeBases: [], a2a: { url: 'https://agentes.buteco.app/a2a/suporte-tecnico', agentCardUrl: 'https://agentes.buteco.app/a2a/suporte-tecnico/.well-known/agent-card.json' } },
+      { id: 'a3', name: 'Triagem de Mensagens', description: '', provider: null, model: null, isActive: true, createdAt: '08/11/2025', updatedAt: '08/11/2025', skills: [], instructions: 'Classifique a mensagem recebida e delegue para o agente responsável. Não responda ao cliente diretamente.', mcpServers: [], delegatesTo: ['a1', 'a2'], knowledgeBases: [], a2a: null },
+      { id: 'a4', name: 'Cobrança Ativa', description: 'Campanha de recuperação de faturas em atraso.', provider: 'openai', model: 'gpt-4.1', isActive: false, createdAt: '21/06/2026', updatedAt: '30/08/2026', skills: [], instructions: '# Papel\nAgente de cobrança ativa. Tom firme, nunca ameaçador.', mcpServers: [{ id: 's1', allowedTools: ['gerar_boleto'] }], delegatesTo: [], knowledgeBases: ['k3'], a2a: { url: 'https://agentes.buteco.app/a2a/cobranca-ativa', agentCardUrl: 'https://agentes.buteco.app/a2a/cobranca-ativa/.well-known/agent-card.json' } }
+    ],
+    servers: [
+      { id: 's1', name: 'Servidor Financeiro', description: 'Tools de saldo, extrato e boletos do core bancário.', url: 'https://mcp.buteco.dev/financeiro/sse', authType: 'BearerToken', isActive: true, createdAt: '10/03/2026', updatedAt: '26/08/2026' },
+      { id: 's2', name: 'Servidor CRM', description: 'Cadastro de clientes e tickets.', url: 'https://crm.exemplo.com/mcp/sse', authType: 'BearerToken', isActive: false, createdAt: '30/03/2026', updatedAt: '01/09/2026' },
+      { id: 's3', name: 'Servidor Agenda', description: '', url: 'https://agenda.exemplo.com/sse', authType: 'None', isActive: true, createdAt: '14/05/2026', updatedAt: '14/05/2026' },
+      { id: 's4', name: 'Servidor Notas Fiscais', description: 'Ainda em implantação.', url: 'https://nf.exemplo.com/sse', authType: 'BearerToken', isActive: true, createdAt: '02/09/2026', updatedAt: '02/09/2026' }
+    ]
+  };
+
+  go = (n, id, extra) => this.setState({ route: Object.assign({ n: n, id: id }, extra || {}), tab: 'overview', ktab: 'docs', draft: null, saving: null, kform: null, docModal: null, docForm: null });
+  toast = (msg, kind) => { this.setState({ toast: msg, toastKind: kind || 'ok' }); clearTimeout(this._tt); this._tt = setTimeout(() => this.setState({ toast: null }), 3600); };
+  agent = (id) => this.state.agents.find(a => a.id === id);
+  server = (id) => this.state.servers.find(s => s.id === id);
+  savedTools = (a, sid) => { const l = (a.mcpServers || []).find(m => m.id === sid); return l ? l.allowedTools : null; };
+
+  toolCount = (a) => (a.mcpServers || []).reduce((n, m) => n + m.allowedTools.length, 0);
+  zeroServers = (a) => (a.mcpServers || []).filter(m => m.allowedTools.length === 0).map(m => (this.server(m.id) || {}).name);
+
+  copyValue = (v) => {
+    if (navigator.clipboard) navigator.clipboard.writeText(v).catch(() => {});
+    this.setState({ copied: v });
+    clearTimeout(this._copyT);
+    this._copyT = setTimeout(() => this.setState({ copied: null }), 1600);
+  };
+
+  renderVals() {
+    const s = this.state, r = s.route;
+    const nav = [
+      { k: 'agents', label: 'Agentes', mono: 'A', routes: ['agents', 'agent', 'agentForm'] },
+      { k: 'servers', label: 'Servidores MCP', mono: 'M', routes: ['servers', 'server', 'serverForm'] },
+      { k: 'kbs', label: 'Conhecimento', mono: 'K', routes: ['kbs', 'kb', 'kbForm'] },
+      { k: 'channels', label: 'Canais', mono: 'C', routes: ['channels'] }
+    ];
+    return Object.assign(this.screenVals(), {
+      theme: s.theme, dens: this.props.densidade ?? 'compacta', accent: this.props.accent ?? '#2a6ecb',
+      navW: (this.props.navegacao ?? 'Lateral completa') === 'Lateral compacta' ? '58px' : '224px',
+      navFull: (this.props.navegacao ?? 'Lateral completa') !== 'Lateral compacta',
+      themeIcon: s.theme === 'light' ? '☾' : '☀', themeLabel: s.theme === 'light' ? 'Tema escuro' : 'Tema claro',
+      toggleTheme: () => this.setState({ theme: s.theme === 'light' ? 'dark' : 'light' }),
+      navItems: nav.map(n => {
+        const on = n.routes.indexOf(r.n) >= 0;
+        return { label: n.label, mono: n.mono, bg: on ? 'var(--acsf)' : 'transparent', fg: on ? 'var(--ac)' : 'var(--mut)', weight: on ? '600' : '500', go: () => n.k === 'channels' ? this.toast('Canais estão fora do escopo deste protótipo.', 'info') : this.go(n.k) };
+      }),
+      toast: s.toast,
+      toastIcon: s.toastKind === 'err' ? '!' : s.toastKind === 'info' ? 'i' : '✓',
+      toastBg: s.toastKind === 'err' ? 'var(--dabg)' : s.toastKind === 'info' ? 'var(--sf2)' : 'var(--okbg)',
+      toastFg: s.toastKind === 'err' ? 'var(--da)' : s.toastKind === 'info' ? 'var(--mut)' : 'var(--ok)'
+    });
+  }
+
+  badge(label, tone) {
+    const m = { ok: ['var(--okbg)', 'var(--ok)'], warn: ['var(--wabg)', 'var(--wa)'], off: ['var(--sf2)', 'var(--mut)'], err: ['var(--dabg)', 'var(--da)'], ac: ['var(--acsf)', 'var(--ac)'] }[tone] || ['var(--sf2)', 'var(--mut)'];
+    return { label: label, bg: m[0], fg: m[1] };
+  }
+
+  agentBadges(a) {
+    const b = [this.badge(a.isActive ? 'Ativo' : 'Inativo', a.isActive ? 'ok' : 'off')];
+    if (!a.provider || !a.model) b.push(this.badge('Precisa de reconfiguração', 'warn'));
+    return b;
+  }
+
+  screenVals() {
+    const s = this.state, r = s.route;
+    const v = { isAgents: r.n === 'agents', isAgent: r.n === 'agent', isAgentForm: r.n === 'agentForm', isServers: r.n === 'servers', isServer: r.n === 'server', isServerForm: r.n === 'serverForm', isKbs: r.n === 'kbs', isKb: r.n === 'kb', isKbForm: r.n === 'kbForm' };
+    if (v.isKbs) Object.assign(v, this.kbsVals());
+    if (v.isKb) Object.assign(v, this.kbVals());
+    if (v.isKbForm) Object.assign(v, this.kbFormVals());
+    Object.assign(v, this.docModalVals());
+    if (v.isAgents) Object.assign(v, this.agentsVals());
+    if (v.isAgent) Object.assign(v, this.agentVals());
+    if (v.isServers) Object.assign(v, this.serversVals());
+    if (v.isServer) Object.assign(v, this.serverVals());
+    if (v.isAgentForm || v.isServerForm) Object.assign(v, this.formVals());
+    Object.assign(v, this.modalVals());
+    return v;
+  }
+
+  agentsVals() {
+    const s = this.state;
+    const q = s.q.trim().toLowerCase();
+    const rows = s.agents.filter(a => {
+      if (q && a.name.toLowerCase().indexOf(q) < 0 && (a.description || '').toLowerCase().indexOf(q) < 0) return false;
+      if (s.filter === 'Ativos') return a.isActive;
+      if (s.filter === 'Inativos') return !a.isActive;
+      if (s.filter === 'Reconfigurar') return !a.provider || !a.model;
+      return true;
+    }).map(a => {
+      const zero = this.zeroServers(a), n = (a.mcpServers || []).length, t = this.toolCount(a);
+      return {
+        id: a.id, name: a.name, description: a.description || '—',
+        model: a.model || 'não configurado', provider: a.provider || '—',
+        needsCfg: !a.provider,
+        tools: n === 0 ? 'Nenhum servidor' : n + (n === 1 ? ' servidor · ' : ' servidores · ') + t + (t === 1 ? ' tool' : ' tools'),
+        toolWarn: zero.length ? zero.length + (zero.length === 1 ? ' servidor sem tools' : ' servidores sem tools') : null,
+        deleg: (a.delegatesTo || []).length ? (a.delegatesTo || []).map(id => (this.agent(id) || {}).name).join(', ') : '—',
+        badges: this.agentBadges(a),
+        open: () => this.go('agent', a.id)
+      };
+    });
+    const steps = [
+      { label: 'Cadastrar um servidor MCP', done: s.servers.length > 0, hint: 'Fonte das tools que os agentes vão usar.' },
+      { label: 'Criar um agente', done: s.agents.length > 0, hint: 'Nome, instruções, provedor e modelo.' },
+      { label: 'Vincular tools ao agente', done: s.agents.some(a => this.toolCount(a) > 0), hint: 'Aba Ferramentas no detalhe do agente.' }
+    ];
+    return {
+      agentRows: rows, agentCount: s.agents.length, agentQ: s.q,
+      onAgentQ: (e) => this.setState({ q: e.target.value }),
+      newAgent: () => this.go('agentForm', null, { mode: 'new' }),
+      emptyAgents: rows.length === 0,
+      emptyMsg: s.agents.length === 0 ? 'Nenhum agente cadastrado ainda.' : 'Nenhum agente corresponde à busca.',
+      filters: ['Todos', 'Ativos', 'Inativos', 'Reconfigurar'].map(f => ({
+        label: f, bg: s.filter === f ? 'var(--sf)' : 'transparent', fg: s.filter === f ? 'var(--fg)' : 'var(--mut)',
+        bd: s.filter === f ? 'var(--bd)' : 'transparent', pick: () => this.setState({ filter: f })
+      })),
+      firstRun: s.firstRun && steps.some(x => !x.done),
+      steps: steps.map((x, i) => ({ label: x.label, hint: x.hint, mono: x.done ? '✓' : String(i + 1), bg: x.done ? 'var(--okbg)' : 'var(--sf2)', fg: x.done ? 'var(--ok)' : 'var(--mut)', op: x.done ? '.6' : '1' })),
+      dismissFirstRun: () => this.setState({ firstRun: false })
+    };
+  }
+
+  md(src) {
+    const R = React.createElement;
+    const inline = (txt, key) => {
+      const parts = String(txt).split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(x => x !== '');
+      return parts.map((p, i) => p.slice(0, 2) === '**' ? R('strong', { key: i }, p.slice(2, -2))
+        : p[0] === '`' ? R('code', { key: i, style: { font: "400 11.5px 'IBM Plex Mono',monospace", background: 'var(--sf2)', border: '1px solid var(--bd2)', borderRadius: '4px', padding: '1px 4px' } }, p.slice(1, -1))
+          : p);
+    };
+    const out = []; let li = null;
+    (src || '').split('\n').forEach((ln, i) => {
+      const flush = () => { if (li) { out.push(R('ul', { key: 'u' + i, style: { margin: '4px 0 10px', paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '3px' } }, li)); li = null; } };
+      if (ln.slice(0, 3) === '## ') { flush(); out.push(R('h4', { key: i, style: { margin: '12px 0 4px', font: "600 12.5px 'IBM Plex Sans',sans-serif", letterSpacing: '.01em' } }, inline(ln.slice(3)))); }
+      else if (ln.slice(0, 2) === '# ') { flush(); out.push(R('h3', { key: i, style: { margin: '0 0 6px', font: "600 14px 'IBM Plex Sans',sans-serif" } }, inline(ln.slice(2)))); }
+      else if (ln.slice(0, 2) === '- ') { li = li || []; li.push(R('li', { key: i, style: { fontSize: '12.5px' } }, inline(ln.slice(2)))); }
+      else if (ln.trim() === '') { flush(); }
+      else { flush(); out.push(R('p', { key: i, style: { margin: '0 0 8px', fontSize: '12.5px', lineHeight: 1.55 } }, inline(ln))); }
+    });
+    if (li) out.push(R('ul', { key: 'uf', style: { margin: '4px 0 10px', paddingLeft: '18px' } }, li));
+    return out;
+  }
+
+  discover = (sid, force) => {
+    const d = this.state.discovery[sid];
+    if (d && !force && d.state !== 'error') return;
+    const at = (this.state.attempts[sid] || 0) + 1;
+    this.setState(st => ({ discovery: Object.assign({}, st.discovery, { [sid]: { state: 'loading' } }), attempts: Object.assign({}, st.attempts, { [sid]: at }) }));
+    setTimeout(() => {
+      const fail = sid === 's3' && at === 1;
+      if (fail) { this.setState(st => ({ discovery: Object.assign({}, st.discovery, { [sid]: { state: 'error' } }) })); return; }
+      const tools = this.catalog[sid] || [];
+      this.setState(st => {
+        const dr = st.draft;
+        let draft = dr;
+        if (dr && dr.links[sid]) {
+          const keep = dr.links[sid].filter(t => tools.some(x => x.name === t));
+          draft = { agentId: dr.agentId, links: Object.assign({}, dr.links, { [sid]: keep }), expanded: dr.expanded };
+        }
+        return { discovery: Object.assign({}, st.discovery, { [sid]: { state: 'ok', tools: tools } }), draft: draft };
+      });
+    }, 760);
+  };
+
+  initDraft(a) {
+    const links = {}; (a.mcpServers || []).forEach(m => { links[m.id] = m.allowedTools.slice(); });
+    return { agentId: a.id, links: links, expanded: {} };
+  }
+
+  agentVals() {
+    const s = this.state, a = this.agent(s.route.id); if (!a) return {};
+    const draft = s.draft && s.draft.agentId === a.id ? s.draft : this.initDraft(a);
+    const dIds = s.dDraft && s.dDraft.agentId === a.id ? s.dDraft.ids : (a.delegatesTo || []).slice();
+    const linkIds = Object.keys(draft.links);
+    const v = {
+      aName: a.name, aDesc: a.description || 'Sem descrição.', aHasDesc: !!a.description,
+      aProvider: a.provider || '—', aModel: a.model || '—', aCreated: a.createdAt, aUpdated: a.updatedAt,
+      aBadges: this.agentBadges(a), aNeedsCfg: !a.provider || !a.model,
+      aInstructions: this.md(a.instructions),
+      aSkills: (a.skills || []).map(k => ({ name: k.name, description: k.description || '', hasDesc: !!k.description })),
+      aNoSkills: (a.skills || []).length === 0,
+      aHasA2A: !!a.a2a, aNoA2A: !a.a2a, aA2AInactive: !!a.a2a && !a.isActive,
+      aA2ARows: a.a2a ? [
+        { label: 'Endpoint de execução', value: a.a2a.url, canOpen: false },
+        { label: 'Card de descoberta', value: a.a2a.agentCardUrl, canOpen: true }
+      ].map(r => Object.assign(r, {
+        copyLabel: this.state.copied === r.value ? 'Copiado' : 'Copiar',
+        copy: () => this.copyValue(r.value)
+      })) : [],
+      backAgents: () => this.go('agents'),
+      editAgent: () => this.go('agentForm', a.id, { mode: 'edit' }),
+      aActive: a.isActive, aToggleLabel: a.isActive ? 'Desativar' : 'Ativar',
+      aToggleFg: a.isActive ? 'var(--da)' : 'var(--ok)',
+      aToggle: () => a.isActive ? this.setState({ modal: { kind: 'agent', id: a.id } }) : this.setActive('agent', a.id, true),
+      tabs: [
+        { k: 'overview', label: 'Visão geral', n: '' },
+        { k: 'tools', label: 'Ferramentas', n: String(linkIds.length) },
+        { k: 'kb', label: 'Conhecimento', n: String((a.knowledgeBases || []).length) },
+        { k: 'deleg', label: 'Delegações', n: String(dIds.length) }
+      ].map(t => ({ label: t.label, n: t.n, hasN: t.n !== '' && t.n !== '0', bd: s.tab === t.k ? 'var(--ac)' : 'transparent', fg: s.tab === t.k ? 'var(--fg)' : 'var(--mut)', w: s.tab === t.k ? '600' : '500', pick: () => this.setState({ tab: t.k }) })),
+      tabOverview: s.tab === 'overview', tabTools: s.tab === 'tools', tabDeleg: s.tab === 'deleg', tabKb: s.tab === 'kb'
+    };
+    if (s.tab === 'kb') Object.assign(v, this.agentKbVals(a));
+    if (s.tab === 'tools') Object.assign(v, this.toolsVals(a, draft));
+    if (s.tab === 'deleg') Object.assign(v, this.delegVals(a, dIds));
+    return v;
+  }
+
+  toolsVals(a, draft) {
+    const s = this.state;
+    const setDraft = (d) => this.setState({ draft: d });
+    const rows = s.servers.map(sv => {
+      const linked = Object.prototype.hasOwnProperty.call(draft.links, sv.id);
+      const sel = draft.links[sv.id] || [];
+      const d = s.discovery[sv.id] || { state: 'idle' };
+      const badges = [];
+      if (!sv.isActive) badges.push(this.badge('Inativo', 'off'));
+      if (linked && sel.length === 0) badges.push(this.badge('Sem tools', 'warn'));
+      return {
+        id: sv.id, name: sv.name, url: sv.url, linked: linked,
+        badges: badges, expanded: !!draft.expanded[sv.id],
+        expandLabel: draft.expanded[sv.id] ? 'Ocultar tools' : 'Ver tools',
+        count: linked ? (sel.length + (d.state === 'ok' ? ' de ' + d.tools.length : '') + ' selecionadas') : 'Não vinculado',
+        countFg: linked && sel.length === 0 ? 'var(--wa)' : 'var(--mut2)',
+        inactiveNote: linked && !sv.isActive,
+        loading: d.state === 'loading', error: d.state === 'error',
+        emptyTools: d.state === 'ok' && d.tools.length === 0,
+        hasTools: d.state === 'ok' && d.tools.length > 0,
+        tools: (d.tools || []).map(t => ({
+          name: t.name, description: t.description, checked: sel.indexOf(t.name) >= 0, disabled: !linked,
+          op: linked ? '1' : '.45',
+          toggle: () => {
+            const cur = (draft.links[sv.id] || []).slice();
+            const i = cur.indexOf(t.name); if (i >= 0) cur.splice(i, 1); else cur.push(t.name);
+            setDraft({ agentId: a.id, links: Object.assign({}, draft.links, { [sv.id]: cur }), expanded: draft.expanded });
+          }
+        })),
+        retry: () => this.discover(sv.id, true),
+        expand: () => { const ex = Object.assign({}, draft.expanded); ex[sv.id] = !ex[sv.id]; setDraft({ agentId: a.id, links: draft.links, expanded: ex }); if (ex[sv.id]) this.discover(sv.id); },
+        toggleLink: () => {
+          const links = Object.assign({}, draft.links); const ex = Object.assign({}, draft.expanded);
+          if (linked) { delete links[sv.id]; ex[sv.id] = false; }
+          else { links[sv.id] = (this.savedTools(a, sv.id) || []).slice(); ex[sv.id] = true; this.discover(sv.id); }
+          setDraft({ agentId: a.id, links: links, expanded: ex });
+        }
+      };
+    });
+    const zero = rows.filter(r => r.linked && (draft.links[r.id] || []).length === 0);
+    const before = JSON.stringify((a.mcpServers || []).map(m => [m.id, m.allowedTools.slice().sort()]).sort());
+    const after = JSON.stringify(Object.keys(draft.links).map(k => [k, draft.links[k].slice().sort()]).sort());
+    const dirty = before !== after;
+    const nLinks = Object.keys(draft.links).length, nTools = Object.keys(draft.links).reduce((n, k) => n + draft.links[k].length, 0);
+    return {
+      bindRows: rows, noServers: s.servers.length === 0,
+      bindSummary: nLinks + (nLinks === 1 ? ' servidor vinculado · ' : ' servidores vinculados · ') + nTools + (nTools === 1 ? ' tool permitida' : ' tools permitidas'),
+      zeroWarn: zero.length > 0,
+      zeroWarnText: zero.map(z => z.name).join(', ') + (zero.length === 1 ? ' está vinculado sem nenhuma tool marcada.' : ' estão vinculados sem nenhuma tool marcada.'),
+      bindError: s.bindError, bindErrorDetail: s.bindErrorDetail,
+      barVisible: dirty || !!s.saving,
+      barText: s.saving ? 'Validando ' + s.saving.name + '… (' + s.saving.i + '/' + s.saving.total + ')' : 'Alterações não salvas neste vínculo',
+      barSaving: !!s.saving,
+      barSaveLabel: s.saving ? 'Salvando…' : 'Salvar vínculo',
+      barSave: () => this.saveBinding(a, draft),
+      barDiscard: () => this.setState({ draft: null, bindError: null }),
+      goNewServer: () => this.go('serverForm', null, { mode: 'new' })
+    };
+  }
+
+  saveBinding(a, draft) {
+    if (this.state.saving) return;
+    const ids = Object.keys(draft.links).filter(k => draft.links[k].length > 0);
+    const names = ids.map(id => (this.server(id) || {}).name);
+    const total = Math.max(names.length, 1);
+    const step = (i) => {
+      if (i > names.length) {
+        if (this.props.simular502 && names.length) {
+          this.setState({ saving: null, bindError: 'Não foi possível validar as tools do servidor MCP ' + names[names.length - 1], bindErrorDetail: 'O servidor não respondeu ao handshake em tempo. Nenhum vínculo foi salvo.' });
+          this.toast('Falha ao salvar o vínculo.', 'err');
+          return;
+        }
+        this.setState(st => ({
+          agents: st.agents.map(x => x.id === a.id ? Object.assign({}, x, {
+            mcpServers: Object.keys(draft.links).map(k => ({ id: k, allowedTools: draft.links[k].slice() })).sort((p, q) => ((this.server(p.id) || {}).name || '').localeCompare((this.server(q.id) || {}).name || ''))
+          }) : x),
+          saving: null, draft: null, bindError: null
+        }));
+        this.toast('Vínculo salvo.');
+        return;
+      }
+      this.setState({ saving: { i: i, total: total, name: names[i - 1] || '—' }, bindError: null });
+      setTimeout(() => step(i + 1), 620);
+    };
+    step(1);
+  }
+
+  delegVals(a, ids) {
+    const s = this.state;
+    const q = (s.dq || '').trim().toLowerCase();
+    const rows = s.agents.filter(x => x.id !== a.id).filter(x => !q || x.name.toLowerCase().indexOf(q) >= 0).map(x => ({
+      id: x.id, name: x.name, checked: ids.indexOf(x.id) >= 0,
+      note: x.isActive ? (x.model || 'sem modelo') : '(inativo)',
+      noteFg: x.isActive ? 'var(--mut2)' : 'var(--wa)',
+      toggle: () => { const c = ids.slice(); const i = c.indexOf(x.id); if (i >= 0) c.splice(i, 1); else c.push(x.id); this.setState({ dDraft: { agentId: a.id, ids: c } }); }
+    }));
+    const dirty = JSON.stringify(ids.slice().sort()) !== JSON.stringify((a.delegatesTo || []).slice().sort());
+    return {
+      delegRows: rows, delegQ: s.dq || '', onDelegQ: (e) => this.setState({ dq: e.target.value }),
+      delegSummary: ids.length + (ids.length === 1 ? ' agente-alvo' : ' agentes-alvo') + ' · delegação é unidirecional',
+      delegEmpty: rows.length === 0,
+      barVisible: dirty, barSaving: false, barText: 'Alterações não salvas nas delegações', barSaveLabel: 'Salvar delegações',
+      barSave: () => { this.setState(st => ({ agents: st.agents.map(x => x.id === a.id ? Object.assign({}, x, { delegatesTo: ids.slice() }) : x), dDraft: null })); this.toast('Delegações salvas.'); },
+      barDiscard: () => this.setState({ dDraft: null })
+    };
+  }
+
+  setActive(kind, id, on) {
+    if (kind === 'agent') this.setState(st => ({ agents: st.agents.map(x => x.id === id ? Object.assign({}, x, { isActive: on }) : x), modal: null }));
+    else this.setState(st => ({ servers: st.servers.map(x => x.id === id ? Object.assign({}, x, { isActive: on }) : x), modal: null }));
+    this.toast(on ? 'Ativado.' : 'Desativado.');
+  }
+
+  authLabel = (t) => t === 'None' ? 'Nenhuma' : 'Bearer Token';
+  usedBy = (sid) => this.state.agents.map(a => { const l = (a.mcpServers || []).find(m => m.id === sid); return l ? { agent: a, tools: l.allowedTools } : null; }).filter(Boolean);
+
+  failText = (reason) => ({
+    HostUnreachable: 'Host inalcançável — a URL não respondeu. Verifique o endereço e se o servidor está no ar.',
+    CredentialRejected: 'Credencial rejeitada — o servidor respondeu 401. Gere um novo token e salve a credencial novamente.',
+    CredentialDecryptionFailed: 'Não foi possível decifrar a credencial — a chave de criptografia do ambiente mudou desde que ela foi salva. Salve a credencial novamente.',
+    Unknown: 'Falha desconhecida ao conectar ao servidor MCP.'
+  }[reason] || 'Falha desconhecida ao conectar ao servidor MCP.');
+
+  runTest = (key, reason, nTools) => {
+    this.setState(st => ({ tests: Object.assign({}, st.tests, { [key]: { state: 'loading' } }) }));
+    setTimeout(() => this.setState(st => ({ tests: Object.assign({}, st.tests, { [key]: { state: reason ? 'err' : 'ok', reason: reason, n: nTools, at: 'agora' } }) })), 900);
+  };
+
+  serversVals() {
+    const s = this.state, q = (s.sq || '').trim().toLowerCase();
+    const rows = s.servers.filter(x => !q || x.name.toLowerCase().indexOf(q) >= 0 || x.url.toLowerCase().indexOf(q) >= 0).map(sv => {
+      const u = this.usedBy(sv.id), zero = u.filter(x => x.tools.length === 0).length;
+      return {
+        id: sv.id, name: sv.name, url: sv.url, auth: this.authLabel(sv.authType),
+        used: u.length === 0 ? 'Nenhum agente' : u.length + (u.length === 1 ? ' agente' : ' agentes'),
+        usedWarn: zero ? zero + (zero === 1 ? ' sem tools' : ' sem tools') : null,
+        badges: [this.badge(sv.isActive ? 'Ativo' : 'Inativo', sv.isActive ? 'ok' : 'off')],
+        open: () => this.go('server', sv.id)
+      };
+    });
+    return {
+      serverRows: rows, serverCount: s.servers.length, serverQ: s.sq || '',
+      onServerQ: (e) => this.setState({ sq: e.target.value }),
+      emptyServers: rows.length === 0,
+      emptyServerMsg: s.servers.length === 0 ? 'Nenhum servidor MCP cadastrado ainda.' : 'Nenhum servidor corresponde à busca.',
+      newServer: () => this.go('serverForm', null, { mode: 'new' })
+    };
+  }
+
+  serverVals() {
+    const s = this.state, sv = this.server(s.route.id); if (!sv) return {};
+    const d = s.discovery[sv.id] || { state: 'idle' };
+    const t = s.tests[sv.id] || { state: 'idle' };
+    const u = this.usedBy(sv.id);
+    return {
+      svName: sv.name, svUrl: sv.url, svAuth: this.authLabel(sv.authType),
+      svDesc: sv.description || 'Sem descrição.', svCreated: sv.createdAt, svUpdated: sv.updatedAt,
+      svHasCred: sv.authType !== 'None',
+      svBadges: [this.badge(sv.isActive ? 'Ativo' : 'Inativo', sv.isActive ? 'ok' : 'off')],
+      backServers: () => this.go('servers'),
+      editServer: () => this.go('serverForm', sv.id, { mode: 'edit' }),
+      svToggleLabel: sv.isActive ? 'Desativar' : 'Ativar',
+      svToggleFg: sv.isActive ? 'var(--da)' : 'var(--ok)',
+      svToggle: () => sv.isActive ? this.setState({ modal: { kind: 'server', id: sv.id } }) : this.setActive('server', sv.id, true),
+      svTest: () => this.runTest(sv.id, this.testMap[sv.id], (this.catalog[sv.id] || []).length),
+      testLoading: t.state === 'loading', testOk: t.state === 'ok', testErr: t.state === 'err',
+      testOkText: 'Conexão bem-sucedida — ' + (t.n || 0) + (t.n === 1 ? ' tool disponível.' : ' tools disponíveis.'),
+      testErrText: this.failText(t.reason), testErrReason: t.reason,
+      testAt: t.at ? 'testado ' + t.at + ' · resultado não é persistido' : '',
+      catLoading: d.state === 'loading', catError: d.state === 'error',
+      catEmpty: d.state === 'ok' && d.tools.length === 0, catIdle: d.state === 'idle',
+      catTools: (d.tools || []).map(x => {
+        const n = u.filter(y => y.tools.indexOf(x.name) >= 0).length;
+        return { name: x.name, description: x.description, used: n === 0 ? 'não permitida em nenhum agente' : 'permitida em ' + n + (n === 1 ? ' agente' : ' agentes'), usedFg: n === 0 ? 'var(--mut2)' : 'var(--ac)' };
+      }),
+      catDiscover: () => this.discover(sv.id, true),
+      inverseRows: u.map(x => ({
+        name: x.agent.name, tools: x.tools.map(n => ({ n: n })), nTools: String(x.tools.length),
+        warn: x.tools.length === 0, agentActive: x.agent.isActive,
+        state: x.agent.isActive ? 'Ativo' : 'Inativo',
+        stateFg: x.agent.isActive ? 'var(--ok)' : 'var(--mut2)',
+        open: () => this.go('agent', x.agent.id)
+      })),
+      inverseEmpty: u.length === 0,
+      inverseSummary: u.length === 0 ? 'Nenhum agente usa este servidor.' : u.length + (u.length === 1 ? ' agente usa' : ' agentes usam') + ' este servidor MCP'
+    };
+  }
+
+  initForm() {
+    const r = this.state.route;
+    if (r.n === 'agentForm') {
+      const a = r.mode === 'edit' ? this.agent(r.id) : null;
+      return { kind: 'agent', name: a ? a.name : '', description: a ? a.description : '', instructions: a ? a.instructions : '', provider: a && a.provider ? a.provider : '', model: a && a.model ? a.model : '', skills: a ? (a.skills || []).map(k => k.name) : [], newSkill: '', errors: {} };
+    }
+    const sv = r.mode === 'edit' ? this.server(r.id) : null;
+    return { kind: 'server', name: sv ? sv.name : '', description: sv ? sv.description : '', url: sv ? sv.url : '', authType: sv ? sv.authType : 'None', credential: '', errors: {} };
+  }
+
+  setF = (patch) => this.setState(st => ({ form: Object.assign({}, st.form || this.initForm(), patch) }));
+
+  formVals() {
+    const s = this.state, r = s.route;
+    const f = s.form && s.form.kind === (r.n === 'agentForm' ? 'agent' : 'server') ? s.form : this.initForm();
+    const isNew = r.mode === 'new';
+    const base = {
+      fName: f.name, fDesc: f.description, fErrName: f.errors.name, fErrUrl: f.errors.url,
+      onFName: (e) => this.setF({ name: e.target.value, errors: {} }),
+      onFDesc: (e) => this.setF({ description: e.target.value }),
+      formCancel: () => r.n === 'agentForm' ? (isNew ? this.go('agents') : this.go('agent', r.id)) : (isNew ? this.go('servers') : this.go('server', r.id)),
+      formTitle: r.n === 'agentForm' ? (isNew ? 'Novo agente' : 'Editar agente') : (isNew ? 'Novo servidor MCP' : 'Editar servidor MCP'),
+      formSubmitLabel: r.n === 'agentForm' ? (isNew ? 'Criar agente' : 'Salvar alterações') : (isNew ? 'Cadastrar servidor' : 'Salvar alterações'),
+      formBack: () => r.n === 'agentForm' ? this.go('agents') : this.go('servers'),
+      formBackLabel: r.n === 'agentForm' ? '← Agentes' : '← Servidores MCP'
+    };
+    if (r.n === 'agentForm') {
+      const models = (this.providers.find(p => p.id === f.provider) || {}).models || [];
+      return Object.assign(base, {
+        fInstructions: f.instructions, fChars: String((f.instructions || '').length) + ' caracteres',
+        onFInstructions: (e) => this.setF({ instructions: e.target.value }),
+        fProvider: f.provider, fModel: f.model,
+        providerOpts: [{ v: '', label: 'Selecione o provedor' }].concat(this.providers.map(p => ({ v: p.id, label: p.id }))),
+        modelOpts: [{ v: '', label: f.provider ? 'Selecione o modelo' : 'Escolha o provedor primeiro' }].concat(models.map(m => ({ v: m, label: m }))),
+        modelDisabled: !f.provider,
+        onFProvider: (e) => this.setF({ provider: e.target.value, model: '' }),
+        onFModel: (e) => this.setF({ model: e.target.value }),
+        fSkills: (f.skills || []).map((k, i) => ({ name: k, remove: () => this.setF({ skills: f.skills.filter((_, j) => j !== i) }) })),
+        fNewSkill: f.newSkill || '',
+        onFNewSkill: (e) => this.setF({ newSkill: e.target.value }),
+        addSkill: () => { const n = (f.newSkill || '').trim(); if (!n) return; this.setF({ skills: (f.skills || []).concat([n]), newSkill: '' }); },
+        formSubmit: () => {
+          if (!f.name.trim()) { this.setF({ errors: { name: 'Nome é obrigatório.' } }); return; }
+          const skills = (f.skills || []).map(n => ({ name: n }));
+          if (isNew) {
+            const id = 'a' + (s.agents.length + 1);
+            this.setState(st => ({ agents: st.agents.concat([{ id: id, name: f.name, description: f.description, provider: f.provider || null, model: f.model || null, isActive: true, createdAt: '05/09/2026', updatedAt: '05/09/2026', skills: skills, instructions: f.instructions, mcpServers: [], delegatesTo: [] }]), form: null }));
+            this.toast('Agente criado. Agora vincule as ferramentas.');
+            setTimeout(() => this.setState({ route: { n: 'agent', id: 'a' + (s.agents.length + 1) }, tab: 'tools' }), 60);
+          } else {
+            this.setState(st => ({ agents: st.agents.map(x => x.id === r.id ? Object.assign({}, x, { name: f.name, description: f.description, instructions: f.instructions, provider: f.provider || null, model: f.model || null, skills: skills, updatedAt: '05/09/2026' }) : x), form: null }));
+            this.toast('Alterações salvas.'); this.go('agent', r.id);
+          }
+        }
+      });
+    }
+    const tk = 'form:' + (r.id || 'new'), t = s.tests[tk] || { state: 'idle' };
+    return Object.assign(base, {
+      fUrl: f.url, onFUrl: (e) => this.setF({ url: e.target.value, errors: {} }),
+      fAuth: f.authType, fNeedsCred: f.authType !== 'None', fCred: f.credential,
+      authOpts: [{ v: 'None', label: 'Nenhuma' }, { v: 'BearerToken', label: 'Bearer Token' }],
+      onFAuth: (e) => this.setF({ authType: e.target.value, credential: '' }),
+      onFCred: (e) => this.setF({ credential: e.target.value }),
+      credHint: isNew ? 'Enviada cifrada (AES-GCM) e nunca retorna na API.' : 'Deixe em branco para manter a credencial atual.',
+      keepsSaved: !isNew && f.credential === '' && f.authType !== 'None',
+      fTestLoading: t.state === 'loading', fTestOk: t.state === 'ok', fTestErr: t.state === 'err',
+      fTestOkText: 'Conexão bem-sucedida — ' + (t.n || 0) + (t.n === 1 ? ' tool disponível.' : ' tools disponíveis.'),
+      fTestErrText: this.failText(t.reason),
+      fTest: () => { if (!f.url.trim()) { this.setF({ errors: { url: 'Informe a Url antes de testar.' } }); return; } this.runTest(tk, (!isNew && f.credential === '' && f.authType !== 'None') ? null : this.testMap[r.id] || null, (this.catalog[r.id] || []).length || 4); },
+      fTestSavedNote: !isNew && f.credential === '' && f.authType !== 'None' ? 'Sem digitar a credencial, o teste usa a credencial salva deste servidor.' : null,
+      formSubmit: () => {
+        if (!f.name.trim()) { this.setF({ errors: { name: 'Nome é obrigatório.' } }); return; }
+        if (!f.url.trim()) { this.setF({ errors: { url: 'Url é obrigatória.' } }); return; }
+        if (isNew) {
+          const id = 's' + (s.servers.length + 1);
+          this.setState(st => ({ servers: st.servers.concat([{ id: id, name: f.name, description: f.description, url: f.url, authType: f.authType, isActive: true, createdAt: '05/09/2026', updatedAt: '05/09/2026' }]), form: null }));
+          this.toast('Servidor MCP cadastrado.'); setTimeout(() => this.go('server', id), 60);
+        } else {
+          this.setState(st => ({ servers: st.servers.map(x => x.id === r.id ? Object.assign({}, x, { name: f.name, description: f.description, url: f.url, authType: f.authType, updatedAt: '05/09/2026' }) : x), form: null }));
+          this.toast('Alterações salvas.'); this.go('server', r.id);
+        }
+      }
+    });
+  }
+
+  embedding = { provider: 'openai', model: 'text-embedding-3-small', dim: 1536 };
+
+  componentDidMount() {
+    this.state.kbs.forEach(k => (k.docs || []).forEach(d => {
+      if (d.status === 'pending' || d.status === 'indexing') this.runIndex(k.id, d.id, d.status);
+    }));
+  }
+
+  baseList = () => this.props.catalogoVazio ? [] : this.state.kbs;
+  kb = (id) => this.state.kbs.find(k => k.id === id);
+  kbAgents = (id) => this.state.agents.filter(a => (a.knowledgeBases || []).indexOf(id) >= 0);
+  kbStats = (k) => {
+    const d = k.docs || [], c = (st) => d.filter(x => x.status === st).length;
+    return { total: d.length, indexed: c('indexed'), pending: c('pending'), indexing: c('indexing'), failed: c('failed'), chunks: d.reduce((n, x) => n + (x.status === 'indexed' ? (x.chunks || 0) : 0), 0) };
+  };
+  indexSummary = (k) => {
+    const t = this.kbStats(k); if (!t.total) return 'Nenhum documento';
+    const p = [];
+    if (t.indexed) p.push(t.indexed + (t.indexed === 1 ? ' indexado' : ' indexados'));
+    if (t.indexing) p.push(t.indexing + ' indexando');
+    if (t.pending) p.push(t.pending + (t.pending === 1 ? ' pendente' : ' pendentes'));
+    if (t.failed) p.push(t.failed + (t.failed === 1 ? ' falhou' : ' falharam'));
+    return p.join(' · ');
+  };
+
+  patchDoc = (kid, did, patch) => this.setState(st => ({
+    kbs: st.kbs.map(k => k.id !== kid ? k : Object.assign({}, k, { docs: k.docs.map(d => d.id !== did ? d : Object.assign({}, d, patch)) }))
+  }));
+
+  runIndex = (kid, did, from) => {
+    const start = () => {
+      this.patchDoc(kid, did, { status: 'indexing' });
+      setTimeout(() => {
+        const k = this.kb(kid), d = k && (k.docs || []).find(x => x.id === did); if (!d) return;
+        if (this.props.simularFalhaIndexacao) this.patchDoc(kid, did, { status: 'failed', chunks: 0, reason: 'O provedor de embedding devolveu 429 (rate limit) nas três tentativas de indexação deste documento. O texto continua armazenado na base, mas nenhum fragmento dele está no índice e ele não aparece nas consultas do agente.' });
+        else this.patchDoc(kid, did, { status: 'indexed', chunks: Math.max(1, Math.round((d.chars || 1400) / 620)), reason: null });
+      }, 3200);
+    };
+    if (from === 'indexing') start(); else setTimeout(start, 2400);
+  };
+
+  reindex = (kid, did) => { this.patchDoc(kid, did, { status: 'pending', reason: null, chunks: 0 }); this.runIndex(kid, did, 'pending'); this.toast('Documento enfileirado para reindexação.', 'info'); };
+  setKbActive = (id, on) => { this.setState(st => ({ kbs: st.kbs.map(k => k.id === id ? Object.assign({}, k, { isActive: on }) : k), modal: null })); this.toast(on ? 'Base ativada.' : 'Base desativada.'); };
+
+  toggleKb = (agentId, kbId) => {
+    const key = agentId + ':' + kbId;
+    if (this.state.linkSaving[key]) return;
+    this.setState(st => ({ linkSaving: Object.assign({}, st.linkSaving, { [key]: true }) }));
+    setTimeout(() => {
+      let on = false;
+      this.setState(st => ({
+        agents: st.agents.map(a => {
+          if (a.id !== agentId) return a;
+          const cur = (a.knowledgeBases || []); on = cur.indexOf(kbId) < 0;
+          return Object.assign({}, a, { knowledgeBases: on ? cur.concat([kbId]) : cur.filter(x => x !== kbId) });
+        }),
+        linkSaving: (() => { const l = Object.assign({}, st.linkSaving); delete l[key]; return l; })()
+      }));
+      const nm = (this.kb(kbId) || {}).name;
+      this.toast(on ? 'Base “' + nm + '” vinculada.' : 'Base “' + nm + '” desvinculada.');
+    }, 560);
+  };
+
+  kbsVals() {
+    const s = this.state, list = this.baseList(), q = (s.kq || '').trim().toLowerCase();
+    const rows = list.filter(k => !q || k.name.toLowerCase().indexOf(q) >= 0 || (k.description || '').toLowerCase().indexOf(q) >= 0)
+      .filter(k => {
+        const t = this.kbStats(k);
+        if (s.kfilter === 'Ativas') return k.isActive;
+        if (s.kfilter === 'Inativas') return !k.isActive;
+        if (s.kfilter === 'Com falha') return t.failed > 0;
+        return true;
+      })
+      .map(k => {
+        const t = this.kbStats(k), ag = this.kbAgents(k.id);
+        const badges = [this.badge(k.isActive ? 'Ativa' : 'Inativa', k.isActive ? 'ok' : 'off')];
+        if (t.failed) badges.push(this.badge('Falha', 'err'));
+        else if (k.isActive && t.indexed === 0) badges.push(this.badge('Nada indexado', 'warn'));
+        return {
+          name: k.name, description: k.description || 'Sem descrição — o modelo não sabe quando consultar.',
+          docs: t.total === 0 ? 'Nenhum' : t.total + (t.total === 1 ? ' documento' : ' documentos'),
+          idx: this.indexSummary(k), idxFg: (t.failed || t.pending || t.indexing) ? 'var(--wa)' : 'var(--mut)',
+          agents: ag.length ? ag.map(a => a.name).join(', ') : '—',
+          badges: badges, open: () => this.go('kb', k.id)
+        };
+      });
+    return {
+      kbRows: rows, kbQ: s.kq || '', onKbQ: (e) => this.setState({ kq: e.target.value }),
+      kbSubtitle: list.length + (list.length === 1 ? ' base' : ' bases') + ' · o agente consulta sob demanda, como ferramenta',
+      kbFilters: ['Todas', 'Ativas', 'Inativas', 'Com falha'].map(f => ({
+        label: f, bg: s.kfilter === f ? 'var(--sf)' : 'transparent', fg: s.kfilter === f ? 'var(--fg)' : 'var(--mut)',
+        bd: s.kfilter === f ? 'var(--bd)' : 'transparent', pick: () => this.setState({ kfilter: f })
+      })),
+      kbCatalogEmpty: list.length === 0, kbHasCatalog: list.length > 0,
+      kbNoResults: rows.length === 0 && list.length > 0,
+      newKb: () => this.go('kbForm', null, { mode: 'new' })
+    };
+  }
+
+  kbVals() {
+    const s = this.state, k = this.kb(s.route.id); if (!k) return {};
+    const t = this.kbStats(k), ag = this.kbAgents(k.id), ktab = s.ktab || 'docs';
+    const badges = [this.badge(k.isActive ? 'Ativa' : 'Inativa', k.isActive ? 'ok' : 'off')];
+    if (t.failed) badges.push(this.badge(t.failed + (t.failed === 1 ? ' documento falhou' : ' documentos falharam'), 'err'));
+    else if (t.indexed === 0) badges.push(this.badge('Nada indexado', 'warn'));
+    const v = {
+      kName: k.name, kBadges: badges, kDesc: k.description, kHasDesc: !!k.description, kNoDesc: !k.description,
+      kSub: (ag.length ? ag.length + (ag.length === 1 ? ' agente consulta' : ' agentes consultam') + ' esta base' : 'Nenhum agente consulta esta base') + ' · ' + this.indexSummary(k),
+      backKbs: () => this.go('kbs'), editKb: () => this.go('kbForm', k.id, { mode: 'edit' }),
+      kToggleLabel: k.isActive ? 'Desativar' : 'Ativar', kToggleFg: k.isActive ? 'var(--da)' : 'var(--ok)',
+      kToggle: () => k.isActive ? this.setState({ modal: { kind: 'kbOff', id: k.id } }) : this.setKbActive(k.id, true),
+      kTabs: [{ key: 'docs', label: 'Documentos', n: String(t.total) }, { key: 'diag', label: 'Diagnóstico do índice', n: '' }].map(x => ({
+        label: x.label, n: x.n, hasN: x.n !== '' && x.n !== '0',
+        bd: ktab === x.key ? 'var(--ac)' : 'transparent', fg: ktab === x.key ? 'var(--fg)' : 'var(--mut)',
+        w: ktab === x.key ? '600' : '500', pick: () => this.setState({ ktab: x.key })
+      })),
+      kTabDocs: ktab === 'docs', kTabDiag: ktab === 'diag',
+      addDoc: () => this.setState({ docModal: { kbId: k.id, docId: null }, docForm: { mode: 'upload', files: [], title: '', content: '', errors: {} } })
+    };
+    if (v.kTabDocs) {
+      v.docRows = (k.docs || []).map(d => {
+        const st = d.status;
+        const b = this.badge(st === 'indexed' ? 'Indexado' : st === 'failed' ? 'Falhou' : st === 'indexing' ? 'Indexando' : 'Pendente', st === 'indexed' ? 'ok' : st === 'failed' ? 'err' : st === 'indexing' ? 'ac' : 'off');
+        return {
+          title: d.title, source: d.source,
+          chunks: st === 'indexed' ? d.chunks + (d.chunks === 1 ? ' fragmento' : ' fragmentos') : st === 'failed' ? '0 fragmentos' : '—',
+          chunksFg: st === 'indexed' ? 'var(--mut)' : 'var(--mut2)',
+          note: st === 'pending' ? 'na fila de indexação' : st === 'indexing' ? 'gerando embeddings' : st === 'failed' ? 'atualizado em ' + d.updatedAt : 'atualizado em ' + d.updatedAt,
+          statusLabel: b.label, statusBg: b.bg, statusFg: b.fg, spinner: st === 'indexing',
+          hasReason: st === 'failed', reason: d.reason,
+          edit: () => this.setState({ docModal: { kbId: k.id, docId: d.id }, docForm: { mode: 'manual', files: [], title: d.title, content: d.content || '', errors: {} } }),
+          del: () => this.setState({ modal: { kind: 'docDel', id: d.id, kbId: k.id } }),
+          retry: () => this.reindex(k.id, d.id)
+        };
+      });
+      v.docsEmpty = (k.docs || []).length === 0;
+      v.docsEmptyNote = ag.length
+        ? 'Esta base está vinculada a ' + ag.length + (ag.length === 1 ? ' agente' : ' agentes') + ', mas uma consulta não devolve nada até algum documento ficar indexado.'
+        : 'Carregue um documento markdown para o agente ter o que consultar.';
+      v.kbAgentRows = ag.map(a => ({ name: a.name, state: a.isActive ? 'Ativo' : 'Inativo', stateFg: a.isActive ? 'var(--ok)' : 'var(--mut2)', open: () => this.go('agent', a.id) }));
+      v.kbAgentsEmpty = ag.length === 0;
+      const q = t.pending + t.indexing;
+      v.pendingNote = q ? q + (q === 1 ? ' documento ainda não está utilizável' : ' documentos ainda não estão utilizáveis') + ' — a indexação roda em segundo plano e o estado de cada um está na lista abaixo.' : null;
+    } else {
+      const has = t.indexed > 0;
+      v.diagEmpty = !has;
+      v.diagRows = [
+        { label: 'Provedor de embedding', value: has ? this.embedding.provider : '—' },
+        { label: 'Modelo de embedding', value: has ? this.embedding.model : '—' },
+        { label: 'Dimensão do vetor', value: has ? String(this.embedding.dim) : '—' },
+        { label: 'Documentos indexados', value: t.indexed + ' de ' + t.total },
+        { label: 'Fragmentos no índice', value: String(t.chunks) }
+      ];
+      v.diagFails = (k.docs || []).filter(d => d.status === 'failed').map(d => ({ title: d.title, reason: d.reason, retry: () => this.reindex(k.id, d.id) }));
+      v.diagNoFails = v.diagFails.length === 0;
+    }
+    return v;
+  }
+
+  kbFormVals() {
+    const s = this.state, r = s.route, isNew = r.mode === 'new';
+    const src = isNew ? null : this.kb(r.id);
+    const f = s.kform && s.kform.id === (r.id || 'new') ? s.kform : { id: r.id || 'new', name: src ? src.name : '', description: src ? src.description : '', errors: {} };
+    const setK = (p) => this.setState({ kform: Object.assign({}, f, p) });
+    const d = f.description || '';
+    return {
+      kfTitle: isNew ? 'Nova base de conhecimento' : 'Editar base',
+      kfBack: () => this.go('kbs'),
+      kfCancel: () => isNew ? this.go('kbs') : this.go('kb', r.id),
+      kfSubmitLabel: isNew ? 'Criar base' : 'Salvar alterações',
+      kfName: f.name, onKfName: (e) => setK({ name: e.target.value, errors: {} }),
+      kfDesc: f.description, onKfDesc: (e) => setK({ description: e.target.value, errors: {} }),
+      kfErrName: f.errors.name, kfErrDesc: f.errors.description,
+      kfChars: d.length + ' caracteres' + (d.length > 0 && d.length < 80 ? ' · curto demais para o modelo decidir com segurança' : ''),
+      kfCharsFg: d.length > 0 && d.length < 80 ? 'var(--wa)' : 'var(--mut2)',
+      kfPreviewName: f.name || 'nome da base',
+      kfPreviewDesc: d || 'Sem descrição: o modelo recebe só o nome e decide no chute quando consultar.',
+      kfSubmit: () => {
+        if (!f.name.trim()) { setK({ errors: { name: 'Nome é obrigatório.' } }); return; }
+        if (!(f.description || '').trim()) { setK({ errors: { description: 'Descrição é obrigatória: é o texto que o modelo lê para decidir se consulta esta base.' } }); return; }
+        if (isNew) {
+          const id = 'k' + (s.kbs.length + 1);
+          this.setState(st => ({ kbs: st.kbs.concat([{ id: id, name: f.name, description: f.description, isActive: true, createdAt: '06/09/2026', updatedAt: '06/09/2026', docs: [] }]), kform: null }));
+          this.toast('Base criada. Agora carregue documentos.');
+          setTimeout(() => this.go('kb', id), 60);
+        } else {
+          this.setState(st => ({ kbs: st.kbs.map(k => k.id === r.id ? Object.assign({}, k, { name: f.name, description: f.description, updatedAt: '06/09/2026' }) : k), kform: null }));
+          this.toast('Alterações salvas.'); this.go('kb', r.id);
+        }
+      }
+    };
+  }
+
+  fmtSize = (b) => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1).replace('.', ',') + ' KB' : (b / 1048576).toFixed(1).replace('.', ',') + ' MB';
+
+  readFiles = (list) => {
+    const arr = Array.prototype.slice.call(list || []);
+    const push = (entry) => this.setState(st => ({ docForm: Object.assign({}, st.docForm || {}, { drag: false, errors: {}, files: ((st.docForm || {}).files || []).concat([entry]) }) }));
+    arr.forEach(file => {
+      const name = file.name, ext = (name.split('.').pop() || '').toLowerCase();
+      if (['md', 'markdown', 'txt'].indexOf(ext) < 0) {
+        push({ file: name, size: this.fmtSize(file.size), ok: false, error: 'Formato .' + ext + ' não é aceito. A base guarda texto markdown — converta o arquivo para .md ou .txt e suba de novo.' });
+        return;
+      }
+      const r = new FileReader();
+      r.onload = () => push({
+        file: name, size: this.fmtSize(file.size), ok: true, content: String(r.result || ''),
+        title: name.replace(/\.(md|markdown|txt)$/i, '').replace(/[-_]+/g, ' ').trim()
+      });
+      r.onerror = () => push({ file: name, size: this.fmtSize(file.size), ok: false, error: 'Não foi possível ler este arquivo.' });
+      r.readAsText(file);
+    });
+  };
+
+  docModalVals() {
+    const s = this.state, m = s.docModal; if (!m) return { docModal: false };
+    const f = s.docForm || { title: '', content: '', errors: {}, mode: 'upload', files: [] }, isNew = !m.docId;
+    const mode = f.mode || 'upload', files = f.files || [];
+    const ok = files.filter(x => x.ok);
+    const setD = (p) => this.setState({ docForm: Object.assign({}, f, p) });
+    const nOk = ok.length;
+    return {
+      docModal: true, docModalTitle: isNew ? 'Adicionar documento' : 'Atualizar documento',
+      docModes: [
+        { key: 'upload', label: isNew ? 'Subir arquivos' : 'Substituir por arquivo' },
+        { key: 'manual', label: 'Escrever manualmente' }
+      ].map(x => ({
+        label: x.label, bg: mode === x.key ? 'var(--sf)' : 'transparent', fg: mode === x.key ? 'var(--fg)' : 'var(--mut)',
+        bd: mode === x.key ? 'var(--bd)' : 'transparent', pick: () => setD({ mode: x.key, errors: {} })
+      })),
+      docUpload: mode === 'upload', docManual: mode === 'manual',
+      dfMulti: isNew,
+      dropTitle: isNew ? 'Arraste arquivos markdown aqui' : 'Arraste o arquivo markdown aqui',
+      dropBd: f.drag ? 'var(--ac)' : 'var(--bd)', dropBg: f.drag ? 'var(--acsf)' : 'var(--sf2)',
+      onPickFiles: (e) => { this.readFiles(e.target.files); e.target.value = ''; },
+      onDragOver: (e) => { e.preventDefault(); if (!f.drag) setD({ drag: true }); },
+      onDragLeave: (e) => { e.preventDefault(); if (f.drag) setD({ drag: false }); },
+      onDrop: (e) => { e.preventDefault(); this.readFiles(e.dataTransfer.files); },
+      dfFiles: files.map((x, i) => ({
+        file: x.file, size: x.size, ok: !!x.ok, error: x.error, title: x.title,
+        onTitle: (e) => { const c = files.slice(); c[i] = Object.assign({}, c[i], { title: e.target.value }); setD({ files: c }); },
+        remove: (e) => { if (e && e.preventDefault) e.preventDefault(); setD({ files: files.filter((_, j) => j !== i), errors: {} }); }
+      })),
+      dfFilesSummary: nOk ? (isNew
+        ? nOk + (nOk === 1 ? ' documento será criado e entra como pendente' : ' documentos serão criados e entram como pendentes')
+        : 'O conteúdo atual será substituído por “' + ok[0].file + '” e o documento volta para pendente') : null,
+      dfErrFiles: f.errors.files,
+      dfTitle: f.title, onDfTitle: (e) => setD({ title: e.target.value, errors: {} }),
+      dfErrTitle: f.errors.title,
+      dfContent: f.content, onDfContent: (e) => setD({ content: e.target.value, errors: {} }),
+      dfChars: (f.content || '').length + ' caracteres de texto',
+      docReindexNote: !isNew, docNewNote: isNew,
+      docSubmitLabel: !isNew ? 'Salvar e reindexar' : mode === 'upload' ? (nOk > 1 ? 'Adicionar ' + nOk + ' documentos' : 'Adicionar documento') : 'Adicionar documento',
+      docCancel: () => this.setState({ docModal: null, docForm: null }),
+      docSubmit: () => {
+        const stamp = '06/09/2026';
+        if (mode === 'upload') {
+          if (!nOk) { setD({ errors: { files: 'Escolha pelo menos um arquivo .md, .markdown ou .txt.' } }); return; }
+          if (ok.some(x => !(x.title || '').trim())) { setD({ errors: { files: 'Todo documento precisa de um título.' } }); return; }
+          if (isNew) {
+            const created = ok.map((x, i) => ({ id: 'd' + Date.now() + i, title: x.title.trim(), source: 'markdown', content: x.content, chars: x.content.length, chunks: 0, status: 'pending', updatedAt: stamp }));
+            this.setState(st => ({
+              kbs: st.kbs.map(k => k.id !== m.kbId ? k : Object.assign({}, k, { docs: k.docs.concat(created) })),
+              docModal: null, docForm: null
+            }));
+            created.forEach(d => this.runIndex(m.kbId, d.id, 'pending'));
+            this.toast(created.length === 1 ? 'Documento carregado. A indexação começa em instantes.' : created.length + ' documentos carregados. A indexação começa em instantes.', 'info');
+          } else {
+            const x = ok[0];
+            this.patchDoc(m.kbId, m.docId, { content: x.content, chars: x.content.length, chunks: 0, status: 'pending', reason: null, updatedAt: stamp });
+            this.setState({ docModal: null, docForm: null });
+            this.runIndex(m.kbId, m.docId, 'pending');
+            this.toast('Conteúdo substituído. O documento volta para pendente até reindexar.', 'info');
+          }
+          return;
+        }
+        if (!f.title.trim()) { setD({ errors: { title: 'Título é obrigatório.' } }); return; }
+        const chars = (f.content || '').length;
+        if (isNew) {
+          const id = 'd' + Date.now();
+          this.setState(st => ({
+            kbs: st.kbs.map(k => k.id !== m.kbId ? k : Object.assign({}, k, { docs: k.docs.concat([{ id: id, title: f.title, source: 'markdown', content: f.content, chars: chars, chunks: 0, status: 'pending', updatedAt: stamp }]) })),
+            docModal: null, docForm: null
+          }));
+          this.runIndex(m.kbId, id, 'pending');
+          this.toast('Documento carregado. A indexação começa em instantes.', 'info');
+        } else {
+          this.patchDoc(m.kbId, m.docId, { title: f.title, content: f.content, chars: chars, chunks: 0, status: 'pending', reason: null, updatedAt: stamp });
+          this.setState({ docModal: null, docForm: null });
+          this.runIndex(m.kbId, m.docId, 'pending');
+          this.toast('Documento atualizado. Ele volta para pendente até reindexar.', 'info');
+        }
+      }
+    };
+  }
+
+  agentKbVals(a) {
+    const all = this.baseList(), saving = this.state.linkSaving || {};
+    const ids = a.knowledgeBases || [];
+    const row = (k) => {
+      const t = this.kbStats(k), on = ids.indexOf(k.id) >= 0;
+      let warn = null;
+      if (on && !k.isActive) warn = 'Base inativa: o agente não a consulta enquanto ela estiver desativada.';
+      else if (on && t.indexed === 0) warn = 'Nenhum documento indexado nesta base: a consulta não devolve trecho algum.';
+      return {
+        id: k.id, name: k.name,
+        description: k.description || 'Sem descrição — o modelo não sabe quando consultar.',
+        linked: on, saving: !!saving[a.id + ':' + k.id],
+        stats: t.total === 0 ? 'Nenhum documento' : t.total + (t.total === 1 ? ' documento · ' : ' documentos · ') + t.indexed + (t.indexed === 1 ? ' indexado' : ' indexados'),
+        statsFg: t.indexed === 0 ? 'var(--wa)' : 'var(--mut2)',
+        hasWarn: !!warn, warn: warn,
+        toggle: () => this.toggleKb(a.id, k.id), open: () => this.go('kb', k.id),
+        btnLabel: on ? 'Vinculada' : 'Vincular',
+        btnBg: on ? 'var(--sf2)' : 'var(--ac)', btnFg: on ? 'var(--mut)' : '#fff',
+        btnBd: on ? 'var(--bd)' : 'transparent'
+      };
+    };
+    const linked = all.filter(k => ids.indexOf(k.id) >= 0).map(row);
+    const q = (this.state.kbq || '').trim().toLowerCase();
+    const pick = all.filter(k => !q || (k.name + ' ' + (k.description || '')).toLowerCase().indexOf(q) >= 0).map(row);
+    const n = linked.length;
+    return {
+      kbLinkRows: linked, kbLinkEmpty: n === 0,
+      kbLinkSummary: n === 0
+        ? 'Nenhuma base vinculada — este agente não consulta conhecimento'
+        : n === 1
+          ? '1 base vinculada · consultada sob demanda, como ferramenta'
+          : n + ' bases vinculadas · consultadas sob demanda, como ferramenta',
+      kbCatalogNote: all.length + (all.length === 1 ? ' base no catálogo' : ' bases no catálogo'),
+      kbPick: !!this.state.kbPick,
+      kbPickQ: this.state.kbq || '',
+      onKbPickQ: (e) => this.setState({ kbq: e.target.value }),
+      kbPickRows: pick, kbPickEmpty: pick.length === 0,
+      kbPickEmptyText: all.length === 0 ? 'Nenhuma base cadastrada ainda.' : 'Nenhuma base corresponde à busca.',
+      kbPickNote: 'O vínculo é salvo na hora. Documentos são criados e editados em Conhecimento.',
+      kbPickOpen: () => this.setState({ kbPick: true, kbq: '' }),
+      kbPickClose: () => this.setState({ kbPick: false, kbq: '' }),
+      kbWhyOpen: !!this.state.kbWhy,
+      kbWhyLabel: this.state.kbWhy ? 'Ocultar nota de projeto' : 'Por que só as vinculadas, e numa aba própria',
+      kbWhyToggle: () => this.setState({ kbWhy: !this.state.kbWhy }),
+      goNewKb: () => this.go('kbForm', null, { mode: 'new' })
+    };
+  }
+  modalVals() {
+    const m = this.state.modal; if (!m) return { modal: false };
+    if (m.kind === 'docDel') {
+      const k = this.kb(m.kbId), d = k && k.docs.find(x => x.id === m.id); if (!d) return { modal: false };
+      const ag = this.kbAgents(m.kbId);
+      return {
+        modal: true, modalTitle: 'Excluir “' + d.title + '”?',
+        modalBody: 'O texto e os fragmentos deste documento saem do índice. Os agentes vinculados a esta base deixam de encontrar esse conteúdo na próxima consulta. Não há como desfazer.',
+        modalExtra: ag.length ? 'Afeta ' + ag.length + (ag.length === 1 ? ' agente: ' : ' agentes: ') + ag.map(a => a.name).join(', ') : null,
+        modalConfirmLabel: 'Excluir documento',
+        modalConfirm: () => {
+          this.setState(st => ({ kbs: st.kbs.map(x => x.id !== m.kbId ? x : Object.assign({}, x, { docs: x.docs.filter(y => y.id !== m.id) })), modal: null }));
+          this.toast('Documento excluído.');
+        },
+        modalCancel: () => this.setState({ modal: null })
+      };
+    }
+    if (m.kind === 'kbOff') {
+      const k = this.kb(m.id), ag = this.kbAgents(m.id);
+      return {
+        modal: true, modalTitle: 'Desativar base “' + k.name + '”?',
+        modalBody: 'Os agentes vinculados param de consultar esta base enquanto ela estiver inativa. Documentos e índice são preservados.',
+        modalExtra: ag.length ? 'Afeta ' + ag.length + (ag.length === 1 ? ' agente: ' : ' agentes: ') + ag.map(a => a.name).join(', ') : null,
+        modalConfirmLabel: 'Desativar',
+        modalConfirm: () => this.setKbActive(m.id, false),
+        modalCancel: () => this.setState({ modal: null })
+      };
+    }
+    const isAgent = m.kind === 'agent';
+    const obj = isAgent ? this.agent(m.id) : this.server(m.id);
+    const used = isAgent ? [] : this.state.agents.filter(a => (a.mcpServers || []).some(x => x.id === m.id));
+    return {
+      modal: true,
+      modalTitle: isAgent ? 'Desativar agente “' + obj.name + '”?' : 'Desativar servidor MCP “' + obj.name + '”?',
+      modalBody: isAgent ? 'Mensagens enviadas a este agente enquanto ele estiver inativo serão rejeitadas.' : 'Agentes vinculados a este servidor MCP deixarão de conseguir usar suas tools enquanto ele estiver inativo.',
+      modalExtra: used.length ? 'Afeta ' + used.length + (used.length === 1 ? ' agente: ' : ' agentes: ') + used.map(a => a.name).join(', ') : null,
+      modalConfirmLabel: 'Desativar',
+      modalConfirm: () => this.setActive(m.kind, m.id, false),
+      modalCancel: () => this.setState({ modal: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import {
   useAgentsQuery,
   useCreateAgentMutation,
   useReplaceAgentDelegationsMutation,
+  useReplaceAgentKnowledgeBasesMutation,
   useReplaceAgentMcpServersMutation,
 } from './useAgents';
 import { ApiError } from './agentsApi';
@@ -294,5 +295,55 @@ describe('useReplaceAgentDelegationsMutation', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     const error = result.current.error as ApiError;
     expect(error.status).toBe(400);
+  });
+});
+
+describe('useReplaceAgentKnowledgeBasesMutation', () => {
+  it('em sucesso, popula o cache do detalhe com o agente devolvido e invalida a lista', async () => {
+    const updated: Agent = {
+      ...agent,
+      knowledgeBases: [{ id: '33333333-3333-3333-3333-333333333333', name: 'Cardápio' }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(updated));
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const { result } = renderHook(() => useReplaceAgentKnowledgeBasesMutation(agent.id), {
+      wrapper: Wrapper,
+    });
+
+    result.current.mutate(['33333333-3333-3333-3333-333333333333']);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/agents/${agent.id}/knowledge-bases`),
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          knowledgeBaseIds: ['33333333-3333-3333-3333-333333333333'],
+        }),
+      }),
+    );
+    expect(queryClient.getQueryData(['agents', agent.id])).toEqual(updated);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['agents'] });
+  });
+
+  it('em erro, expõe o ApiError sem popular o cache', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ title: 'Validação falhou' }, 400)),
+    );
+    const { Wrapper, queryClient } = createWrapper();
+
+    const { result } = renderHook(() => useReplaceAgentKnowledgeBasesMutation(agent.id), {
+      wrapper: Wrapper,
+    });
+
+    result.current.mutate(['33333333-3333-3333-3333-333333333333']);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeInstanceOf(ApiError);
+    expect(queryClient.getQueryData(['agents', agent.id])).toBeUndefined();
   });
 });

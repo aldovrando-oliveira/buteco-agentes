@@ -10,23 +10,29 @@ import {
   useDeactivateAgentMutation,
 } from '../api/useAgents';
 import { useMcpServersQuery } from '../../mcp-servers/api/useMcpServers';
+import { useKnowledgeBasesQuery } from '../../knowledge-bases/api/useKnowledgeBases';
 import { AgentDelegationsTab } from '../components/AgentDelegationsTab';
+import { AgentKnowledgeTab } from '../components/AgentKnowledgeTab';
 import { AgentOverviewTab } from '../components/AgentOverviewTab';
 import { AgentToolsTab } from '../components/AgentToolsTab';
 import { ApiError } from '../api/agentsApi';
 
 const OVERVIEW_TAB = 'visao-geral';
 const TOOLS_TAB = 'ferramentas';
+const KNOWLEDGE_TAB = 'conhecimento';
 const DELEGATIONS_TAB = 'delegacoes';
 
-type AgentDetailTab = typeof OVERVIEW_TAB | typeof TOOLS_TAB | typeof DELEGATIONS_TAB;
+type AgentDetailTab =
+  typeof OVERVIEW_TAB | typeof TOOLS_TAB | typeof KNOWLEDGE_TAB | typeof DELEGATIONS_TAB;
 
 // Ausência do parâmetro é a forma canônica da visão geral, e valor
 // desconhecido cai nela também — sem reescrever o endereço, que só poluiria
 // o histórico (Decision 1 do design.md da change
 // frontend-agente-detalhe-abas).
 function parseTab(value: string | null): AgentDetailTab {
-  return value === TOOLS_TAB || value === DELEGATIONS_TAB ? value : OVERVIEW_TAB;
+  return value === TOOLS_TAB || value === KNOWLEDGE_TAB || value === DELEGATIONS_TAB
+    ? value
+    : OVERVIEW_TAB;
 }
 
 function TabCounter({ count }: { count: number }) {
@@ -48,6 +54,10 @@ export function AgentDetailPage() {
   const { data, isLoading, error } = useAgentQuery(id!);
   const agentsQuery = useAgentsQuery();
   const mcpServersQuery = useMcpServersQuery({ enabled: activeTab === TOOLS_TAB });
+  // Catálogo de bases buscado só com a aba de conhecimento ativa, no mesmo
+  // molde acima. São 100+ bases declaradas pelo handoff, e é uma requisição que
+  // as outras três abas não precisam (design.md, D7).
+  const knowledgeBasesQuery = useKnowledgeBasesQuery({ enabled: activeTab === KNOWLEDGE_TAB });
   const activateMutation = useActivateAgentMutation();
   const deactivateMutation = useDeactivateAgentMutation();
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
@@ -164,6 +174,12 @@ export function AgentDetailPage() {
             Ferramentas
           </Tabs.Tab>
           <Tabs.Tab
+            value={KNOWLEDGE_TAB}
+            rightSection={<TabCounter count={data.knowledgeBases.length} />}
+          >
+            Conhecimento
+          </Tabs.Tab>
+          <Tabs.Tab
             value={DELEGATIONS_TAB}
             rightSection={<TabCounter count={data.delegatesTo.length} />}
           >
@@ -185,6 +201,22 @@ export function AgentDetailPage() {
             <Alert color="red">Não foi possível carregar os servidores MCP.</Alert>
           ) : (
             <AgentToolsTab agent={data} mcpServers={mcpServersQuery.data ?? []} />
+          )}
+        </Tabs.Panel>
+
+        <Tabs.Panel value={KNOWLEDGE_TAB} pt="md">
+          {knowledgeBasesQuery.isLoading ? (
+            <Group>
+              <Loader size="sm" />
+              <Text>Carregando bases de conhecimento...</Text>
+            </Group>
+          ) : knowledgeBasesQuery.isError ? (
+            // Sem o catálogo não há descrição nem estado, então a aba não
+            // renderiza a lista pela metade: informar a falha é mais honesto que
+            // uma tela que parece funcionar com metade do conteúdo faltando.
+            <Alert color="red">Não foi possível carregar as bases de conhecimento.</Alert>
+          ) : (
+            <AgentKnowledgeTab agent={data} catalog={knowledgeBasesQuery.data ?? []} />
           )}
         </Tabs.Panel>
 
