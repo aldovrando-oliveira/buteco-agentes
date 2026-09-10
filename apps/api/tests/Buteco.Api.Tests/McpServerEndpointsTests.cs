@@ -15,6 +15,50 @@ public class McpServerEndpointsTests(ApiFactoryFixture factory) : IClassFixture<
 {
     private readonly HttpClient _client = factory.CreateClient();
 
+    // --- Ordenação (api-response-ordering) ---------------------------------
+
+    [Fact]
+    public async Task McpServersWithEqualCreatedAt_AreTieBrokenById()
+    {
+        var first = await CreateServerAsync("MCP Empate 1");
+        var second = await CreateServerAsync("MCP Empate 2");
+        var third = await CreateServerAsync("MCP Empate 3");
+
+        var tied = new[] { first.Id, second.Id, third.Id };
+        await CreatedAtTie.ForceAsync(factory.Services, "mcp_servers", tied);
+
+        var response = await _client.GetAsync("/mcp-servers");
+        response.EnsureSuccessStatusCode();
+        var listed = (await response.Content.ReadFromJsonAsync<List<McpServerResponse>>())!;
+
+        var observed = listed.Where(m => tied.Contains(m.Id)).Select(m => m.Id).ToList();
+        Assert.Equal(tied.Order().ToList(), observed);
+    }
+
+    // Metade determinística (design.md, D6).
+    [Fact]
+    public async Task McpServerCatalogQuery_EmitsTieBreakAsLastOrderByTerm()
+    {
+        await CreateServerAsync("MCP SQL Ordem");
+
+        var commands = await factory.SqlCapture.CaptureAsync(async () =>
+        {
+            (await _client.GetAsync("/mcp-servers")).EnsureSuccessStatusCode();
+        });
+
+        var query = EmittedSqlCapture.SingleCommandContaining(commands, "FROM mcp_servers", "ORDER BY");
+        EmittedSqlCapture.AssertOrderByEndsWithTieBreak(query);
+    }
+
+    private async Task<McpServerResponse> CreateServerAsync(string name)
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/mcp-servers",
+            new CreateMcpServerRequest(name, "Servidor de teste.", "https://mcp.exemplo.test/sse", "None", null));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<McpServerResponse>())!;
+    }
+
     [Fact]
     public async Task CreateMcpServer_WithoutAuthentication_ReturnsCreatedServer()
     {

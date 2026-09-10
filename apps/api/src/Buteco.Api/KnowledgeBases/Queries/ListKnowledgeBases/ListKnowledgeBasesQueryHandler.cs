@@ -17,7 +17,12 @@ public sealed class ListKnowledgeBasesQueryHandler(AppDbContext dbContext)
     {
         return await dbContext.KnowledgeBases
             .AsNoTracking()
+            // Desempate estável: CreatedAt não é único — é atribuído no
+            // construtor da entidade e dois registros podem compartilhar o
+            // instante —, então ordenar só por ele deixa a ordem entre
+            // empatados a cargo do plano do Postgres (api-response-ordering).
             .OrderBy(knowledgeBase => knowledgeBase.CreatedAt)
+            .ThenBy(knowledgeBase => knowledgeBase.Id)
             .Select(knowledgeBase => KnowledgeBaseResponse.FromEntity(knowledgeBase))
             .ToListAsync(cancellationToken);
     }

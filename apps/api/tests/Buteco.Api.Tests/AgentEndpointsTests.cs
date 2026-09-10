@@ -16,6 +16,45 @@ public class AgentEndpointsTests(ApiFactoryFixture factory) : IClassFixture<ApiF
 
     private readonly HttpClient _client = factory.CreateClient();
 
+    // --- Ordenação (api-response-ordering) ---------------------------------
+
+    // Guarda comportamental do desempate da listagem de agentes. O critério
+    // primário continua sendo CreatedAt (design.md, D1).
+    [Fact]
+    public async Task AgentsWithEqualCreatedAt_AreTieBrokenById()
+    {
+        var first = await CreateAgentAsync("Agente Empate 1", "Instruções.");
+        var second = await CreateAgentAsync("Agente Empate 2", "Instruções.");
+        var third = await CreateAgentAsync("Agente Empate 3", "Instruções.");
+
+        var tied = new[] { first.Id, second.Id, third.Id };
+        await CreatedAtTie.ForceAsync(factory.Services, "agents", tied);
+
+        var response = await _client.GetAsync("/agents");
+        response.EnsureSuccessStatusCode();
+        var listed = (await response.Content.ReadFromJsonAsync<List<AgentResponse>>())!;
+
+        var observed = listed.Where(agent => tied.Contains(agent.Id)).Select(agent => agent.Id).ToList();
+        Assert.Equal(tied.Order().ToList(), observed);
+    }
+
+    // Metade determinística (design.md, D6): o guarda acima reprova só
+    // probabilisticamente, porque sem o ThenBy o Postgres às vezes já devolve em
+    // ordem de id sozinho. Esta asserção é sobre o SQL da consulta de produção.
+    [Fact]
+    public async Task AgentListQuery_EmitsTieBreakAsLastOrderByTerm()
+    {
+        await CreateAgentAsync("Agente SQL Ordem", "Instruções.");
+
+        var commands = await factory.SqlCapture.CaptureAsync(async () =>
+        {
+            (await _client.GetAsync("/agents")).EnsureSuccessStatusCode();
+        });
+
+        var query = EmittedSqlCapture.SingleCommandContaining(commands, "FROM agents AS a", "ORDER BY");
+        EmittedSqlCapture.AssertOrderByEndsWithTieBreak(query);
+    }
+
     [Fact]
     public async Task CreateAgent_WithValidData_ReturnsCreatedAgent()
     {

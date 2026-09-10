@@ -74,16 +74,54 @@ This is an **agent-driven** operation - you will read delta specs and directly e
       **RENAMED Requirements:**
       - Find the FROM requirement, rename to TO
 
+      **`## Purpose` section (if the delta has one):**
+      - The delta may carry a `## Purpose` section above its requirement
+        sections. It is content, not a heading to skip.
+      - If the main spec's Purpose is a `TBD - ...` placeholder → **replace it**
+        with the delta's Purpose.
+      - If the main spec has a real Purpose and the delta carries one → the
+        delta's wins (the change author just touched this capability).
+      - If the delta has no `## Purpose` → leave the main spec's Purpose alone.
+      - Never overwrite a real Purpose with a placeholder.
+
    d. **Create new main spec** if capability doesn't exist yet:
       - Create `openspec/specs/<capability>/spec.md`
-      - Add Purpose section (can be brief, mark as TBD)
+      - **Purpose section: use the delta's `## Purpose` verbatim when it has
+        one.** Only when the delta carries no Purpose at all, write the
+        placeholder `TBD - defined by change <change-name>. Update Purpose after
+        archive.` and tell the user, in the summary, that this capability needs
+        a Purpose written by whoever touched the code.
       - Add Requirements section with the ADDED requirements
 
-5. **Show summary**
+5. **Verify what landed in the main specs — not what you intended to write**
+
+   Re-read each main spec you touched and check, before reporting success:
+
+   - **No `TBD - ` placeholder in a capability whose delta carried a
+     `## Purpose`.** This is the check that matters most: `openspec validate
+     --specs --strict` does **not** catch it, because a placeholder is valid
+     text. 39 of this repo's 44 capabilities carry one and all 44 validate.
+   - **No duplicated requirement block** — grep the `### Requirement:` titles
+     and confirm there are no repeats.
+   - **No leaked delta headings** — `## ADDED Requirements`,
+     `## MODIFIED Requirements`, `## REMOVED Requirements` and
+     `## RENAMED Requirements` belong to the delta and must never appear in a
+     main spec.
+   - **Nothing lost.** For a MODIFIED delta, the diff against the main spec as
+     it was before the sync should be *additive* unless the delta deliberately
+     rewrote or removed something. Snapshot the file before editing if that
+     makes the check easier.
+   - Then run `openspec validate --specs --strict` — necessary, not sufficient,
+     for the reasons above.
+
+6. **Show summary**
 
    After applying all changes, summarize:
    - Which capabilities were updated
    - What changes were made (requirements added/modified/removed/renamed)
+   - Which capabilities got their Purpose from the delta, and which were left
+     with a placeholder needing one
+   - The result of each verification in step 5
 
 **Delta Spec Format Reference**
 
@@ -142,6 +180,22 @@ Main specs are now updated. The change remains active - archive when implementat
 **Guardrails**
 - Read both delta and main specs before making changes
 - Preserve existing content not mentioned in delta
+- **A real `## Purpose` is never replaced by a placeholder** — not on create, not
+  on update. A capability's Purpose says which question it answers, and that is
+  the one thing a reader cannot recover from the scenarios.
 - If something is unclear, ask for clarification
 - Show what you're changing as you go
+- Verify the main specs after writing them (step 5); reporting the intent is not
+  the same as checking the result
 - The operation should be idempotent - running twice should give same result
+
+**Known second producer of placeholders (not this skill)**
+
+The `openspec` CLI creates a main spec on its own when a change is archived
+**without** a prior sync — `dist/core/specs-apply.js` writes
+`TBD - created by archiving change <name>. Update Purpose after archive.`. Note
+the different wording: this repo's 39 placeholders all say *"defined by change"*,
+so none of them came from that path, but the archive flow does offer "Archive
+without syncing" and it stays reachable. Syncing before archiving keeps the
+Purpose under this skill's control; when grepping for the placeholder stock,
+search both `TBD - defined by change` and `TBD - created by archiving change`.

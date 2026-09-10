@@ -1659,6 +1659,34 @@ Cada um tem gatilho de quando revisitar:
   pergunta por migrações pendentes ali). Gatilho: qualquer mudança que toque
   as migrações de `apps/workers`, ou um segundo app passar a compartilhar o
   mesmo banco.
+- **~~Ordenação sem desempate, em cinco sites de `apps/api`~~ — FECHADO por
+  `ordenacao-desempate-listas-vinculo` (09/09/2026).** O registro abaixo fica
+  como estava, com **duas correções que a change teve de fazer nele**:
+
+  1. **Eram oito sites, não cinco.** Os cinco listados existem e estavam nas
+     linhas certas; a varredura achou mais três em `apps/api` — o sexto que o
+     próprio item mandava conferir (`ListAgentsQueryHandler.cs:21`) e dois
+     inéditos: `ListMcpServersQueryHandler.cs:14` e
+     `ListKnowledgeDocumentsQueryHandler.cs:33`.
+  2. **A premissa sobre os catálogos estava errada.** O item afirma que a
+     listagem de bases diverge por ordenar por `CreatedAt`. Não diverge: os
+     **quatro** catálogos de `apps/api` ordenam por `CreatedAt`, e quem ordena
+     por nome são as três consultas de vínculo. O padrão da casa é catálogo em
+     ordem de cadastro, vínculo em ordem de leitura — e o comentário de classe
+     de `ListKnowledgeBasesQueryHandler` já dizia isso ("mesmo comportamento de
+     `ListMcpServers`"). A "decisão" que o item pedia não existia. Causa
+     registrada como acréscimo à convenção 6.
+
+  E a change achou um defeito de **classe diferente**, que o item não
+  descrevia e que o desempate não conserta: `GET /agents` ordenava
+  `mcpServers`/`delegatesTo`/`knowledgeBases` em memória (comparador do .NET)
+  enquanto `GET /agents/{id}` ordena em SQL (collation do Postgres). Os dois
+  discordam — medido —, então as duas rotas podiam devolver o mesmo agente em
+  ordens diferentes **sem empate nenhum**. Corrigido movendo a ordenação para a
+  consulta (design.md, D3).
+
+  Registro original:
+
 - **Ordenação sem desempate, em cinco sites de `apps/api`** — achado durante a
   revisão da proposta de `knowledge-base-vinculo-agente`, pré-existente e não
   introduzido por ela. **Linhas reconferidas em 09/09/2026** — as registradas
@@ -2059,6 +2087,246 @@ Cada um tem gatilho de quando revisitar:
   bloco de contexto de canal). Gatilho: antes de qualquer mudança que
   coloque texto não controlado pelo sistema em um bloco de contexto
   delimitado por esse marcador (ou por um análogo).
+
+- **A ordenação de `GET /agents` passa a depender de `Enumerable.GroupBy`
+  preservar a ordem de origem** — assumido por `ordenacao-desempate-listas-vinculo`
+  (design.md, D3), que move a ordenação de `mcpServers`, `delegatesTo` e
+  `knowledgeBases` da memória para a consulta em lote e **remove** o `OrderBy`
+  em memória de dentro do `GroupBy`. A partir daí a ordem dentro de cada grupo
+  é a ordem em que as linhas saíram do PostgreSQL, e o que a preserva é o
+  `GroupBy`.
+
+  **É `System.Linq.Enumerable.GroupBy`, não EF Core.** `bindings` vem de
+  `ToListAsync`, então o `GroupBy` de `ListAgentsQueryHandler.cs:32,49,66` é
+  LINQ-to-Objects sobre uma `List<>` já materializada — EF Core e Npgsql não
+  participam dessa etapa. A dependência é do **runtime .NET**
+  (`global.json`, hoje `10.0.301`), não dos pacotes de acesso a dados.
+
+  **E o comportamento é documentado**, o que muda a classe de risco: a
+  documentação de `Enumerable.GroupBy` (Microsoft Learn, moniker `net-10.0`,
+  revisão de 2026-07-01, em todas as sobrecargas) diz *"Elements in a grouping
+  are yielded in the order that the elements that produced them appear in
+  `source`"*. Não é comportamento não documentado verificado por medição — é
+  contrato publicado de API de primeira parte, **corroborado** por medição
+  (2.000 tentativas com fonte pré-ordenada e agentes intercalados, ordem
+  preservada em todas; design.md desta change). Isso o separa do item de
+  `Pgvector.EntityFrameworkCore` da etapa 2, que é comportamento de terceiro
+  **sem** contrato publicado — os dois pedem gatilho no bump, mas por motivos e
+  com pesos diferentes.
+
+  **Modo de falha, corrigido:** não é invisível para os guardas desta change,
+  como parecia. O `GroupBy` só existe no caminho da **listagem**;
+  `GET /agents/{id}` passa por `AgentMcpServerLookup`/`AgentDelegationLookup`/
+  `AgentKnowledgeBaseLookup`, que ordenam em SQL puro e não agrupam nada
+  (conferido: o único `GroupBy` em caminho de leitura de `apps/api` está em
+  `ListAgentsQueryHandler`). Logo uma quebra de ordem no `GroupBy` faz as duas
+  superfícies **divergirem**, que é exatamente o que os guardas de R2 afirmam
+  não acontecer — eles reprovam.
+
+  O que sobra, e é a razão real de registrar: eles reprovam **por
+  probabilidade**. Um `GroupBy` que deixasse de preservar a ordem ainda pode
+  emitir a ordem esperada por acaso — com os dois itens do guarda de R2, em
+  torno de metade das vezes. É o perfil de guarda que aprova ou reprova por
+  sorte de ordenação que a convenção 15 nomeia, e nenhum arranjo de teste desta
+  change o elimina, porque o defeito hipotético não é determinístico.
+
+  **Gatilho: bump do runtime .NET (`global.json` / TFM)** — refazer a medição
+  antes de aceitar o bump; são minutos e o script está descrito no design.md.
+  **Segundo gatilho:** qualquer reescrita que mova o agrupamento para o servidor
+  (`GroupBy` traduzido por EF Core) ou que volte a ordenar em memória — a
+  primeira troca a premissa de lugar, a segunda reintroduz a divergência de
+  comparador que D3 foi corrigir.
+
+  **Não é gatilho:** bump de `Microsoft.EntityFrameworkCore` ou
+  `Npgsql.EntityFrameworkCore.PostgreSQL`. Esses tocam um elo diferente da
+  corrente — se o `ORDER BY` deixar de sobreviver à tradução, a listagem
+  diverge da consulta por id e os mesmos guardas de R2 reprovam, com a mesma
+  ressalva probabilística.
+
+- **Uma premissa sobre o próprio código entrou num item aberto sem ter sido
+  lida** — achado ao propor `ordenacao-desempate-listas-vinculo`. O item de
+  ordenação afirmava que *"o catálogo de MCP e o de agentes ordenam por nome"* e
+  pedia decidir se a listagem de bases, que ordena por `CreatedAt`, era acidente
+  a corrigir. Lido no código: os **quatro** catálogos de `apps/api` ordenam por
+  `CreatedAt` (`ListAgents:21`, `ListMcpServers:14`, `ListKnowledgeBases:20`,
+  `ListKnowledgeDocuments:33`), e quem ordena por nome são as três consultas de
+  vínculo. Não havia divergência, não havia acidente, e a "decisão" pedida não
+  existia — a change quase gastou uma seção de `design.md` decidindo sobre uma
+  realidade inventada.
+
+  O dano teve duas etapas, e a segunda é a que importa: a premissa errada saiu
+  do item para o prompt da change seguinte, que a repetiu como enunciado. Item
+  aberto é lido depois, por quem não tem o contexto de quem escreveu, e é aí que
+  ele vira instrução.
+
+  **E a conferência que existia não pega isto.** A rodada anterior conferiu as
+  linhas do mesmo item e corrigiu `:34`/`:51` para `:36`/`:53` — ou seja, o item
+  passou por revisão, e saiu dela com as linhas certas **e** a frase sobre os
+  catálogos errada. Conferir referência não é conferir afirmação.
+
+  Registrado como acréscimo à **convenção 6** (ver
+  `01-ARQUITETURA_E_CONVENCOES.md`), e não como item próprio, porque a convenção
+  já é sobre exatamente este erro em outros alvos e é onde se olha antes de
+  escrever. Gatilho de reavaliação, caso o acréscimo não segure: segunda
+  ocorrência de premissa sobre código deste repositório propagada de item aberto
+  para change.
+
+- **Ordenação sem desempate em `apps/inbox` — seis sites** — achado pela
+  varredura de `ordenacao-desempate-listas-vinculo`, que olhou os três apps.
+  Não corrigido junto por convenção 12 (app diferente, banco próprio, specs
+  próprias) e porque a forma da spec delta é outra — ver abaixo.
+
+  | Site | Ordena por |
+  |---|---|
+  | `Channels/Queries/ListChannels/ListChannelsQueryHandler.cs:19` | `channel.CreatedAt` |
+  | `Contacts/Queries/ListContacts/ListContactsQueryHandler.cs:14` | `contact.CreatedAt` |
+  | `Contacts/Queries/GetContactSessions/GetContactSessionsQueryHandler.cs:23` | `session.StartedAt` |
+  | `Contacts/Queries/GetChannelSessions/GetChannelSessionsQueryHandler.cs:28` | `session.LastActivityAt` |
+  | `Contacts/Queries/GetChannelSessions/GetChannelSessionsQueryHandler.cs:37` | `message.OccurredAt` (prévia da última mensagem, `FirstOrDefault`) |
+  | `Messages/Queries/GetSessionMessages/GetSessionMessagesQueryHandler.cs:23` | `message.OccurredAt` |
+
+  **Severidade menor que a de `apps/api`, e a razão é verificável:** todos os
+  critérios são temporais e alimentados por `DateTimeOffset.UtcNow`, conferido no
+  `design.md` de `inbox-instante-mensagem` (*"`Message.OccurredAt` em
+  `apps/inbox` é sempre o instante de recebimento… os dois adapters chamam
+  `DateTimeOffset.UtcNow` inline e sequer desserializam o timestamp que WAHA e
+  Telegram enviam"*). O empate exige dois eventos no mesmo microssegundo — não é
+  o empate por construção que nome duplicado produz em `apps/api`.
+
+  **Dois deles têm promessa de ordem em spec viva**, e isso muda a forma do
+  trabalho: `inbox-contact-session:211,222` ("ordenadas pela mais recente
+  atividade primeiro") e `inbox-message-history:176,185` (ordem cronológica). Lá
+  a change **conserta requisito violado** (MODIFIED), enquanto em `apps/api`
+  acrescentou requisito (ADDED). Misturar as duas formas num carve só foi o
+  segundo motivo de deixar `apps/inbox` de fora.
+
+  **Herdar os guardas prontos:** o par comportamental + asserção determinística
+  sobre o SQL emitido (convenção 15, quinta forma) já existe em
+  `apps/api/tests/.../Support/EmittedSqlCapture.cs` — o equivalente em
+  `apps/inbox` é cópia adaptada, não desenho novo. Gatilho: imediato, change
+  própria.
+
+- **`ContactSessionResolver.cs:53` NÃO é defeito de ordenação** — registrado como
+  **não-achado** para a próxima varredura não o levantar de novo. Ele aparece em
+  qualquer busca por `OrderBy` sem `ThenBy`
+  (`OrderByDescending(StartedAt).FirstOrDefault()`) e parece o caso mais grave de
+  todos, porque a consequência seria semântica: qual `Session` é retomada. Mas
+  `apps/inbox` tem índice único **parcial** em
+  `sessions."ContactId" WHERE "ClosedAt" IS NULL` (`AppDbContext.cs:100-102`) e o
+  `Where` da consulta é exatamente `ClosedAt == null` — no máximo uma linha casa,
+  e não há empate possível. O `OrderByDescending` é defensivo e inerte.
+
+- **`A2A/PostgresTaskStore.cs:77` em `apps/api` ordena sem desempate, e com
+  `.Take()`** — `OrderByDescending(StatusTimestamp)` seguido de
+  `.Take(request.PageSize ?? 50)`. Paginação sobre ordem instável pode **repetir
+  ou omitir** linhas, que é pior que ordem trocada, e por isso vale mais que os
+  oito sites corrigidos apesar de estar fora do escopo deles. Fora de escopo
+  porque o próprio arquivo já registra, no comentário de `ListTasksAsync`, que a
+  consulta *"não tem nenhum consumidor em `apps/api` hoje"*. Gatilho: **o
+  primeiro consumidor de `ListTasksAsync` em `apps/api`** — o mesmo gatilho da
+  lacuna de filtro por `AgentId` já anotada ali; as duas se corrigem juntas.
+
+- **Um terceiro comparador de ordem, em `apps/frontend`** —
+  `features/agents/utils/knowledgeBaseRows.ts:26-27` reordena a lista no cliente
+  com `name.localeCompare(...)` e `id.localeCompare(...)`, enquanto
+  `agent-knowledge-binding-ui:62-66` diz que a interface *"reproduz a ordem que a
+  API devolve"*. Reproduzir e recalcular com um terceiro comparador não são a
+  mesma coisa, e a spec descreve a primeira. Depois de
+  `ordenacao-desempate-listas-vinculo` a API passou a ter **uma ordem só** (a da
+  collation do banco, nas duas rotas), o que torna a reordenação no cliente
+  desnecessária **e** o único ponto restante onde a ordem pode divergir do que a
+  spec promete. Gatilho: imediato — e é change de `apps/frontend`, nunca de
+  `apps/api` (convenção 12 na direção inversa).
+
+- **A causa dos 39 `Purpose` placeholder está na instrução do skill de
+  sincronização, não em esquecimento de quem sincroniza** — achado em 09/09/2026,
+  ao exercer pela primeira vez o gatilho de `Purpose` fixado no mesmo dia. O
+  passo 4d de `.claude/skills/openspec-sync-specs/SKILL.md` diz, textualmente:
+
+  > **Create new main spec** if capability doesn't exist yet:
+  > - Create `openspec/specs/<capability>/spec.md`
+  > - **Add Purpose section (can be brief, mark as TBD)**
+  > - Add Requirements section with the ADDED requirements
+
+  Ou seja: o skill **manda** escrever o placeholder, e **não manda procurar um
+  `Purpose` na delta**. Quem seguir a instrução ao pé da letra produz
+  `TBD - defined by change <nome>` — que é exatamente o texto dos 39. Não foram
+  39 esquecimentos; foram 39 execuções corretas de uma instrução errada.
+
+  **O que aconteceu nesta change:** o arquivo vivo
+  `openspec/specs/api-response-ordering/spec.md` ficou com o `Purpose` real,
+  porque a delta o trazia e quem sincronizou leu a delta em vez de seguir o 4d.
+  E `agent-knowledge-binding` (delta `MODIFIED`) teve o `Purpose` preservado —
+  diff do arquivo vivo contra o snapshot de antes é **puramente aditivo**, 0
+  linhas removidas e 25 acrescentadas. Ou seja, **nenhum dos dois modos de falha
+  temidos ocorreu.** Mas o primeiro não ocorreu por sorte de quem executou, não
+  porque o mecanismo o impeça.
+
+  **Por que isso muda a formulação do gatilho.** O gatilho de 09/09/2026 foi
+  fixado assumindo que *escrever o `Purpose` na delta bastaria*. Não basta: a
+  delta pode trazer o `Purpose` e a sincronização escrever `TBD` por cima, se
+  quem sincroniza seguir o skill literalmente. O gatilho precisa de duas metades:
+
+  1. **escrever o `Purpose` real na delta da capability nova** (a metade já
+     fixada), e
+  2. **conferir o arquivo vivo depois da sincronização** — `## Purpose` real, sem
+     `TBD - defined by change`. `openspec validate --strict` **não pega isso**:
+     placeholder é texto válido, e as 44 specs passam com 39 deles.
+
+  **CORRIGIDO NA FERRAMENTA em 09/09/2026.** `.claude/skills/openspec-sync-specs/SKILL.md`
+  passou a mandar usar o `## Purpose` da delta quando houver, e só cair no
+  placeholder quando a delta não trouxer nenhum — aí avisando no resumo que
+  aquela capability ficou devendo um. Não foi uma linha só; a leitura do skill
+  inteiro achou mais três coisas, e o porquê de cada uma está abaixo.
+
+  **Confirmação de que o skill era o único produtor dos 39:** o texto exato dos
+  39 é `TBD - defined by change ...`, e essa cadeia **não existe** no CLI nem em
+  `.claude/`. O CLI tem um template próprio, com redação diferente
+  (`TBD - created by archiving change ...`, em
+  `dist/core/specs-apply.js`), e **nenhuma** das 44 specs usa essa redação. Ou
+  seja: os 39 foram escritos à mão por agentes seguindo o "mark as TBD" do 4d,
+  inventando a redação — e o caminho do CLI nunca disparou aqui. Corrigir o 4d
+  para de fato para o crescimento.
+
+  **O que mais mudou no skill, além do 4d:**
+
+  1. **Cláusula de `## Purpose` no passo 4c (capability existente).** O skill não
+     tinha *nenhuma* noção de que uma delta pode trazer `## Purpose` — o passo 4
+     só falava de requisitos. Sem isso, uma delta `MODIFIED` que traga um
+     `Purpose` real para substituir um placeholder seria simplesmente ignorada, o
+     que **bloquearia o consumo incremental do estoque de 39** — exatamente o
+     plano que o gatilho deste item depende. A cláusula diz: placeholder é
+     substituído pelo `Purpose` da delta; `Purpose` real nunca é sobrescrito por
+     placeholder.
+  2. **Passo de verificação novo (passo 5).** O skill terminava em "Show summary",
+     que relata a *intenção*, não o que foi escrito. Agora manda reler os
+     arquivos vivos e conferir: sem `TBD` onde a delta trazia `Purpose`, sem
+     bloco de requisito duplicado, sem resíduo de `## ADDED/MODIFIED Requirements`,
+     e diff aditivo para delta `MODIFIED`. São as quatro conferências que
+     `ordenacao-desempate-listas-vinculo` fez à mão. `validate --strict` continua
+     sendo necessário e não suficiente — as 44 specs passam com 39 placeholders.
+  3. **Segundo produtor registrado no próprio skill.** O CLI cria spec viva
+     sozinho quando uma change é arquivada **sem** sync prévio, e o fluxo de
+     archive oferece "Archive without syncing". O skill não pode corrigir o CLI,
+     então registra a redação alternativa para quem for grepar o estoque, e a
+     recomendação de sincronizar antes de arquivar.
+
+  **A resposta à suspeita sobre `MODIFIED`:** conferido, e é o contrário do
+  temido. O passo 4c opera só sobre requisitos ("Find the requirement in main
+  spec") e nunca sobre a seção de `Purpose`, e o guardrail "Preserve existing
+  content not mentioned in delta" cobre o resto. O `Purpose` de
+  `agent-knowledge-binding` ter sobrevivido é **propriedade da instrução**, não
+  do caso — ao contrário do `Purpose` da capability nova, que sobreviveu por
+  sorte de execução.
+
+  **O gatilho depois da correção.** A metade (1) — escrever o `Purpose` real na
+  delta da capability nova — continua sendo do autor da change, porque só ele
+  sabe responder. A metade (2) — conferir o arquivo vivo depois do sync — deixou
+  de ser tarefa de quem lembra e virou passo do skill. **O estoque de 39 não foi
+  tocado**, de propósito: 39 escritos de uma vez por quem não tocou o código de
+  nenhum produz prosa genérica, que é pior que o placeholder porque parece
+  preenchido. Segue consumido incrementalmente, uma capability por change que a
+  toque — e agora o passo 4c garante que essa substituição de fato acontece.
 
 ### Primeiro deploy em produção (checklist)
 

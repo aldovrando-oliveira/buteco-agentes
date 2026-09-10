@@ -19,7 +19,11 @@ public static class AgentMcpServerLookup
             .AsNoTracking()
             .Where(binding => binding.AgentId == agentId)
             .Join(dbContext.McpServers, binding => binding.McpServerId, mcpServer => mcpServer.Id, (binding, mcpServer) => new { binding.AllowedTools, McpServer = mcpServer })
+            // O ThenBy NÃO é redundante: nome de servidor MCP não é único —
+            // mesma razão registrada em AgentDelegationLookup e em
+            // AgentKnowledgeBaseLookup (api-response-ordering).
             .OrderBy(joined => joined.McpServer.Name)
+            .ThenBy(joined => joined.McpServer.Id)
             .Select(joined => McpServerSummaryResponse.FromEntity(joined.McpServer, joined.AllowedTools))
             .ToListAsync(cancellationToken);
     }

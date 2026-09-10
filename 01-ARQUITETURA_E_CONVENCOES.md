@@ -419,6 +419,63 @@ de propor algo nesta base:
    qualquer comportamento não verificado. Vale também para nomes de
    header, campos de payload e rotas de sistemas externos citados dentro
    de spec: requisito errado sobrevive ao archive.
+
+   **E o alvo mais perigoso não é o SDK de terceiro — é o próprio
+   repositório descrito de memória dentro de um item aberto.** Um item de
+   `02-HISTORICO_E_STATUS.md` afirmava que "o catálogo de MCP e o de
+   agentes ordenam por nome", e pedia decidir se a listagem de bases, que
+   ordena por `CreatedAt`, era acidente a corrigir. Lido no código, os
+   **quatro** catálogos de `apps/api` ordenam por `CreatedAt` e quem ordena
+   por nome são as consultas de vínculo: não havia divergência, não havia
+   acidente, e a decisão pedida não existia. A premissa saiu do item para
+   o prompt da change seguinte e voltou como enunciado — item aberto é
+   lido depois, por quem não tem o contexto de quem o escreveu, e é aí que
+   ele deixa de ser anotação e vira instrução. O dano é o mesmo das outras
+   formas desta convenção, e chega mais longe: decisão tomada contra uma
+   realidade que não existe.
+
+   **Conferir referência não é conferir afirmação**, e é a parte que
+   engana. O mesmo item já tinha passado por uma conferência que corrigiu
+   as linhas defasadas (`:34`/`:51` viraram `:36`/`:53`) — saiu dela com as
+   linhas certas **e** a frase sobre os catálogos errada, agora com a
+   autoridade de ter sido revisado. Linha, caminho de arquivo e nome de
+   símbolo se conferem rápido e dão sensação de item verificado; a frase
+   em prosa que descreve *o que o código faz* é a que decide a próxima
+   change, e é a que ninguém abre o arquivo para checar.
+
+   **E o alvo se estende a comportamento de infraestrutura que o código
+   pressupõe sem dizer.** Duas medições de `ordenacao-desempate-listas-vinculo`
+   valem como precedente, e uma delas é resultado **negativo**:
+
+   - **A collation do PostgreSQL e o comparador de `string` do .NET discordam.**
+     Verificado nos dois runtimes reais (`postgres:18` com
+     `datcollate=en_US.utf8`/`datlocprovider=c`; .NET 10 com ICU): para
+     `suporte-alfa` × `Suporte Alfa` a ordem sai invertida, e igual nas três
+     culturas testadas. Ordenar "por nome" em dois lugares com dois comparadores
+     não é a mesma ordenação, e nenhum teste que desserialize a resposta enxerga
+     isso — só o que compara as duas superfícies com um par medido.
+   - **A crença de que `Guid.CompareTo` compara o primeiro campo com sinal, e
+     portanto discordaria do `uuid` do PostgreSQL, é FALSA no .NET 10.** Medido:
+     100.000 pares aleatórios e os casos de fronteira, zero discordâncias,
+     conferido contra um PostgreSQL real. Registrar o resultado negativo importa
+     tanto quanto o positivo — sem essa medição, o desempate por `Id` nas duas
+     superfícies teria sido uma aposta, e "verificar" teria custado o mesmo que
+     supor errado.
+
+   **E o alvo inclui a própria ferramenta de processo.** Os 39 `Purpose`
+   placeholder das specs vivas não foram 39 esquecimentos: o passo 4d de
+   `.claude/skills/openspec-sync-specs/SKILL.md` **manda** escrever
+   `Purpose ... (can be brief, mark as TBD)` e não manda procurar um `Purpose`
+   na delta. Foram 39 execuções corretas de uma instrução errada. Antes de
+   atribuir um padrão repetido de descuido a quem executa, ler a instrução que
+   essa pessoa estava seguindo.
+
+   Na prática: item aberto que descreve comportamento de código carrega o
+   arquivo e a linha de onde a afirmação foi **lida**, ou é escrito como
+   suspeita explícita ("a conferir") em vez de fato. E toda change que
+   consome um item aberto reconfere as afirmações dele contra a árvore
+   antes de decidir qualquer coisa — a verificação da convenção 6 vale
+   para o registro interno, não só para dependência externa.
 7. **Frontend**: página busca dados e repassa como prop; componente
    apresentacional nunca importa hook de query/mutation diretamente.
    Cada feature mantém seu próprio `request<T>`/`ApiError` fino — sem
@@ -545,6 +602,31 @@ de propor algo nesta base:
     enquanto a correção é global no ponto que une os dois conjuntos. Ao escrever
     o guarda, checar não só que ele reprova, mas que ele reprova **no
     componente que a correção vai tocar**.
+    **E a quinta forma, achada em `ordenacao-desempate-listas-vinculo`: guarda
+    cujo critério é uma ordem que o banco às vezes já produz sozinho.** O guarda
+    de desempate afirma "ordem crescente de `id`" — e, sem o `ThenBy`, o
+    PostgreSQL **às vezes já devolve nessa ordem**, porque um index scan pela
+    chave primária emite exatamente assim. *"Ordenado por `id` porque o `ThenBy`
+    existe"* e *"ordenado por `id` porque o plano calhou"* são a mesma
+    observação, e nenhum arranjo de teste as separa. Medido nos dois sentidos: o
+    guarda novo de `mcpServers` passou com o defeito presente em **1 de 3**
+    execuções da sua classe (e reprovou 5/5 rodando isolado, que é o jeito
+    enganoso de "conferir"), enquanto o guarda entregue pela etapa 3 reprovou
+    **4/4** na sua forma de consulta. Ou seja: a confiabilidade depende do plano,
+    que varia por consulta e por povoamento da tabela, então **"reprovou quando
+    eu conferi" não é propriedade durável** — e conferir o guarda isolado é
+    justamente o que esconde o problema.
+
+    A saída não é abandonar o guarda comportamental, que é a expressão do
+    requisito: é **pareá-lo com uma asserção determinística sobre o artefato que
+    a correção produz**. Ali o artefato é o SQL emitido — capturado do log de
+    `Executed DbCommand` do EF Core durante a requisição real, nunca uma consulta
+    remontada no teste (convenção 11) —, e a asserção de que o `ORDER BY` termina
+    no desempate reprova em 100% das execuções. A régua geral: quando o efeito
+    observável do defeito **coincide às vezes com o efeito do acerto**, o guarda
+    comportamental sozinho é insuficiente por construção, e o par determinístico
+    é obrigatório.
+
 16. **Papel visual que troca de ponta da escala precisa de variável
     declarada por esquema** — `gray[n]` é claro nos dois esquemas e
     `dark[n]` é escuro nos dois, então um tom fixo usado como fundo de

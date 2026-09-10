@@ -20,7 +20,14 @@ public static class AgentDelegationLookup
             .AsNoTracking()
             .Where(delegation => delegation.SourceAgentId == sourceAgentId)
             .Join(dbContext.Agents, delegation => delegation.TargetAgentId, agent => agent.Id, (delegation, agent) => agent)
+            // O ThenBy NÃO é redundante: nome de agente não é único — o
+            // AppDbContext não tem índice único de nome e nenhum handler de
+            // criação valida duplicata —, então OrderBy(Name) sozinho deixa a
+            // ordem entre homônimos a cargo do plano do Postgres, e a mesma
+            // requisição pode responder em ordens diferentes sem nada ter
+            // mudado no cadastro (api-response-ordering).
             .OrderBy(agent => agent.Name)
+            .ThenBy(agent => agent.Id)
             .Select(agent => AgentSummaryResponse.FromEntity(agent))
             .ToListAsync(cancellationToken);
     }

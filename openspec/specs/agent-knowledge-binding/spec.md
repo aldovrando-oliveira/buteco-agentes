@@ -139,6 +139,19 @@ para nomes iguais, **com desempate estável por identificador**. A chave e os
 nomes dos campos SHALL ser verificados sobre o texto do JSON da resposta, não
 por desserialização para o mesmo tipo.
 
+A ordenação SHALL ser produzida pela consulta ao banco, nunca por comparação em
+memória no processo de `apps/api`, **tanto na consulta por id quanto na
+listagem** — o comparador canônico de "ordem de nome" é o da collation do banco
+de dados. Sem isso a garantia de "a mesma ordem nas duas superfícies", que este
+requisito sempre pretendeu, não se sustenta: a collation do PostgreSQL e o
+comparador de `string` do .NET discordam para nomes que diferem em caixa e
+pontuação, e o comparador do .NET depende ainda da cultura do processo, que este
+repositório não fixa. Com dois comparadores, as duas rotas podem devolver as
+mesmas bases em ordens diferentes **sem nenhum empate de nome envolvido** — o
+que o desempate por identificador não alcança, porque a divergência está no
+critério primário. Ver `api-response-ordering`, que é dona dessa garantia para
+todas as listas de `apps/api`.
+
 O desempate é requisito, não detalhe de implementação: nome de base de
 conhecimento **não é único** (`knowledge-base-catalog`, cenário "Nome duplicado
 é permitido"), então ordenar só por nome deixa a ordem entre homônimas a cargo
@@ -153,6 +166,11 @@ A asserção que vale é sobre a **ordem crescente de identificador**, e o arran
 precisa criar as bases homônimas em ordem de inserção **oposta** à ordem de
 `id`; sem isso, a ordem "natural" do banco coincide com a esperada e o teste
 fica verde com e sem o desempate.
+
+O guarda de "mesma ordem nas duas superfícies" da ordenação por nome é a única
+exceção legítima à regra acima, e só porque não afirma sobre não-determinação:
+ele compara **dois comparadores conhecidos e medidos**, com ordem esperada fixa
+e verificada nos dois runtimes reais.
 
 #### Scenario: Chave e campos aparecem no JSON da resposta
 - **WHEN** um cliente consulta um agente com pelo menos uma base vinculada e o
@@ -171,6 +189,13 @@ fica verde com e sem o desempate.
 - **THEN** a API retorna essas bases em ordem **crescente de `id`**, tanto na
   consulta por id quanto na listagem — nunca na ordem de inserção nem em ordem
   indefinida pelo banco
+
+#### Scenario: Nomes que as duas collations ordenam diferente saem na mesma ordem nas duas rotas
+- **WHEN** um agente tem duas bases vinculadas cujos nomes diferem entre si
+  apenas em caixa e pontuação, de forma que a collation do banco e o comparador
+  de `string` do .NET as ordenem em ordens **opostas**
+- **THEN** `GET /agents/{id}` e `GET /agents` devolvem `knowledgeBases` na mesma
+  ordem, e essa ordem é a da collation do banco
 
 ### Requirement: Autenticação da rota de vínculo de bases de conhecimento
 O sistema SHALL exigir autenticação de operador na rota de substituição do

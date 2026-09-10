@@ -202,6 +202,129 @@ public class AgentDelegationEndpointsTests(ApiFactoryFixture factory) : IClassFi
         Assert.Empty(listed.DelegatesTo);
     }
 
+    // --- Ordenação ---------------------------------------------------------
+
+    [Fact]
+    public async Task DelegatesTo_AreOrderedByName()
+    {
+        var source = await CreateAgentAsync("Agente M");
+        // Vinculados fora de ordem alfabética de propósito.
+        var zulu = await CreateAgentAsync("Agente M Zulu");
+        var alfa = await CreateAgentAsync("Agente M Alfa");
+        var mike = await CreateAgentAsync("Agente M Mike");
+
+        await PutDelegationsAsync(source.Id, [zulu.Id, mike.Id, alfa.Id]);
+
+        var fetched = await GetAgentAsync(source.Id);
+        Assert.Equal(
+            ["Agente M Alfa", "Agente M Mike", "Agente M Zulu"],
+            fetched.DelegatesTo.Select(target => target.Name));
+
+        // Par "sem empate" (convenção 5): nomes todos distintos, a ordem é a do
+        // critério primário e o desempate não a altera.
+        var listed = await GetListedAgentAsync(source.Id);
+        Assert.Equal(
+            ["Agente M Alfa", "Agente M Mike", "Agente M Zulu"],
+            listed.DelegatesTo.Select(target => target.Name));
+    }
+
+    // Guarda do desempate (api-response-ordering). Separado do teste acima de
+    // propósito: remover o `.ThenBy(agent => agent.Id)` precisa reprovar ESTE e
+    // não aquele — um guarda que reprova os dois está afirmando a garantia no
+    // componente errado (convenção 15, segunda metade).
+    //
+    // A asserção é sobre a ordem CRESCENTE DE ID, e não sobre "duas consultas
+    // devolvem a mesma ordem": esta segunda forma é asserção sobre
+    // não-determinação e passa com o defeito presente sempre que o plano do
+    // Postgres calhar de ser estável.
+    [Fact]
+    public async Task DelegatesToWithEqualNames_AreTieBrokenByIdDeterministically()
+    {
+        const string SharedName = "Agente N Homônimo";
+
+        var source = await CreateAgentAsync("Agente N");
+        var first = await CreateAgentAsync(SharedName);
+        var second = await CreateAgentAsync(SharedName);
+        var third = await CreateAgentAsync(SharedName);
+
+        var byId = new[] { first.Id, second.Id, third.Id }.Order().ToList();
+
+        // Vinculados em ordem de inserção deliberadamente oposta à ordem de id,
+        // para que a ordem "natural" do banco não coincida por acidente com a
+        // esperada.
+        await PutDelegationsAsync(source.Id, byId.AsEnumerable().Reverse().ToList());
+
+        var fetched = await GetAgentAsync(source.Id);
+        Assert.Equal(byId, fetched.DelegatesTo.Select(target => target.Id));
+
+        var listed = await GetListedAgentAsync(source.Id);
+        Assert.Equal(byId, listed.DelegatesTo.Select(target => target.Id));
+    }
+
+    // Metade determinística do guarda de desempate (design.md, D6 "Correção
+    // feita durante a implementação"). O guarda comportamental acima reprova só
+    // probabilisticamente: sem o `ThenBy`, o Postgres às vezes já devolve em
+    // ordem de id sozinho — um index scan pela chave primária emite exatamente
+    // assim, e "ordenado por id porque o ThenBy existe" é indistinguível de
+    // "ordenado por id porque o plano calhou".
+    //
+    // Esta asserção é sobre o SQL que a consulta DE PRODUÇÃO emitiu na
+    // requisição real, capturado do log do EF Core — não uma consulta remontada
+    // no teste, que passaria igual com o comportamento certo e com o errado
+    // (convenção 11). Reprova no instante em que o `ThenBy` sai, sempre.
+    [Fact]
+    public async Task DelegatesToQuery_EmitsTieBreakAsLastOrderByTerm()
+    {
+        var source = await CreateAgentAsync("Agente O");
+        var target = await CreateAgentAsync("Agente O Target");
+        await PutDelegationsAsync(source.Id, [target.Id]);
+
+        var commands = await factory.SqlCapture.CaptureAsync(async () =>
+        {
+            (await _client.GetAsync($"/agents/{source.Id}")).EnsureSuccessStatusCode();
+        });
+
+        var query = EmittedSqlCapture.SingleCommandContaining(commands, "FROM agent_delegations", "ORDER BY");
+        EmittedSqlCapture.AssertOrderByEndsWithTieBreak(query);
+    }
+
+    // Guarda de R2 para delegatesTo — ver o comentário completo em
+    // AgentMcpBindingEndpointsTests.McpServers_OrderedByDatabaseCollation_...
+    [Fact]
+    public async Task DelegatesTo_OrderedByDatabaseCollation_MatchesAcrossBothSurfaces()
+    {
+        var source = await CreateAgentAsync("Agente P-Collation");
+        var upper = await CreateAgentAsync("Agente Suporte Alfa");
+        var lower = await CreateAgentAsync("agente-suporte-alfa");
+
+        await PutDelegationsAsync(source.Id, [upper.Id, lower.Id]);
+
+        var fetched = await GetAgentAsync(source.Id);
+        var listed = await GetListedAgentAsync(source.Id);
+
+        Assert.Equal(
+            ["agente-suporte-alfa", "Agente Suporte Alfa"],
+            fetched.DelegatesTo.Select(target => target.Name));
+        Assert.Equal(
+            fetched.DelegatesTo.Select(target => target.Id),
+            listed.DelegatesTo.Select(target => target.Id));
+    }
+
+    private async Task<AgentResponse> GetAgentAsync(Guid agentId)
+    {
+        var response = await _client.GetAsync($"/agents/{agentId}");
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<AgentResponse>())!;
+    }
+
+    private async Task<AgentResponse> GetListedAgentAsync(Guid agentId)
+    {
+        var response = await _client.GetAsync("/agents");
+        response.EnsureSuccessStatusCode();
+        var agents = await response.Content.ReadFromJsonAsync<List<AgentResponse>>();
+        return agents!.Single(agent => agent.Id == agentId);
+    }
+
     private Task<HttpResponseMessage> PutDelegationsAsync(Guid agentId, IReadOnlyList<Guid> targetAgentIds) =>
         _client.PutAsJsonAsync($"/agents/{agentId}/delegations", new ReplaceAgentDelegationsRequest(targetAgentIds));
 
