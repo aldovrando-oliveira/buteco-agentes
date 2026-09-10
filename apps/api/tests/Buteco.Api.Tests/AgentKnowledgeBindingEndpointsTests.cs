@@ -374,6 +374,31 @@ public class AgentKnowledgeBindingEndpointsTests(ApiFactoryFixture factory) : IC
         Assert.Equal(byId, listed.KnowledgeBases.Select(kb => kb.Id));
     }
 
+    // Guarda de R2 para knowledgeBases — ver o comentário completo em
+    // AgentMcpBindingEndpointsTests.McpServers_OrderedByDatabaseCollation_...
+    // Este conjunto já tinha o desempate por id desde a etapa 3, e ainda assim
+    // divergia entre as duas rotas: o desempate não alcança a divergência de
+    // comparador, que está no critério primário.
+    [Fact]
+    public async Task KnowledgeBases_OrderedByDatabaseCollation_MatchesAcrossBothSurfaces()
+    {
+        var agent = await CreateAgentAsync("Agente KB-T");
+        var upper = await _client.CreateBaseAsync("Base Suporte Alfa");
+        var lower = await _client.CreateBaseAsync("base-suporte-alfa");
+
+        await PutKnowledgeBasesAsync(agent.Id, [upper.Id, lower.Id]);
+
+        var fetched = await GetAgentAsync(agent.Id);
+        var listed = await GetListedAgentAsync(agent.Id);
+
+        Assert.Equal(
+            ["base-suporte-alfa", "Base Suporte Alfa"],
+            fetched.KnowledgeBases.Select(kb => kb.Name));
+        Assert.Equal(
+            fetched.KnowledgeBases.Select(kb => kb.Id),
+            listed.KnowledgeBases.Select(kb => kb.Id));
+    }
+
     // --- Helpers ------------------------------------------------------------
 
     private Task<HttpResponseMessage> PutKnowledgeBasesAsync(Guid agentId, IReadOnlyList<Guid> knowledgeBaseIds) =>

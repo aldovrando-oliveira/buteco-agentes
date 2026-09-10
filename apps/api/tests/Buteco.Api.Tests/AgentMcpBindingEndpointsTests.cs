@@ -192,6 +192,136 @@ public class AgentMcpBindingEndpointsTests(ApiFactoryFixture factory) : IClassFi
         Assert.Empty(listed.McpServers);
     }
 
+    // --- Ordenação ---------------------------------------------------------
+
+    [Fact]
+    public async Task McpServers_AreOrderedByName()
+    {
+        var agent = await CreateAgentAsync("Agente K");
+        // Vinculados fora de ordem alfabética de propósito.
+        var zulu = await CreateMcpServerAsync("MCP K Zulu");
+        var alfa = await CreateMcpServerAsync("MCP K Alfa");
+        var mike = await CreateMcpServerAsync("MCP K Mike");
+
+        await PutMcpServersAsync(agent.Id, [zulu.Id, mike.Id, alfa.Id]);
+
+        var fetched = await GetAgentAsync(agent.Id);
+        Assert.Equal(
+            ["MCP K Alfa", "MCP K Mike", "MCP K Zulu"],
+            fetched.McpServers.Select(mcpServer => mcpServer.Name));
+
+        // Par "sem empate" (convenção 5): nomes todos distintos, a ordem é a do
+        // critério primário e o desempate não a altera.
+        var listed = await GetListedAgentAsync(agent.Id);
+        Assert.Equal(
+            ["MCP K Alfa", "MCP K Mike", "MCP K Zulu"],
+            listed.McpServers.Select(mcpServer => mcpServer.Name));
+    }
+
+    // Guarda do desempate (api-response-ordering). Separado do teste acima de
+    // propósito: remover o `.ThenBy(joined => joined.McpServer.Id)` precisa
+    // reprovar ESTE e não aquele — um guarda que reprova os dois está afirmando
+    // a garantia no componente errado (convenção 15, segunda metade).
+    //
+    // A asserção é sobre a ordem CRESCENTE DE ID, e não sobre "duas consultas
+    // devolvem a mesma ordem": esta segunda forma é asserção sobre
+    // não-determinação e passa com o defeito presente sempre que o plano do
+    // Postgres calhar de ser estável.
+    [Fact]
+    public async Task McpServersWithEqualNames_AreTieBrokenByIdDeterministically()
+    {
+        const string SharedName = "MCP L Homônimo";
+
+        var agent = await CreateAgentAsync("Agente L-Ordem");
+        var first = await CreateMcpServerAsync(SharedName);
+        var second = await CreateMcpServerAsync(SharedName);
+        var third = await CreateMcpServerAsync(SharedName);
+
+        var byId = new[] { first.Id, second.Id, third.Id }.Order().ToList();
+
+        // Vinculados em ordem de inserção deliberadamente oposta à ordem de id,
+        // para que a ordem "natural" do banco não coincida por acidente com a
+        // esperada.
+        await PutMcpServersAsync(agent.Id, byId.AsEnumerable().Reverse().ToList());
+
+        var fetched = await GetAgentAsync(agent.Id);
+        Assert.Equal(byId, fetched.McpServers.Select(mcpServer => mcpServer.Id));
+
+        var listed = await GetListedAgentAsync(agent.Id);
+        Assert.Equal(byId, listed.McpServers.Select(mcpServer => mcpServer.Id));
+    }
+
+    // Metade determinística do guarda de desempate — ver o comentário gêmeo em
+    // AgentDelegationEndpointsTests. Este site é o que mostrou o problema: o
+    // guarda comportamental acima passou com o defeito presente em 1 de 3
+    // execuções desta classe.
+    [Fact]
+    public async Task McpServersQuery_EmitsTieBreakAsLastOrderByTerm()
+    {
+        var agent = await CreateAgentAsync("Agente M-Ordem");
+        var mcpServer = await CreateMcpServerAsync("MCP M Único");
+        await PutMcpServersAsync(agent.Id, [mcpServer.Id]);
+
+        var commands = await factory.SqlCapture.CaptureAsync(async () =>
+        {
+            (await _client.GetAsync($"/agents/{agent.Id}")).EnsureSuccessStatusCode();
+        });
+
+        var query = EmittedSqlCapture.SingleCommandContaining(commands, "FROM agent_mcp_servers", "ORDER BY");
+        EmittedSqlCapture.AssertOrderByEndsWithTieBreak(query);
+    }
+
+    // Guarda de R2 — divergência de COMPARADOR, não de desempate.
+    //
+    // GET /agents/{id} ordena em SQL (collation do Postgres) e GET /agents
+    // ordenava em memória (comparador de string do .NET/ICU). Os dois discordam,
+    // medido nos dois runtimes reais (design.md, Verificação 3):
+    //
+    //   postgres:18, datcollate=en_US.utf8, datlocprovider=c -> "mcp-suporte-alfa" antes de "MCP Suporte Alfa"
+    //   .NET 10 / ICU (Invariant, pt-BR e en-US, os três iguais) -> o inverso
+    //
+    // Ou seja, sem empate de nome nenhum, as duas rotas podiam devolver o mesmo
+    // agente em ordens diferentes. O ThenBy(Id) não alcança isso, porque a
+    // divergência está no critério PRIMÁRIO. A correção é ordenar na consulta
+    // (design.md, D3), e este guarda afirma a ordem esperada CONCRETAMENTE — a
+    // do banco —, não só "as duas iguais": se as collations um dia convergirem
+    // ele continua correto, e se divergirem de outro jeito ele reprova e obriga
+    // a reconferir (R3).
+    [Fact]
+    public async Task McpServers_OrderedByDatabaseCollation_MatchesAcrossBothSurfaces()
+    {
+        var agent = await CreateAgentAsync("Agente N-Collation");
+        var upper = await CreateMcpServerAsync("MCP Suporte Alfa");
+        var lower = await CreateMcpServerAsync("mcp-suporte-alfa");
+
+        await PutMcpServersAsync(agent.Id, [upper.Id, lower.Id]);
+
+        var fetched = await GetAgentAsync(agent.Id);
+        var listed = await GetListedAgentAsync(agent.Id);
+
+        Assert.Equal(
+            ["mcp-suporte-alfa", "MCP Suporte Alfa"],
+            fetched.McpServers.Select(mcpServer => mcpServer.Name));
+        Assert.Equal(
+            fetched.McpServers.Select(mcpServer => mcpServer.Id),
+            listed.McpServers.Select(mcpServer => mcpServer.Id));
+    }
+
+    private async Task<AgentResponse> GetAgentAsync(Guid agentId)
+    {
+        var response = await _client.GetAsync($"/agents/{agentId}");
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<AgentResponse>())!;
+    }
+
+    private async Task<AgentResponse> GetListedAgentAsync(Guid agentId)
+    {
+        var response = await _client.GetAsync("/agents");
+        response.EnsureSuccessStatusCode();
+        var agents = await response.Content.ReadFromJsonAsync<List<AgentResponse>>();
+        return agents!.Single(agent => agent.Id == agentId);
+    }
+
     // allowedTools vazio em todos os vínculos — estes testes cobrem o
     // gerenciamento do vínculo em si (herdados da change
     // backend-mcp-catalogo-vinculo), não a seleção de tools. allowedTools

@@ -13,6 +13,43 @@ public class KnowledgeDocumentCatalogTests(ApiFactoryFixture factory) : IClassFi
 {
     private readonly HttpClient _client = factory.CreateClient();
 
+    // --- Ordenação (api-response-ordering) ---------------------------------
+
+    [Fact]
+    public async Task KnowledgeDocumentsWithEqualCreatedAt_AreTieBrokenById()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Empate Docs");
+        var first = await _client.CreateDocumentAsync(knowledgeBase.Id, "Doc Empate 1");
+        var second = await _client.CreateDocumentAsync(knowledgeBase.Id, "Doc Empate 2");
+        var third = await _client.CreateDocumentAsync(knowledgeBase.Id, "Doc Empate 3");
+
+        var tied = new[] { first.Id, second.Id, third.Id };
+        await CreatedAtTie.ForceAsync(factory.Services, "knowledge_documents", tied);
+
+        var response = await _client.GetAsync($"/knowledge-bases/{knowledgeBase.Id}/documents");
+        response.EnsureSuccessStatusCode();
+        var listed = (await response.Content.ReadFromJsonAsync<List<KnowledgeDocumentSummaryResponse>>())!;
+
+        var observed = listed.Where(d => tied.Contains(d.Id)).Select(d => d.Id).ToList();
+        Assert.Equal(tied.Order().ToList(), observed);
+    }
+
+    // Metade determinística (design.md, D6).
+    [Fact]
+    public async Task KnowledgeDocumentCatalogQuery_EmitsTieBreakAsLastOrderByTerm()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base SQL Docs");
+        await _client.CreateDocumentAsync(knowledgeBase.Id, "Doc SQL");
+
+        var commands = await factory.SqlCapture.CaptureAsync(async () =>
+        {
+            (await _client.GetAsync($"/knowledge-bases/{knowledgeBase.Id}/documents")).EnsureSuccessStatusCode();
+        });
+
+        var query = EmittedSqlCapture.SingleCommandContaining(commands, "FROM knowledge_documents", "ORDER BY");
+        EmittedSqlCapture.AssertOrderByEndsWithTieBreak(query);
+    }
+
     [Fact]
     public async Task CreateDocument_WithMarkdown_ReturnsPendingDocument()
     {

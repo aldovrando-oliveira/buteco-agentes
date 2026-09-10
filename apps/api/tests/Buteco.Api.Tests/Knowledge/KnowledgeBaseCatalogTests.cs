@@ -17,6 +17,46 @@ public class KnowledgeBaseCatalogTests(ApiFactoryFixture factory) : IClassFixtur
         return (await response.Content.ReadFromJsonAsync<KnowledgeBaseResponse>())!;
     }
 
+    // --- Ordenação (api-response-ordering) ---------------------------------
+
+    // Guarda comportamental do desempate do catálogo. O critério primário
+    // continua sendo CreatedAt — catálogo em ordem de cadastro é o padrão dos
+    // quatro catálogos de apps/api (design.md, D1), e esta change não o troca.
+    [Fact]
+    public async Task KnowledgeBasesWithEqualCreatedAt_AreTieBrokenById()
+    {
+        var first = await CreateBaseAsync("Base Empate KB-1");
+        var second = await CreateBaseAsync("Base Empate KB-2");
+        var third = await CreateBaseAsync("Base Empate KB-3");
+
+        var tied = new[] { first.Id, second.Id, third.Id };
+        await CreatedAtTie.ForceAsync(factory.Services, "knowledge_bases", tied);
+
+        var response = await _client.GetAsync("/knowledge-bases");
+        response.EnsureSuccessStatusCode();
+        var listed = (await response.Content.ReadFromJsonAsync<List<KnowledgeBaseResponse>>())!;
+
+        var observed = listed.Where(kb => tied.Contains(kb.Id)).Select(kb => kb.Id).ToList();
+        Assert.Equal(tied.Order().ToList(), observed);
+    }
+
+    // Metade determinística (design.md, D6): o guarda acima reprova só
+    // probabilisticamente, porque sem o ThenBy o Postgres às vezes já devolve em
+    // ordem de id sozinho. Esta asserção é sobre o SQL da consulta de produção.
+    [Fact]
+    public async Task KnowledgeBaseCatalogQuery_EmitsTieBreakAsLastOrderByTerm()
+    {
+        await CreateBaseAsync("Base SQL KB");
+
+        var commands = await factory.SqlCapture.CaptureAsync(async () =>
+        {
+            (await _client.GetAsync("/knowledge-bases")).EnsureSuccessStatusCode();
+        });
+
+        var query = EmittedSqlCapture.SingleCommandContaining(commands, "FROM knowledge_bases", "ORDER BY");
+        EmittedSqlCapture.AssertOrderByEndsWithTieBreak(query);
+    }
+
     [Fact]
     public async Task CreateKnowledgeBase_WithNameAndDescription_ReturnsCreatedActiveBase()
     {

@@ -30,7 +30,12 @@ public sealed class ListKnowledgeDocumentsQueryHandler(AppDbContext dbContext)
         return await dbContext.KnowledgeDocuments
             .AsNoTracking()
             .Where(document => document.KnowledgeBaseId == query.KnowledgeBaseId)
+            // Desempate estável: CreatedAt não é único — é atribuído no
+            // construtor da entidade e dois registros podem compartilhar o
+            // instante —, então ordenar só por ele deixa a ordem entre
+            // empatados a cargo do plano do Postgres (api-response-ordering).
             .OrderBy(document => document.CreatedAt)
+            .ThenBy(document => document.Id)
             .Select(document => new KnowledgeDocumentSummaryResponse(
                 document.Id,
                 document.KnowledgeBaseId,

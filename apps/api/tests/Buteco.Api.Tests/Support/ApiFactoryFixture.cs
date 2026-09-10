@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Testcontainers.PostgreSql;
 
 namespace Buteco.Api.Tests.Support;
@@ -61,7 +62,22 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
             services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
         });
+
+        // Sink do SQL emitido pelo EF Core. Inerte para quem não usa
+        // SqlCapture: só enfileira strings, e a categoria de comando do EF já é
+        // logada em Information por padrão.
+        builder.ConfigureLogging(logging =>
+        {
+            logging.AddProvider(SqlCapture);
+            logging.AddFilter(EmittedSqlCapture.EfCommandCategory, LogLevel.Information);
+        });
     }
+
+    /// <summary>
+    /// Captura do SQL de produção, usada pela metade determinística dos guardas
+    /// de ordenação (ver <see cref="EmittedSqlCapture"/>).
+    /// </summary>
+    public EmittedSqlCapture SqlCapture { get; } = new();
 
     protected override void ConfigureClient(HttpClient client)
     {

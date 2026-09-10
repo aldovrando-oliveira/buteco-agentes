@@ -11,7 +11,12 @@ public sealed class ListMcpServersQueryHandler(AppDbContext dbContext) : IQueryH
     {
         return await dbContext.McpServers
             .AsNoTracking()
+            // Desempate estável: CreatedAt não é único — é atribuído no
+            // construtor da entidade e dois registros podem compartilhar o
+            // instante —, então ordenar só por ele deixa a ordem entre
+            // empatados a cargo do plano do Postgres (api-response-ordering).
             .OrderBy(mcpServer => mcpServer.CreatedAt)
+            .ThenBy(mcpServer => mcpServer.Id)
             .Select(mcpServer => McpServerResponse.FromEntity(mcpServer))
             .ToListAsync(cancellationToken);
     }
