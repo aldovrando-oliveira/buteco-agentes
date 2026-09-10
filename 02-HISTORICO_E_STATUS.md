@@ -2273,13 +2273,60 @@ Cada um tem gatilho de quando revisitar:
      `TBD - defined by change`. `openspec validate --strict` **não pega isso**:
      placeholder é texto válido, e as 44 specs passam com 39 deles.
 
-  **Correção de raiz, que tira o passo de cima do dono humano:** trocar o 4d do
-  skill por "usar o `## Purpose` da delta quando houver; só marcar `TBD` quando a
-  delta não trouxer nenhum". É edição de uma linha num arquivo do próprio
-  repositório (`.claude/skills/openspec-sync-specs/SKILL.md`), e enquanto ela não
-  for feita a metade (2) do gatilho é obrigatória em toda change que crie
-  capability. Gatilho: imediato — e é a única correção da lista que impede a
-  quadragésima ocorrência em vez de detectá-la.
+  **CORRIGIDO NA FERRAMENTA em 09/09/2026.** `.claude/skills/openspec-sync-specs/SKILL.md`
+  passou a mandar usar o `## Purpose` da delta quando houver, e só cair no
+  placeholder quando a delta não trouxer nenhum — aí avisando no resumo que
+  aquela capability ficou devendo um. Não foi uma linha só; a leitura do skill
+  inteiro achou mais três coisas, e o porquê de cada uma está abaixo.
+
+  **Confirmação de que o skill era o único produtor dos 39:** o texto exato dos
+  39 é `TBD - defined by change ...`, e essa cadeia **não existe** no CLI nem em
+  `.claude/`. O CLI tem um template próprio, com redação diferente
+  (`TBD - created by archiving change ...`, em
+  `dist/core/specs-apply.js`), e **nenhuma** das 44 specs usa essa redação. Ou
+  seja: os 39 foram escritos à mão por agentes seguindo o "mark as TBD" do 4d,
+  inventando a redação — e o caminho do CLI nunca disparou aqui. Corrigir o 4d
+  para de fato para o crescimento.
+
+  **O que mais mudou no skill, além do 4d:**
+
+  1. **Cláusula de `## Purpose` no passo 4c (capability existente).** O skill não
+     tinha *nenhuma* noção de que uma delta pode trazer `## Purpose` — o passo 4
+     só falava de requisitos. Sem isso, uma delta `MODIFIED` que traga um
+     `Purpose` real para substituir um placeholder seria simplesmente ignorada, o
+     que **bloquearia o consumo incremental do estoque de 39** — exatamente o
+     plano que o gatilho deste item depende. A cláusula diz: placeholder é
+     substituído pelo `Purpose` da delta; `Purpose` real nunca é sobrescrito por
+     placeholder.
+  2. **Passo de verificação novo (passo 5).** O skill terminava em "Show summary",
+     que relata a *intenção*, não o que foi escrito. Agora manda reler os
+     arquivos vivos e conferir: sem `TBD` onde a delta trazia `Purpose`, sem
+     bloco de requisito duplicado, sem resíduo de `## ADDED/MODIFIED Requirements`,
+     e diff aditivo para delta `MODIFIED`. São as quatro conferências que
+     `ordenacao-desempate-listas-vinculo` fez à mão. `validate --strict` continua
+     sendo necessário e não suficiente — as 44 specs passam com 39 placeholders.
+  3. **Segundo produtor registrado no próprio skill.** O CLI cria spec viva
+     sozinho quando uma change é arquivada **sem** sync prévio, e o fluxo de
+     archive oferece "Archive without syncing". O skill não pode corrigir o CLI,
+     então registra a redação alternativa para quem for grepar o estoque, e a
+     recomendação de sincronizar antes de arquivar.
+
+  **A resposta à suspeita sobre `MODIFIED`:** conferido, e é o contrário do
+  temido. O passo 4c opera só sobre requisitos ("Find the requirement in main
+  spec") e nunca sobre a seção de `Purpose`, e o guardrail "Preserve existing
+  content not mentioned in delta" cobre o resto. O `Purpose` de
+  `agent-knowledge-binding` ter sobrevivido é **propriedade da instrução**, não
+  do caso — ao contrário do `Purpose` da capability nova, que sobreviveu por
+  sorte de execução.
+
+  **O gatilho depois da correção.** A metade (1) — escrever o `Purpose` real na
+  delta da capability nova — continua sendo do autor da change, porque só ele
+  sabe responder. A metade (2) — conferir o arquivo vivo depois do sync — deixou
+  de ser tarefa de quem lembra e virou passo do skill. **O estoque de 39 não foi
+  tocado**, de propósito: 39 escritos de uma vez por quem não tocou o código de
+  nenhum produz prosa genérica, que é pior que o placeholder porque parece
+  preenchido. Segue consumido incrementalmente, uma capability por change que a
+  toque — e agora o passo 4c garante que essa substituição de fato acontece.
 
 ### Primeiro deploy em produção (checklist)
 
