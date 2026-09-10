@@ -1680,9 +1680,26 @@ distância explícita, e o agente decide** (convenção 13). Não é default por
 empate. `ts_rank_cd` foi confirmado como inservível para limiar — numa pergunta
 que o corpus não responde ele devolveu `1,0000`, a pontuação de melhor aparência
 possível. As distâncias de cosseno do nomic **sobrepõem** entre queries com e sem
-alvo; as do qwen **separam**. Mas a folga é fina e vem de 5 negativas, e 5 não
-calibram corte: limiar absoluto volta à mesa na etapa 2 com 50-100 negativas
-reais de log. A queda relativa entre 1º e k-ésimo não separou em nenhum modelo.
+alvo; as do qwen, **sobre estas 5 negativas**, separam — e é só isso que a
+amostra sustenta. A queda relativa entre 1º e k-ésimo não separou em nenhum
+modelo.
+
+> **Correção (convenção 9), registrada por `0c` em 2026-09-10:** a afirmação que
+> estava escrita aqui — "as do qwen **separam**", sem qualificar a amostra — está
+> **errada como generalização**, e a causa é a amostra: **5 negativas**. Com 20
+> negativas e um índice de 110 fragmentos, o qwen **não separa**: a pior positiva
+> fica a 0,5154 e a negativa mais próxima a 0,3865, e **16 das 83 positivas têm
+> topo mais longe que a negativa mais próxima**. As médias continuam separando
+> (0,3357 contra 0,4742); o que não sobrevive é a folga entre os extremos, que é
+> o que um limiar precisa. A ressalva "5 não calibram corte" estava certa e
+> ficou curta: com 5 amostras o mínimo do conjunto sem alvo é uma estatística de
+> extremo, e ela subiu ao ganhar 15 pontos novos. **Consequência: o item "limiar
+> absoluto volta à mesa na etapa 2 com 50-100 negativas reais de log" fecha com
+> 20, e fecha contra o limiar** — nenhum corte serve (em 0,42 descarta 10,8% das
+> consultas boas para barrar 85% das sem-alvo; em 0,45 descarta 7,2% e deixa
+> passar 30%). O mecanismo já decidido — devolver os k com a distância explícita
+> e o agente decide — deixa de ser default por empate e passa a ter evidência a
+> favor.
 
 **Três medições curtas fecharam a etapa**, todas sobre o cache, sem reembedar o
 corpus:
@@ -1717,9 +1734,10 @@ corpus:
   lexical cai *entre* as duas distribuições, como se esperava, mas os **três
   modos vetoriais caem abaixo de ambas**. No qwen o recall@5 sobrevive — segue
   100% — mas **R@1 cai de 93,8% para 75,0%** e o MRR de 0,958 para 0,859. É 75%
-  que entra no orçamento da etapa 4, não 93,8%. Em compensação a separação do
-  "não encontrei" **melhora muito**: folga de 0,1053 contra 0,0154 da
-  distribuição natural, quase sete vezes.
+  que entra no orçamento da etapa 4, não 93,8%. Em compensação a folga do
+  "não encontrei" cresce **dentro desta amostra de 5 negativas**: 0,1053 contra
+  0,0154 da distribuição natural. **Não generaliza, e `0c` mediu que não
+  sobrevive a 20 negativas** — ver a correção acima.
 
 **Ameaça à validade que precisa acompanhar a tabela de truncagem:** R@1 idêntico
 de 512 a 4096 dimensões **não é evidência de que truncar preserva qualidade** —
@@ -1753,6 +1771,300 @@ limiar; e 16 queries fazem cada uma valer 6,25 pontos de recall.
 
 Relatório completo, com os gráficos de distribuição:
 https://claude.ai/code/artifact/87bcc0a4-05d2-4cda-9965-e84beba10b92
+
+#### Etapa `0c` — chunker corrigido, medido (2026-09-10)
+
+Segunda rodada de medição, não change: nada em `apps/`, corpus e vetores em
+`~/.cache/buteco-agents/kbtest-0c/`. Ela existe porque a exploração da etapa 2
+reproduziu que **o chunker medido em `0b` não sobrevive a documento real**.
+
+Corpus de 40 documentos e 168 KB — 11 herdados de `0b`, 29 escritos aqui —,
+**110 fragmentos** contra os 44 de `0b`: top-5 cai de 11,4% para 4,5% da base.
+83 queries com alvo e **20 negativas** (contra 16 e 5). Emissor das queries de
+produção: `nvidia-llama-3.3-70b-instruct-fp8` por tool call real, 103 de 103.
+
+**Mudança de método que a comparação exigiu:** o alvo passou a ser **âncora
+textual** — substring distintiva da passagem que responde, verificada como
+ocorrendo exatamente uma vez em exatamente um documento. O índice de fragmento
+que `0b` usava é inutilizável quando o que se compara são chunkers, porque as
+fronteiras mudam entre os braços.
+
+##### Os três invariantes, que é onde a rodada é conclusiva
+
+| | chunker de `0b` | corrigido |
+|---|---|---|
+| **I1** documento não-vazio → ≥1 fragmento | **3 violações de 40** | **0** |
+| **I2** nenhum fragmento acima do teto, medido no texto emitido | **2 violações**, pior 2.858 caracteres | **0**, máximo 1.591 |
+| **I3** cobertura de parágrafos | **367 de 393 (93,4%)** | **393 de 393 (100%)** |
+
+As três violações de I1 são exatamente as formas previstas: `.txt` corrido sem
+cabeçalho, `#` sem `##`, e `#` + `###` pulando o `##`. Dos 26 parágrafos
+perdidos em I3, **4 são preâmbulo** entre o `#` e o primeiro `##` — o terceiro
+defeito, isolado.
+
+O efeito no recall torna isso concreto: o chunker de `0b` tem **15 queries
+inalcançáveis de 83** — 11 nos três documentos que ele descarta inteiros, 4 que
+só o preâmbulo responde. Nenhum ajuste de busca as alcança. O corrigido tem
+**zero**.
+
+**Estes três vão para a spec da etapa 2a, e só eles.** I1 e I2 são absolutos,
+sem faixa; I3 é 100% dos parágrafos, tolerando linha em branco e marcação de
+estrutura, nunca parágrafo. Os três já reprovam contra o chunker anterior, com
+número — guarda antes de existir, que é o que a convenção 15 pede.
+
+##### Os parâmetros 900/1600 NÃO vão para a spec
+
+Separar isto dos invariantes é decisão, não descuido. Os invariantes são
+**propriedades verificáveis** do resultado: nenhum documento sem fragmento,
+nenhum fragmento acima do teto, nenhum parágrafo perdido. Já `TARGET_MIN = 900`
+e `HARD_MAX = 1600` são **constantes de produto**, e esta rodada não mediu
+nenhuma alternativa a elas — não houve braço com 600/1200 nem com 1200/2400. O
+que a medição sustenta é que o chunker corrigido não perde conteúdo, não que
+900/1600 seja o ótimo.
+
+Afirmar em spec um número que não foi medido é exatamente o padrão que a
+convenção 10 nomeia: requisito que passa verde sem provar nada.
+
+**Ficam como constantes nomeadas em `apps/workers`, fora da spec, com o gatilho
+registrado: remedir quando houver corpus real de operador com volume.** Pela
+convenção 2, a opção de configuração nasce no dia em que alguém precisar de
+outro valor — não antes, e não "para o caso de". Referência para comparar
+quando esse dia chegar: média de 985 caracteres por fragmento e 2,75 fragmentos
+por documento, medidas aqui.
+
+Mesmo idioma do `AgentDelegationToolOptions`, que não é vinculado a seção de
+configuração de propósito porque os defaults são constantes de produto.
+
+**O que separa isto dos invariantes, dito de uma vez:** invariante é
+**propriedade do chunker** que a spec afirma e o teste reprova; 900/1600 é
+**parâmetro que a medição não otimizou**. Misturar os dois faria a spec afirmar
+um número tão bem fundamentado quanto um chute.
+
+##### Overlap: rejeitado, e não por margem
+
+Regra declarada antes de medir: adotar só com **ganho ≥ 5 pontos de R@1 sem
+perder R@5**. Medido, o overlap **perde 20 a 23 pontos de R@1** — nas duas
+direções e nas duas magnitudes.
+
+| estratégia | R@1 | R@3 | R@5 | MRR | R@1 por documento |
+|---|---|---|---|---|---|
+| corrigido + cabeçalho de tabela repetido | **41,0%** | **71,1%** | 77,1% | **0,583** | **55,4%** |
+| corrigido, overlap zero | 36,1% | 69,9% | **80,7%** | 0,551 | 45,8% |
+| chunker de `0b` | 18,1% | 38,6% | 47,0% | 0,311 | 37,3% |
+| overlap por sufixo, 150 | 16,9% | 31,3% | 33,7% | 0,263 | 34,9% |
+| overlap por prefixo, 300 | 15,7% | 41,0% | 45,8% | 0,307 | 34,9% |
+| overlap por prefixo, 150 | 13,3% | 38,6% | 42,2% | 0,277 | 34,9% |
+
+Duas armadilhas foram removidas **antes** de concluir, porque mediriam a coisa
+errada: a primeira implementação cortava no meio de frase (refeita para
+sentenças inteiras) e só testava prefixo (acrescentado o braço de sufixo, que
+anexa a cabeça do fragmento seguinte). Os dois consertos mantiveram o
+resultado. Mecanismo provável: com fragmentos de ~1.000 caracteres, 150-300
+vindos de outra seção são 13-27% de diluição, e o vizinho mais próximo perde
+poder de discriminação.
+
+**O gatilho registrado desde a etapa 1 — "revisitar overlap quando a medição de
+recall mostrar perda em fragmentos de fronteira" — está respondido pelo avesso:
+o overlap é que causa a perda.** Overlap zero deixa de ser escolha por
+parcimônia e passa a ser resultado.
+
+##### Fragmento-atrator: defeito novo, e a mitigação é parcial
+
+`0b` não tinha tabela no corpus. Este tem, e apareceu isto: **um único
+fragmento foi o top-1 de 32 das 83 queries (38,6%)**. É a continuação da tabela
+de códigos de retorno — uma laje de linhas `| 1008 | débito em recuperação
+judicial | … |` sem prosa e **sem a linha de cabeçalho da tabela**, que ficou
+no fragmento anterior. Sua distância média a todas as queries é 0,3706, contra
+mediana 0,5428 do índice. Ele venceu perguntas sobre tom de voz, sobre
+empréstimo a pessoa idosa e sobre terceiro autorizado.
+
+Um bloco de muitas entradas curtas e heterogêneas produz vetor perto do
+centroide do vocabulário do domínio, e ganha vizinho mais próximo em consultas
+com que não tem relação nenhuma.
+
+Mitigação medida — repetir a linha de cabeçalho da tabela em cada pedaço:
+
+| | sem a correção | com a correção |
+|---|---|---|
+| top-1 do fragmento mais atrator | 32/83 (38,6%) | **10/83 (12,0%)** |
+| menor distância média do índice | 0,3706 | **0,4365** |
+| R@1 | 36,1% | **41,0%** |
+| R@1 por documento | 45,8% | **55,4%** |
+| MRR | 0,551 | **0,583** |
+| R@5 | 80,7% | 77,1% |
+
+**A mitigação é parcial, e isso precisa ser lido junto com o número:** 12% de
+top-1 num índice de 110 fragmentos é **mais de treze vezes** o ~0,9% que um
+fragmento teria num índice sem atrator. O fenômeno foi reduzido, não eliminado.
+A correção ataca **um sintoma de tabela**; a causa raiz é sobre densidade e
+heterogeneidade, não sobre tabelas, então **o defeito volta a valer para
+qualquer bloco denso e heterogêneo que não seja tabela** — glossário, lista de
+códigos em texto corrido, índice remissivo, tabela de preços em parágrafo.
+Nesses, não há cabeçalho para repetir. R@5 ainda piora 3,6 pontos com a
+correção.
+
+**E vale registrar por que isto não apareceu antes: `0b` era estruturalmente
+incapaz de encontrá-lo.** O corpus dele não tinha nenhuma tabela — 11
+documentos de prosa. Não é que a rodada anterior tenha olhado e não visto; é
+que o instrumento não continha o caso. É o argumento mais concreto a favor de
+corpus de medição cobrir **formas** de documento, e não só assuntos.
+
+**Gatilho para voltar ao assunto:** base real com documento de catálogo, tabela
+de códigos ou glossário — e o sintoma a procurar é o mesmo fragmento aparecendo
+no topo de consultas sem relação. Se aparecer, o caminho é fragmentar lista por
+grupos menores de entradas, não repetir mais cabeçalho.
+
+##### `k` = 5, pela regra declarada antes
+
+R@3 sobre R@5 = 71,1/77,1 = **92,2%**, abaixo dos 95% que a regra exigia para
+`k = 3`. Fica **`k = 5`**, com o custo registrado para a etapa 4 revisitar com
+log real: os dois resultados a mais compram 6,0 pontos de recall por 67% mais
+contexto em toda chamada de tool.
+
+##### A linha do Gemini fecha sem medir
+
+O argumento declarado em `0b` para testá-lo era `output_dimensionality` honrado
+de verdade resolver o bloqueio de índice do pgvector sem truncar no cliente.
+`subvector` em coluna gerada resolve isso dentro da infra interna. **O motivo
+para testar deixou de existir** — não é que o Gemini seja pior, é que a pergunta
+que ele responderia já está respondida. Junto com ele fecha a decisão de mandar
+corpus de cobrança e de dados cadastrais para uma API externa, que não precisa
+mais ser tomada.
+
+##### O bar não foi atingido, e ele não vai ser movido
+
+Bar declarado às 01:57, antes de gerar corpus, escrever chunker ou chamar
+embedding: **R@1 ≥ 70%** na distribuição de produção; 60-69% aceitável só com
+R@3 ≥ 90%; **abaixo de 60%, a iteração de chunking não está fechada**.
+
+**Medido: 41,0%.** Pela regra declarada, esta rodada **não certifica o recall
+do chunker**.
+
+**Por que o bar estava mal calibrado**, escrito aqui em vez de virar ajuste
+retroativo: ele foi ancorado nos 75% de R@1 que `0b` mediu na distribuição de
+produção, e `0b` mediu sobre 44 fragmentos de 11 documentos tematicamente
+distintos, num benchmark que o próprio relatório declarou **saturado**. O corpus
+desta rodada foi construído de propósito para ser confundível — os documentos
+`35`-`40` cobrem matéria vizinha de `01`-`05`, o `26` é controle temático do
+`24`/`25`, os `12`-`22` compartilham vocabulário. **Bar e corpus foram
+desenhados na mesma rodada, e o corpus saiu mais difícil do que o bar supôs.**
+
+**A decisão é não mover o bar**, e o motivo é que mover bar depois de ver
+número destrói o instrumento: um bar que se ajusta ao resultado não reprova
+nada, e as duas rodadas seguintes não teriam como confiar no que a anterior
+declarou. O custo dessa disciplina é ter uma rodada que fecha cinco decisões e
+reprova na sua própria métrica primária, e esse custo está sendo pago aqui.
+
+**O precedente, formulado para ser citado: bar calibrado contra benchmark
+saturado não transfere para benchmark discriminante.** Os 75% de `0b` mediam um
+instrumento que já não separava os modos; herdá-los como exigência num
+instrumento que separa é comparar duas coisas que não são a mesma escala.
+
+Desdobrado, para a próxima rodada que declarar bar — é para isto que este
+parágrafo existe:
+
+1. **Bar e corpus não podem ser desenhados na mesma rodada sem um controle.**
+   Se o corpus é novo, o bar precisa ou ser calibrado num corpus já medido, ou
+   vir acompanhado de um braço de referência que rode nos dois.
+2. **Bar ancorado em número de benchmark saturado não é bar.** Os 75% vieram de
+   uma medição cujo próprio relatório dizia que o instrumento não discriminava
+   mais; herdar o número sem herdar a ressalva é o erro.
+3. **Declarar, junto com o bar, o que o invalida.** Aqui teria bastado escrever
+   "este bar pressupõe corpus de dificuldade comparável ao de `0b`; se o corpus
+   novo for mais confundível, o bar não é comparável" — e a rodada teria
+   reprovado com a leitura certa desde o começo.
+
+##### Achado que não é ameaça: 44,6% das consultas erram até o documento
+
+Estava enterrado na lista de ameaças à validade e é maior do que uma ameaça —
+é um dado sobre **onde a dificuldade mora**. A lente por documento pergunta
+outra coisa que o R@1 por fragmento: o topo veio do documento que contém a
+resposta? Medido no melhor braço, **55,4% sim, 44,6% não**.
+
+A consequência muda o diagnóstico: se quase metade das consultas erra o
+**documento**, o problema não é granularidade de fragmento, e **nenhum ajuste
+de chunking o resolve** — nem tamanho, nem overlap, nem fronteira de cabeçalho.
+É recuperação escolhendo o assunto errado, não o pedaço errado do assunto
+certo.
+
+**Gatilho: etapa 4**, e a consequência lá é direta. O agente escolhe **qual
+base consultar** antes de qualquer busca, pela `Description` da base, e esse
+roteamento entre bases **não tem nenhuma medição** — nem em `0b`, nem aqui.
+Errar o documento dentro de uma base em 44,6% dos casos torna a pergunta sobre
+roteamento entre bases mais séria, não menos: se a recuperação já confunde
+assuntos vizinhos dentro de um corpus homogêneo, escolher entre 100+ bases pela
+`Description` é um problema da mesma família e nunca foi olhado.
+
+##### Reranker: hipótese com dado a favor, e escopo novo
+
+Não é possibilidade genérica que se levanta no fim de todo relatório de
+recuperação. Tem número atrás: **R@5 de 77,1% contra R@1 de 41,0%** significa
+que, em três de cada quatro consultas, a resposta **está entre os cinco** e o
+que falha é a **ordenação**. Ordenar melhor um conjunto pequeno já recuperado é
+exatamente o que um reranker faz.
+
+Observação colhida junto, que não obriga a nada: `bge-reranker-v2-m3` e
+`qwen-qwen3-reranker-8b` já estão servidos pelo mesmo gateway configurado na
+variável de ambiente do provedor — não haveria dependência nova de
+infraestrutura.
+
+**Fica como item em aberto, com gatilho: se o recall do topo incomodar em uso
+real.** É escopo novo — segunda chamada de modelo por consulta, latência,
+alçada de custo —, não iteração de chunking, e por isso não entra na etapa 2a
+nem justifica segurá-la.
+
+##### Ameaças à validade, para quem citar os números
+
+- **Corpus deliberadamente confundível.** É o que faz R@1 discriminar entre
+  estratégias, e é o que derruba o valor absoluto. Uma base real de 40
+  documentos sobre assuntos distintos daria número maior sem que nada tivesse
+  melhorado. Use as **diferenças entre braços**, não os absolutos.
+- **Corpus e queries escritos pela mesma mão** — mesmo viés que `0b` registrou.
+  Compartilhado por todos os braços, então não distorce a comparação.
+- **Âncora textual é métrica estrita:** 33,7% das queries têm a âncora no rank
+  2-3. Mas a lente por documento mostra que **44,6% das consultas erram até o
+  documento**, então a dificuldade não é só granularidade.
+- **O controle de tamanho de corpus tem 8 queries.** Nas mesmas 8, o índice de
+  44 fragmentos dá R@1 50,0% e o de 110 dá 37,5%: direção confirmada,
+  magnitude não — cada query vale 12,5 pontos.
+- **20 negativas fecham o limiar, não calibram corte.** Bastam para mostrar que
+  a separação de `0b` não sobrevive; não bastam para escolher um valor.
+- **Metade do corpus escreve número por extenso** (herança de `0b`) e metade em
+  dígitos. Não afeta a comparação entre braços vetoriais; afetaria uma
+  comparação lexical, que esta rodada não fez.
+- **A mais séria: o chunker corrigido foi escrito e medido na mesma rodada,
+  sem braço independente que o valide.** Quem escreveu o chunker escreveu o
+  corpus, as queries e as âncoras. Os invariantes escapam disso porque são
+  verificáveis por inspeção do resultado, e reprovam contra um chunker que a
+  rodada não escreveu; o **recall**, não — ele carrega essa ameaça inteira, e é
+  mais um motivo para não afirmá-lo em spec.
+
+##### O que a etapa 2a herda
+
+**Seis coisas fechadas**, e nenhum número de recall a afirmar em spec:
+
+1. Os **três invariantes** (I1, I2, I3), com os valores acima — é o que a spec
+   afirma e o que o teste reprova.
+2. **Overlap zero**, por medição, com o gatilho antigo respondido pelo avesso.
+3. **`k` = 5**, com o custo registrado para a etapa 4 revisitar.
+4. **Nenhum limiar**, agora com evidência contra a alternativa e não por
+   empate — ver a correção de `0b` acima.
+5. **Tabela markdown repete o cabeçalho em cada pedaço**, com o resíduo de 12%
+   declarado como mitigação parcial.
+6. **900 e 1600 como constante em `apps/workers`, com gatilho** — fora da
+   spec, pelo motivo da seção própria.
+
+**Aberto, e é o que a etapa 2a NÃO deve tentar fechar:** um número de recall
+que autorize afirmar parâmetros de fragmentação; o roteamento entre bases
+(etapa 4); e o atrator residual.
+
+A decisão de aceitar o chunker pelos invariantes, deixando os parâmetros fora
+da spec, foi tomada com o argumento que a própria rodada formulou: **a medição
+provou que o chunker não perde conteúdo; não provou que 900/1600 é o ótimo.**
+A alternativa considerada e recusada era remedir num corpus de dificuldade
+realista para obter número comparável ao bar — recusada porque um corpus
+deliberadamente mais fácil produz número maior sem nada ter melhorado, o que é
+calibrar o teste ao bar em vez do contrário.
 
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
@@ -1954,6 +2266,58 @@ Cada um tem gatilho de quando revisitar:
   da spec daquela change de propósito, por não terem gatilho verificável lá.
   Entram como ADDED requirements da etapa de indexação, com cenário real. A
   etapa 2 não as redecide; se divergir, corrige D9 com a causa (convenção 9).
+
+- **`TARGET_MIN = 900` / `HARD_MAX = 1600` são constante de produto, não
+  requisito de spec** — `0c` mediu que o chunker corrigido não perde conteúdo,
+  **não** que 900/1600 seja o ótimo: não houve braço com outra configuração de
+  tamanho. Vão para o código como constantes nomeadas, no idioma de
+  `AgentDelegationToolOptions`; o que a spec da etapa 2a afirma são os três
+  invariantes (I1, I2, I3), que são propriedades verificáveis do resultado.
+  **Gatilho: remedir quando houver corpus real de operador com volume.** Pela
+  convenção 2, a opção de configuração nasce no dia em que alguém precisar de
+  outro valor. Referência de comparação: 985 caracteres por fragmento e 2,75
+  fragmentos por documento, medidos em `0c`.
+
+- **Fragmento-atrator: mitigado em parte, causa raiz aberta** — `0c` achou um
+  fragmento que era top-1 de 32 das 83 queries (38,6%), sem relação com elas:
+  uma laje de linhas de tabela sem prosa e sem cabeçalho. Repetir o cabeçalho
+  da tabela em cada pedaço derruba para 10/83 (12,0%) — mas **12% num índice de
+  110 fragmentos ainda é mais de treze vezes o ~0,9% de um índice sem
+  atrator**, e a causa raiz (bloco de entradas curtas e heterogêneas vira vetor
+  de centroide) continua valendo para qualquer lista longa. R@5 piora 3,6
+  pontos com a correção. **Gatilho:** base real com catálogo, tabela de códigos
+  ou glossário — o sintoma a procurar é o mesmo fragmento no topo de consultas
+  sem relação. Se aparecer, o caminho é fragmentar lista em grupos menores de
+  entradas, não repetir mais cabeçalho.
+
+- **Roteamento entre bases de conhecimento nunca foi medido** — `0c` mediu que
+  **44,6% das consultas erram até o documento** dentro de um único corpus
+  homogêneo. Na etapa 4 o agente escolhe **qual base consultar** antes de
+  qualquer busca, pela `Description` da base, e essa escolha não tem nenhuma
+  medição — nem em `0b`, nem em `0c`. Se a recuperação já confunde assuntos
+  vizinhos dentro de um corpus, escolher entre as 100+ bases que o handoff
+  declara como volume real é problema da mesma família. **Gatilho: etapa 4**,
+  ao desenhar a tool — a pergunta a responder é se a `Description` basta para
+  rotear, e ela precisa de medição, não de raciocínio.
+
+- **Reranker: hipótese com dado a favor, não levantada por completude** —
+  `0c` mediu R@5 de 77,1% contra R@1 de 41,0%: em três de cada quatro
+  consultas a resposta está entre os cinco e o que falha é a **ordenação**, que
+  é o que um reranker ataca. `bge-reranker-v2-m3` e `qwen-qwen3-reranker-8b` já
+  estão servidos pelo mesmo gateway do provedor de embedding, então não haveria
+  dependência nova de infraestrutura. **É escopo novo** — segunda chamada de
+  modelo por consulta, latência e custo —, não iteração de chunking.
+  **Gatilho: se o recall do topo incomodar em uso real.**
+
+- **Recall do chunker não certificado** — `0c` reprovou no próprio bar
+  declarado (R@1 41,0% contra os 70% exigidos), e o bar **não foi movido**. O
+  diagnóstico registrado é má calibração do bar, não defeito do chunker: os
+  invariantes passaram todos e as formas antes inalcançáveis passaram a
+  recuperar na média do corpus. **Gatilho:** medir num corpus de dificuldade
+  realista (documentos sobre assuntos distintos, sem a confundibilidade que
+  `0c` injetou de propósito), com braço de referência que rode nos dois
+  corpora — sem esse braço, o número novo não é comparável nem com este nem
+  com o de `0b`.
 
 - **Revogação antecipada de token** — token stateless não pode ser
   invalidado antes do TTL. Nem troca de senha do operador nem reinício do
@@ -2734,13 +3098,14 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
 **Concluído nesta sessão**: `dedupe-global-nome-de-tool` (`0a` da fila) —
 aplicada, suíte de `apps/workers` em 168/168, censo de colisão zerado. Com ela
 fora do caminho, **a etapa 2 da linha de bases de conhecimento (indexação) é o
-próximo passo**, e continua esperando `0b` (head-to-head semântico), que precisa
-de uma chave de embedding real — a mesma sessão que fechar `0b` fecha também R7 e
-R8 desta change, porque os três dependem de chave de provedor. Quando houver
-chave, rodar `0b` com **bar de recall declarado antes de medir** e corpus do
-domínio (política de atendimento, faixas de desconto, casos de aprovação humana),
-não o corpus de arquitetura: é ele que decide o mecanismo do "não encontrei", que
-é requisito da etapa 4.
+próximo passo**. As duas rodadas de medição que ela esperava estão fechadas:
+`0b` (head-to-head semântico, modelo e schema) e `0c` (chunker corrigido,
+invariantes, overlap, `k` e limiar), ambas registradas acima com bar declarado
+antes de medir. A exploração da etapa 2 recomendou **dividi-la em duas
+changes** — `2a`, o índice (`apps/workers` mais a tabela de fragmentos), e
+`2b`, a superfície de operação em `apps/api` (rota de reindexação e resumo por
+base), que é o que a etapa 5a-2 bloqueia. **A `2a` está pronta para ser
+proposta.**
 
 **Concluído em sessões anteriores**: o redesenho do painel foi fechado nas **oito
 etapas**, da identidade visual ao card A2A, mais a change de CORS de
