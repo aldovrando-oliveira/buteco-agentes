@@ -266,7 +266,9 @@ a leitura do passado.
 de uso concreto — o operador subiu o arquivo errado, ou um com dado que não
 devia estar ali — é exatamente aquele em que "continua no banco, invisível" é
 a resposta errada. Há também o custo medido: cerca de 60 MB de vetores por
-7.500 fragmentos.
+7.500 fragmentos **em 1536 dimensões** — com as 4096 dimensões do modelo
+recomendado pela etapa `0b`, são cerca de 123 MB para os mesmos 7.500
+fragmentos.
 
 Duas consequências práticas:
 

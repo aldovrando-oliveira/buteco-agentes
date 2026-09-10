@@ -1081,8 +1081,20 @@ por raciocínio: busca lexical pura (`tsvector`) reprovou com recall@5 de 47-52%
 em corpus real de 419 fragmentos mesmo com a query já reescrita como um modelo a
 emitiria, e `ts_rank_cd` não é comparável entre consultas — o score do topo de
 uma pergunta *sem resposta no corpus* ficou acima do de uma recuperação correta,
-então nenhum limiar separa acerto de ruído. Daí embedding vencer, indexação ser
-assíncrona, e `Pending` existir desde a etapa 1.
+então nenhum limiar separa acerto de ruído. Daí indexação ser assíncrona e
+`Pending` existir desde a etapa 1.
+
+> **Correção (convenção 9), registrada por `0b` em 2026-09-10:** a conclusão
+> escrita aqui como "embedding vencer" está **errada como formulada**. Ela foi
+> tirada do negativo do lexical — o lexical reprovou, logo embedding vence — sem
+> que nenhum embedding tivesse sido medido. Medidos os três modos no mesmo
+> corpus, `nomic-embed-text-v1` (o modelo que o ambiente configura em
+> `EMBEDDING_MODEL`) **empata com o lexical** em recall@5 (87,5% nos dois) e
+> **perde** em R@1 (62,5% contra 68,8%) e em MRR (0,731 contra 0,801). O que a
+> medição sustenta é "**este** embedding vence": `qwen3-embedding-8b` faz 93,8%
+> de R@1 e 100% de recall@5. A escolha de indexação assíncrona e de `Pending`
+> não muda — o que muda é que ela depende do modelo, e não de embedding como
+> categoria.
 
 O que entrou no `01-ARQUITETURA_E_CONVENCOES.md`: as duas entidades, a seção
 "Exclusão: catálogo × conteúdo" (o primeiro `MapDelete` do repositório, com o
@@ -1636,6 +1648,111 @@ paginação, então busca e filtro do catálogo rodam no cliente sobre a respost
 inteira. Com as 100+ bases que o handoff declara, essa é a primeira lista do
 painel em que a ausência incomoda — pedir `?q=` e paginação ao backend, e trocar
 a filtragem local por requisição com debounce.
+
+#### Etapa `0b` — head-to-head semântico (2026-09-10)
+
+Rodada de medição, não change: nada em `apps/`, corpus e vetores fora do
+repositório, em `~/.cache/buteco-agents/kbtest-0b/`. Corpus de domínio escrito
+para a medição — 11 documentos de política de atendimento e cobrança, 42,8 KB,
+44 fragmentos pelo chunker previsto (cabeçalho + merge-up até ~900, teto 1600;
+média medida 1021 caracteres, 4 fragmentos por documento). 16 queries com alvo e
+5 sem alvo nenhum no corpus. **Bar de recall declarado e gravado antes da
+primeira chamada de embedding** — ≥60% entregável, 40-59% chunking obrigatório,
+<40% redesenho.
+
+**O resultado que fecha a etapa 2:** `qwen3-embedding-8b` (servido pelo mesmo
+gateway configurado em `OPENAI_BASE_URL`) faz **R@1 93,8% / recall@5 100% / MRR
+0,958**. `nomic-embed-text-v1`, que é o que `EMBEDDING_MODEL` aponta, faz 87,5%
+de recall@5 — **empate com o lexical**, e derrota em R@1 (62,5% contra 68,8%) e
+MRR. A correção da formulação "embedding vencer" está registrada acima, na
+própria linha que a afirmava.
+
+**Dois mecanismos foram descartados por número, não por preferência.** A
+**união** lexical ∪ vetorial não acrescenta nada sobre o qwen (100% para os
+dois) — só salva o nomic, que é o modelo a não usar; não há razão para construir
+híbrido. E a **reescrita de query** piorou *todos* os modos, contrariando os +16
+pontos que a medição anterior lhe creditava: o lexical cai de 68,8% para 50,0%
+de R@1. Some-se que a reescrita é frágil como etapa — o modelo devolveu
+`inadimplencia aumentoaposexigenciaentrada`, palavras fundidas, numa das 21.
+
+**O mecanismo do "não encontrei" está decidido: devolver sempre os k com a
+distância explícita, e o agente decide** (convenção 13). Não é default por
+empate. `ts_rank_cd` foi confirmado como inservível para limiar — numa pergunta
+que o corpus não responde ele devolveu `1,0000`, a pontuação de melhor aparência
+possível. As distâncias de cosseno do nomic **sobrepõem** entre queries com e sem
+alvo; as do qwen **separam**. Mas a folga é fina e vem de 5 negativas, e 5 não
+calibram corte: limiar absoluto volta à mesa na etapa 2 com 50-100 negativas
+reais de log. A queda relativa entre 1º e k-ésimo não separou em nenhum modelo.
+
+**Três medições curtas fecharam a etapa**, todas sobre o cache, sem reembedar o
+corpus:
+
+- **`subvector` existe em pgvector 0.8.6**, com overloads para `vector` e
+  `halfvec`, e tanto ele quanto `l2_normalize` são `IMMUTABLE`. Verificado na
+  extensão instalada: coluna **gerada** `halfvec(3072)` a partir de
+  `vector(4096)` é criável, indexável por HNSW, o plano usa o índice, e a
+  derivada nasce preenchida e normalizada. **Isso fecha o item de schema:
+  guardar `vector(4096)` cheio** e derivar a coluna indexável por SQL quando o
+  índice fizer falta — sem chamar o gateway e sem reembedar. Truncar desde o
+  primeiro dia só seria obrigatório se a função não existisse.
+- **Latência de embedding de query única** — o item de custo/latência que
+  continuava aberto, e que bate em toda chamada de tool da etapa 4. Medida no
+  regime da consulta (chamada única, não em lote), 84 chamadas por modelo:
+  `qwen3-embedding-8b` **p50 37 ms / p95 46 ms**, `nomic-embed-text-v1` p50 36 ms
+  / p95 62 ms. Empate no p50, e o modelo maior tem a **cauda mais curta**.
+  **Latência não é restrição e não desempata os modelos** — ao lado da segunda
+  ida ao LLM, que custa segundos, o embedding da query é ruído. Para consulta
+  esparsa há penalidade de primeira chamada no qwen (154-302 ms, acima dos 135 ms
+  do máximo quente), mas ela **não cresce com o tempo parado** — 302 ms com 30 s
+  de intervalo contra 154 ms com 180 s, o inverso de um cold start de
+  carregamento. No nomic os valores cabem dentro da cauda quente. Com uma amostra
+  por intervalo não dá para separar cold start de variância; o que se orça é o
+  pior caso observado, **~300 ms**, sem lhe atribuir causa. Orçamento da etapa 4:
+  ~40 ms típicos, ~50 ms de p95, ~300 ms de pior caso.
+- **A terceira distribuição de query — a de produção.** As duas medidas antes
+  ("natural", perguntas de humano; "reescrita", reescrita agressiva) não são o
+  que a etapa 4 recebe: lá quem formula a query é o modelo chamando a tool. As 21
+  queries foram reemitidas por **tool call real**, a partir da `Description` de
+  uma base plausível (21 de 21 chamaram a tool). **É achado, não confirmação:** o
+  lexical cai *entre* as duas distribuições, como se esperava, mas os **três
+  modos vetoriais caem abaixo de ambas**. No qwen o recall@5 sobrevive — segue
+  100% — mas **R@1 cai de 93,8% para 75,0%** e o MRR de 0,958 para 0,859. É 75%
+  que entra no orçamento da etapa 4, não 93,8%. Em compensação a separação do
+  "não encontrei" **melhora muito**: folga de 0,1053 contra 0,0154 da
+  distribuição natural, quase sete vezes.
+
+**Ameaça à validade que precisa acompanhar a tabela de truncagem:** R@1 idêntico
+de 512 a 4096 dimensões **não é evidência de que truncar preserva qualidade** —
+é evidência de que o benchmark não discrimina nessa faixa, com 44 fragmentos e
+recall saturado (top-5 é 11,4% da base). A conclusão pode estar certa, Matryoshka
+é real e o qwen3 é treinado com ela, mas **o dado colhido aqui não a sustenta**.
+Ler como "não observei perda", nunca como "não há perda". É o argumento mais
+forte a favor de guardar 4096 cheio: a dimensão da derivada pode ser revista
+depois, com um benchmark que discrimine, sem reembedar.
+
+**Correção do custo de armazenamento.** A projeção registrada — ~60 MB por 7.500
+fragmentos — **estava certa**; faltava dizer a que dimensão se referia (1536).
+Medidas as três opções com linhas reais em `pgvector/pgvector:pg18`:
+`vector(4096)` são **123 MB**, `halfvec(3072)` são **60 MB** e `vector(1536)` são
+**60 MB**. E aqui um número que se pretendia corrigir estava errado: **`halfvec`
+de 3072 não ocupa 45 MB**. `halfvec` é de 2 bytes por dimensão, então 3072 × 2 =
+6.144 bytes é exatamente o mesmo que 1536 × 4 = 6.144 — **payload idêntico**,
+truncar para 3072 em meia precisão não economiza nada sobre 1536 em precisão
+cheia. Os 45 MB são o payload cru comparado contra um baseline que já incluía
+overhead de linha e página, misturando métodos na mesma conta. Corrigido em
+`01-ARQUITETURA_E_CONVENCOES.md` e em `docs/architecture.md`. Detalhe colhido
+junto: pgvector marca a coluna de vetor como `external`, então **todo vetor vai
+para TOAST em qualquer dimensão** — TOAST não distingue as opções.
+
+**Ameaças à validade da rodada inteira, registradas para quem citar os números:**
+recall@5 satura (44 fragmentos, top-5 é 11,4% da base — daí três modos empatarem
+em 87,5% e só R@1/MRR os separarem); corpus e queries foram escritos pela mesma
+mão, o que **infla o lexical** por sobreposição de vocabulário, e explica ele ter
+feito 87,5% aqui contra 47-52% no corpus de arquitetura; 5 negativas não calibram
+limiar; e 16 queries fazem cada uma valer 6,25 pontos de recall.
+
+Relatório completo, com os gráficos de distribuição:
+https://claude.ai/code/artifact/87bcc0a4-05d2-4cda-9965-e84beba10b92
 
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 

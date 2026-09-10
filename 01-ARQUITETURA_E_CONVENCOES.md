@@ -203,7 +203,9 @@ leitura de passado.
 **conteúdo**, nada aponta para ele além dos seus próprios fragmentos, e o caso
 de uso concreto — o operador subiu o arquivo errado, ou um com dado que não
 devia estar ali — é exatamente aquele em que "continua no banco, invisível" é a
-resposta errada. Some-se o custo medido: ~60 MB de vetores por 7.500 fragmentos.
+resposta errada. Some-se o custo medido: ~60 MB de vetores por 7.500
+fragmentos **em 1536 dimensões** — com as 4096 dimensões do modelo que a
+etapa `0b` recomendou, são ~123 MB para os mesmos 7.500 fragmentos.
 
 O critério, reutilizável para qualquer entidade futura, é esse: **catálogo
 referenciado → `IsActive`; conteúdo sem referência → exclusão real.** Duas
