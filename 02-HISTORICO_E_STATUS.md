@@ -2238,6 +2238,49 @@ Cada um tem gatilho de quando revisitar:
   spec promete. Gatilho: imediato — e é change de `apps/frontend`, nunca de
   `apps/api` (convenção 12 na direção inversa).
 
+- **A causa dos 39 `Purpose` placeholder está na instrução do skill de
+  sincronização, não em esquecimento de quem sincroniza** — achado em 09/09/2026,
+  ao exercer pela primeira vez o gatilho de `Purpose` fixado no mesmo dia. O
+  passo 4d de `.claude/skills/openspec-sync-specs/SKILL.md` diz, textualmente:
+
+  > **Create new main spec** if capability doesn't exist yet:
+  > - Create `openspec/specs/<capability>/spec.md`
+  > - **Add Purpose section (can be brief, mark as TBD)**
+  > - Add Requirements section with the ADDED requirements
+
+  Ou seja: o skill **manda** escrever o placeholder, e **não manda procurar um
+  `Purpose` na delta**. Quem seguir a instrução ao pé da letra produz
+  `TBD - defined by change <nome>` — que é exatamente o texto dos 39. Não foram
+  39 esquecimentos; foram 39 execuções corretas de uma instrução errada.
+
+  **O que aconteceu nesta change:** o arquivo vivo
+  `openspec/specs/api-response-ordering/spec.md` ficou com o `Purpose` real,
+  porque a delta o trazia e quem sincronizou leu a delta em vez de seguir o 4d.
+  E `agent-knowledge-binding` (delta `MODIFIED`) teve o `Purpose` preservado —
+  diff do arquivo vivo contra o snapshot de antes é **puramente aditivo**, 0
+  linhas removidas e 25 acrescentadas. Ou seja, **nenhum dos dois modos de falha
+  temidos ocorreu.** Mas o primeiro não ocorreu por sorte de quem executou, não
+  porque o mecanismo o impeça.
+
+  **Por que isso muda a formulação do gatilho.** O gatilho de 09/09/2026 foi
+  fixado assumindo que *escrever o `Purpose` na delta bastaria*. Não basta: a
+  delta pode trazer o `Purpose` e a sincronização escrever `TBD` por cima, se
+  quem sincroniza seguir o skill literalmente. O gatilho precisa de duas metades:
+
+  1. **escrever o `Purpose` real na delta da capability nova** (a metade já
+     fixada), e
+  2. **conferir o arquivo vivo depois da sincronização** — `## Purpose` real, sem
+     `TBD - defined by change`. `openspec validate --strict` **não pega isso**:
+     placeholder é texto válido, e as 44 specs passam com 39 deles.
+
+  **Correção de raiz, que tira o passo de cima do dono humano:** trocar o 4d do
+  skill por "usar o `## Purpose` da delta quando houver; só marcar `TBD` quando a
+  delta não trouxer nenhum". É edição de uma linha num arquivo do próprio
+  repositório (`.claude/skills/openspec-sync-specs/SKILL.md`), e enquanto ela não
+  for feita a metade (2) do gatilho é obrigatória em toda change que crie
+  capability. Gatilho: imediato — e é a única correção da lista que impede a
+  quadragésima ocorrência em vez de detectá-la.
+
 ### Primeiro deploy em produção (checklist)
 
 **Não existe ambiente de produção hoje** — o projeto está todo em

@@ -462,6 +462,14 @@ de propor algo nesta base:
      superfícies teria sido uma aposta, e "verificar" teria custado o mesmo que
      supor errado.
 
+   **E o alvo inclui a própria ferramenta de processo.** Os 39 `Purpose`
+   placeholder das specs vivas não foram 39 esquecimentos: o passo 4d de
+   `.claude/skills/openspec-sync-specs/SKILL.md` **manda** escrever
+   `Purpose ... (can be brief, mark as TBD)` e não manda procurar um `Purpose`
+   na delta. Foram 39 execuções corretas de uma instrução errada. Antes de
+   atribuir um padrão repetido de descuido a quem executa, ler a instrução que
+   essa pessoa estava seguindo.
+
    Na prática: item aberto que descreve comportamento de código carrega o
    arquivo e a linha de onde a afirmação foi **lida**, ou é escrito como
    suspeita explícita ("a conferir") em vez de fato. E toda change que

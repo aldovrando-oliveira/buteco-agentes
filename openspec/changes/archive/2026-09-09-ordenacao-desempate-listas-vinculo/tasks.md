@@ -156,18 +156,24 @@ do app.
 
 ## 6. Spec e `Purpose`
 
-- [ ] 6.1 **Roda no `/opsx:archive`, não aqui** — esta versão do CLI não tem
+- [x] 6.1 **Roda no `/opsx:archive`, não aqui** — esta versão do CLI não tem
   `openspec sync` autônomo; o archive é que aplica as deltas. Sincronizar as
   deltas para as specs vivas
   (`api-response-ordering` como capability nova, `agent-knowledge-binding` como
   modificada).
-- [ ] 6.2 Conferir que `openspec/specs/api-response-ordering/spec.md` ficou com
+- [x] 6.2 **Conferido no arquivo vivo: Purpose real, zero placeholder.** A
+  sincronização não sobrescreveu — mas ver o achado sobre a ferramenta em
+  `02-HISTORICO_E_STATUS.md`: a instrução do skill manda escrever `TBD`, e só
+  não escreveu porque o agente leu a delta. Conferir que `openspec/specs/api-response-ordering/spec.md` ficou com
   o **`Purpose` real** que a delta traz, e não com o placeholder
   `TBD - defined by change ...`. Se a sincronização escrever o placeholder,
   corrigir o arquivo vivo na mesma passada. Este é o gatilho fixado em
   09/09/2026 (39 de 43 capabilities estão com placeholder porque "escrever depois
   do archive" nunca teve dono), e esta é a primeira change a exercê-lo.
-- [ ] 6.3 Conferir que `agent-knowledge-binding` continua com o `Purpose` real
+- [x] 6.3 **Conferido: diff do arquivo vivo contra o snapshot de antes é
+  puramente aditivo — 0 linhas removidas, 25 acrescentadas.** Purpose intacto,
+  6 requisitos antes e depois, nenhum título duplicado, nenhum resíduo de
+  cabeçalho de delta. Conferir que `agent-knowledge-binding` continua com o `Purpose` real
   que já tem — é uma das quatro capabilities que não estão com placeholder, e a
   sincronização de uma delta MODIFIED não deve sobrescrevê-lo.
 
