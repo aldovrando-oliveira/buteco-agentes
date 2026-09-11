@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using Pgvector;
 
 #nullable disable
 
@@ -20,6 +21,7 @@ namespace Buteco.Api.Infrastructure.Migrations
                 .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Buteco.Api.A2A.A2ATaskRecord", b =>
@@ -196,6 +198,9 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ContentHash")
+                        .HasColumnType("text");
+
                     b.Property<int>("ContentLengthBytes")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("integer")
@@ -214,8 +219,18 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.Property<string>("FailureReason")
                         .HasColumnType("text");
 
+                    b.Property<int>("FragmentCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTimeOffset?>("IndexedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("IndexingAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<string>("IndexingStatus")
                         .IsRequired()
@@ -223,6 +238,9 @@ namespace Buteco.Api.Infrastructure.Migrations
 
                     b.Property<Guid>("KnowledgeBaseId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SourceType")
                         .IsRequired()
@@ -240,6 +258,52 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.HasIndex("KnowledgeBaseId");
 
                     b.ToTable("knowledge_documents", (string)null);
+                });
+
+            modelBuilder.Entity("Buteco.Api.KnowledgeFragments.Entities.KnowledgeFragment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Vector>("Embedding")
+                        .IsRequired()
+                        .HasColumnType("vector(4096)");
+
+                    b.Property<int>("EmbeddingDimensions")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EmbeddingModel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("EmbeddingProvider")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("KnowledgeBaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("KnowledgeDocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KnowledgeBaseId");
+
+                    b.HasIndex("KnowledgeDocumentId");
+
+                    b.ToTable("knowledge_fragments", (string)null);
                 });
 
             modelBuilder.Entity("Buteco.Api.McpServers.Entities.McpServer", b =>
@@ -343,6 +407,15 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("KnowledgeBaseId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Api.KnowledgeFragments.Entities.KnowledgeFragment", b =>
+                {
+                    b.HasOne("Buteco.Api.KnowledgeDocuments.Entities.KnowledgeDocument", null)
+                        .WithMany()
+                        .HasForeignKey("KnowledgeDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

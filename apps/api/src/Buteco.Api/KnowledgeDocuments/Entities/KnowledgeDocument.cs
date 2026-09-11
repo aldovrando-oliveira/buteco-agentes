@@ -50,13 +50,18 @@ public class KnowledgeDocument
     /// É este campo, e não um valor de enum, que distingue "nunca indexado" de
     /// "há conteúdo indexado respondendo agora" (D8).
     ///
-    /// Sem escritor nesta etapa: quem o preenche é o consumidor da etapa de
-    /// indexação (D10).
+    /// Escrito pelo consumidor de indexação de <c>apps/workers</c>, nunca por
+    /// <c>apps/api</c>.
     /// </summary>
     public DateTimeOffset? IndexedAt { get; private set; }
 
     /// <summary>
-    /// Motivo da última falha de indexação. Sem escritor nesta etapa (D10).
+    /// Motivo da última falha de indexação, em **texto legível por operador** —
+    /// nunca exceção crua (design.md da change knowledge-base-indexacao, spec
+    /// "Motivo de falha é legível por operador"). A tela de documentos o mostra
+    /// completo, sem truncar: é a única cópia de falha que ela tem.
+    ///
+    /// Escrito pelo consumidor de indexação de <c>apps/workers</c>.
     /// </summary>
     public string? FailureReason { get; private set; }
 
@@ -69,6 +74,48 @@ public class KnowledgeDocument
     /// estável ao longo das transições dele.
     /// </summary>
     public int ContentRevision { get; private set; }
+
+    /// <summary>
+    /// SHA-256 hexadecimal de <see cref="ExtractedText"/>. Tem **um** propósito
+    /// e só ele: atualização cujo conteúdo extraído seja idêntico ao gravado não
+    /// volta para <see cref="KnowledgeIndexingStatus.Pending"/>, não enfileira
+    /// indexação e não gasta chamada ao provedor de embedding.
+    ///
+    /// NÃO é chave de deduplicação entre documentos, NÃO é validação de
+    /// integridade e NÃO participa de nenhuma decisão de busca.
+    ///
+    /// É a evolução que a etapa 1 registrou em D9 para não parecer regressão
+    /// depois: lá **toda** atualização voltava a <c>Pending</c>, inclusive a que
+    /// só trocava o título, e isso era conservador de propósito.
+    ///
+    /// Nulo em linhas anteriores a esta etapa — significa "nunca indexado sob
+    /// esta regra", e a primeira atualização o preenche. Não há backfill.
+    /// </summary>
+    public string? ContentHash { get; private set; }
+
+    /// <summary>
+    /// Número de fragmentos gravados para este documento. Escrito pelo
+    /// consumidor de indexação de <c>apps/workers</c>, nunca por <c>apps/api</c>.
+    ///
+    /// **Regra de exibição, que é contrato desde a etapa 1 (D8):** consumidores
+    /// exibem este valor sempre que <see cref="IndexedAt"/> não for nulo,
+    /// qualquer que seja o estado, e o **omitem** quando for nulo — nunca
+    /// exibindo zero, que afirmaria que a indexação rodou e não achou nada.
+    /// </summary>
+    public int FragmentCount { get; private set; }
+
+    /// <summary>
+    /// Tentativas de indexação sobre a **revisão corrente** do conteúdo — não
+    /// sobre a vida do documento. Zerado quando o conteúdo muda.
+    ///
+    /// Uma tentativa é uma **execução** do consumidor, não uma chamada HTTP ao
+    /// provedor (design.md, D3). É o que torna verdadeiro o texto que a tela de
+    /// documentos mostra: "429 nas três tentativas, a última às 03:14".
+    /// </summary>
+    public int IndexingAttempts { get; private set; }
+
+    /// <inheritdoc cref="IndexingAttempts"/>
+    public DateTimeOffset? LastAttemptAt { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -89,6 +136,10 @@ public class KnowledgeDocument
         IndexedAt = null;
         FailureReason = null;
         ContentRevision = 1;
+        ContentHash = ComputeContentHash(extractedText);
+        FragmentCount = 0;
+        IndexingAttempts = 0;
+        LastAttemptAt = null;
         CreatedAt = DateTimeOffset.UtcNow;
         UpdatedAt = CreatedAt;
     }
@@ -100,17 +151,24 @@ public class KnowledgeDocument
     ///
     /// Numa única operação: grava o conteúdo novo, incrementa
     /// <see cref="ContentRevision"/> se e somente se <see cref="ExtractedText"/>
-    /// mudou, volta <see cref="IndexingStatus"/> para
-    /// <see cref="KnowledgeIndexingStatus.Pending"/>, limpa
-    /// <see cref="FailureReason"/> e **preserva** <see cref="IndexedAt"/>.
+    /// mudou, e **preserva** <see cref="IndexedAt"/>.
     ///
-    /// Nesta etapa toda atualização volta a <c>Pending</c>, inclusive uma que
-    /// só troque o título — é conservador de propósito; com <c>ContentHash</c>
-    /// (etapa de indexação) conteúdo idêntico deixa de reenfileirar.
+    /// Só volta <see cref="IndexingStatus"/> para
+    /// <see cref="KnowledgeIndexingStatus.Pending"/> — limpando
+    /// <see cref="FailureReason"/> e zerando <see cref="IndexingAttempts"/> —
+    /// quando há conteúdo novo a indexar. Atualização que só troca o título
+    /// preserva o estado de indexação corrente.
     /// </summary>
-    public void Update(string title, string sourceType, string extractedText)
+    /// <returns>
+    /// <c>true</c> quando há indexação a enfileirar; <c>false</c> quando o
+    /// conteúdo já está indexado e nada precisa ser feito. O handler usa este
+    /// retorno para decidir se publica na fila.
+    /// </returns>
+    public bool Update(string title, string sourceType, string extractedText)
     {
-        if (!string.Equals(ExtractedText, extractedText, StringComparison.Ordinal))
+        var contentChanged = !string.Equals(ExtractedText, extractedText, StringComparison.Ordinal);
+
+        if (contentChanged)
         {
             ContentRevision++;
         }
@@ -118,8 +176,48 @@ public class KnowledgeDocument
         Title = title;
         SourceType = sourceType;
         ExtractedText = extractedText;
+        UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Só conteúdo diferente volta o documento para a fila.
+        //
+        // A aferição é por ContentHash, e não pela comparação de string acima,
+        // por UM motivo concreto — e não porque as duas "respondam perguntas
+        // diferentes", que seria falso: com o hash sempre em sincronia com o
+        // texto, as duas coincidem em toda linha criada a partir desta etapa.
+        //
+        // Onde elas divergem é na linha LEGADA, criada antes desta change, cujo
+        // ContentHash é nulo: ali a comparação de string diz "não mudou" (o
+        // operador reenviou o mesmo conteúdo) enquanto o hash nulo diz "este
+        // conteúdo nunca foi indexado". O hash acerta, a string erraria, e o
+        // documento ficaria parado em Pending para sempre — que é exatamente o
+        // estado que esta change existe para acabar.
+        //
+        // ContentRevision continua sendo outra coisa: é o token de descarte do
+        // consumidor (etapa 1, D7), move-se com o texto e não com o hash.
+        var newHash = ComputeContentHash(extractedText);
+        var alreadyIndexedThisContent = string.Equals(ContentHash, newHash, StringComparison.Ordinal);
+        ContentHash = newHash;
+
+        if (alreadyIndexedThisContent)
+        {
+            return false;
+        }
+
         IndexingStatus = KnowledgeIndexingStatus.Pending;
         FailureReason = null;
-        UpdatedAt = DateTimeOffset.UtcNow;
+        IndexingAttempts = 0;
+        LastAttemptAt = null;
+
+        return true;
     }
+
+    /// <summary>
+    /// SHA-256 do texto em UTF-8, em hexadecimal minúsculo. Determinístico e
+    /// estável entre processos — o mesmo conteúdo precisa dar o mesmo hash em
+    /// <c>apps/api</c> hoje e daqui a um ano, senão a regra de "não reindexar
+    /// conteúdo idêntico" vira reindexação silenciosa a cada deploy.
+    /// </summary>
+    private static string ComputeContentHash(string extractedText) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(extractedText)));
 }

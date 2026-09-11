@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
+using Buteco.Api.Tests.Support;
 
 namespace Buteco.Api.Tests.Support;
 
@@ -19,7 +20,7 @@ namespace Buteco.Api.Tests.Support;
 /// </summary>
 public sealed class McpConnectionTestFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_agents_mcp_connection_test")
         .WithUsername("buteco")
         .WithPassword("buteco_test_password")
@@ -39,7 +40,7 @@ public sealed class McpConnectionTestFixture : WebApplicationFactory<Program>, I
                 services.Remove(dbContextDescriptor);
             }
 
-            services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+            services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(_postgres.GetConnectionString()));
 
             services.AddHttpClient(McpConnectionTester.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => McpServerHandler);

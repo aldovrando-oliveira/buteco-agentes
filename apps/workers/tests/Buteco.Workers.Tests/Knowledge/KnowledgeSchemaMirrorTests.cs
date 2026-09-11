@@ -189,7 +189,7 @@ public class KnowledgeSchemaMirrorTests(WorkerInfrastructureFixture fixture) : I
     public async Task MirroredModel_HasNoPendingModelChanges()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(fixture.Postgres.GetConnectionString())
+            .UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString())
             .Options;
 
         await using var dbContext = new AppDbContext(options);

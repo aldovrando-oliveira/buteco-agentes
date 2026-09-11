@@ -10,12 +10,12 @@ namespace Buteco.Api.Tests.Knowledge;
 /// e na volta, e por isso é cego a enum saindo como inteiro ordinal — defeito
 /// que já apareceu duas vezes nesta base (convenção 11/12).
 ///
-/// **Cobertura parcial, e é de propósito:** nesta etapa só <c>Pending</c> tem
-/// escritor, então só ele aparece numa resposta real. <c>Indexing</c>,
-/// <c>Indexed</c> e <c>Failed</c> ficam verificáveis na etapa de indexação, e é
-/// lá que este teste tem de ser estendido (design.md, D10). O conversor é
-/// declarado no tipo, não por valor, então o risco residual é pequeno — mas a
-/// cobertura desta change não é completa e está dito.
+/// **Cobertura agora completa.** A etapa 1 conseguia afirmar só <c>Pending</c>,
+/// porque os outros três valores nasceram sem escritor e não tinham como
+/// aparecer numa resposta real; D10 daquela change pediu nominalmente que a
+/// etapa de indexação estendesse este arquivo. É o que a change
+/// knowledge-base-indexacao faz aqui: os quatro valores passam a ter escritor e
+/// os quatro são afirmados.
 /// </summary>
 public class KnowledgeWireFormatTests
 {
@@ -33,6 +33,9 @@ public class KnowledgeWireFormatTests
             null,
             null,
             1,
+            0,
+            0,
+            null,
             DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow);
 
@@ -49,6 +52,41 @@ public class KnowledgeWireFormatTests
 
         Assert.Equal(JsonValueKind.String, status.ValueKind);
         Assert.Equal("Pending", status.GetString());
+    }
+
+    // Os QUATRO valores, e não só o que a etapa 1 conseguia produzir. Theory em
+    // vez de quatro Facts porque o que se afirma é uma propriedade do tipo —
+    // todo valor do enum atravessa como string —, e enumerar os casos aqui faz
+    // um valor novo no enum, se algum dia houver, nascer sem cobertura visível.
+    [Theory]
+    [InlineData(KnowledgeIndexingStatus.Pending, "Pending")]
+    [InlineData(KnowledgeIndexingStatus.Indexing, "Indexing")]
+    [InlineData(KnowledgeIndexingStatus.Indexed, "Indexed")]
+    [InlineData(KnowledgeIndexingStatus.Failed, "Failed")]
+    public void EveryIndexingStatus_IsSerializedAsString_NotOrdinal(KnowledgeIndexingStatus status, string expected)
+    {
+        var json = SerializeSampleDocument(status);
+
+        using var document = JsonDocument.Parse(json);
+        var value = document.RootElement.GetProperty("indexingStatus");
+
+        Assert.Equal(JsonValueKind.String, value.ValueKind);
+        Assert.Equal(expected, value.GetString());
+    }
+
+    [Fact]
+    public void IndexingFields_AreExposedOnTheWire()
+    {
+        var json = SerializeSampleDocument(KnowledgeIndexingStatus.Indexed);
+
+        using var document = JsonDocument.Parse(json);
+
+        foreach (var key in new[] { "fragmentCount", "indexingAttempts", "lastAttemptAt" })
+        {
+            Assert.True(
+                document.RootElement.TryGetProperty(key, out _),
+                $"chave '{key}' ausente no JSON: {json}");
+        }
     }
 
     [Fact]

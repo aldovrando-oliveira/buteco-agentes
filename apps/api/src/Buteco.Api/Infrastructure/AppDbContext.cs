@@ -6,6 +6,7 @@ using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Entities;
 using Buteco.Api.KnowledgeBases.Entities;
 using Buteco.Api.KnowledgeDocuments.Entities;
+using Buteco.Api.KnowledgeFragments.Entities;
 using Buteco.Api.McpServers.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -30,8 +31,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<AgentKnowledgeBase> AgentKnowledgeBases => Set<AgentKnowledgeBase>();
 
+    public DbSet<KnowledgeFragment> KnowledgeFragments => Set<KnowledgeFragment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // A extensão nasce na migração de apps/api porque é apps/api quem
+        // aplica migração a banco real — o migrator do compose só empacota
+        // bundles de apps/api e apps/inbox (design.md, D10). apps/api NÃO
+        // escreve em knowledge_fragments; quem escreve é apps/workers.
+        //
+        // Restrição de deploy a declarar, não a assumir: `vector` não é uma
+        // extensão `trusted` (verificado: trusted = f, superuser = t), então
+        // CREATE EXTENSION exige superusuário. Funciona hoje porque o migrator
+        // conecta como ${POSTGRES_USER}, o superusuário de bootstrap do compose.
+        if (Database.IsNpgsql())
+        {
+            modelBuilder.HasPostgresExtension("vector");
+        }
+
         modelBuilder.Entity<Agent>(entity =>
         {
             entity.ToTable("agents");
@@ -155,6 +172,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(document => document.IndexedAt).IsRequired(false);
             entity.Property(document => document.FailureReason).IsRequired(false);
             entity.Property(document => document.ContentRevision).IsRequired();
+            entity.Property(document => document.ContentHash).IsRequired(false);
+            entity.Property(document => document.FragmentCount).IsRequired().HasDefaultValue(0);
+            entity.Property(document => document.IndexingAttempts).IsRequired().HasDefaultValue(0);
+            entity.Property(document => document.LastAttemptAt).IsRequired(false);
             entity.Property(document => document.CreatedAt).IsRequired();
             entity.Property(document => document.UpdatedAt).IsRequired();
 
@@ -188,6 +209,74 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasForeignKey(document => document.KnowledgeBaseId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
+
+        // O provider InMemory não sabe representar `vector` — nenhum tipo do CLR
+        // mapeia para ele fora de um provider relacional. A entidade é
+        // condicionada aqui por isso, e não como concessão de teste: em produção
+        // e em todo teste com Testcontainers o provider é Npgsql, e o mapeamento
+        // é exercitado por inteiro, inclusive por KnowledgeSchemaMirrorTests.
+        //
+        // Sem esta guarda, o único teste de handler que usa InMemory reprova ao
+        // CONSTRUIR O MODELO — e por um motivo que não tem relação com o que ele
+        // afirma, porque a validação do EF Core é do **modelo inteiro**, não da
+        // entidade que o teste usa.
+        if (Database.IsNpgsql())
+        {
+            modelBuilder.Entity<KnowledgeFragment>(entity =>
+            {
+                entity.ToTable("knowledge_fragments");
+                entity.HasKey(fragment => fragment.Id);
+                entity.Property(fragment => fragment.Text).IsRequired();
+                entity.Property(fragment => fragment.Ordinal).IsRequired();
+                entity.Property(fragment => fragment.EmbeddingProvider).IsRequired();
+                entity.Property(fragment => fragment.EmbeddingModel).IsRequired();
+                entity.Property(fragment => fragment.EmbeddingDimensions).IsRequired();
+                entity.Property(fragment => fragment.CreatedAt).IsRequired();
+
+                // Coluna de verdade na dimensão nativa do modelo (design.md, D1).
+                // NÃO existe índice ANN aqui, e isso é decisão medida: HNSW recusa
+                // mais de 2000 dimensões em `vector` e mais de 4000 em `halfvec`
+                // (verificado em pgvector 0.8.6), então qualquer índice exige uma
+                // coluna DERIVADA e truncada. Ela nasce por SQL quando o índice
+                // fizer falta — gatilho medido: p95 da consulta acima de 200 ms —,
+                // sem chamar o gateway e sem reembedar.
+                //
+                // ATENÇÃO ao dia de exercer esse gatilho: `ADD COLUMN ... GENERATED
+                // ALWAYS AS ... STORED` REESCREVE a tabela sob ACCESS EXCLUSIVE, e
+                // durante o ALTER até leitura bloqueia (medido). Para 150 mil
+                // fragmentos são ~2,4 GB lidos e ~3,5 GB escritos com a tabela
+                // travada. A saída medida é coluna comum (que não reescreve) mais
+                // UPDATE em lotes.
+                entity.Property(fragment => fragment.Embedding).HasColumnType("vector(4096)");
+
+                // A busca da etapa 4 filtra por base e ordena por distância; este é
+                // o índice que sustenta o filtro enquanto a busca for exata.
+                entity.HasIndex(fragment => fragment.KnowledgeBaseId);
+                entity.HasIndex(fragment => fragment.KnowledgeDocumentId);
+
+                // Cascade, e NÃO o Restrict que KnowledgeDocument usa para a base
+                // (design.md, D5). A distinção é entre conteúdo derivado e conteúdo
+                // referenciado: fragmento só existe por causa do documento, e o
+                // documento TEM exclusão real desde a etapa 1 (D6, o primeiro
+                // MapDelete do repositório).
+                //
+                // Com Restrict aqui, excluir um documento já indexado passaria a
+                // FALHAR — regressão direta daquela decisão. O teste que guarda
+                // isso vive em apps/api, onde a exclusão mora.
+                entity.HasOne<KnowledgeDocument>()
+                    .WithMany()
+                    .HasForeignKey(fragment => fragment.KnowledgeDocumentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+        }
+        else
+        {
+            // O DbSet faz o EF descobrir a entidade por convenção mesmo sem
+            // mapeamento explícito — sem este Ignore, ele tenta materializar
+            // `Vector` e falha por não achar construtor vinculável.
+            modelBuilder.Ignore<KnowledgeFragment>();
+        }
+
 
         modelBuilder.Entity<AgentKnowledgeBase>(entity =>
         {

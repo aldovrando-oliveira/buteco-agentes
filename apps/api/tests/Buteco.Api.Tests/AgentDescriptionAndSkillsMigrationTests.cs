@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Testcontainers.PostgreSql;
+using Buteco.Api.Tests.Support;
 
 namespace Buteco.Api.Tests;
 
@@ -22,7 +23,7 @@ public class AgentDescriptionAndSkillsMigrationTests : IAsyncLifetime
 {
     private const string PreviousMigrationId = "20260803010705_AddAgentMcpServerAllowedTools";
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_agents_migration_test")
         .WithUsername("buteco")
         .WithPassword("buteco_test_password")
@@ -36,7 +37,7 @@ public class AgentDescriptionAndSkillsMigrationTests : IAsyncLifetime
     public async Task ExistingAgent_MigratesToNullDescriptionAndEmptySkills()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_postgres.GetConnectionString())
+            .UseButecoAgentsNpgsql(_postgres.GetConnectionString())
             .Options;
 
         await using (var dbContext = new AppDbContext(options))

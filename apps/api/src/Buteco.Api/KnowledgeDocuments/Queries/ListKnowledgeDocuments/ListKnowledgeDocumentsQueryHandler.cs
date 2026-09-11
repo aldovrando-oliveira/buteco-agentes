@@ -46,6 +46,9 @@ public sealed class ListKnowledgeDocumentsQueryHandler(AppDbContext dbContext)
                 document.IndexedAt,
                 document.FailureReason,
                 document.ContentRevision,
+                document.FragmentCount,
+                document.IndexingAttempts,
+                document.LastAttemptAt,
                 document.CreatedAt,
                 document.UpdatedAt))
             .ToListAsync(cancellationToken);

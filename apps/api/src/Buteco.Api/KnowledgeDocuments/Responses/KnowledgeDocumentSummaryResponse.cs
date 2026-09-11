@@ -21,5 +21,8 @@ public sealed record KnowledgeDocumentSummaryResponse(
     DateTimeOffset? IndexedAt,
     string? FailureReason,
     int ContentRevision,
+    int FragmentCount,
+    int IndexingAttempts,
+    DateTimeOffset? LastAttemptAt,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

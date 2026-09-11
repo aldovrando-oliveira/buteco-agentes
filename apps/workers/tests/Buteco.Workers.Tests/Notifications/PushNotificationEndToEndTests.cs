@@ -432,7 +432,7 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
     }
 
     private AppDbContext CreateDbContext() =>
-        new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options);
+        new(new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options);
 
     private async Task SeedTaskAsync(string taskId, Guid agentId, string contextId, string userMessage)
     {

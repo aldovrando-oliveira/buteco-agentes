@@ -6,6 +6,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Testcontainers.PostgreSql;
+using Buteco.Api.Tests.Support;
+using Buteco.Api.Knowledge.Indexing;
 
 namespace Buteco.Api.Tests.Support;
 
@@ -24,7 +26,7 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
     public const string KnownOperatorUsername = TestAuthentication.KnownOperatorUsername;
     public const string KnownOperatorPassword = TestAuthentication.KnownOperatorPassword;
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_agents_test")
         .WithUsername("buteco")
         .WithPassword("buteco_test_password")
@@ -60,7 +62,21 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
                 services.Remove(descriptor);
             }
 
-            services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+            services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(_postgres.GetConnectionString()));
+
+            // O fixture NÃO sobe RabbitMQ, e a partir da change
+            // knowledge-base-indexacao todo POST/PUT de documento publica na
+            // fila de indexação. Sem esta substituição o publisher real tenta
+            // abrir conexão e derruba todo teste que cria documento — inclusive
+            // os 12 que existiam antes e não têm relação com indexação.
+            var indexingPublisher = services.SingleOrDefault(
+                d => d.ServiceType == typeof(IKnowledgeIndexingJobPublisher));
+            if (indexingPublisher is not null)
+            {
+                services.Remove(indexingPublisher);
+            }
+
+            services.AddSingleton<IKnowledgeIndexingJobPublisher>(IndexingPublisher);
         });
 
         // Sink do SQL emitido pelo EF Core. Inerte para quem não usa
@@ -78,6 +94,13 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
     /// de ordenação (ver <see cref="EmittedSqlCapture"/>).
     /// </summary>
     public EmittedSqlCapture SqlCapture { get; } = new();
+
+    /// <summary>
+    /// Registra o que foi publicado na fila de indexação. É o que permite
+    /// afirmar tanto "enfileirou" quanto "NÃO enfileirou" — o par da regra de
+    /// <c>ContentHash</c>.
+    /// </summary>
+    public FakeKnowledgeIndexingJobPublisher IndexingPublisher { get; } = new();
 
     protected override void ConfigureClient(HttpClient client)
     {

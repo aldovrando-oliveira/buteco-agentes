@@ -148,7 +148,7 @@ public class ChannelContextMessageTests(WorkerInfrastructureFixture fixture) : I
             await host.StopAsync();
         }
 
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options;
         await using var dbContext = new AppDbContext(options);
         var persistedInstructions = await dbContext.Agents
             .AsNoTracking()
@@ -254,7 +254,7 @@ public class ChannelContextMessageTests(WorkerInfrastructureFixture fixture) : I
 
     private async Task SeedAgentAsync(Guid agentId, string agentName, string instructions, string provider = "openai", string model = "gpt-5.6-sol")
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options;
         await using var dbContext = new AppDbContext(options);
 
         var now = DateTimeOffset.UtcNow;
@@ -268,7 +268,7 @@ public class ChannelContextMessageTests(WorkerInfrastructureFixture fixture) : I
     private async Task SeedTaskAsync(
         string taskId, Guid agentId, string contextId, string userMessage, Dictionary<string, JsonElement>? messageMetadata)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options;
         await using var dbContext = new AppDbContext(options);
 
         var now = DateTimeOffset.UtcNow;
@@ -322,7 +322,7 @@ public class ChannelContextMessageTests(WorkerInfrastructureFixture fixture) : I
 
     private async Task<A2ATaskRecord> PollUntilTerminalAsync(string taskId)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options;
 
         for (var attempt = 0; attempt < 50; attempt++)
         {

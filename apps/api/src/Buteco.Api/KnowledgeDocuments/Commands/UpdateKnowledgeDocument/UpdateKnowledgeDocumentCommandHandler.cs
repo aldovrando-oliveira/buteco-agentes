@@ -1,4 +1,5 @@
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Knowledge.Indexing;
 using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeDocuments.Responses;
 using Mediator;
@@ -8,7 +9,8 @@ namespace Buteco.Api.KnowledgeDocuments.Commands.UpdateKnowledgeDocument;
 
 public sealed class UpdateKnowledgeDocumentCommandHandler(
     AppDbContext dbContext,
-    KnowledgeContentProcessor contentProcessor)
+    KnowledgeContentProcessor contentProcessor,
+    IKnowledgeIndexingJobPublisher indexingPublisher)
     : ICommandHandler<UpdateKnowledgeDocumentCommand, UpdateKnowledgeDocumentResult>
 {
     public async ValueTask<UpdateKnowledgeDocumentResult> Handle(UpdateKnowledgeDocumentCommand command, CancellationToken cancellationToken)
@@ -33,8 +35,18 @@ public sealed class UpdateKnowledgeDocumentCommandHandler(
             return UpdateKnowledgeDocumentResult.Invalid(content.ValidationErrors!);
         }
 
-        document.Update(command.Title, command.SourceType, content.ExtractedText!);
+        // Update devolve se HÁ conteúdo novo a indexar. Atualização que só
+        // troca o título preserva o estado de indexação e NÃO enfileira — é a
+        // regra do ContentHash (design.md, D9), e é o que impede gastar
+        // embedding à toa em edição de metadado.
+        var needsIndexing = document.Update(command.Title, command.SourceType, content.ExtractedText!);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        if (needsIndexing)
+        {
+            await indexingPublisher.PublishAsync(
+                new KnowledgeIndexingJobMessage(document.Id, document.ContentRevision), cancellationToken);
+        }
 
         return UpdateKnowledgeDocumentResult.Success(KnowledgeDocumentResponse.FromEntity(document));
     }

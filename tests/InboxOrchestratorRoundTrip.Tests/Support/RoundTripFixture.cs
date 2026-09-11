@@ -27,6 +27,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Buteco.Workers.Mcp;
+using InboxOrchestratorRoundTrip.Tests.Support;
 
 namespace InboxOrchestratorRoundTrip.Tests.Support;
 
@@ -52,7 +53,7 @@ namespace InboxOrchestratorRoundTrip.Tests.Support;
 /// </summary>
 public sealed class RoundTripFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _apiAndWorkersPostgres = new PostgreSqlBuilder("postgres:18")
+    private readonly PostgreSqlContainer _apiAndWorkersPostgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_agents_roundtrip_test")
         .WithUsername("buteco")
         .WithPassword("buteco_test_password")
@@ -164,7 +165,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     services.Remove(dbContextDescriptor);
                 }
 
-                services.AddDbContext<ApiAppDbContext>(options => options.UseNpgsql(_apiAndWorkersPostgres.GetConnectionString()));
+                services.AddDbContext<ApiAppDbContext>(options => options.UseButecoAgentsNpgsql(_apiAndWorkersPostgres.GetConnectionString()));
 
                 services.Configure<ApiRabbitMqOptions>(options =>
                 {

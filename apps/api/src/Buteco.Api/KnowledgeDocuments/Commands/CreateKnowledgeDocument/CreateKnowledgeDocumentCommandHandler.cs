@@ -1,4 +1,5 @@
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Knowledge.Indexing;
 using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeDocuments.Responses;
@@ -9,7 +10,8 @@ namespace Buteco.Api.KnowledgeDocuments.Commands.CreateKnowledgeDocument;
 
 public sealed class CreateKnowledgeDocumentCommandHandler(
     AppDbContext dbContext,
-    KnowledgeContentProcessor contentProcessor)
+    KnowledgeContentProcessor contentProcessor,
+    IKnowledgeIndexingJobPublisher indexingPublisher)
     : ICommandHandler<CreateKnowledgeDocumentCommand, CreateKnowledgeDocumentResult>
 {
     public async ValueTask<CreateKnowledgeDocumentResult> Handle(CreateKnowledgeDocumentCommand command, CancellationToken cancellationToken)
@@ -35,6 +37,12 @@ public sealed class CreateKnowledgeDocumentCommandHandler(
 
         dbContext.KnowledgeDocuments.Add(document);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        // Publica DEPOIS do SaveChanges, nunca antes: uma mensagem publicada
+        // antes da gravação apontaria para um documento que o consumidor não
+        // acharia, e o SaveChanges ainda pode falhar.
+        await indexingPublisher.PublishAsync(
+            new KnowledgeIndexingJobMessage(document.Id, document.ContentRevision), cancellationToken);
 
         // ContentLengthBytes é coluna gerada pelo banco: o EF a lê de volta no
         // próprio SaveChanges, sem Reload() explícito (design.md, D14).

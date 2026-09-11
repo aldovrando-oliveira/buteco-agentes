@@ -19,6 +19,9 @@ public sealed record KnowledgeDocumentResponse(
     DateTimeOffset? IndexedAt,
     string? FailureReason,
     int ContentRevision,
+    int FragmentCount,
+    int IndexingAttempts,
+    DateTimeOffset? LastAttemptAt,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
@@ -33,6 +36,9 @@ public sealed record KnowledgeDocumentResponse(
         document.IndexedAt,
         document.FailureReason,
         document.ContentRevision,
+        document.FragmentCount,
+        document.IndexingAttempts,
+        document.LastAttemptAt,
         document.CreatedAt,
         document.UpdatedAt);
 }

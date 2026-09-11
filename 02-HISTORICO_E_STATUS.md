@@ -2066,6 +2066,219 @@ realista para obter número comparável ao bar — recusada porque um corpus
 deliberadamente mais fácil produz número maior sem nada ter melhorado, o que é
 calibrar o teste ao bar em vez do contrário.
 
+### Etapa 2a — indexação de documentos (`knowledge-base-indexacao`, 2026-09-11)
+
+O consumidor que a etapa 1 declarou que não existia. Os valores `Indexing`,
+`Indexed` e `Failed` do enum, e as colunas `IndexedAt` e `FailureReason`,
+nasceram sem escritor lá de propósito; é esta change que os escreve.
+`ContentRevision`, criada na etapa 1 e sem consumidor desde então, ganha o dela.
+
+O que entrou: entidade `KnowledgeFragment` com `vector(4096)` e três colunas de
+proveniência; fragmentador corrigido; resolvedor de gerador de embedding; fila
+própria com política de tentativas; `ContentHash`, `FragmentCount`,
+`IndexingAttempts` e `LastAttemptAt` em `KnowledgeDocument`; e a checagem de
+integridade do índice no boot — quinto caso da convenção 8, e o primeiro desta
+base que faz I/O no boot.
+
+#### Os três mecanismos que "cobre de graça" escondia
+
+A D7 da etapa 1 afirmava que `ContentRevision` "cobre o delete de graça". A
+verificação V4 desta change contestou pela leitura do código, e os testes de
+concorrência **confirmaram por medição** — reintroduzindo dois defeitos
+diferentes e vendo o que cada um derruba:
+
+| defeito reintroduzido | o que reprova |
+|---|---|
+| removida a condição `ContentRevision == ...` do commit | **só** o teste de atualização — o de exclusão passa, porque a linha já não existe e a atualização afeta zero linhas de qualquer jeito |
+| removida a checagem de `linhas afetadas == 0` | **os dois** — sem ela o caso de exclusão segue para o `INSERT` e estoura na chave estrangeira |
+
+São **três** mecanismos, não um: `ContentRevision` cobre a **atualização**; a
+checagem de zero linhas cobre a **exclusão**; e quem impede fragmento órfão é a
+**chave estrangeira em `Cascade`** — que precisou ser `Cascade` e não `Restrict`,
+senão excluir documento indexado passaria a falhar, regressão direta da D6 da
+etapa 1.
+
+**A leitura que vale mais que o conserto: "cobre de graça" foi a forma de
+afirmação que escondeu três mecanismos sob um nome.** A frase é econômica e soa
+como economia de desenho; o que ela economizou foi a distinção. E foram
+necessários **dois defeitos reintroduzidos diferentes** para separá-los — um só
+teria confirmado a metade que ele exercita e deixado a outra parecendo coberta.
+
+#### Guarda correto reprovando pelo motivo errado
+
+A primeira execução dos testes da checagem de startup reprovou dois de seis. O
+guarda estava certo: o defeito era **isolamento de fixture** — o fixture é por
+classe, os testes compartilham o mesmo Postgres, e fragmentos de um teste
+anterior faziam o seguinte cair no caminho de "mais de uma combinação" em vez do
+que ele queria exercitar.
+
+É parente próximo da quinta forma da convenção 15, e vale registrar o par:
+**estado contaminado** e **estado insuficiente** produzem o mesmo tipo de
+resultado — algo que parece medição e não é. A vacuidade sobre tabela vazia faz o
+guarda passar sem exercitar nada; a contaminação entre testes faz ele reprovar
+sem que o código esteja errado. Os dois se resolvem pela mesma pergunta: *este
+arranjo coloca o sistema no estado que eu penso que coloca?*
+
+#### O que os guardas mediram
+
+Todos foram **vistos reprovar**, não deduzidos:
+
+- **Invariantes do fragmentador** — reimplementado o fragmentador de `0b` e posto
+  no lugar: I1 dá **0 fragmentos** onde o atual dá 1; I2 dá um fragmento de
+  **7.226 caracteres** contra teto de 1.600 (pior que os 2.858 que `0c` mediu,
+  porque aquele corpus tinha tabela menor); I3 descarta o preâmbulo.
+- **Guarda de zero fragmentos** — com a guarda, 15 de 15 passam; removida,
+  reprovam **exatamente 2**, os dois do arquivo dela. Os 12 invariantes não se
+  movem, e a separação é **estrutural**: aqueles instanciam o fragmentador real
+  diretamente e nunca veem a substituição.
+- **Checagem de integridade** — os quatro cenários de divergência rodam sobre
+  índice **povoado**, com um teste afirmando essa precondição.
+
+#### Fechamento: como a suíte foi comparada, e a dúvida que ficou
+
+Baseline e fechamento medidos com o **mesmo procedimento de carga** — `uptime`
+antes de cada alvo, espaçamento entre eles, nada em paralelo.
+
+| alvo | baseline | fechamento | delta |
+|---|---|---|---|
+| `libs/ProviderCatalog.Tests` | 6/6 | 6/6 | — |
+| `apps/api` | 275/276 | **287/288** | +12 testes, mesma reprovação |
+| `apps/workers` | 174/174 | 211/212 → **212/212** na repetição | +38 testes |
+| `apps/inbox` | 164/164 | 164/164 | — |
+| `tests/CrossApp…` / `RoundTrip` | 2/2, 4/4 | 2/2, 4/4 | — |
+| `apps/frontend` | 617/617 | 617/617 | — |
+
+A única reprovação de `apps/api` é a mesma da baseline: o flake de ordem de
+execução de `AgentDeactivationTests`, já registrado como item aberto.
+
+**A reprovação única de `apps/workers` NÃO foi resolvida, e fica registrada como
+dúvida residual em vez de fechada.** O que se sabe:
+
+- ela aconteceu **uma vez**, com a carga dentro do limiar (4,26);
+- a repetição com a máquina mais descarregada (2,52) passou **212/212**, com a
+  saída completa guardada em
+  `~/.cache/buteco-agents/kb-2a-fechamento/workers-fechamento-completo.log`;
+- o **nome do teste se perdeu**, porque aquela rodada passou por um filtro que só
+  capturava o resumo — erro de instrumentação, corrigido na convenção 19 e na
+  tarefa de fechamento, mas irrecuperável para este caso;
+- a evidência circunstancial aponta contenção: os quatro pares de containers
+  novos são desta change, e o perfil (reprovação única, em bloco de classes de
+  host) é o que `WorkerHostCollection` documenta.
+
+**O que não dá para afirmar: que foi contenção.** Pode ter sido teste
+intermitente escrito por esta change, e sem o nome não há como descartar.
+Registrar isso como "ambiental confirmado" seria exatamente o erro que a
+convenção 19 nomeia — baseline vermelha não absolve ninguém, e uma reprovação
+sem nome absolve menos ainda.
+
+**Por que não se caçou o evento:** forçar carga para reproduzir é perseguir algo
+que não se controla, e "não reproduziu em cinco tentativas" não elimina a
+dúvida — só a torna mais barata de ignorar. A rodada única com saída completa
+foi feita; o valor dela está na próxima vez, não nesta.
+
+#### Oitava medição da convenção 18
+
+Projetado **51 arquivos / ~3.305 linhas** de código; entregue **83 arquivos /
+3.963 linhas** de código (artefatos OpenSpec e migração gerada fora da conta,
+como manda a convenção).
+
+| categoria | criados | modificados |
+|---|---|---|
+| produção | 23 arq / 1.770 li | 14 arq / 338 li |
+| teste | 11 arq / 1.594 li | 26 arq / 128 li |
+| configuração (build, compose, env) | — | 11 arq / 135 li |
+| **código** | **34 arq / 3.364 li** | **49 arq / 601 li** |
+| *documentação (`.md`)* | *—* | *4 arq / 374 li* |
+| *migração gerada* | *4 arq / 1.058 li* | *2 arq / 146 li* |
+| *`openspec/`* | *6 arq / 1.247 li* | *—* |
+
+**As linhas erraram por 20%; os arquivos erraram por 63%.** E são erros de
+naturezas diferentes, que é o que importa registrar.
+
+**As linhas quase acertaram**, e pelo motivo certo: 3.364 linhas criadas contra
+as ~3.270 projetadas para criados. O método por componente funciona quando o
+componente é código novo — a projeção tinha o chunker, o consumidor, o serviço,
+o resolvedor e os testes, e cada um custou perto do previsto.
+
+**Os arquivos erraram, e as três causas são estruturais, não escala:**
+
+1. **A pergunta errada da V1, medida em dois níveis.** Ela contou
+   `PostgreSqlBuilder` — a **imagem** — e concluiu 11 sítios. O que a mudança
+   alcançava era `UseNpgsql` — o **provider** —, e depois disso ainda alcançava
+   `UseInMemoryDatabase`, que a segunda varredura também não pegou. Duas vezes a
+   mesma forma: verificação correta respondendo à pergunta errada, a segunda
+   **depois** de a regra sobre ela já estar escrita na convenção 6. Custo: 26
+   arquivos de teste modificados que a projeção não tinha.
+2. **Sítio e arquivo não são a mesma unidade.** A correção do `UseVector` foram
+   ~38 **sítios** em 24 **arquivos** — vários sítios por arquivo. A projeção
+   contava sítios e a entrega conta arquivos; comparar os dois números como se
+   fossem o mesmo esconde que a estimativa de trabalho estava certa e a de
+   arquivos, não.
+3. **Blast radius de ligar um caminho que antes não existia.** Ao publicar na
+   fila, **12 testes que existiam antes desta change** passaram a reprovar, e o
+   conserto (duplo do publisher no fixture) é arquivo que nenhuma projeção por
+   componente teria previsto — ele não pertence a componente nenhum da change.
+
+**Não há fator de correção a extrair daqui, e é deliberado não inventá-lo.** As
+três causas são sobre *o que a mudança alcança*, não sobre *quanto ela custa*.
+Um multiplicador esconderia justamente a pergunta que precisa ser feita antes:
+**"o que exatamente esta mudança toca?"** — e ela se responde por varredura, não
+por estimativa.
+
+**A documentação foi 374 linhas em 4 arquivos**, quase toda no `01` e no `02`, e
+fica fora da conta de código por consistência com as sete medições anteriores —
+mas vale dito que ela é ~10% do esforço, e que a convenção 18 nunca a mediu.
+
+#### O limiar de carga envelheceu, e é achado diferente do que o item previa
+
+No fechamento, `apps/workers` reprovou **1 de 212** — e a carga estava **dentro
+do limiar declarado**: load 4,26 contra o teto de 5,0. A máquina não estava
+suja. **A suíte é que ficou mais pesada por dentro.**
+
+Esta change levou a `WorkerHostCollection` de **7 para 11** classes, todas as
+quatro novas subindo host: `KnowledgeIndexingTests`,
+`KnowledgeIndexingConcurrencyTests`, `KnowledgeIndexingZeroFragmentGuardTests` e
+`EmbeddingIndexConsistencyTests`. Cada uma tem `IClassFixture<WorkerInfrastructureFixture>`,
+ou seja um par próprio de containers Postgres + RabbitMQ.
+
+| rodada | classes de host | load na largada | duração | resultado |
+|---|---|---|---|---|
+| baseline (antes da change) | 7 | — | 5 m 24 s | 174/174 |
+| fechamento | 11 | **4,26** | 4 m 57 s | **211/212** |
+| repetição | 11 | 2,52 | 3 m 48 s | **212/212** |
+
+**O item aberto previa outra coisa.** Ele dizia que, entrando classe nova na
+coleção, *"o sintoma desaparece de novo sem a causa ser tratada"* — ou seja,
+esperava que a serialização escondesse o problema. O que aconteceu foi o
+contrário: o sintoma **apareceu**, e quem falhou foi o **limiar**, que estava
+calibrado para 7 classes e não cobre 11.
+
+**A leitura generalizável, que é o que vale guardar: um limiar de carga externa
+não cobre uma suíte que ficou mais pesada por dentro.** São duas dimensões
+diferentes, e o número media só uma. Qualquer limiar calibrado contra um estado
+do sistema precisa de **gatilho de recalibração quando o sistema muda** — senão
+ele continua sendo citado com a autoridade de um número medido, sobre um sistema
+que já não é o que foi medido.
+
+**É a segunda ocorrência da mesma família, e a primeira está em `0c`:** *"bar
+calibrado contra benchmark saturado não transfere para benchmark
+discriminante"*. Agora na forma *"limiar calibrado contra suíte de N classes não
+transfere para N+4"*. As duas são o mesmo mecanismo — **referência medida sobre
+um estado, citada depois que o estado mudou** —, mas duas ocorrências não fazem
+convenção: ficam como dois registros, com **gatilho para promover ao `01` na
+terceira**.
+
+#### Handoff para a 2b
+
+- **Rota de reindexação de documento** — a fila e o publisher já existem; falta a
+  rota que publica nela.
+- **Resumo de indexação por base** — a forma (campo em `KnowledgeBaseResponse`
+  contra rota própria) precisa ser decidida **com a tela na mão**: a 5a-1
+  registrou que a coluna de documentos exigiria uma requisição por base, contra
+  as 100+ bases que o handoff declara.
+- **O `FakeKnowledgeIndexingJobPublisher` já está no fixture de `apps/api`** — a
+  2b herda a capacidade de afirmar "enfileirou" e "não enfileirou" sem broker.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -2984,11 +3197,38 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   detector**: a próxima classe com o mesmo problema entra na coleção e o sintoma
   desaparece de novo sem a causa ser tratada. A correção é uma
   `ICollectionFixture` compartilhando UM par de containers entre todas elas.
+
+  **A forma natural dessa refatoração ficou conhecida em `knowledge-base-indexacao`,
+  e vale registrar antes que se perca:** exportar as **`DbContextOptions` prontas
+  do fixture** — em vez de a connection string — é o mesmo movimento que
+  compartilhar containers, e os dois se fazem juntos. Aquela change precisou
+  tocar 24 arquivos de teste para acrescentar `UseVector()` ao provider, e a saída
+  possível era um ajudante (`UseButecoAgentsNpgsql`), escolhido por ser aditivo e
+  não reescrever arranjo de teste nenhum. O ajudante resolve o modo de falha
+  ("o próximo teste esquece"), mas **não** a duplicação: cada sítio continua
+  montando as próprias opções. Com `fixture.DbOptions`, o sítio deixa de saber
+  que provider existe, e a mudança seguinte de configuração de banco custa um
+  arquivo em vez de 24. **É a forma de fazê-la quando a vez chegar, não trabalho
+  a antecipar agora.**
   **Mesma família que o item `InboxFactoryFixture.InitializeAsync` acessa
   `Services` antes de migrar** (acima): fixture de teste construindo host mais
   cedo, ou mais vezes, do que devia. Provavelmente uma change só, com os dois.
-  **Gatilho: a próxima classe de teste que precise subir um host** — em qualquer
-  um dos dois apps. **Terceiro item da mesma família, com mecanismo diferente:**
+  **GATILHO VENCIDO em 11/09/2026, por `knowledge-base-indexacao`.** A change
+  acrescentou **quatro** classes de host (as de indexação de conhecimento e a de
+  integridade do índice), levando a coleção de **7 para 11** — cada uma com par
+  próprio de containers. O fechamento reprovou **1 de 212** com a carga **dentro
+  do limiar** (4,26 contra teto de 5,0), e a repetição com a máquina mais
+  descarregada (2,52) passou 212/212.
+
+  **O que o gatilho revelou não foi o que ele previa.** Este item esperava que a
+  serialização escondesse o sintoma; o sintoma apareceu, e quem falhou foi o
+  **limiar de carga**, calibrado para 7 classes. Ver "O limiar de carga
+  envelheceu" acima, com a tabela das três rodadas — o registro generalizável é
+  que limiar de carga **externa** não cobre suíte que engordou **por dentro**.
+
+  **Continua sendo change própria, e provavelmente uma só junto com o
+  `InboxFactoryFixture`.** Não foi feita em `knowledge-base-indexacao` porque é
+  refatoração de suíte inteira, não trabalho daquela change. **Terceiro item da mesma família, com mecanismo diferente:**
   a sensibilidade da suíte de `apps/frontend` a contenção de CPU externa, logo
   abaixo.
 - **A suíte de `apps/frontend` reprova sob contenção de CPU externa, com
@@ -3022,6 +3262,44 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   processo alheio ≥ 100%** (um núcleo cheio). Verde medido em 3,1-4,2; vermelho
   medido em 11,5-14,5; entre os dois não há medição, e o limiar é conservador
   por escolha.
+
+  **Primeiro exercício do limiar em uso real, em 10/09/2026, ao abrir a etapa
+  2a — e ele funcionou:** a baseline da convenção 19 foi tomada com carga prévia
+  de **26,04** contra o limiar de 5,0, com a VM do Podman a **464%**. Ela
+  reportou **7 reprovações em `apps/workers`** e **12 em `apps/frontend`**.
+  Refeita com a máquina descarregada, medindo a carga **antes de cada alvo**:
+  **174/174** e **617/617**. Nenhuma das dezenove existia.
+
+  | alvo | sob carga 26,04 | descarregado | duração |
+  |---|---|---|---|
+  | `apps/workers` | 7 reprovadas / 174 | **174/174** | 17 m 54 s → **5 m 24 s** |
+  | `apps/frontend` | 12 reprovadas / 617 | **617/617** | 215 s → **53 s** |
+
+  As três reprovações que deu para nomear eram todas de
+  `AgentDelegationExecutionTests` — classe de host —, uma delas gastando **1 m
+  10 s** num teste que roda em segundos. É assinatura de *starvation*, não de
+  defeito, e é exatamente o que o parágrafo acima previa.
+
+  **Refinamento medido, com a ressalva de que a medição não o isola:** o
+  confundidor não vem só de processo alheio; vem também do **resíduo da suíte
+  pesada imediatamente anterior** — na rodada inválida, `apps/frontend` correu
+  logo depois de 18 minutos de containers. Na rodada válida houve espaçamento
+  **e** máquina ociosa, e as duas coisas mudaram juntas: o dado mostra que a
+  combinação importa, **não** que o espaçamento sozinho baste. Separar as duas
+  exigiria uma terceira rodada, com máquina ociosa e sem espaçamento, que não
+  foi feita.
+
+  **A distinção que esta rodada tornou concreta, e que vale mais que os
+  números: "baseline vermelha" e "baseline inválida" são coisas diferentes, e a
+  convenção 19 as trata de forma oposta.** Vermelha é informação — remove a
+  hipótese de que a change seguinte causou aquilo. Inválida não remove nada, e é
+  pior que ausente, porque *parece* informação: uma baseline com 19 reprovações
+  fantasma teria feito o fechamento da etapa 2a comparar contra ruído, e
+  qualquer regressão real teria se escondido no meio. **O procedimento que a
+  convenção 19 precisa passar a exigir é medir a carga antes de cada alvo, não
+  só antes do primeiro, e registrar o número medido ao lado de cada resultado.**
+  Fica como acréscimo proposto à convenção 19, a promover ao `01` quando a
+  próxima change o exercer — não se promove convenção com um caso só.
 
   **Mesma família que `WorkerHostCollection` (acima) e
   `InboxFactoryFixture.InitializeAsync` acessa `Services` antes de migrar** —

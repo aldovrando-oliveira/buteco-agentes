@@ -206,6 +206,7 @@ cada provedor de LLM:
 | Variável | Provedor |
 |---|---|
 | `OpenAI:BaseUrl` / `OpenAI:ApiKey` / `OpenAI:Model` | OpenAI, ou Azure OpenAI / gateway compatível (basta trocar `BaseUrl` e `ApiKey`) |
+| `Embedding:Provider` / `Embedding:Model` / `Embedding:Dimensions` | Modelo de embedding da indexação de bases de conhecimento (`apps/workers`). Sem credencial própria — reusa a de `OpenAI`. `apps/workers` **falha o boot** se divergir do que já está gravado no índice |
 | `Anthropic:ApiKey` | Claude, via pacote oficial `Anthropic` |
 | `Gemini:ApiKey` | Gemini, via pacote oficial `Google.GenAI` |
 

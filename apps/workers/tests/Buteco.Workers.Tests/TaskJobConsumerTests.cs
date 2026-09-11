@@ -290,7 +290,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
     private async Task SeedAgentAsync(
         Guid agentId, string agentName, string instructions, string provider = "openai", string model = "gpt-5.6-sol")
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options;
         await using var dbContext = new AppDbContext(options);
 
         var now = DateTimeOffset.UtcNow;
@@ -303,7 +303,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
 
     private async Task SeedTaskAsync(string taskId, Guid agentId, string contextId, string userMessage)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options;
         await using var dbContext = new AppDbContext(options);
 
         var now = DateTimeOffset.UtcNow;
@@ -331,7 +331,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
 
     private async Task SeedTaskWithoutUserMessageAsync(string taskId, Guid agentId, string contextId)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options;
         await using var dbContext = new AppDbContext(options);
 
         var now = DateTimeOffset.UtcNow;
@@ -349,7 +349,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
 
     private async Task AddUserMessageToTaskAsync(string taskId, string contextId, string userMessage)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options;
         await using var dbContext = new AppDbContext(options);
 
         var record = await dbContext.A2ATasks.FirstAsync(t => t.TaskId == taskId);
@@ -397,7 +397,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
 
     private async Task<A2ATaskRecord> PollUntilTerminalAsync(string taskId)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options;
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options;
 
         for (var attempt = 0; attempt < 50; attempt++)
         {
