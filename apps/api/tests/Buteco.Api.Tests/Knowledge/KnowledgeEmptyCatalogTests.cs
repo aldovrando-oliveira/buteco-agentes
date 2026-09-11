@@ -25,4 +25,18 @@ public class KnowledgeEmptyCatalogTests(ApiFactoryFixture factory) : IClassFixtu
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Empty((await response.Content.ReadFromJsonAsync<List<KnowledgeBaseResponse>>())!);
     }
+
+    /// <summary>
+    /// Mesmo par "sem item", agora para o resumo de indexação: sem base nenhuma
+    /// a resposta é lista vazia, nunca 404. Vive aqui pelo mesmo motivo que o
+    /// cenário acima — é o único lugar com um banco garantidamente vazio.
+    /// </summary>
+    [Fact]
+    public async Task IndexingSummary_WithNoBases_ReturnsEmptyListNotNotFound()
+    {
+        var response = await _client.GetAsync("/knowledge-bases/indexing-summary");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty((await response.Content.ReadFromJsonAsync<List<KnowledgeBaseIndexingSummaryResponse>>())!);
+    }
 }

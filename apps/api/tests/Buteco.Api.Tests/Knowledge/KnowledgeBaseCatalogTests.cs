@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Buteco.Api.KnowledgeBases.Requests;
 using Buteco.Api.KnowledgeBases.Responses;
 using Buteco.Api.Tests.Support;
@@ -240,5 +241,61 @@ public class KnowledgeBaseCatalogTests(ApiFactoryFixture factory) : IClassFixtur
 
         var reread = await _client.GetAsync($"/knowledge-bases/{created.Id}");
         Assert.Equal(HttpStatusCode.OK, reread.StatusCode);
+    }
+
+    // --- A resposta de base não carrega contagem agregada -------------------
+
+    /// <summary>
+    /// Asserção <b>negativa</b>, e é ela que impede a regressão
+    /// bem-intencionada de "só acrescentar o campo" (design.md, D1).
+    ///
+    /// <para>
+    /// <c>KnowledgeBaseResponse</c> é construído em <b>seis</b> lugares, quatro
+    /// deles handlers de comando sem relação nenhuma com indexação. Acrescentar
+    /// contagem ali ou encareceria as quatro operações de escrita, ou as faria
+    /// devolver zero — falso em atualizar, ativar e desativar, e a convenção 13
+    /// o proíbe. O agregado vive em <c>GET /knowledge-bases/indexing-summary</c>.
+    /// </para>
+    ///
+    /// <para>
+    /// Sem este guarda o acréscimo passaria calado: nenhum sítio de construção
+    /// está em <c>tests/</c>, e desserializar um campo zerado não reprova nada.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ListKnowledgeBases_DoesNotExposeDocumentOrIndexingCounts()
+    {
+        var knowledgeBase = await CreateBaseAsync("Base sem contagem");
+        await _client.CreateDocumentAsync(knowledgeBase.Id, "Documento que não deve ser contado aqui");
+
+        var json = await _client.GetStringAsync("/knowledge-bases");
+
+        using var parsed = JsonDocument.Parse(json);
+        var row = parsed.RootElement.EnumerateArray()
+            .Single(item => item.GetProperty("id").GetGuid() == knowledgeBase.Id);
+
+        foreach (var forbidden in new[] { "documentCount", "indexedCount", "failedCount", "documents", "indexingSummary" })
+        {
+            Assert.False(
+                row.TryGetProperty(forbidden, out _),
+                $"A resposta de base passou a carregar '{forbidden}'. O agregado pertence a "
+              + "GET /knowledge-bases/indexing-summary (design.md, D1).");
+        }
+    }
+
+    [Fact]
+    public async Task CreateKnowledgeBase_DoesNotAssertAnyCount()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/knowledge-bases", new CreateKnowledgeBaseRequest("Base recém-criada", "Descrição da base."));
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync();
+
+        using var parsed = JsonDocument.Parse(json);
+        foreach (var forbidden in new[] { "documentCount", "indexedCount", "failedCount" })
+        {
+            Assert.False(parsed.RootElement.TryGetProperty(forbidden, out _), $"A criação passou a afirmar '{forbidden}'.");
+        }
     }
 }

@@ -3,6 +3,7 @@ using Buteco.Api.KnowledgeBases.Commands.CreateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Commands.DeactivateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Commands.UpdateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Queries.GetKnowledgeBaseById;
+using Buteco.Api.KnowledgeBases.Queries.GetKnowledgeBaseIndexingSummary;
 using Buteco.Api.KnowledgeBases.Queries.ListKnowledgeBases;
 using Buteco.Api.KnowledgeBases.Requests;
 using Buteco.Api.KnowledgeBases.Responses;
@@ -19,6 +20,17 @@ public static class KnowledgeBaseEndpoints
 
         group.MapPost("/", CreateKnowledgeBaseAsync);
         group.MapGet("/", ListKnowledgeBasesAsync);
+        // Recurso próprio, e NÃO campos de contagem em KnowledgeBaseResponse
+        // (design.md, D1) — é a decisão que alguém tentaria "corrigir" sem ver a
+        // causa. Aquele record é construído em seis lugares, quatro deles
+        // handlers de comando que não têm relação nenhuma com indexação, e
+        // encarecer GET /knowledge-bases serviria uma única tela. Aqui o
+        // catálogo continua sendo a consulta simples que é.
+        //
+        // Segmento literal antes do {id:guid}: a restrição de guid já exclui a
+        // cadeia, e o roteamento classifica literal acima de parâmetro de
+        // qualquer forma — nenhuma ordem de registro precisa ser garantida.
+        group.MapGet("/indexing-summary", GetKnowledgeBaseIndexingSummaryAsync);
         group.MapGet("/{id:guid}", GetKnowledgeBaseByIdAsync);
         group.MapPut("/{id:guid}", UpdateKnowledgeBaseAsync);
         group.MapPost("/{id:guid}/activate", ActivateKnowledgeBaseAsync);
@@ -56,6 +68,15 @@ public static class KnowledgeBaseEndpoints
         var knowledgeBases = await mediator.Send(new ListKnowledgeBasesQuery(), cancellationToken);
 
         return TypedResults.Ok(knowledgeBases);
+    }
+
+    private static async Task<Ok<IReadOnlyList<KnowledgeBaseIndexingSummaryResponse>>> GetKnowledgeBaseIndexingSummaryAsync(
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var summary = await mediator.Send(new GetKnowledgeBaseIndexingSummaryQuery(), cancellationToken);
+
+        return TypedResults.Ok(summary);
     }
 
     private static async Task<Results<Ok<KnowledgeBaseResponse>, NotFound>> GetKnowledgeBaseByIdAsync(

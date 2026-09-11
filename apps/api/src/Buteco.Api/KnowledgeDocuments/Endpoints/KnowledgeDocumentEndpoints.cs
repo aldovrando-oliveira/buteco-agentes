@@ -1,5 +1,6 @@
 using Buteco.Api.KnowledgeDocuments.Commands.CreateKnowledgeDocument;
 using Buteco.Api.KnowledgeDocuments.Commands.DeleteKnowledgeDocument;
+using Buteco.Api.KnowledgeDocuments.Commands.ReindexKnowledgeDocument;
 using Buteco.Api.KnowledgeDocuments.Commands.UpdateKnowledgeDocument;
 using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeDocuments.Queries.GetKnowledgeDocumentById;
@@ -21,6 +22,12 @@ public static class KnowledgeDocumentEndpoints
         group.MapGet("/", ListKnowledgeDocumentsAsync);
         group.MapGet("/{id:guid}", GetKnowledgeDocumentByIdAsync);
         group.MapPut("/{id:guid}", UpdateKnowledgeDocumentAsync);
+
+        // Idioma de POST /{id:guid}/activate: ação sobre um recurso existente.
+        // É a ÚNICA entrada que reenfileira indexação sem o conteúdo ter mudado
+        // — o bypass deliberado da regra do ContentHash, com o motivo em
+        // design.md (D4) e no comentário de KnowledgeDocument.RequestReindex().
+        group.MapPost("/{id:guid}/reindex", ReindexKnowledgeDocumentAsync);
 
         // Primeiro MapDelete do repositório. O padrão da casa é soft delete por
         // IsActive, e a divergência é deliberada, com o motivo em design.md
@@ -118,6 +125,26 @@ public static class KnowledgeDocumentEndpoints
         }
 
         return TypedResults.Ok(result.Document!);
+    }
+
+    /// <summary>
+    /// Responde 200 com o documento já no estado novo, e não 202: a mudança de
+    /// estado que a resposta descreve — <c>Pending</c>, contadores limpos —
+    /// aconteceu de forma síncrona e completa. O que é assíncrono é a indexação,
+    /// e o documento já diz isso no próprio <c>indexingStatus</c>. A tela
+    /// re-renderiza a linha sem uma segunda leitura.
+    /// </summary>
+    private static async Task<Results<Ok<KnowledgeDocumentResponse>, NotFound>> ReindexKnowledgeDocumentAsync(
+        Guid knowledgeBaseId,
+        Guid id,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var document = await mediator.Send(new ReindexKnowledgeDocumentCommand(knowledgeBaseId, id), cancellationToken);
+
+        return document is null
+            ? TypedResults.NotFound()
+            : TypedResults.Ok(document);
     }
 
     private static async Task<Results<NoContent, NotFound>> DeleteKnowledgeDocumentAsync(

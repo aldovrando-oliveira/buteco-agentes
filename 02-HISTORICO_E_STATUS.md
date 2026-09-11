@@ -2176,6 +2176,69 @@ que não se controla, e "não reproduziu em cinco tentativas" não elimina a
 dúvida — só a torna mais barata de ignorar. A rodada única com saída completa
 foi feita; o valor dela está na próxima vez, não nesta.
 
+#### Nona medição da convenção 18
+
+`knowledge-base-indexacao-operacao` (etapa 2b). Projetado **14 arquivos / ~680
+linhas** de código; entregue **15 arquivos / 951 linhas**. Não há migração, então
+não há a distorção de `.Designer.cs` que produziu os 3,1x da oitava.
+
+| categoria | criados | modificados |
+|---|---|---|
+| produção | 5 arq / 196 li | 3 arq / 125 li |
+| teste | 2 arq / 448 li | 5 arq / 182 li |
+| **código** | **7 arq / 644 li** | **8 arq / 307 li** |
+| *documentação (`.md`)* | *—* | *4 arq / 33 li* |
+
+**Os arquivos quase acertaram; as linhas erraram por 40%. É o inverso exato da
+oitava medição**, e registrar a inversão é o ponto — foi a oitava que concluiu
+"o método acerta linhas e erra arquivos", e uma medição só não sustentava isso.
+
+**Arquivos: 14 projetados, 15 entregues.** Criados **7 contra 7, exato** — é o
+**terceiro acerto seguido** do método de contar criados a partir do blast radius
+lido no código, depois de `knowledge-base-vinculo-agente` (25/25) e dos 21/21 de
+`frontend-knowledge-base-catalogo`. Essa metade está confirmada por três
+medições e pode parar de ser tratada como hipótese.
+
+Modificados erraram por **um**, e a causa é reutilizável: **o cenário que exige
+fixture isolada cai num arquivo que não é o da feature.** O par "sem item" do
+resumo — nenhuma base cadastrada — precisa de um banco garantidamente vazio, e
+só `KnowledgeEmptyCatalogTests` tem fixture própria para isso. A projeção olhou a
+superfície da feature e não a isolação de fixture. É a mesma forma já registrada
+("arquivo é sobre o que a mudança *alcança*"), numa variante nova: o que a
+mudança alcança inclui **onde um cenário pode ser afirmado**, não só o que ele
+afirma.
+
+**Linhas: ~680 projetadas, 951 entregues (+40%), e o erro está quase todo nos
+modificados** — ~155 projetadas contra 307, +98%. Decomposto, a causa é única e
+não é escala:
+
+- `KnowledgeDocument.cs`: projetado ~30, entregue **77**. O corpo de
+  `RequestReindex()` são **5 linhas**; o resto é o comentário que diz as duas
+  exceções como exceções e corrige o motivo do reset.
+- `KnowledgeTestClient.cs`: projetado ~15, entregue **77**. Dois apoios de
+  arranjo que forçam estado terminal no banco não são atalhos de uma linha: são
+  duas funções com escopo, `ExecuteUpdate` e o comentário que diz por que o
+  arranjo não passa pela rota.
+
+**A causa estrutural, e ela vale além deste caso: numa change cujo entregável é
+uma decisão que não pode ser relitigada, o custo em linha é dominado pela prosa
+que carrega a decisão, não pelo código que a executa.** Aqui a razão
+comentário/código no método central foi de ~12:1. Nenhuma projeção por operação
+CQRS, por cenário de teste ou por grupo de endpoints vê isso — todas contam
+código. **Não é fator de correção**: é uma pergunta a acrescentar antes de
+projetar linhas — *"quantas decisões esta change precisa deixar escritas no
+lugar onde alguém tentaria desfazê-las?"*
+
+Os criados também subiram (+23% na produção, +15% nos testes), pelo mesmo motivo
+em menor grau, e os testes confirmaram a faixa alta de 25-40 linhas por cenário
+que a convenção já registra para cenário com arranjo próprio: 15 cenários em 448
+linhas dá ~30 por cenário.
+
+**A documentação foram 33 linhas em 4 arquivos**, uma ordem de grandeza abaixo
+das 374 da oitava — e a diferença é que aquela change *criou* mecanismo a
+descrever, enquanto esta em boa parte **corrigiu afirmação que ficou falsa**
+(ver o item de dívida de documentação da 2a, abaixo).
+
 #### Oitava medição da convenção 18
 
 Projetado **51 arquivos / ~3.305 linhas** de código; entregue **83 arquivos /
@@ -2417,20 +2480,63 @@ Cada um tem gatilho de quando revisitar:
   Cada um dos cinco sites tem duas superfícies a cobrir onde couber, como o
   teste da etapa 3 faz: a rota de item (`GET /agents/{id}`) e a de listagem
   (`GET /agents`).
-- **39 das 43 capabilities estão com `Purpose` placeholder** — registrado em
-  09/09/2026, ao escrever o `Purpose` de `agent-knowledge-binding-ui` depois do
-  archive da 5b. O texto do placeholder é
+- **A 2a deixou dívida de documentação, achada pela passada de documentação da
+  2b (11/09/2026), e as duas afirmações estavam FALSAS — não desatualizadas.**
+  A distinção importa: texto desatualizado envelhece, texto falso desorienta.
+
+  - `README.md` dizia *"Knowledge base indexing has no consumer. Documents are
+    catalogued and extracted, then stay `Pending`."* — a própria 2a entregou o
+    consumidor. Um leitor novo concluiria que a linha de trabalho não existe.
+  - `docs/architecture.md` listava os campos de `KnowledgeDocument` **sem as
+    quatro colunas que a 2a acrescentou** (`ContentHash`, `FragmentCount`,
+    `IndexingAttempts`, `LastAttemptAt`).
+  - `CHANGELOG.md` **não tinha entrada nenhuma** para o pipeline de indexação, e
+    ainda carregava *"A indexação em si ainda não tem consumidor"*.
+
+  As três corrigidas na 2b. **A causa é a mesma do estoque de `Purpose`:** a 2a
+  tinha tarefa de fechamento para registrar no `02`, e nenhuma para conferir os
+  quatro artefatos de documentação um a um. `scripts/check-docs.py` passou verde
+  o tempo todo — ele verifica link quebrado, app não documentado e
+  `[Unreleased]`, e **não tem como saber que uma frase virou mentira**.
+
+  **Consequência prática:** a passada de documentação pertence ao `tasks.md`,
+  com os quatro artefatos **nomeados um a um** e a instrução de dizer *"conferido,
+  nada a mudar"* onde não houver — silêncio não distingue "nada a fazer" de
+  "ninguém olhou". Foi assim que a 2b os achou.
+
+- **38 das 43 capabilities estão com `Purpose` placeholder** — eram 39 quando
+  isto foi registrado em 09/09/2026, ao escrever o `Purpose` de
+  `agent-knowledge-binding-ui` depois do archive da 5b. O texto do placeholder é
   `TBD - defined by change <nome>. Update Purpose after archive.`, ou seja
   **carrega a própria instrução do que fazer com ele** — e foi ignorado 39
   vezes. Isso é evidência de que o mecanismo não funciona: "escrever depois do
   archive" é um passo sem dono, que acontece quando a change já foi encerrada e
   ninguém está mais olhando.
 
-  Têm `Purpose` real hoje apenas quatro: `agent-knowledge-binding`,
-  `inbox-message-orchestration`, `knowledge-base-catalog-ui` e
-  `agent-knowledge-binding-ui`. As duas últimas são as duas etapas mais recentes
-  da linha de bases de conhecimento — ou seja, o hábito começou a se formar, e é
-  isso que dá o gatilho abaixo em vez de uma change de mutirão.
+  Têm `Purpose` real hoje **cinco**: `agent-knowledge-binding`,
+  `inbox-message-orchestration`, `knowledge-base-catalog-ui`,
+  `agent-knowledge-binding-ui` e — desde 11/09/2026 —
+  `knowledge-base-catalog`. As três últimas são as etapas mais recentes da linha
+  de bases de conhecimento: o hábito se formou, e é isso que dá o gatilho abaixo
+  em vez de uma change de mutirão.
+
+  **O estoque caiu de 39 para 38 pelo gatilho, não por mutirão, e essa distinção
+  é o dado.** `knowledge-base-indexacao-operacao` (etapa 2b) modificou
+  `knowledge-base-catalog` e escreveu o `Purpose` dela **na mesma passada**,
+  antes do archive — que é exatamente o que o gatilho pede. O `Purpose` foi
+  escrito **na delta**, não direto na spec viva, e foi o passo 4c do skill que o
+  promoveu por cima do placeholder na sincronização; a conferência do arquivo
+  vivo depois do sync entrou como tarefa própria do `tasks.md`, porque
+  `validate --strict` não pega placeholder.
+
+  Vale registrar o que quase aconteceu: a primeira redação do `design.md` da 2b
+  deixou isto como **Open Question** — com o argumento de que escrever o
+  `Purpose` de uma capability que a change não criou era escopo não pedido.
+  Estava errado, e o erro é o padrão que este item nomeia: adiar é como o
+  estoque nunca cai. **A primeira vez que o gatilho encontra dívida vizinha
+  dentro do próprio escopo é onde ele precisa funcionar**, e os dois argumentos
+  que sustentam não fazer mutirão não protegem essa omissão — quem está mexendo
+  na capability é justamente quem sabe responder, e o custo é de minutos.
 
   **Por que importa:** spec viva sem `Purpose` é spec que a próxima pessoa lê
   sem saber **qual pergunta ela responde**. Os requisitos dizem o que o sistema

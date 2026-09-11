@@ -147,7 +147,12 @@ para a pergunta. Por isso é obrigatória e não vazia — ao contrário de
 
 `KnowledgeBaseId`, `Title`, `SourceType`, `ExtractedText`,
 `ContentLengthBytes`, `IndexingStatus`, `IndexedAt`, `FailureReason`,
-`ContentRevision`.
+`ContentRevision`, `ContentHash`, `FragmentCount`, `IndexingAttempts`,
+`LastAttemptAt`.
+
+Os quatro últimos são escritos pelo consumidor de indexação de `apps/workers`,
+nunca por `apps/api` — com **uma** exceção, a rota de reindexação, que limpa
+`FailureReason`, `IndexingAttempts` e `LastAttemptAt` ao abrir uma rodada nova.
 
 Quatro pontos que não se deduzem lendo os campos:
 

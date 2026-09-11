@@ -80,4 +80,28 @@ public class KnowledgeRouteAuthenticationTests(ApiFactoryFixture factory) : ICla
         var reread = await authenticated.GetAsync($"/knowledge-bases/{knowledgeBase.Id}/documents/{document.Id}");
         Assert.Equal(HttpStatusCode.OK, reread.StatusCode);
     }
+
+    [Fact]
+    public async Task IndexingSummary_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await UnauthenticatedClient().GetAsync("/knowledge-bases/indexing-summary");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReindexKnowledgeDocument_WithoutToken_ReturnsUnauthorizedAndDoesNotEnqueue()
+    {
+        var authenticated = factory.CreateClient();
+        var knowledgeBase = await authenticated.CreateBaseAsync("Base reindex autenticada");
+        var document = await authenticated.CreateDocumentAsync(knowledgeBase.Id, "Documento reindex autenticado");
+
+        var before = factory.IndexingPublisher.PublishedFor(document.Id).Count;
+
+        var response = await UnauthenticatedClient().PostAsync(
+            $"/knowledge-bases/{knowledgeBase.Id}/documents/{document.Id}/reindex", content: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(before, factory.IndexingPublisher.PublishedFor(document.Id).Count);
+    }
 }
