@@ -16,6 +16,16 @@ namespace Buteco.Api.Tests.Knowledge;
 /// etapa de indexação estendesse este arquivo. É o que a change
 /// knowledge-base-indexacao faz aqui: os quatro valores passam a ter escritor e
 /// os quatro são afirmados.
+///
+/// <para>
+/// <b>O formato de fio de <c>KnowledgeBaseIndexingSummaryResponse</c> NÃO mora
+/// aqui</b>, e é decisão: esta classe serializa o tipo com as opções web e não
+/// tem fixture, enquanto aquele contrato é afirmado sobre o <b>texto da resposta
+/// HTTP real</b>, em
+/// <c>KnowledgeBaseIndexingSummaryTests.SummaryResponse_UsesCamelCaseFieldNamesOnTheWire</c>.
+/// A forma mais forte ganha (convenção 11), e ela exige a fixture que a outra
+/// classe já paga.
+/// </para>
 /// </summary>
 public class KnowledgeWireFormatTests
 {

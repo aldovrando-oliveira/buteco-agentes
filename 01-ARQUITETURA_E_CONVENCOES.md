@@ -273,6 +273,13 @@ a mensagem (`BasicNackAsync(requeue: false)`), sem retry.
 causa do `prefetchCount: 1` da outra:** indexação de minutos ali não seria "fila
 mais lenta", seria a mesma classe de bloqueio, com execução de agente atrás.
 
+Três publicadores, todos em `apps/api`: criar documento, atualizar documento com
+conteúdo diferente, e **reindexar** — este último a única entrada que publica sem
+o conteúdo ter mudado. A reindexação abre uma **rodada nova** sobre a mesma
+revisão: publica com `Attempt = 1`, e limpa `FailureReason`, `IndexingAttempts` e
+`LastAttemptAt` para que o documento não leia como rodada encerrada enquanto a
+mensagem espera na fila. Não toca `ContentHash` nem `ContentRevision`.
+
 É o **primeiro consumidor do repositório com política de tentativas**, e não
 havia molde a herdar. A forma: **três execuções**, espaçadas por 1 e 5 minutos,
 por **duas filas de espera** (`knowledge-indexing-wait-60s` e

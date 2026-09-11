@@ -120,8 +120,22 @@ o versionamento pretende seguir
 - Primeira entidade do repositório com exclusão real, sob o critério
   "catálogo referenciado usa `IsActive`; conteúdo sem referência usa exclusão
   real".
-- A indexação em si ainda não tem consumidor: todo documento nasce e
-  permanece `Pending`.
+- Pipeline de indexação em `apps/workers`: fragmentação do conteúdo, geração de
+  embedding e gravação dos vetores em `knowledge_fragments` (`pgvector`), por
+  fila própria `knowledge-indexing`, com máquina de estados
+  `Pending → Indexing → Indexed | Failed` e política de três tentativas.
+- Reindexação de documento sob pedido do operador, por
+  `POST /knowledge-bases/{id}/documents/{documentId}/reindex`. É a única entrada
+  que reenfileira sem o conteúdo ter mudado — existe para o documento cujo
+  conteúdo está correto e cuja indexação falhou por causa transitória. Abre uma
+  rodada nova: limpa o motivo da falha e os contadores de tentativa, e preserva
+  o conteúdo indexado anterior, que continua respondendo.
+- Resumo de indexação agregado por base, por
+  `GET /knowledge-bases/indexing-summary`, com contagem de documentos,
+  indexados e em falha. Uma requisição para o conjunto inteiro, com custo
+  independente do número de bases. A resposta de base **não** carrega essas
+  contagens, de propósito.
+- A consulta do índice pelo agente ainda não existe: não há tool de busca.
 - Vínculo N:N entre agente e base de conhecimento em `apps/api`, definido por
   `PUT /agents/{id}/knowledge-bases` com substituição integral do conjunto.
   Base inativa continua vinculável, e agente inativo continua configurável.

@@ -154,9 +154,10 @@ source `docs/` is written from, not project documentation themselves.
 Everything listed under [Features](#features) is implemented and running.
 Known gaps, tracked deliberately:
 
-- **Knowledge base indexing has no consumer.** Documents are catalogued and
-  extracted, then stay `Pending`. Embedding-based retrieval is the next line
-  of work.
+- **Knowledge bases are indexed, but nothing queries them yet.** Documents are
+  chunked, embedded and stored as vectors, and an operator can retry a failed
+  document. The retrieval tool the agent would call does not exist yet — that
+  is the next line of work.
 - **No continuous integration.** There is no `.github/workflows/`; tests and
   the documentation integrity check run locally. See
   [CONTRIBUTING.md](CONTRIBUTING.md).

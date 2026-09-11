@@ -212,6 +212,83 @@ public class KnowledgeDocument
     }
 
     /// <summary>
+    /// Reenfileira a indexação <b>sem que o conteúdo tenha mudado</b> — a única
+    /// entrada do sistema que faz isso, e a razão de o botão "Reindexar
+    /// documento" existir: o caso real é o documento cujo conteúdo está certo e
+    /// cuja indexação falhou por causa transitória (429 do provedor).
+    ///
+    /// <para>
+    /// <b>Exceção 1 — à regra "conteúdo idêntico não é reindexado".</b> Aquela
+    /// regra governa o que <see cref="Update"/> faz, e existe para não gastar
+    /// chamada ao provedor de embedding em edição de metadado. Esta operação não
+    /// é uma atualização: é pedido explícito do operador. O contorno é o
+    /// propósito, não um conflito — sem ele a operação não teria função nenhuma.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>E <see cref="ContentHash"/> NÃO é tocado</b>, nem recalculado, nem
+    /// anulado. Anulá-lo pareceria o jeito de "fazer o bypass funcionar" — força
+    /// o reprocessamento e resolve o problema imediato —, e é armadilha: hash
+    /// nulo significa <i>"linha legada, nunca indexada sob esta regra"</i>
+    /// (design.md da 2a, D9), e é esse significado que faz o caminho de documento
+    /// pré-existente funcionar. Além disso a <b>próxima</b> atualização só de
+    /// título passaria a reindexar sem motivo. O bypass é do caminho, não do
+    /// dado.
+    /// </para>
+    ///
+    /// <para>
+    /// <see cref="ContentRevision"/> também não muda: ela é o token de descarte
+    /// do consumidor e move-se com o texto, que não mudou. Incrementá-la
+    /// descartaria uma indexação em voo do <b>mesmo</b> conteúdo.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Exceção 2 — ao significado de <see cref="IndexingAttempts"/>.</b> A
+    /// etapa 2a fixou "tentativas sobre a revisão corrente", zeradas quando o
+    /// conteúdo muda; aqui o conteúdo não muda, e a leitura literal diria para
+    /// não zerar. Zera assim mesmo, e o significado é <b>refinado, não
+    /// contrariado</b>: a contagem é de tentativas dentro de uma <b>rodada de
+    /// indexação</b>, e uma rodada abre quando chega conteúdo novo <b>ou quando o
+    /// operador pede uma reindexação</b>.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>E o motivo do reset não é o que parece.</b> Não é "senão o documento
+    /// chega com o limite esgotado": o limite não mora nesta coluna. O consumidor
+    /// compara <c>message.Attempt &lt; MaxAttempts</c> e <b>atribui</b>
+    /// <c>IndexingAttempts = message.Attempt</c> no início de cada execução, de
+    /// modo que uma mensagem com <c>Attempt = 1</c> ganharia três execuções novas
+    /// e reescreveria a coluna sozinha. O que o reset resolve é a <b>janela entre
+    /// esta gravação e o consumidor pegar a mensagem</b>: nela o documento leria
+    /// <c>Pending</c> ao lado de três tentativas, da data de ontem e do motivo de
+    /// falha antigo, e a tela renderizaria o badge "Pendente" colado em "429 nas
+    /// três tentativas, a última às 03:14" e na faixa de falha inteira — contendo
+    /// o próprio botão que o operador acabou de clicar. É a convenção 13 na
+    /// letra. A fila é compartilhada, então a janela não é teórica.
+    /// </para>
+    ///
+    /// <para>
+    /// <see cref="IndexedAt"/> e <see cref="FragmentCount"/> são <b>preservados</b>:
+    /// o conteúdo anterior continua respondendo até os fragmentos novos serem
+    /// gravados (garantia 3 de D9 da etapa 1), e é <see cref="IndexedAt"/> não
+    /// nulo que mantém <see cref="FragmentCount"/> exibível pela regra da etapa 1.
+    /// </para>
+    ///
+    /// <para>
+    /// O escritor autoritativo dos contadores continua sendo o consumidor de
+    /// <c>apps/workers</c>. Esta operação só limpa.
+    /// </para>
+    /// </summary>
+    public void RequestReindex()
+    {
+        IndexingStatus = KnowledgeIndexingStatus.Pending;
+        FailureReason = null;
+        IndexingAttempts = 0;
+        LastAttemptAt = null;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
     /// SHA-256 do texto em UTF-8, em hexadecimal minúsculo. Determinístico e
     /// estável entre processos — o mesmo conteúdo precisa dar o mesmo hash em
     /// <c>apps/api</c> hoje e daqui a um ano, senão a regra de "não reindexar
