@@ -1,6 +1,14 @@
 services:
   postgres:
-    image: postgres:18
+    # pgvector/pgvector:pg18, e não postgres:18: a tabela de fragmentos usa a
+    # extensão `vector` (change knowledge-base-indexacao). ATENÇÃO à leitura
+    # desta linha: há UM servidor Postgres aqui para DOIS bancos —
+    # buteco_agents (apps/api + apps/workers) e buteco_inbox (apps/inbox) —,
+    # então trocar a imagem troca também o servidor que hospeda o banco de
+    # apps/inbox. É inócuo, porque a extensão é criada por banco e só
+    # buteco_agents a tem, mas o compose NÃO isola os apps, e a frase existe
+    # para não sugerir um isolamento que não há.
+    image: pgvector/pgvector:pg18
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-buteco}

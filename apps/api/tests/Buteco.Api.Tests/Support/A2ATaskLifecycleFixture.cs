@@ -7,12 +7,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
+using Buteco.Api.Tests.Support;
 
 namespace Buteco.Api.Tests.Support;
 
 public sealed class A2ATaskLifecycleFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_agents_a2a_test")
         .WithUsername("buteco")
         .WithPassword("buteco_test_password")
@@ -37,7 +38,7 @@ public sealed class A2ATaskLifecycleFixture : WebApplicationFactory<Program>, IA
                 services.Remove(descriptor);
             }
 
-            services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+            services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(_postgres.GetConnectionString()));
 
             services.Configure<RabbitMqOptions>(options =>
             {

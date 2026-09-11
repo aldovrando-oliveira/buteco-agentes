@@ -406,7 +406,7 @@ public class AgentToolNamespaceTests(WorkerInfrastructureFixture fixture) : ICla
     }
 
     private AppDbContext CreateDbContext() =>
-        new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options);
+        new(new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options);
 
     private async Task SeedAgentAsync(Guid agentId, string agentName)
     {
@@ -522,7 +522,7 @@ public class AgentToolNamespaceTests(WorkerInfrastructureFixture fixture) : ICla
     private sealed class ScopeFactoryFromFixture(string connectionString) : IServiceScopeFactory
     {
         private readonly IServiceProvider provider = new ServiceCollection()
-            .AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString))
+            .AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(connectionString))
             .BuildServiceProvider();
 
         public IServiceScope CreateScope() => provider.CreateScope();

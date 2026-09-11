@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
+using Buteco.Api.Tests.Support;
 
 namespace Buteco.Api.Tests.Support;
 
@@ -17,7 +18,7 @@ namespace Buteco.Api.Tests.Support;
 /// </summary>
 public sealed class AgentProviderRejectionFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_agents_provider_rejection_test")
         .WithUsername("buteco")
         .WithPassword("buteco_test_password")
@@ -37,7 +38,7 @@ public sealed class AgentProviderRejectionFixture : WebApplicationFactory<Progra
                 services.Remove(dbContextDescriptor);
             }
 
-            services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+            services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(_postgres.GetConnectionString()));
 
             var publisherDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ITaskJobPublisher));
             if (publisherDescriptor is not null)

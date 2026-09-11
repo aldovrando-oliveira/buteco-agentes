@@ -84,6 +84,18 @@ integridade no startup, o padrão descrito em [conventions.md](conventions.md).
 
 Usadas apenas pelo compose de desenvolvimento, não pelos apps.
 
+**A imagem do Postgres é `pgvector/pgvector:pg18`, não `postgres:18`** — a
+indexação de bases de conhecimento usa a extensão `vector`. Atenção à leitura:
+há **um servidor para dois bancos** (`buteco_agents`, de `apps/api` e
+`apps/workers`, e `buteco_inbox`), então a imagem alcança também o banco de
+`apps/inbox`. É inócuo, porque a extensão é criada por banco e só
+`buteco_agents` a tem — mas o compose **não isola** os apps.
+
+`CREATE EXTENSION vector` **exige superusuário**: a extensão não é `trusted`.
+Funciona no compose porque o `migrator` conecta como `POSTGRES_USER`, que é o
+superusuário de bootstrap. Num ambiente em que o app conecte com papel
+restrito, a extensão precisa ser criada antes, por fora da migração.
+
 | Variável | Default | Descrição |
 |---|---|---|
 | `POSTGRES_USER` | `buteco` | Usuário do Postgres local |
@@ -134,6 +146,19 @@ qual a própria API é **alcançada** de fora, do ponto de vista do AgentCard.
 | `OpenAI__BaseUrl` / `OpenAI__ApiKey` / `OpenAI__Model` | condicional | Necessária se algum agente usar o provedor |
 | `Anthropic__ApiKey` | condicional | Idem |
 | `Gemini__ApiKey` | condicional | Idem |
+| `Embedding__Provider` | condicional | Provedor do modelo de embedding da indexação de bases de conhecimento. Hoje só `openai` é suportado — `anthropic` e `gemini` não expõem tipo de embedding no SDK referenciado |
+| `Embedding__Model` | condicional | Modelo de embedding. **Não tem default**: foi escolhido por medição, e o modelo que um ambiente serve por padrão pode empatar com busca lexical |
+| `Embedding__Dimensions` | condicional | Dimensão declarada, **conferida contra a que o provedor devolve no momento da gravação**. O gateway pode aceitar o parâmetro `dimensions` e ignorá-lo, e sem a conferência o índice seria gravado com vetores incompatíveis sem erro nenhum |
+
+A seção `Embedding` **não tem credencial própria**: a chave e o endpoint vêm da
+seção `OpenAI` acima, reusados de propósito — aquele endpoint já é no formato
+OpenAI, e duplicar o segredo criaria duas fontes que divergem no primeiro
+rodízio de chave.
+
+`apps/workers` **falha o boot** se o provedor, o modelo ou a dimensão declarados
+divergirem do que está gravado nos fragmentos já indexados. Vetores de modelos
+diferentes são incomparáveis, e a busca continuaria devolvendo resultados
+errados sem erro nenhum. Índice vazio sobe normalmente.
 
 As chaves de provedor são "condicionais" no sentido de que só a do provedor
 efetivamente referenciado pelo agente em execução é usada — mas precisam

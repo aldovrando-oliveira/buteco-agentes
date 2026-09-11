@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
+using Buteco.Api.Tests.Support;
 
 namespace Buteco.Api.Tests.Support;
 
@@ -18,7 +19,7 @@ namespace Buteco.Api.Tests.Support;
 /// </summary>
 public sealed class NoProvidersConfiguredFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_agents_no_providers_test")
         .WithUsername("buteco")
         .WithPassword("buteco_test_password")
@@ -45,7 +46,7 @@ public sealed class NoProvidersConfiguredFixture : WebApplicationFactory<Program
                 services.Remove(descriptor);
             }
 
-            services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+            services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(_postgres.GetConnectionString()));
         });
     }
 

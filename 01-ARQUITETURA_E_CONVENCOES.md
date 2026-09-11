@@ -155,6 +155,44 @@ todo documento criado ou atualizado permanece `Pending` indefinidamente. Isso é
 requisito declarado, não defeito: quem os escreve é o consumidor da etapa de
 indexação.
 
+**`KnowledgeFragment`** — o pedaço indexável de um documento, com o vetor que o
+encontra. `KnowledgeDocumentId`, `KnowledgeBaseId` (desnormalizado: a busca
+filtra por base antes de ordenar por distância), `Ordinal`, `Text` (o texto
+**emitido**, com o prefixo de caminho de cabeçalhos — é ele que foi embedado),
+`Embedding` em `vector(4096)`, e três colunas de proveniência
+(`EmbeddingProvider`, `EmbeddingModel`, `EmbeddingDimensions`).
+
+As três de proveniência não são metadado decorativo: são o lado do índice na
+checagem bidirecional do boot de `apps/workers` (convenção 8), e sem elas a
+troca silenciosa de modelo — que corrompe o índice sem erro nenhum — deixa de
+ser detectável.
+
+**A tabela nasce na migração de `apps/api`, que não escreve nela.** Quem escreve
+é `apps/workers`, e o motivo é de deploy: o `migrator` do compose só empacota
+bundles de `apps/api` e `apps/inbox`. É contraintuitivo o bastante para alguém
+"consertar".
+
+**Sem índice ANN**, e não por esquecimento: HNSW recusa mais de 2000 dimensões em
+`vector` e mais de 4000 em `halfvec` (medido em pgvector 0.8.6), então qualquer
+índice exige uma coluna **derivada e truncada**, que nasce por SQL quando fizer
+falta. Gatilho medido: p95 da consulta acima de 200 ms. Custo de exercê-lo,
+também medido: `ADD COLUMN ... GENERATED ... STORED` **reescreve a tabela sob
+`ACCESS EXCLUSIVE`**, e durante o `ALTER` até leitura bloqueia.
+
+**As quatro colunas que `KnowledgeDocument` ganhou na etapa de indexação:**
+
+- `ContentHash` (SHA-256 do texto extraído) — um propósito só: atualização com
+  conteúdo idêntico não volta a `Pending`, não enfileira e não gasta embedding.
+  **Nulo significa "nunca indexado sob esta regra"**, e é o que faz a linha
+  criada antes da etapa 2a ser enfileirada mesmo com conteúdo idêntico — o
+  comportamento **oposto** ao da linha nova, de propósito.
+- `FragmentCount` — mantido pelo consumidor, na mesma transação que grava os
+  fragmentos. Exibido quando `IndexedAt` não é nulo, **omitido** quando é nulo,
+  nunca zerado.
+- `IndexingAttempts` e `LastAttemptAt` — tentativas sobre a **revisão corrente**,
+  zeradas quando o conteúdo muda. Uma tentativa é uma **execução** do consumidor,
+  não uma chamada HTTP.
+
 **`AgentKnowledgeBase`** (`apps/api`): vínculo N:N entre `Agent` e
 `KnowledgeBase` — `AgentId`, `KnowledgeBaseId`, e **nada mais**. A ausência de
 coluna extra é decisão com causa, não omissão: `AgentMcpServer.AllowedTools`
@@ -219,6 +257,45 @@ consequências práticas registradas junto:
 - `DELETE` numa rota que não oferece o verbo responde **405**, não 404 — a
   distinção entre "recurso inexistente" e "operação não oferecida" é
   informação, e é ela que os testes afirmam.
+
+## Filas de trabalho
+
+Duas filas, com propósitos e topologias distintas — e a distinção é decisão, não
+acidente.
+
+**`agent-tasks`** — execução de tarefa de agente. Consumidor com
+`prefetchCount: 1`, e `AgentDelegationConcurrencyTests` existe para provar o que
+isso implica: dentro de uma instância o consumo é **serializado**, a ponto de uma
+delegação que aguarda a task do alvo ser autodeadlock estrutural. Falha descarta
+a mensagem (`BasicNackAsync(requeue: false)`), sem retry.
+
+**`knowledge-indexing`** — indexação de documento. **Fila própria justamente por
+causa do `prefetchCount: 1` da outra:** indexação de minutos ali não seria "fila
+mais lenta", seria a mesma classe de bloqueio, com execução de agente atrás.
+
+É o **primeiro consumidor do repositório com política de tentativas**, e não
+havia molde a herdar. A forma: **três execuções**, espaçadas por 1 e 5 minutos,
+por **duas filas de espera** (`knowledge-indexing-wait-60s` e
+`-wait-300s`), cada uma com `x-message-ttl` **fixo** e dead-letter de volta para
+a principal.
+
+**TTL fixo por fila, nunca por mensagem** — e o motivo é um defeito conhecido e
+silencioso: RabbitMQ só expira mensagem quando ela chega à **cabeça** da fila,
+então numa fila única com TTL por mensagem uma de 300 s na frente segura uma de
+60 s atrás. Duas filas de TTL fixo custam uma declaração a mais e não têm o
+problema.
+
+**Uma tentativa é uma execução**, não uma chamada HTTP ao provedor — não há retry
+dentro da execução. Uma camada só, um contador só, um significado só: é o que
+torna verdadeiro o texto que a tela mostra ao operador ("três tentativas, a
+última às 03:14").
+
+**O `catch` do consumidor tem duas saídas**, e isso é o que o molde de
+`TaskJobConsumer` não cobre: republicar na fila de espera, ou terminar em
+`Failed`. As duas contam tentativa; **só** o esgotamento do limite grava
+`Failed`, e essa gravação **preserva** `IndexedAt` e os fragmentos anteriores.
+Falhar ao gravar o estado de falha não devolve a mensagem para a fila — criaria
+um laço que falharia pelo mesmo motivo.
 
 ## Autenticação
 
@@ -445,6 +522,37 @@ de propor algo nesta base:
    em prosa que descreve *o que o código faz* é a que decide a próxima
    change, e é a que ninguém abre o arquivo para checar.
 
+   **A forma mais difícil de pegar: a fonte foi consultada corretamente e a
+   PERGUNTA estava errada.** As formas acima são sobre não verificar, ou
+   verificar a referência em vez da afirmação. Esta é outra coisa — verificação
+   bem feita, medição correta, número certo, respondendo a uma pergunta que não
+   era a que decidia.
+
+   Medido em `knowledge-base-indexacao`: a verificação contou os sítios de
+   `PostgreSqlBuilder` para dimensionar a troca de imagem do Postgres, e chegou a
+   11 — número correto. Mas **imagem e provider são camadas diferentes**: a
+   imagem decide se a extensão existe no servidor; `UseNpgsql` decide se o EF
+   sabe **mapear o tipo**. Nenhuma implica a outra. Os sítios que a mudança
+   realmente alcançava eram **~38**, e o erro só apareceu na primeira
+   materialização, com uma mensagem que parece defeito de modelo.
+
+   **Por que engana mais que as outras:** o resultado tem toda a aparência de
+   evidência. Há um número, ele saiu de uma varredura no código, e ele está
+   certo. Não há nada a "conferir de novo" — o que falta é perguntar *o que
+   exatamente esta mudança alcança*, e só depois medir. O sintoma a procurar é
+   uma verificação que mede **um nome** (uma string, um tipo, um arquivo) quando
+   a mudança age sobre um **mecanismo**.
+
+   **Corolário útil, medido na mesma rodada: no EF Core, mapeamento inválido
+   falha de forma GLOBAL e IMEDIATA, nunca latente.** A validação é do **modelo
+   inteiro**, na primeira materialização — não por entidade, quando alguém for
+   consultá-la. Foi isso que derrubou 21 testes que não tocam a entidade nova, e
+   é a mesma propriedade que provou que o caminho de produção não estava
+   passando por acidente: sem `UseVector()` em `AddInfrastructure`, `apps/api`
+   falharia em **qualquer** operação de banco, não só no dia em que alguém
+   lesse fragmento. Vale guardar porque o medo de "caso silencioso esperando o
+   primeiro consumidor" é natural aqui, e nesta camada ele não existe.
+
    **E o alvo se estende a comportamento de infraestrutura que o código
    pressupõe sem dizer.** Duas medições de `ordenacao-desempate-listas-vinculo`
    valem como precedente, e uma delas é resultado **negativo**:
@@ -488,7 +596,7 @@ de propor algo nesta base:
    feature que não `channels`.
 8. **Checagem de integridade no startup** é o padrão para todo registro
    que possa ficar incompleto em silêncio — não documentação em prosa. Já
-   aplicado a quatro casos de natureza diferente: DI keyed para pontos de
+   aplicado a cinco casos de natureza diferente: DI keyed para pontos de
    extensão tipo-plugin (contrato de canal), classificação de rotas
    anônimas (autenticação), configuração de fuso horário do sistema
    (`apps/workers` — valor resolvido vs. valor declarado em `TZ`, não só
@@ -497,6 +605,38 @@ de propor algo nesta base:
    esperada e realidade mapeada: item declarado sem contraparte real é tão
    problema quanto o inverso. DI keyed continua sendo o padrão para pontos
    de extensão tipo-plugin.
+
+   **Quinto caso, e de forma nova: a primeira checagem desta base que faz
+   I/O no boot.** `ValidateEmbeddingIndexConsistency` (`apps/workers`)
+   compara o provedor, o modelo e a dimensão de embedding **declarados na
+   configuração** com os **gravados nos fragmentos** (`SELECT DISTINCT`
+   sobre as três colunas de proveniência). Índice vazio sobe; uma
+   combinação igual à declarada sobe; **qualquer outra coisa falha o
+   boot** — inclusive mais de uma combinação distinta, que é corrupção por
+   troca anterior não detectada e reprova ainda que uma delas seja a
+   declarada.
+
+   O motivo de falhar em vez de tolerar: vetores de modelos diferentes são
+   **incomparáveis**, e a busca continuaria devolvendo resultados — errados,
+   sem erro nenhum. Não há modo de tolerância nem bypass.
+
+   **O que sustenta o custo do I/O no boot foi verificado, não suposto:**
+   no compose, `apps/workers` declara `depends_on: migrator:
+   service_completed_successfully`, e o `migrator` declara `postgres:
+   service_healthy` — transitivamente, em produção o banco está saudável e
+   migrado antes daquele processo subir. **Consequência local a declarar:**
+   quem roda `dotnet run` fora do compose passa a não subir com o Postgres
+   parado, onde antes subia e falhava por mensagem. `apps/workers` não faz
+   nada sem banco e sem fila, então a diferença prática é o momento e a
+   clareza da falha — mas é mudança que se nota antes de entender.
+
+   **E esta forma tem um modo de reprovar que as outras não têm: a
+   vacuidade.** `SELECT DISTINCT` sobre tabela vazia devolve conjunto
+   vazio, e conjunto vazio sobe — então um guarda exercitado só contra
+   **estado limpo** fica verde com e sem a implementação, porque nunca
+   chega à comparação. É a quinta forma da convenção 15 aplicada a uma
+   checagem de boot, e a saída é a mesma: todo cenário de divergência roda
+   sobre **índice povoado**, e há um teste que afirma essa precondição.
 
    **Existem duas formas do padrão, e a escolha entre elas tem
    consequência de teste.** Três das quatro checagens rodam sobre o **host
@@ -789,3 +929,25 @@ de propor algo nesta base:
     ambiental confirmada por evidência direta" — e a causa real só apareceu na
     terceira leitura. Baseline verde acusa regressão; baseline vermelha não
     absolve ninguém.
+
+    **E uma terceira coisa, que `knowledge-base-indexacao` aprendeu do jeito
+    caro: baseline e fechamento GUARDAM A SAÍDA COMPLETA, em arquivo, fora do
+    diretório de sessão.** Não filtrada, não resumida.
+
+    Ali a suíte de fechamento reprovou 1 de 212, e a saída tinha passado por um
+    `grep` que só capturava a linha de resumo — o **nome do teste se perdeu**.
+    Sem o nome não há como separar "contenção" de "teste intermitente meu", e a
+    dúvida ficou registrada como residual em vez de resolvida. Rodar de novo não
+    recupera: o evento não se repetiu.
+
+    Duas armadilhas concretas, as duas já encontradas nesta base:
+
+    - **`| grep ... | head -N` fecha o cano e mata o produtor por `SIGPIPE`.** A
+      rodada parece ter terminado e não produz nem sucesso nem falha.
+    - **Filtrar antes de saber se há saída** deixa o caso de erro sem rastro
+      justamente quando ele é o que interessa.
+
+    O custo de guardar é um arquivo de ~1 MB. O custo de não guardar é uma
+    pergunta que não tem mais resposta. **Isto pertence ao `tasks.md` da change,
+    na tarefa de fechamento, e não à disciplina de quem roda** — escrito como
+    tarefa, deixa de depender de alguém lembrar.

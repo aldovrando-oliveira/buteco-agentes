@@ -817,7 +817,7 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
     }
 
     private AppDbContext CreateDbContext() =>
-        new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options);
+        new(new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options);
 
     private async Task<A2ATaskRecord> PollUntilTerminalAsync(string taskId, int maxAttempts = 50)
     {

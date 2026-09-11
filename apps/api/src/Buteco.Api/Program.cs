@@ -7,6 +7,7 @@ using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Auth;
 using Buteco.Api.Auth.Endpoints;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Knowledge.Indexing;
 using Buteco.Api.KnowledgeBases.Endpoints;
 using Buteco.Api.KnowledgeDocuments.Endpoints;
 using Buteco.Api.KnowledgeDocuments.Extraction;
@@ -37,6 +38,7 @@ builder.Services.Configure<OperatorCredentialOptions>(builder.Configuration.GetS
 builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
+builder.Services.AddSingleton<IKnowledgeIndexingJobPublisher, RabbitMqKnowledgeIndexingJobPublisher>();
 builder.Services.AddSingleton<ProviderCatalogService>();
 builder.Services.AddSingleton<IMcpCredentialCipher, AesGcmMcpCredentialCipher>();
 

@@ -35,8 +35,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<AgentKnowledgeBase> AgentKnowledgeBases => Set<AgentKnowledgeBase>();
 
+    public DbSet<KnowledgeFragment> KnowledgeFragments => Set<KnowledgeFragment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Espelho EXATO do de apps/api, incluindo a extensão: KnowledgeSchemaMirrorTests
+        // afirma que os dois modelos geram o mesmo schema.
+        if (Database.IsNpgsql())
+        {
+            modelBuilder.HasPostgresExtension("vector");
+        }
+
         modelBuilder.Entity<Agent>(entity =>
         {
             entity.ToTable("agents");
@@ -135,6 +144,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(document => document.IndexedAt).IsRequired(false);
             entity.Property(document => document.FailureReason).IsRequired(false);
             entity.Property(document => document.ContentRevision).IsRequired();
+            entity.Property(document => document.ContentHash).IsRequired(false);
+            entity.Property(document => document.FragmentCount).IsRequired().HasDefaultValue(0);
+            entity.Property(document => document.IndexingAttempts).IsRequired().HasDefaultValue(0);
+            entity.Property(document => document.LastAttemptAt).IsRequired(false);
             entity.Property(document => document.CreatedAt).IsRequired();
             entity.Property(document => document.UpdatedAt).IsRequired();
 
@@ -152,6 +165,50 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasForeignKey(document => document.KnowledgeBaseId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
+
+        // O provider InMemory não sabe representar `vector` — nenhum tipo do CLR
+        // mapeia para ele fora de um provider relacional. A entidade é
+        // condicionada aqui por isso, e não como concessão de teste: em produção
+        // e em todo teste com Testcontainers o provider é Npgsql, e o mapeamento
+        // é exercitado por inteiro, inclusive por KnowledgeSchemaMirrorTests.
+        //
+        // Sem esta guarda, o único teste de handler que usa InMemory reprova ao
+        // CONSTRUIR O MODELO — e por um motivo que não tem relação com o que ele
+        // afirma, porque a validação do EF Core é do **modelo inteiro**, não da
+        // entidade que o teste usa.
+        if (Database.IsNpgsql())
+        {
+            modelBuilder.Entity<KnowledgeFragment>(entity =>
+            {
+                entity.ToTable("knowledge_fragments");
+                entity.HasKey(fragment => fragment.Id);
+                entity.Property(fragment => fragment.Text).IsRequired();
+                entity.Property(fragment => fragment.Ordinal).IsRequired();
+                entity.Property(fragment => fragment.EmbeddingProvider).IsRequired();
+                entity.Property(fragment => fragment.EmbeddingModel).IsRequired();
+                entity.Property(fragment => fragment.EmbeddingDimensions).IsRequired();
+                entity.Property(fragment => fragment.CreatedAt).IsRequired();
+                entity.Property(fragment => fragment.Embedding).HasColumnType("vector(4096)");
+
+                entity.HasIndex(fragment => fragment.KnowledgeBaseId);
+                entity.HasIndex(fragment => fragment.KnowledgeDocumentId);
+
+                // Cascade — o mesmo de apps/api. Com Restrict, excluir documento
+                // indexado passaria a falhar (design.md, D5).
+                entity.HasOne<KnowledgeDocument>()
+                    .WithMany()
+                    .HasForeignKey(fragment => fragment.KnowledgeDocumentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+        }
+        else
+        {
+            // O DbSet faz o EF descobrir a entidade por convenção mesmo sem
+            // mapeamento explícito — sem este Ignore, ele tenta materializar
+            // `Vector` e falha por não achar construtor vinculável.
+            modelBuilder.Ignore<KnowledgeFragment>();
+        }
+
 
         modelBuilder.Entity<AgentKnowledgeBase>(entity =>
         {

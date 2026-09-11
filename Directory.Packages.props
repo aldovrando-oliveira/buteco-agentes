@@ -31,6 +31,17 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- pgvector: a coluna de verdade é vector(4096) e quem escreve é
+         apps/workers (design.md D1/D12 da change knowledge-base-indexacao).
+         ATENÇÃO NUM UPGRADE DE EF CORE: Pgvector.EntityFrameworkCore 0.3.0
+         declara targetFramework net8.0 e Npgsql.EntityFrameworkCore.PostgreSQL
+         >= 9.0.1, contra os net10.0 / 10.0.3 deste repositório. A compatibilidade
+         foi verificada end-to-end contra pgvector/pgvector:pg18 real (INSERT,
+         SELECT com norma preservada, e <=> traduzido em LINQ), não deduzida do
+         nuspec. O pacote não acompanha o ciclo do EF Core — levou 9 meses entre
+         0.2.2 e 0.3.0 — então verificar antes de assumir (risco R8). -->
+    <PackageVersion Include="Pgvector" Version="0.3.2" />
+    <PackageVersion Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
 
     <!-- CQRS mediator (apps/api) -->
     <PackageVersion Include="Mediator.Abstractions" Version="3.0.2" />

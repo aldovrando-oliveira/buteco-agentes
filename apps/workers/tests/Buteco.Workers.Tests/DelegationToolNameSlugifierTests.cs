@@ -103,7 +103,7 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
     private AgentDelegationToolSetResolver BuildResolver()
     {
         var services = new ServiceCollection();
-        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(fixture.Postgres.GetConnectionString()));
+        services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()));
         var provider = services.BuildServiceProvider();
 
         return new AgentDelegationToolSetResolver(
@@ -114,7 +114,7 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
     }
 
     private AppDbContext CreateDbContext() =>
-        new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(fixture.Postgres.GetConnectionString()).Options);
+        new(new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options);
 
     private async Task SeedAgentAsync(Guid agentId, string name, string provider = "openai", string model = "gpt-5.6-sol")
     {

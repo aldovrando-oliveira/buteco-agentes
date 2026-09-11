@@ -10,6 +10,7 @@ using Buteco.Workers.Agents;
 using TaskStatus = A2A.TaskStatus;
 using WorkerDbContext = Buteco.Workers.Infrastructure.AppDbContext;
 using WorkerTaskStore = Buteco.Workers.A2A.PostgresTaskStore;
+using CrossAppTaskStoreCompatibility.Tests.Support;
 
 namespace CrossAppTaskStoreCompatibility.Tests;
 
@@ -21,7 +22,7 @@ namespace CrossAppTaskStoreCompatibility.Tests;
 /// </summary>
 public class PostgresTaskStoreCompatibilityTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:18")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_cross_app_test")
         .WithUsername("buteco")
         .WithPassword("buteco_test_password")
@@ -35,11 +36,11 @@ public class PostgresTaskStoreCompatibilityTests : IAsyncLifetime
         await _postgres.StartAsync();
 
         var apiServices = new ServiceCollection();
-        apiServices.AddDbContext<ApiDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+        apiServices.AddDbContext<ApiDbContext>(options => options.UseButecoAgentsNpgsql(_postgres.GetConnectionString()));
         _apiScopeFactory = apiServices.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         var workerServices = new ServiceCollection();
-        workerServices.AddDbContext<WorkerDbContext>(options => options.UseNpgsql(_postgres.GetConnectionString()));
+        workerServices.AddDbContext<WorkerDbContext>(options => options.UseButecoAgentsNpgsql(_postgres.GetConnectionString()));
         _workerScopeFactory = workerServices.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         // Só apps/api aplica migration em runtime (é quem cria o agente antes
