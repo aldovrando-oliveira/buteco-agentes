@@ -174,6 +174,14 @@ Quatro pontos que não se deduzem lendo os campos:
   estados. Regra para a UI: informação derivada da indexação aparece sempre
   que `IndexedAt` não for nulo, e é **omitida** quando for — nunca zerada,
   o que afirmaria que a indexação rodou e não achou nada.
+
+  A consequência concreta dessa regra, e ela **não** é "omitir quando o
+  documento não está `Indexed`": documento que falhou depois de ter sido
+  indexado, ou que está sendo reindexado, continua exibindo a **contagem
+  anterior**, porque os fragmentos antigos continuam vivos no índice e
+  respondendo às consultas — `FailAsync` não toca `IndexedAt` nem
+  `FragmentCount`, e a exclusão dos antigos só acontece dentro da transação de
+  sucesso. Quem separa os casos é `IndexedAt`, nunca o estado.
 - **`ContentRevision` é coluna explícita, não `xmin`**, e incrementa apenas
   quando `ExtractedText` muda. O consumidor de indexação muta a própria linha
   ao transicionar de estado, e um token de linha invalidaria o próprio

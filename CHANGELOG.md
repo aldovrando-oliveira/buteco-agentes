@@ -135,6 +135,24 @@ o versionamento pretende seguir
   indexados e em falha. Uma requisição para o conjunto inteiro, com custo
   independente do número de bases. A resposta de base **não** carrega essas
   contagens, de propósito.
+- Gestão de documentos no painel, dentro do detalhe da base: listagem com o
+  estado de indexação de cada documento, adição por arquivo
+  (`.md`/`.markdown`/`.txt`, vários por vez, com título sugerido a partir do nome
+  e editável) ou escrevendo à mão, atualização, exclusão com confirmação, e
+  reindexação a partir da faixa de falha.
+- A listagem de documentos **acompanha a transição** sozinha: enquanto houver
+  documento pendente ou indexando, ela se refaz periodicamente e para quando
+  todos chegam a um estado terminal. Sem barra de progresso percentual — o
+  sistema conhece o estado do documento, não o percentual.
+- O motivo da falha de indexação é exibido **completo, sem truncar**, com a ação
+  de reindexar ao lado. É a única cópia da falha que a tela tem.
+- A contagem de fragmentos é exibida quando o documento já foi indexado alguma
+  vez e **omitida** quando nunca foi — nunca zerada. Documento que falhou depois
+  de indexado, ou que está sendo reindexado, continua mostrando a contagem
+  anterior, porque os fragmentos antigos continuam respondendo.
+- Envio de vários arquivos é tratado como N operações independentes, com estado
+  por linha: se uma falhar, as que já entraram continuam criadas, o modal
+  permanece aberto com o motivo, e um novo envio não recria o que já entrou.
 - A consulta do índice pelo agente ainda não existe: não há tool de busca.
 - Vínculo N:N entre agente e base de conhecimento em `apps/api`, definido por
   `PUT /agents/{id}/knowledge-bases` com substituição integral do conjunto.

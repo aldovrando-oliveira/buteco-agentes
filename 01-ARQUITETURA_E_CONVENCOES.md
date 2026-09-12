@@ -786,6 +786,17 @@ de propor algo nesta base:
     que o card, no escuro é *mais escura* —, e a saída é uma variável
     declarada nos dois esquemas pelo resolver, ou um token da biblioteca
     que já troque sozinho. Fechado por guarda estático (ver 15).
+
+    **E o inverso também vale, medido em `frontend-knowledge-base-documentos`: a
+    variável nova só nasce quando não há token que já troque.** A faixa de falha
+    por linha troca de ponta da escala entre os esquemas — gatilho desta
+    convenção — e **não** ganhou variável, porque `Alert` do Mantine tem variante
+    default `light` e resolve por `theme.variantColorResolver`, que é ciente do
+    esquema (conferido no pacote instalado, não suposto). O precedente da casa
+    para esse papel já existia em `AgentKnowledgeTab.tsx:176`. Inventar
+    `--buteco-danger-band` ali seria variável sem consumidor exclusivo
+    (convenção 2) e um segundo lugar onde a cor de perigo pode divergir.
+
 17. **Contrariar o protótipo é resultado legítimo, e vira registro** —
     handoff de design feito sem acesso ao código diverge da realidade, e a
     divergência se resolve com decisão explícita, não com implementação
@@ -958,3 +969,50 @@ de propor algo nesta base:
     pergunta que não tem mais resposta. **Isto pertence ao `tasks.md` da change,
     na tarefa de fechamento, e não à disciplina de quem roda** — escrito como
     tarefa, deixa de depender de alguém lembrar.
+20. **A UI de acompanhamento de processo assíncrono usa polling CONDICIONAL, com
+    a condição em função pura** — `refetchInterval` do TanStack Query aceita
+    `(query) => number | false | undefined`, e a primeira consulta do painel a
+    usar isso é a listagem de documentos de uma base: devolve o intervalo
+    enquanto houver item não-terminal e `false` quando todos chegam a um estado
+    terminal. `useSessionMessagesQuery` já fazia polling antes, mas com intervalo
+    **constante** — a condição lá é "a tela está aberta", não "os dados ainda
+    mudam", e as duas coisas são diferentes.
+
+    A condição mora numa **função pura exportada**, não numa expressão embutida
+    no hook, por dois motivos medidos: é testável sem timer, e a mesma pergunta é
+    feita por outra parte da tela (a faixa de resumo de itens não-terminais).
+
+    **O guarda é pareado** (convenção 15, quinta forma): uma asserção
+    determinística que resolve a opção real contra a query real do cache, e uma
+    comportamental com timers falsos. A determinística sozinha não prova que a
+    requisição se repete; a comportamental sozinha depende de agendamento.
+
+    **Armadilha que custou uma leitura errada ao escrever isso:** o react-query
+    usa `notifyOnChangeProps: 'tracked'` por padrão, e o objeto devolvido é um
+    **proxy que registra quais props foram LIDAS**. O componente de `renderHook`
+    não lê nada — quem lê é o teste, por `result.current`. Se a primeira espera
+    tocar só `isSuccess`, `data` nunca entra no conjunto rastreado e uma mudança
+    posterior só em `data` **não provoca re-render**: `result.current.data` fica
+    preso no primeiro valor e o `waitFor` seguinte estoura o prazo, com a
+    requisição tendo acontecido e devolvido o dado novo.
+
+    A primeira reprodução isolada disso mudou **duas** variáveis de uma vez —
+    acrescentou o `refetchInterval` em forma de função *e* deixou de tocar
+    `.data` — e creditou o efeito ao `refetchInterval`, quase custando abandonar
+    o recurso da biblioteca por um artefato do teste. **Isolamento só vale
+    mudando uma variável**, e é a forma da convenção 6 que mais engana: medição
+    correta respondendo à pergunta errada.
+
+21. **Comando de varredura que falha em silêncio produz a mesma saída que
+    ausência real.** Acréscimo à convenção 6, e cometido *dentro* da change que
+    passou a conferência inteira nomeando essa família:
+    `grep --include=*.cs` sem aspas vira glob do `zsh`, que devolve
+    *"no matches found"* e **nenhuma linha**. A saída vazia foi lida como "a
+    entidade não existe em `apps/api`", e a afirmação foi para o `design.md` como
+    evidência de uma exclusão de escopo. A conclusão não mudou — nenhuma rota
+    projeta aquela entidade, e a etapa dependente continua bloqueada —, mas a
+    evidência estava errada e foi corrigida no próprio `design.md` (convenção 9).
+
+    Na prática: varredura que devolve zero resultados só vale como evidência de
+    ausência depois de conferir que **o comando rodou**. Um `echo $?`, um caso de
+    controle que deveria casar, ou repetir a busca por outro caminho.

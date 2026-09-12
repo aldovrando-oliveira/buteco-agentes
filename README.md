@@ -86,8 +86,10 @@ boundary goes over authenticated HTTP. See
   and Telegram, behind a plugin contract that new adapters implement.
 - **Conversation memory** — sessions persisted by context, with incremental
   summarization as conversations grow.
-- **Knowledge bases** — base and document catalog with markdown extraction.
-  Indexing has no consumer yet: documents stay `Pending`.
+- **Knowledge bases** — base and document catalog with markdown extraction,
+  chunked and embedded into a vector index in the background. Operators manage
+  documents from the panel: upload or write them, update, delete, watch each
+  one move through indexing, and retry a document whose indexing failed.
 - **Operations panel** — a web UI for all of the above.
 
 ---

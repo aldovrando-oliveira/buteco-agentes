@@ -14,7 +14,13 @@ import {
   getKnowledgeBase,
 } from '../api/knowledgeBasesApi';
 import { listAgents } from '../../agents/api/agentsApi';
+import {
+  deleteKnowledgeDocument,
+  listKnowledgeDocuments,
+  reindexKnowledgeDocument,
+} from '../api/knowledgeDocumentsApi';
 import type { KnowledgeBase } from '../types/knowledgeBase';
+import type { KnowledgeDocumentSummary } from '../types/knowledgeDocument';
 import type { Agent } from '../../agents/types/agent';
 
 vi.mock('../api/knowledgeBasesApi', async (importOriginal) => {
@@ -30,6 +36,17 @@ vi.mock('../api/knowledgeBasesApi', async (importOriginal) => {
 vi.mock('../../agents/api/agentsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../agents/api/agentsApi')>();
   return { ...actual, listAgents: vi.fn() };
+});
+
+vi.mock('../api/knowledgeDocumentsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/knowledgeDocumentsApi')>();
+  return {
+    ...actual,
+    listKnowledgeDocuments: vi.fn(),
+    getKnowledgeDocument: vi.fn(),
+    deleteKnowledgeDocument: vi.fn(),
+    reindexKnowledgeDocument: vi.fn(),
+  };
 });
 
 function agent(overrides: Partial<Agent>): Agent {
@@ -61,6 +78,26 @@ const knowledgeBase: KnowledgeBase = {
   updatedAt: '2026-09-02T11:00:00Z',
 };
 
+function documento(overrides: Partial<KnowledgeDocumentSummary> = {}): KnowledgeDocumentSummary {
+  return {
+    id: 'doc-1',
+    knowledgeBaseId: knowledgeBase.id,
+    title: 'Faixas de atraso e descontos',
+    sourceType: 'markdown',
+    contentLengthBytes: 8420,
+    indexingStatus: 'Indexed',
+    indexedAt: '2026-09-02T03:14:00Z',
+    failureReason: null,
+    contentRevision: 1,
+    fragmentCount: 14,
+    indexingAttempts: 1,
+    lastAttemptAt: '2026-09-02T03:14:00Z',
+    createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-02T00:00:00Z',
+    ...overrides,
+  };
+}
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -84,6 +121,11 @@ describe('KnowledgeBaseDetailPage', () => {
     vi.mocked(deactivateKnowledgeBase).mockReset();
     vi.mocked(listAgents).mockReset();
     vi.mocked(listAgents).mockResolvedValue([]);
+    vi.mocked(listKnowledgeDocuments).mockReset();
+    vi.mocked(listKnowledgeDocuments).mockResolvedValue([]);
+    vi.mocked(deleteKnowledgeDocument).mockReset();
+    vi.mocked(deleteKnowledgeDocument).mockResolvedValue(undefined);
+    vi.mocked(reindexKnowledgeDocument).mockReset();
   });
 
   it('exibe indicador de carregamento enquanto a base não chega', () => {
@@ -124,9 +166,10 @@ describe('KnowledgeBaseDetailPage', () => {
 
     renderPage();
 
-    expect(
-      await screen.findByRole('link', { name: 'Atendimento Financeiro' }),
-    ).toHaveAttribute('href', '/agents/a1');
+    expect(await screen.findByRole('link', { name: 'Atendimento Financeiro' })).toHaveAttribute(
+      'href',
+      '/agents/a1',
+    );
   });
 
   it('informa quando nenhum agente consulta a base', async () => {
@@ -207,13 +250,81 @@ describe('KnowledgeBaseDetailPage', () => {
     expect(screen.queryByText('Sem descrição.')).not.toBeInTheDocument();
   });
 
-  it('informa que a gestão de documentos chega depois, sem afirmar base vazia', async () => {
+  // A nota de sequenciamento da 5a-1 saiu: a tela consulta os documentos, então
+  // o estado vazio passa a ser afirmação VERIFICADA, e não suposição.
+  it('exibe a área de documentos com a listagem da base', async () => {
     vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+    vi.mocked(listKnowledgeDocuments).mockResolvedValue([documento()]);
 
     renderPage();
 
-    expect(await screen.findByTestId('documents-placeholder')).toBeInTheDocument();
-    expect(screen.queryByText(/nenhum documento/i)).not.toBeInTheDocument();
+    expect(await screen.findByText('Faixas de atraso e descontos')).toBeInTheDocument();
+    expect(screen.getByText('14 fragmentos')).toBeInTheDocument();
+    expect(screen.queryByTestId('documents-placeholder')).not.toBeInTheDocument();
+  });
+
+  it('base sem documento exibe estado vazio verificado', async () => {
+    vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+    vi.mocked(listKnowledgeDocuments).mockResolvedValue([]);
+
+    renderPage();
+
+    expect(await screen.findByTestId('documents-empty')).toHaveTextContent(
+      'Nenhum documento nesta base.',
+    );
+  });
+
+  it('reindexar chama a rota de reindexação do documento', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+    vi.mocked(listKnowledgeDocuments).mockResolvedValue([
+      documento({ indexingStatus: 'Failed', indexedAt: null, failureReason: '429 do provedor.' }),
+    ]);
+    vi.mocked(reindexKnowledgeDocument).mockResolvedValue({
+      ...documento({ indexingStatus: 'Pending' }),
+      extractedText: '',
+    });
+
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Reindexar documento' }));
+
+    expect(reindexKnowledgeDocument).toHaveBeenCalledWith(knowledgeBase.id, 'doc-1');
+  });
+
+  it('excluir documento passa por confirmação e nomeia os agentes afetados', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+    vi.mocked(listKnowledgeDocuments).mockResolvedValue([documento()]);
+    vi.mocked(listAgents).mockResolvedValue([
+      agent({ knowledgeBases: [{ id: knowledgeBase.id, name: knowledgeBase.name }] }),
+    ]);
+
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Excluir' }));
+
+    expect(await screen.findByTestId('delete-document-affected-agents')).toHaveTextContent(
+      'Atendimento Financeiro',
+    );
+    expect(deleteKnowledgeDocument).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Excluir documento' }));
+
+    expect(deleteKnowledgeDocument).toHaveBeenCalledWith(knowledgeBase.id, 'doc-1');
+  });
+
+  it('cancelar a confirmação não exclui o documento', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+    vi.mocked(listKnowledgeDocuments).mockResolvedValue([documento()]);
+
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Excluir' }));
+    await user.click(await screen.findByRole('button', { name: 'Cancelar' }));
+
+    expect(deleteKnowledgeDocument).not.toHaveBeenCalled();
   });
 
   // Asserção negativa: as duas abas do protótipo pertencem à 5a-2 e à 5c, e uma

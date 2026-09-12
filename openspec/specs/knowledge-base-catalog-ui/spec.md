@@ -123,16 +123,18 @@ O sistema SHALL exibir, em `/knowledge-bases/{id}`, o nome, a descrição e o
 estado da base, com uma volta explícita para a listagem.
 
 O detalhe SHALL NOT exibir as datas de criação e atualização. Elas existem no
-response, mas o protótipo as omite nesta tela de propósito — a tela ganha a
-tabela de documentos em etapa posterior, e as datas viram ruído ali.
+response, mas o protótipo as omite nesta tela de propósito: a tela carrega a
+tabela de documentos, com a data de atualização de cada documento, e as datas da
+base viram ruído ao lado delas.
 
 O detalhe SHALL oferecer as ações `Editar` e, conforme o estado atual,
 `Ativar` ou `Desativar`. `Desativar` SHALL passar por confirmação, no padrão de
 agente e servidor MCP; `Ativar` SHALL ser imediato.
 
-O detalhe SHALL NOT apresentar estrutura de abas. As duas abas do protótipo
-pertencem a etapas posteriores, e uma barra com uma aba só afirmaria uma
-estrutura que a tela não tem (`design.md`, D3).
+O detalhe SHALL NOT apresentar estrutura de abas. A segunda aba do protótipo —
+diagnóstico do índice — pertence à etapa posterior, e uma barra com uma aba só
+afirmaria uma estrutura que a tela não tem (`design.md` de
+`frontend-knowledge-base-catalogo`, D3).
 
 #### Scenario: Detalhe exibe os campos que a API devolve
 - **WHEN** o operador acessa o detalhe de uma base existente
@@ -183,22 +185,6 @@ campo de runtime (`design.md`, contexto e D7).
 #### Scenario: Descrição não é o subtítulo do cabeçalho
 - **WHEN** o operador visualiza o cabeçalho de detalhe da base
 - **THEN** o subtítulo do cabeçalho não é a descrição da base
-
-### Requirement: Ausência da área de documentos no detalhe
-O sistema SHALL indicar, no lugar da área de documentos, que a gestão de
-documentos desta base chega em etapa posterior.
-
-O sistema SHALL NOT exibir estado vazio de documentos. Dizer que não há
-documentos afirmaria que a base foi consultada e está vazia, quando nenhuma
-consulta de documento é feita nesta etapa (`design.md`, D4).
-
-#### Scenario: Detalhe indica que a gestão de documentos vem depois
-- **WHEN** o operador visualiza o detalhe de uma base
-- **THEN** a tela informa que a gestão de documentos chega em etapa posterior
-
-#### Scenario: Detalhe não afirma que a base está sem documentos
-- **WHEN** o operador visualiza o detalhe de uma base
-- **THEN** a tela não afirma que a base não tem nenhum documento
 
 ### Requirement: Criação e edição de base de conhecimento
 O sistema SHALL permitir criar uma base em `/knowledge-bases/new` e editar nome e
