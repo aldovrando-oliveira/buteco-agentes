@@ -4,12 +4,15 @@ using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
+using Buteco.Workers.Naming;
 using Buteco.Workers.Mcp.Entities;
 using Buteco.Workers.Mcp.Security;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Notifications;
 using Buteco.Workers.Options;
+using Buteco.Workers.Tests.Knowledge.Support;
 using Buteco.Workers.Tests.Mcp.Support;
 using Buteco.Workers.Tests.Support;
 using Microsoft.EntityFrameworkCore;
@@ -44,6 +47,15 @@ public class AgentToolNamespaceTests(WorkerInfrastructureFixture fixture) : ICla
 {
     private const string EncryptionKey = "NtxqjqnKG3sqy52PFRh/SGk573bsE9TrDtKOsDiR8uc=";
 
+    private static readonly float[] FixedQueryVector = BuildFixedQueryVector();
+
+    private static float[] BuildFixedQueryVector()
+    {
+        var vector = new float[4096];
+        vector[0] = 1f;
+        return vector;
+    }
+
     /// <summary>
     /// Nome de agente Target escolhido para que a tool de delegação derivada
     /// ocupe exatamente <see cref="ToolNameSanitizer.MaxToolNameLength"/>
@@ -52,7 +64,7 @@ public class AgentToolNamespaceTests(WorkerInfrastructureFixture fixture) : ICla
     private static readonly string CollidingTargetName = new('a', 52);
 
     private static string CollidingDelegationToolName =>
-        ToolNameSanitizer.Sanitize($"delegate_to_{DelegationToolNameSlugifier.Slugify(CollidingTargetName)}");
+        ToolNameSanitizer.Sanitize($"delegate_to_{ToolNameSlugifier.Slugify(CollidingTargetName)}");
 
     /// <summary>
     /// Nome de McpServer cujo nome composto <c>{servidor}__{tool}</c> passa de
@@ -358,6 +370,166 @@ public class AgentToolNamespaceTests(WorkerInfrastructureFixture fixture) : ICla
 
     private static string UniqueServerUrl() => $"https://fake-mcp-{Guid.NewGuid():N}.test/mcp";
 
+
+    /// <summary>
+    /// Terceiro conjunto no mesmo espaço de nome: duas bases de conhecimento
+    /// cujos nomes <b>slugificam para a mesma cadeia</b>. A colisão é produzida
+    /// pelo resolvedor REAL a partir de cadastro real — "Informações Gerais" e
+    /// "Informacoes  Gerais!" dão o mesmo slug depois da remoção de diacríticos.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_TwoKnowledgeBasesWithCollidingSlug_BothNamesSurviveDistinct()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var taskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(agentId, "Atendente Geral");
+        await SeedKnowledgeLinkAsync(agentId, await SeedKnowledgeBaseAsync("Informações Gerais", "Horários e endereços."));
+        await SeedKnowledgeLinkAsync(agentId, await SeedKnowledgeBaseAsync("Informacoes  Gerais!", "Outra base, mesmo slug."));
+        await SeedTaskAsync(taskId, agentId, contextId, "Olá.");
+
+        var tools = await RunAndCaptureToolsAsync(taskId, agentId, contextId);
+
+        Assert.Equal(2, tools.Count);
+        var names = tools.Select(tool => tool.Name).ToList();
+        Assert.Equal(2, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains("search_informacoes-gerais", names);
+        Assert.All(names, name => Assert.StartsWith("search_", name, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Precedência estendida (design.md D8): numa colisão entre MCP e
+    /// conhecimento, <b>MCP mantém o nome pretendido</b> e a tool de
+    /// conhecimento é a renomeada.
+    ///
+    /// <para>
+    /// <b>ACHADO AO ESCREVER ESTE TESTE, e ele vale mais que o teste:</b> a
+    /// primeira montagem tentou colidir por composição — servidor MCP
+    /// <c>search</c> com tool <c>cobranca</c> dá <c>search__cobranca</c>, e uma
+    /// base <c>_cobranca</c> daria <c>search__cobranca</c>. <b>Não colide</b>, e
+    /// não pode: <see cref="ToolNameSlugifier"/> mapeia todo caractere fora de
+    /// <c>[a-z0-9]</c> para <c>-</c> e apara as pontas, então um slug de base
+    /// <b>nunca contém <c>_</c></b>. Logo <c>search_&lt;slug&gt;</c> nunca é
+    /// igual a <c>&lt;servidor&gt;__&lt;tool&gt;</c> por composição.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Sobra um único caminho, e é o mesmo da colisão MCP × delegação:</b> a
+    /// truncagem em 64 cortando o nome MCP antes do seu <c>__</c>. É assim que
+    /// este teste monta a colisão, e é evidência a favor da escolha do esquema
+    /// <c>search_&lt;slug&gt;</c> (design.md, D3) — o esquema recusado
+    /// (<c>&lt;Nome&gt;__search</c>) colidiria por composição, que é muito mais
+    /// fácil de acontecer por cadastro.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_KnowledgeToolCollidesWithMcpTool_KnowledgeIsTheRenamedOne()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var taskId = Guid.NewGuid().ToString("N");
+
+        // Base cujo nome produz um slug de 57 caracteres: "search_" consome 7,
+        // então a tool de conhecimento ocupa exatamente os 64 do limite.
+        var nomeDaBase = new string('a', 57);
+        var nomeDaToolDeConhecimento = ToolNameSanitizer.Sanitize($"search_{ToolNameSlugifier.Slugify(nomeDaBase)}");
+        Assert.Equal(ToolNameSanitizer.MaxToolNameLength, nomeDaToolDeConhecimento.Length);
+
+        await SeedAgentAsync(agentId, "Atendente Geral");
+
+        // Servidor MCP cujo nome composto passa de 64 e, truncado, cai
+        // exatamente sobre o nome da tool de conhecimento.
+        var handler = new FakeMcpServerHttpMessageHandler();
+        var url = UniqueServerUrl();
+        handler.ConfigureServer(url, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("consultar")] });
+        var serverId = await SeedMcpServerAsync($"{nomeDaToolDeConhecimento}-sufixo-que-sera-truncado", url);
+        await SeedAgentMcpServerAsync(agentId, serverId, ["consultar"]);
+
+        await SeedKnowledgeLinkAsync(agentId, await SeedKnowledgeBaseAsync(nomeDaBase, "Base de cobrança."));
+        await SeedTaskAsync(taskId, agentId, contextId, "Olá.");
+
+        var tools = await RunAndCaptureToolsAsync(taskId, agentId, contextId, handler);
+
+        // Pré-condição: os dois resolvedores reais produziram o mesmo nome
+        // pretendido. Sem isto o resto não prova nada.
+        Assert.Equal(2, tools.Count);
+        var names = tools.Select(tool => tool.Name).ToList();
+        Assert.Equal(2, names.Distinct(StringComparer.Ordinal).Count());
+
+        // MCP mantém; conhecimento é o renomeado.
+        Assert.Contains(nomeDaToolDeConhecimento, names);
+        var renamed = Assert.Single(names, name => name != nomeDaToolDeConhecimento);
+        Assert.True(
+            renamed.Length <= ToolNameSanitizer.MaxToolNameLength,
+            $"Nome renomeado '{renamed}' tem {renamed.Length} caracteres.");
+        Assert.Matches(@"-\d+$", renamed);
+    }
+
+    /// <summary>
+    /// Estabilidade do conjunto de nomes com o terceiro conjunto presente: duas
+    /// execuções do mesmo cadastro produzem a mesma ordem e os mesmos nomes,
+    /// independentemente da ordem em que o banco devolveria as linhas.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_SameKnowledgeCatalog_ProducesSameToolNames_AcrossExecutions()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(agentId, "Atendente Geral");
+        foreach (var nome in new[] { "Zebra", "Alfa", "Meio" })
+        {
+            await SeedKnowledgeLinkAsync(agentId, await SeedKnowledgeBaseAsync(nome, $"Base {nome}."));
+        }
+
+        var firstTaskId = Guid.NewGuid().ToString("N");
+        await SeedTaskAsync(firstTaskId, agentId, contextId, "Primeira.");
+        var first = await RunAndCaptureToolsAsync(firstTaskId, agentId, contextId);
+
+        var secondTaskId = Guid.NewGuid().ToString("N");
+        await SeedTaskAsync(secondTaskId, agentId, contextId, "Segunda.");
+        var second = await RunAndCaptureToolsAsync(secondTaskId, agentId, contextId);
+
+        Assert.Equal(first.Select(t => t.Name), second.Select(t => t.Name));
+    }
+
+    private async Task<IList<AITool>> RunAndCaptureToolsAsync(
+        string taskId, Guid agentId, string contextId, FakeMcpServerHttpMessageHandler? mcpHandler = null)
+    {
+        var (chatClient, captured) = BuildToolCapturingChatClient();
+        using var host = BuildHost(chatClient, mcpHandler ?? new FakeMcpServerHttpMessageHandler());
+        await host.StartAsync();
+        await PublishJobAsync(taskId, agentId, contextId);
+        await PollUntilTerminalAsync(taskId);
+        await host.StopAsync();
+
+        return Assert.Single(captured);
+    }
+
+    private async Task<Guid> SeedKnowledgeBaseAsync(string name, string description)
+    {
+        var id = Guid.NewGuid();
+        await using var dbContext = CreateDbContext();
+        var now = DateTimeOffset.UtcNow;
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             INSERT INTO knowledge_bases ("Id", "Name", "Description", "IsActive", "CreatedAt", "UpdatedAt")
+             VALUES ({id}, {name}, {description}, {true}, {now}, {now})
+             """);
+        return id;
+    }
+
+    private async Task SeedKnowledgeLinkAsync(Guid agentId, Guid knowledgeBaseId)
+    {
+        await using var dbContext = CreateDbContext();
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             INSERT INTO agent_knowledge_bases ("AgentId", "KnowledgeBaseId")
+             VALUES ({agentId}, {knowledgeBaseId})
+             """);
+    }
+
     private IHost BuildHost(IChatClient chatClient, FakeMcpServerHttpMessageHandler mcpHandler)
     {
         var builder = Host.CreateApplicationBuilder();
@@ -388,6 +560,12 @@ public class AgentToolNamespaceTests(WorkerInfrastructureFixture fixture) : ICla
         builder.Services.AddSingleton<IMcpToolSetResolver, McpToolSetResolver>();
         builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, AgentDelegationToolSetResolver>();
+        builder.Services.AddSingleton<IKnowledgeToolSetResolver, KnowledgeToolSetResolver>();
+        // O resolvedor de conhecimento é real; só o PROVEDOR de embedding é
+        // falso, porque chamá-lo de verdade exigiria chave e rede. O que este
+        // teste afirma é nome de tool, não recuperação.
+        builder.Services.AddSingleton<Buteco.Workers.Knowledge.Embedding.IEmbeddingGeneratorResolver>(
+            new FakeEmbeddingGeneratorResolver(FixedQueryVector));
         builder.Services.Configure<AgentDelegationToolOptions>(options =>
         {
             options.Timeout = TimeSpan.FromSeconds(5);

@@ -295,6 +295,13 @@ a resposta errada. Há também o custo medido: cerca de 60 MB de vetores por
 recomendado pela etapa `0b`, são cerca de 123 MB para os mesmos 7.500
 fragmentos.
 
+> Esses 7.500 são volume de referência **de disco**. Como volume de **latência**
+> de consulta eles já passam do teto: a busca exata custa ~47 µs por fragmento
+> da base consultada, então 7.500 fragmentos numa mesma base dão ~333 ms, contra
+> o teto de 200 ms que dispara a criação do índice ANN. O volume de latência é
+> **~4.300 fragmentos na maior base** — e é a maior base que conta, porque a
+> consulta filtra por `KnowledgeBaseId`.
+
 Duas consequências práticas:
 
 - A FK de `KnowledgeDocument` para `KnowledgeBase` usa **`Restrict`**, não o
@@ -320,23 +327,25 @@ domínios diferentes, cada um decifrável apenas pelo processo que o gerou. Ver
 
 ## Namespace de tools do agente
 
-O conjunto de tools entregue ao LLM numa execução é a **união de dois
+O conjunto de tools entregue ao LLM numa execução é a **união de três
 conjuntos resolvidos separadamente**: as tools MCP (dos `McpServer`
-vinculados, filtradas por `AllowedTools`) e as tools de delegação (uma por
-`AgentDelegation`). Os dois dividem um único espaço de nome, e é `apps/workers`
-que garante a unicidade no ponto que os une — não cada resolvedor por si,
-porque nenhum dos dois sabe o que o outro produziu.
+vinculados, filtradas por `AllowedTools`), as tools de delegação (uma por
+`AgentDelegation`) e as tools de conhecimento (uma por `KnowledgeBase`
+vinculada **e ativa**). Os três dividem um único espaço de nome, e é
+`apps/workers` que garante a unicidade no ponto que os une — não cada resolvedor
+por si, porque nenhum deles sabe o que os outros produziram.
 
 ```
-   tools MCP resolvidas          tools de delegação resolvidas
-   (McpServer + AllowedTools)    (uma por AgentDelegation)
-            │                                 │
-            └────────────┬────────────────────┘
-                         ▼
-              ToolNameDeduplicator          ← único ponto que sabe
-                         │                     que os conjuntos dividem
-                         ▼                     namespace
-            conjunto final entregue ao LLM
+   tools MCP resolvidas       tools de delegação        tools de conhecimento
+   (McpServer +               (uma por                  (uma por KnowledgeBase
+    AllowedTools)              AgentDelegation)          vinculada e ativa)
+            │                        │                          │
+            └────────────────────────┼──────────────────────────┘
+                                     ▼
+                          ToolNameDeduplicator     ← único ponto que sabe
+                                     │                que os conjuntos dividem
+                                     ▼                namespace
+                    conjunto final entregue ao LLM
 ```
 
 ### Regras
@@ -346,10 +355,13 @@ porque nenhum dos dois sabe o que o outro produziu.
   lado MCP a renomeação usa `WithName`, que troca só o nome exposto e mantém
   a chamada remota usando o nome de protocolo original; do lado da delegação
   a função é encapsulada, não reconstruída.
-- **Precedência declarada**: numa colisão entre os dois conjuntos, a tool MCP
-  mantém o nome pretendido e a de delegação é a renomeada. Dentro de um mesmo
-  conjunto, a primeira na ordem de resolução mantém o nome. Isso é propriedade
-  do deduplicador, não consequência da ordem de concatenação.
+- **Precedência declarada**, da mais forte para a mais fraca: **MCP →
+  delegação → conhecimento**. A tool do conjunto mais forte mantém o nome
+  pretendido e a do mais fraco é a renomeada. Dentro de um mesmo conjunto, a
+  primeira na ordem de resolução mantém o nome. Isso é propriedade do
+  deduplicador, não consequência da ordem de concatenação. Conhecimento é o
+  último porque é o conjunto mais novo e o que tem menos nome em uso — renomear
+  uma tool de conhecimento é a mudança que quebra menos.
 - **Limite de 64 caracteres**, com o alfabeto `[a-zA-Z0-9_-]`. A garantia vale
   **depois** do sufixo de dedupe: um sufixo aplicado a um nome já no limite
   encurta a base para caber, nunca ultrapassa. A ordem de operações é fixa —

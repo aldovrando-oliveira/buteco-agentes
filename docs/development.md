@@ -43,13 +43,15 @@ Se você usa Podman, leia a próxima seção antes de rodar qualquer teste.
 
 ## Testcontainers com Podman
 
-O Testcontainers fala com o daemon indicado por `DOCKER_HOST`, e com Podman
-essa variável não é definida sozinha. Sem ela os testes de integração falham
-todos de uma vez, com erro de conexão ao daemon — que é fácil de confundir
-com o código estar quebrado.
+Com Podman são **duas** variáveis, e **as duas são obrigatórias**: faltando
+qualquer uma, a suíte de integração reprova inteira — e nos dois casos a falha
+**parece defeito de código**, não de ambiente. Nenhuma das duas é definida
+sozinha.
 
-O trecho abaixo detecta o runtime disponível e só exporta a variável quando é
-o Podman que está no ar, então serve nas duas máquinas sem alteração:
+O trecho abaixo detecta o runtime disponível e exporta as duas quando é o Podman
+que está no ar, então serve nas duas máquinas sem alteração. **Copie o bloco
+inteiro** — foi perder a segunda linha dele que invalidou uma baseline em
+12/09/2026:
 
 ```bash
 if ! command -v docker >/dev/null && command -v podman >/dev/null; then
@@ -73,6 +75,14 @@ for interrompida, sobram contêineres a remover à mão com `podman ps -a`.
 O sinal que distingue os dois casos é a pilha terminar em
 `ResourceReaper.GetAndStartNewAsync` dentro do `InitializeAsync` da fixture:
 aí é infraestrutura, não código.
+
+**E quem escrever script de suíte: registre o valor das duas variáveis na saída,
+antes de rodar.** Este documento já trazia as duas num bloco só, com a tabela de
+sintomas acima, e mesmo assim um runner de baseline foi escrito com só a
+primeira. O que teria custado um segundo para diagnosticar — e custou uma
+baseline inteira — é o script imprimir `DOCKER_HOST` **e**
+`TESTCONTAINERS_RYUK_DISABLED` no seu próprio registro de ambiente. Prosa
+correta não impede transcrição pela metade; a saída do runner impede.
 
 ---
 

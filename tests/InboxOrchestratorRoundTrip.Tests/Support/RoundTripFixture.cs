@@ -247,6 +247,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
         builder.Services.AddSingleton<Buteco.Workers.Mcp.IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<Buteco.Workers.AgentDelegations.IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
+        builder.Services.AddSingleton<Buteco.Workers.Knowledge.Execution.IKnowledgeToolSetResolver, NullKnowledgeToolSetResolver>();
 
         // Redireciona o webhook de push notification de apps/workers para o
         // TestServer de apps/inbox, sem rede real — mesma técnica do

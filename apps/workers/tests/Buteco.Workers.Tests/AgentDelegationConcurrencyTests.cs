@@ -5,7 +5,9 @@ using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
+using Buteco.Workers.Naming;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Notifications;
 using Buteco.Workers.Options;
@@ -186,7 +188,7 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
     }
 
     private static string ExpectedToolName(string targetAgentName) =>
-        ToolNameSanitizer.Sanitize($"delegate_to_{DelegationToolNameSlugifier.Slugify(targetAgentName)}");
+        ToolNameSanitizer.Sanitize($"delegate_to_{ToolNameSlugifier.Slugify(targetAgentName)}");
 
     private static string? ExtractArtifactText(A2ATaskRecord record)
     {
@@ -255,6 +257,7 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, AgentDelegationToolSetResolver>();
+        builder.Services.AddSingleton<IKnowledgeToolSetResolver, NullKnowledgeToolSetResolver>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));

@@ -1,5 +1,6 @@
 using Buteco.Workers.Mcp;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Buteco.Workers.Tests;
@@ -34,10 +35,11 @@ public class ToolNameDeduplicatorTests
         var result = Deduplicator().Deduplicate(
             Guid.NewGuid(),
             [Named("Reservas__search"), Named("Reservas__create")],
-            [Named("delegate_to_financeiro")]);
+            [Named("delegate_to_financeiro")],
+            [Named("search_politicas")]);
 
         Assert.Equal(
-            new[] { "Reservas__search", "Reservas__create", "delegate_to_financeiro" },
+            new[] { "Reservas__search", "Reservas__create", "delegate_to_financeiro", "search_politicas" },
             NamesOf(result));
     }
 
@@ -48,7 +50,8 @@ public class ToolNameDeduplicatorTests
         var result = Deduplicator().Deduplicate(
             Guid.NewGuid(),
             [Named("shared_name")],
-            [Named("shared_name")]);
+            [Named("shared_name")],
+            []);
 
         Assert.Equal(new[] { "shared_name", "shared_name-2" }, NamesOf(result));
     }
@@ -59,6 +62,7 @@ public class ToolNameDeduplicatorTests
         var result = Deduplicator().Deduplicate(
             Guid.NewGuid(),
             [Named("Zendesk_MCP__search"), Named("Zendesk_MCP__search"), Named("Zendesk_MCP__search")],
+            [],
             []);
 
         Assert.Equal(
@@ -78,6 +82,7 @@ public class ToolNameDeduplicatorTests
         var result = Deduplicator().Deduplicate(
             Guid.NewGuid(),
             [Named("Search"), Named("search")],
+            [],
             []);
 
         Assert.Equal(new[] { "Search", "search" }, NamesOf(result));
@@ -91,7 +96,7 @@ public class ToolNameDeduplicatorTests
         var atLimit = ToolNameSanitizer.Sanitize($"delegate_to_{new string('a', 52)}");
         Assert.Equal(ToolNameSanitizer.MaxToolNameLength, atLimit.Length);
 
-        var result = Deduplicator().Deduplicate(Guid.NewGuid(), [Named(atLimit)], [Named(atLimit)]);
+        var result = Deduplicator().Deduplicate(Guid.NewGuid(), [Named(atLimit)], [Named(atLimit)], []);
 
         var names = NamesOf(result);
         Assert.Equal(2, names.Distinct(StringComparer.Ordinal).Count());
@@ -113,6 +118,7 @@ public class ToolNameDeduplicatorTests
         var result = Deduplicator().Deduplicate(
             Guid.NewGuid(),
             [Named(atLimit), Named(atLimit), Named(atLimit)],
+            [],
             []);
 
         var names = NamesOf(result);
@@ -134,7 +140,7 @@ public class ToolNameDeduplicatorTests
             name: "shared_name",
             description: "descrição original");
 
-        var result = Deduplicator().Deduplicate(Guid.NewGuid(), [Named("shared_name")], [original]);
+        var result = Deduplicator().Deduplicate(Guid.NewGuid(), [Named("shared_name")], [original], []);
 
         var renamed = Assert.IsAssignableFrom<AIFunction>(result[1]);
         Assert.Equal("shared_name-2", renamed.Name);
@@ -165,4 +171,113 @@ public class ToolNameDeduplicatorTests
             withSuffix.Length > ToolNameSanitizer.MaxToolNameLength,
             "Se esta asserção falhar, o defeito de estouro não existe mais e este teste perdeu o objeto.");
     }
+
+    // ------------------- terceiro conjunto (change knowledge-tool-resolver) ----
+
+    /// <summary>
+    /// GUARDA NO COMPONENTE QUE A CORREÇÃO TOCA (convenção 15, segunda forma).
+    /// A etapa 4 acrescenta um terceiro conjunto ao mesmo espaço de nome, e a
+    /// unicidade continua sendo global — não do resolvedor novo. Remover o
+    /// terceiro <c>AppendAll</c> do deduplicador faz estes testes reprovarem;
+    /// um guarda escrito dentro de <c>KnowledgeToolSetResolver</c> não
+    /// reprovaria, e foi exatamente esse o erro que `0a` cometeu três vezes.
+    /// </summary>
+    [Fact]
+    public void Deduplicate_CollisionBetweenMcpAndKnowledge_RenamesTheKnowledgeTool()
+    {
+        var result = Deduplicator().Deduplicate(
+            Guid.NewGuid(),
+            [Named("search__cobranca")],
+            [],
+            [Named("search__cobranca")]);
+
+        Assert.Equal(new[] { "search__cobranca", "search__cobranca-2" }, NamesOf(result));
+    }
+
+    [Fact]
+    public void Deduplicate_CollisionBetweenDelegationAndKnowledge_RenamesTheKnowledgeTool()
+    {
+        // Precedência estendida: conhecimento é o mais fraco dos três, então
+        // perde também para delegação.
+        var result = Deduplicator().Deduplicate(
+            Guid.NewGuid(),
+            [],
+            [Named("shared_name")],
+            [Named("shared_name")]);
+
+        Assert.Equal(new[] { "shared_name", "shared_name-2" }, NamesOf(result));
+    }
+
+    [Fact]
+    public void Deduplicate_CollisionWithinTheKnowledgeSet_RenamesTheLaterOne()
+    {
+        // Duas bases cujos nomes slugificam igual — "Informações Gerais" e
+        // "Informacoes Gerais" são o caso real.
+        var result = Deduplicator().Deduplicate(
+            Guid.NewGuid(),
+            [],
+            [],
+            [Named("search_informacoes-gerais"), Named("search_informacoes-gerais")]);
+
+        Assert.Equal(
+            new[] { "search_informacoes-gerais", "search_informacoes-gerais-2" },
+            NamesOf(result));
+    }
+
+    /// <summary>
+    /// O aviso de renomeação nomeia o terceiro conjunto. Sem isto, o operador vê
+    /// "cadastrei a base e o agente chama outra tool" sem rastro que o explique
+    /// — que é a razão de <c>ToolOrigin</c> existir.
+    /// </summary>
+    [Fact]
+    public void Deduplicate_RenamedKnowledgeTool_LogsTheKnowledgeOrigin()
+    {
+        var logger = new CapturingLogger();
+        var deduplicator = new ToolNameDeduplicator(logger);
+
+        deduplicator.Deduplicate(
+            Guid.NewGuid(),
+            [Named("shared_name")],
+            [],
+            [Named("shared_name")]);
+
+        var aviso = Assert.Single(logger.Warnings);
+        Assert.Contains(nameof(ToolOrigin.Knowledge), aviso, StringComparison.Ordinal);
+        Assert.Contains(nameof(ToolOrigin.Mcp), aviso, StringComparison.Ordinal);
+        Assert.Contains("shared_name-2", aviso, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Deduplicate_NoCollisionAcrossTheThreeSets_LogsNothing()
+    {
+        var logger = new CapturingLogger();
+        var deduplicator = new ToolNameDeduplicator(logger);
+
+        deduplicator.Deduplicate(
+            Guid.NewGuid(),
+            [Named("Reservas__search")],
+            [Named("delegate_to_financeiro")],
+            [Named("search_politicas")]);
+
+        Assert.Empty(logger.Warnings);
+    }
+
+    private sealed class CapturingLogger : ILogger<ToolNameDeduplicator>
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+            {
+                Warnings.Add(formatter(state, exception));
+            }
+        }
+    }
+
 }

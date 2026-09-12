@@ -1,6 +1,7 @@
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Notifications;
@@ -33,6 +34,7 @@ public class WorkerTests(WorkerInfrastructureFixture fixture) : IClassFixture<Wo
         builder.Services.AddSingleton(new Mock<IChatClientResolver>().Object);
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
+        builder.Services.AddSingleton<IKnowledgeToolSetResolver, NullKnowledgeToolSetResolver>();
         // TimeProvider: AgentExecutionService/TaskJobConsumer passaram a
         // exigi-lo (change apps-workers-contexto-temporal). PushNotificationSender:
         // gap pré-existente deste harness, não introduzido por esta change —

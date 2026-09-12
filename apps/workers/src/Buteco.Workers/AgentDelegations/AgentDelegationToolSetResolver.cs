@@ -6,6 +6,7 @@ using Buteco.Workers.Agents;
 using Buteco.Workers.Agents.Entities;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
+using Buteco.Workers.Naming;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Options;
 using Microsoft.EntityFrameworkCore;
@@ -52,7 +53,7 @@ public sealed class AgentDelegationToolSetResolver(
 
         foreach (var delegation in delegations)
         {
-            var toolName = ToolNameSanitizer.Sanitize($"{ToolNamePrefix}{DelegationToolNameSlugifier.Slugify(delegation.TargetName)}");
+            var toolName = ToolNameSanitizer.Sanitize($"{ToolNamePrefix}{ToolNameSlugifier.Slugify(delegation.TargetName)}");
             tools.Add(BuildDelegationTool(toolName, delegation.TargetAgentId, delegation.TargetName, sourceAgent.Id, contextId, currentDepth, messageInstant));
         }
 

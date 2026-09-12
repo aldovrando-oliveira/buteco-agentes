@@ -1091,7 +1091,7 @@ então nenhum limiar separa acerto de ruído. Daí indexação ser assíncrona e
 > corpus, `nomic-embed-text-v1` (o modelo que o ambiente configura em
 > `EMBEDDING_MODEL`) **empata com o lexical** em recall@5 (87,5% nos dois) e
 > **perde** em R@1 (62,5% contra 68,8%) e em MRR (0,731 contra 0,801). O que a
-> medição sustenta é "**este** embedding vence": `qwen3-embedding-8b` faz 93,8%
+> medição sustenta é "**este** embedding vence": `qwen-qwen3-embedding-8b` faz 93,8%
 > de R@1 e 100% de recall@5. A escolha de indexação assíncrona e de `Pending`
 > não muda — o que muda é que ela depende do modelo, e não de embedding como
 > categoria.
@@ -1798,7 +1798,7 @@ média medida 1021 caracteres, 4 fragmentos por documento). 16 queries com alvo 
 primeira chamada de embedding** — ≥60% entregável, 40-59% chunking obrigatório,
 <40% redesenho.
 
-**O resultado que fecha a etapa 2:** `qwen3-embedding-8b` (servido pelo mesmo
+**O resultado que fecha a etapa 2:** `qwen-qwen3-embedding-8b` (servido pelo mesmo
 gateway configurado em `OPENAI_BASE_URL`) faz **R@1 93,8% / recall@5 100% / MRR
 0,958**. `nomic-embed-text-v1`, que é o que `EMBEDDING_MODEL` aponta, faz 87,5%
 de recall@5 — **empate com o lexical**, e derrota em R@1 (62,5% contra 68,8%) e
@@ -1853,7 +1853,7 @@ corpus:
 - **Latência de embedding de query única** — o item de custo/latência que
   continuava aberto, e que bate em toda chamada de tool da etapa 4. Medida no
   regime da consulta (chamada única, não em lote), 84 chamadas por modelo:
-  `qwen3-embedding-8b` **p50 37 ms / p95 46 ms**, `nomic-embed-text-v1` p50 36 ms
+  `qwen-qwen3-embedding-8b` **p50 37 ms / p95 46 ms**, `nomic-embed-text-v1` p50 36 ms
   / p95 62 ms. Empate no p50, e o modelo maior tem a **cauda mais curta**.
   **Latência não é restrição e não desempata os modelos** — ao lado da segunda
   ida ao LLM, que custa segundos, o embedding da query é ruído. Para consulta
@@ -2204,6 +2204,232 @@ realista para obter número comparável ao bar — recusada porque um corpus
 deliberadamente mais fácil produz número maior sem nada ter melhorado, o que é
 calibrar o teste ao bar em vez do contrário.
 
+#### Etapa `0d` — roteamento entre bases, medido (2026-09-12)
+
+Terceira rodada de medição, não change: nada em `apps/`, corpus e saídas em
+`~/.cache/buteco-agents/kbtest-0d/`. Ela existe porque `0c` deixou registrado
+que **o roteamento entre bases nunca tinha sido medido**, com gatilho na etapa 4
+— e a etapa 4 chegou.
+
+**Bar declarado às 17:15, antes de escrever `Description` de base, antes de criar
+o ambiente e antes de qualquer chamada.** E, junto com o bar, a declaração que
+protege a rodada de virar bloqueio: **a etapa 4 sai de qualquer jeito**. `0d`
+decidia só se a busca unificada entra como carve-out ou sai como ideia
+descartada. Essa cláusula está escrita no artefato porque "medição que virou
+bloqueio" é o modo de falha que a fila desta lista já registrou três vezes.
+
+**Instrumento:** corpus e intenções de `0c` sem alteração (40 documentos, 110
+fragmentos do braço vencedor, 83 intenções com alvo e 20 negativas), agrupados em
+**7 bases** — agrupamento declarado no bar, com as vizinhanças de `0c` separadas
+de propósito em bases diferentes (01-05 em B1, 35-40 em B2) e uma base distratora
+sem nenhuma intenção com alvo. As `Description` foram derivadas **apenas de
+títulos e cabeçalhos** dos documentos, sem olhar a lista de intenções. Emissor
+`nvidia-llama-3.3-70b-instruct-fp8`, o mesmo de `0c`. 309 chamadas de chat e 83
+de embedding.
+
+##### O roteamento reprova, e nos três braços
+
+| braço | acerto | erros que foram para B1 | negativas que chamaram tool |
+|---|---|---|---|
+| `search_`, B1 primeira | **52/83 = 62,7%** | 19 de 31 | 17/20 |
+| `buscar_`, B1 primeira | 50/83 = 60,2% | 24 de 33 | 16/20 |
+| `search_`, **B1 última** | 50/83 = 60,2% | 20 de 33 | 17/20 |
+
+**Média 61,0%, contra um bar cuja faixa de baixo começa em 75%.** Abstenção zero
+nas positivas: o modelo sempre chamou alguma tool, e errou a base em 4 de cada
+10. Acaso entre 7 bases seria ~14% — ele faz trabalho real, só não é suficiente
+sozinho.
+
+A média esconde o pior: **B2 acerta 33,3% e B5 acerta 39,3%**, enquanto B1 acerta
+100% das suas 5.
+
+##### O achado: **base-atrator**, e não é viés de posição
+
+B1 tem **5** intenções com alvo e foi chamada **24** vezes; B5 tem **28** e foi
+chamada **11**. Pares de erro dominantes: B5 → B1 (11 vezes) e B2 → B1 (5).
+
+**O controle descarta a explicação fácil:** com a ordem das tools invertida, B1
+em **último** lugar, ela continua recebendo 20 dos 33 erros. A atração é da
+`Description`, não da posição.
+
+É o **fragmento-atrator de `0c` uma escala acima**. Lá, um fragmento denso e
+heterogêneo ficava perto do centroide do vocabulário e vencia consultas sem
+relação. Aqui, uma `Description` genérica — "descontos, acordos, parcelamento,
+aprovação, campanhas, quebra" — parece plausível para quase qualquer pergunta do
+domínio, e engole a base específica que ela contém. A assimetria importa: a
+genérica engole a específica, e a específica fica quase inalcançável.
+
+**E `0c` era estruturalmente incapaz de achá-lo: aquela rodada tinha uma base
+só.** Mesmo argumento que `0c` fez sobre o próprio corpus não ter tabela — não é
+que se tenha olhado e não visto, é que o instrumento não continha o caso. Segunda
+vez que essa forma aparece nesta linha de trabalho, e ela vira régua: **corpus de
+medição precisa cobrir a ESTRUTURA que a etapa seguinte vai criar, não só o
+assunto.**
+
+##### Esquema de nome: não discriminou, e a decisão é `search_`
+
+62,7% contra 60,2% são **2,5 pontos**, abaixo do piso de 5 declarado antes
+(≈ 4 intenções). Pela regra: *"o corpus não discriminou"*, e a escolha vai para
+**`search_<slug>`** pelo idioma da casa — `delegate_to_` é o único prefixo de nome
+de tool que existe no repositório, e é inglês com descrição em português.
+
+Que 2,5 pontos sejam ruído está confirmado pelo terceiro braço: `search_` com
+ordem invertida também deu 60,2%. **A variação entre braços idênticos em conteúdo
+é da mesma ordem da variação entre prefixos** — que é exatamente o que um piso de
+decisão declarado antes existe para impedir alguém de ler como sinal.
+
+##### A terceira forma: a busca unificada ganha, e a decomposição é o que vale
+
+Rodou porque o roteamento ficou abaixo de 90%, como a regra mandava.
+
+| braço | quem escolhe a base | R@5 fim a fim |
+|---|---|---|
+| **por base** | o modelo, lendo `Description` | 48/83 = **57,8%** |
+| **unificada** | o vetor, num `ORDER BY` só | 64/83 = **77,1%** |
+
+| | n | R@5 |
+|---|---|---|
+| roteamento **certo** | 52 | **48/52 = 92,3%** |
+| roteamento **errado** | 31 | **0/31** |
+
+Duas coisas que o agregado escondia, e elas invertem a leitura ingênua:
+
+1. **Quando o roteamento acerta, o desenho por base é muito MELHOR que a
+   unificada: 92,3% contra 77,1%.** Restringir à base certa remove 6/7 dos
+   candidatos e a recuperação melhora. O desenho por base não é pior — ele é
+   melhor, e joga fora essa vantagem no passo anterior.
+2. **Quando erra, é 0 de 31.** Irrecuperável, sem `k`, reranker ou chunking que
+   alcance. É o mecanismo que o bar usou para fixar os cortes, agora medido em
+   vez de argumentado.
+
+**O número a citar: o break-even é 83,5%.** Com 92,3% dentro da base certa, o
+desenho por base empata com a unificada quando o roteamento acerta 0,771/0,923 =
+83,5%. Medimos 61%.
+
+**Duas ressalvas obrigatórias ao lado do número da unificada:**
+
+- **Ele não é medição nova.** É `0c` reexecutado — mesmos vetores, mesmas queries,
+  mesmo índice de 110 —, porque no desenho unificado existe uma tool com uma
+  `Description` genérica, que é o que `0c` mediu. Os 77,1% batem exatamente com o
+  R@5 do melhor braço de `0c`, e **isso é consistência interna, não confirmação
+  independente**. O que `0d` produziu de novo são os 57,8% e a decomposição.
+- **As 7 bases estão aproximadamente equilibradas — razão 2,5:1 em fragmentos.**
+  Na unificada as bases competem no mesmo `ORDER BY`, então uma base de 4.000
+  fragmentos domina o top-5 sobre uma de 40 **por volume, não por relevância**.
+  Declarado no bar antes de medir: **o resultado favorável à unificada é
+  "favorável sob equilíbrio", nunca "favorável"**. Se ela tivesse perdido, aí a
+  conclusão seria forte — desequilíbrio só pioraria.
+
+##### As negativas reforçam a decisão de `0c` contra o limiar
+
+17 de 20 chamaram alguma tool. Perguntado sobre horário de loja física, vaga de
+emprego ou estacionamento, o modelo escolhe a base que **parece** mais próxima.
+Métrica sem bar, declarada assim antes, porque nenhum desenho alternativo muda em
+função dela — e o que ela mostra é que a defesa contra "consultou a base errada
+para uma pergunta que nenhuma base responde" **não está no roteamento nem num
+corte**: está no agente ler o trecho e ver que não responde. É a `Description` da
+tool que ensina isso, e é tarefa da etapa 4.
+
+##### O que `0d` fecha, e o que ela não autoriza
+
+**Fecha:** o esquema de nome (`search_<slug>`); e a busca unificada entra como
+**carve-out com POSIÇÃO NA FILA, não com gatilho** — consequência declarada da
+faixa < 75%, e posição em vez de gatilho pelo motivo que esta lista já registrou
+três vezes.
+
+**Não autoriza afirmar:** que a busca unificada é melhor (é melhor *sob
+equilíbrio de tamanho*, e o mecanismo diz que a vantagem inverte com desequilíbrio
+grande); que 61% é a taxa de produção (`Description` de operador real será
+**pior** — as desta rodada foram escritas por quem conhece o corpus, e o número é
+**teto**); nem nada sobre 30 ou 100 bases por agente, porque foram 7.
+
+##### Ameaças à validade, para quem citar os números
+
+- **`Description` escritas por quem conhece o corpus** — mitigado derivando-as só
+  de títulos e cabeçalhos, sem olhar as intenções. Reduzido, não eliminado.
+- **Equilíbrio de 2,5:1 entre bases** — a ameaça que pode **inverter** a leitura da
+  terceira forma, declarada antes de medir.
+- **7 bases, não 100.** O que um agente recebe são as bases vinculadas **a ele**.
+- **Um emissor só.** Roteamento é seguir instrução, mais sensível a modelo do que
+  emissão de query.
+- **Intenções desbalanceadas** (B5 tem 28, B1 tem 5) — daí a tabela por base ao
+  lado da média.
+- **`temperature=0.0` não é determinismo.** Uma execução por braço, nenhuma
+  reexecutada para melhorar número. A dispersão de 60,2% a 62,7% entre três
+  braços é compatível com ruído de emissor.
+- **O agrupamento em 7 bases é de quem mediu.** Declarado antes (mtime do bar),
+  mas um agrupamento sem uma base genérica contendo outra não teria produzido o
+  achado do base-atrator.
+
+Relatório completo: `~/.cache/buteco-agents/kbtest-0d/RELATORIO.md`.
+
+#### Três correções de registro, feitas na mesma sessão de `0d` (2026-09-12)
+
+Independentes de `0d` e da etapa 4. Nenhuma delas mudou comportamento; duas
+corrigem afirmação que estava errada e uma põe um gatilho onde ele é lido.
+
+**1. O gatilho do índice ANN contradizia o custo de disco, e o mesmo 7.500
+significava duas coisas incompatíveis.** O `01` e o `docs/architecture.md`
+citavam 7.500 fragmentos como volume de referência de **armazenamento**; o
+gatilho do índice ANN dizia "p95 acima de 200 ms" sem volume. Medido agora, os
+7.500 dão **333 ms** — o volume de referência de disco já está acima do teto de
+latência, e ninguém tinha notado porque cada número foi escrito para responder
+outra pergunta.
+
+Medição (`pgvector/pgvector:pg18`, busca exata com `ORDER BY <=> LIMIT 5` sobre
+`vector(4096)`, buffers quentes): ~14 ms com 272 fragmentos (o índice real de
+dev), 111 ms com 2.000, 333 ms com 7.500, ~950 ms com 20.000. Inclinação **~47 µs
+por fragmento**, linear e sem joelho.
+
+Corrigido nos dois documentos, com a distinção escrita: **7.500 é volume de
+disco; o teto de latência fica em ~4.300 fragmentos na maior base** (~4,9 MB de
+texto, pela média medida de 1.146 caracteres por fragmento). E **o filtro é
+`KnowledgeBaseId`, então o que conta é a maior base, não o índice inteiro** — cem
+bases de 500 não acionam nada, uma de 5.000 aciona.
+
+Colhido junto, e registrado no `01`: **o pior caso não é o regime quente.** A
+primeira consulta após ociosidade pagou **265 ms com apenas 272 fragmentos**, por
+leitura de TOAST. Ao lado da segunda ida ao LLM continua sendo ruído, mas é esse
+o número a orçar.
+
+**A leitura generalizável:** dois números medidos sobre a mesma grandeza aparente
+(fragmentos) respondendo a perguntas diferentes (bytes em disco, microssegundos
+de CPU) convivem sem se contradizer até alguém citar um no lugar do outro. É
+parente do que esta lista já registrou duas vezes como *referência medida citada
+depois que o estado mudou* — aqui o estado não mudou, mudou a **pergunta**, e o
+sintoma é o mesmo.
+
+**2. O nome do modelo de embedding estava errado em três lugares.** É
+`qwen-qwen3-embedding-8b` — o que está gravado nas 272 linhas de
+`knowledge_fragments` e o que `.env.example:71` declara —, não
+`qwen3-embedding-8b`. Varrido o `02` (3 ocorrências, corrigidas) e os relatórios
+de `0b`/`0c` no cache (7 ocorrências, corrigidas). Os artefatos arquivados de
+`openspec/` não continham nenhuma, porque `0b` e `0c` foram rodadas de medição e
+não changes. Sem consequência funcional — `Embedding__Model` sempre teve o valor
+certo —, mas um nome de modelo que não existe no serviço é exatamente o tipo de
+detalhe que alguém copia de um relatório para uma configuração.
+
+**3. O gatilho de vazamento do lado do embedding, escrito onde é lido.** Estava
+só no `02`, que ninguém abre ao editar `EmbeddingGeneratorResolver`. Agora está
+no `default:` do `switch` de provedor — o sítio exato onde alguém acrescentaria o
+segundo provedor.
+
+O conteúdo: o resolvedor constrói um cliente novo a cada chamada, e isso é seguro
+**só** no caminho `openai`, porque `System.ClientModel` serve o transporte de
+`HttpClientPipelineTransport.Shared`, com um `HttpClient` estático por processo
+(C4 de `fix-vazamento-httpclient-chat`). Os dois provedores que caem no `default`
+não têm essa propriedade no lado de chat, e foi esse padrão que vazou ~44
+descritores por mensagem. **E a frequência aqui é pior que a daquele achado:**
+desde a etapa 4, a consulta gera um embedding por **mensagem** de agente, não um
+por documento indexado. Um provedor de embedding não-OpenAI precisa nascer **com**
+cache por `(provider, model)`, não depois que o perfilamento acusar — ele já
+acusou uma vez, do lado de chat.
+
+**É a aplicação direta do achado de `fix-vazamento-httpclient-chat`**: "decisão
+registrada em docstring e em nenhum teste sobrevive até virar defeito". Aqui não
+há teste possível ainda (o provedor não existe), então o que se pode fazer é pôr
+a decisão no caminho de quem for criá-lo — que é a metade barata do achado.
+
 ### Etapa 2a — indexação de documentos (`knowledge-base-indexacao`, 2026-09-11)
 
 O consumidor que a etapa 1 declarou que não existia. Os valores `Indexing`,
@@ -2469,6 +2695,15 @@ um estado, citada depois que o estado mudou** —, mas duas ocorrências não fa
 convenção: ficam como dois registros, com **gatilho para promover ao `01` na
 terceira**.
 
+> **PROMOVIDA em 12/09/2026 — convenção 22 do `01`.** O gatilho pedia a terceira;
+> a promoção aconteceu na **quarta**, e o que a decidiu não foi a contagem: foi
+> **esta mesma referência ter quebrado uma segunda vez**, 11 → 12 classes, porque
+> nunca ganhou o gatilho de recalibração que este próprio parágrafo prescrevia.
+> Uma regra escrita e não pendurada em lugar nenhum não impede a reincidência —
+> é o argumento mais forte a favor de a convenção 22 exigir o gatilho **junto com
+> o número**, e não como boa prática separada. As outras duas ocorrências são os
+> 7.500 fragmentos (disco citado como latência) e o bar de `0c` acima.
+
 #### Handoff para a 2b
 
 - **Rota de reindexação de documento** — a fila e o publisher já existem; falta a
@@ -2480,9 +2715,403 @@ terceira**.
 - **O `FakeKnowledgeIndexingJobPublisher` já está no fixture de `apps/api`** — a
   2b herda a capacidade de afirmar "enfileirou" e "não enfileirou" sem broker.
 
+### Etapa 4 — resolvedor de tool de conhecimento (`knowledge-tool-resolver`, 2026-09-12)
+
+A etapa que destrava a linha. Catálogo, índice, vínculo e painel estavam
+entregues, o índice tinha conteúdo gravado, e **ninguém consultava**:
+`AgentExecutionService` não tinha uma menção a conhecimento, e o agente recebia
+exatamente dois conjuntos de tools. Vincular uma base não fazia nada em tempo de
+execução — o teste manual da 5a-2 confirmou isso na prática, e o teste fim a fim
+desta change é a primeira vez que o contrário é demonstrado.
+
+O que entrou: `IKnowledgeToolSetResolver` com uma `AITool` por base vinculada e
+**ativa**; busca vetorial exata por distância de cosseno, filtrada pela base,
+`k = 5`, **sem limiar**, devolvendo **documento, trecho e distância**; o terceiro
+conjunto no namespace de tool, com precedência **MCP → delegação → conhecimento**;
+e o slugificador de nome movido para espaço neutro ao ganhar o segundo consumidor.
+
+#### Três achados da implementação que valem mais que o código
+
+**1. `search_<slug>` não pode colidir com MCP por composição — e isso só apareceu
+ao escrever o guarda.** A primeira montagem do teste de colisão tentou o caminho
+óbvio: servidor MCP `search` com tool `cobranca` dá `search__cobranca`, e uma base
+`_cobranca` daria o mesmo. **Não dá, e não pode:** `ToolNameSlugifier` mapeia todo
+caractere fora de `[a-z0-9]` para `-`, então **slug de base nunca contém `_`**.
+Sobra um caminho único, o mesmo da colisão MCP × delegação: a truncagem em 64
+cortando o nome MCP antes do seu `__`.
+
+É evidência **a favor** da escolha de esquema feita no design: o esquema recusado
+(`<Nome>__search`) colidiria por **composição**, que é muito mais fácil de
+acontecer por cadastro do que por truncagem. O censo tinha mostrado que os dois
+esquemas davam zero colisões hoje; o guarda mostrou que eles têm **caminhos de
+colisão de probabilidades muito diferentes**.
+
+**2. O guarda comportamental de ordenação reprovou 3/3 — e pelo motivo errado.**
+Removido o `ORDER BY`, a asserção "os trechos vêm em distância crescente" falhou
+nas três execuções. Parece que o par determinístico era desnecessário. Não era: a
+ordem que voltou era **exatamente a inversa** da esperada, porque o scan devolveu
+na ordem física da tabela, que naquele arranjo é a inversa. **É tão acidental
+quanto o "às vezes já vem ordenado" que motivou a quinta forma da convenção 15** —
+só que desta vez o acidente foi a favor do guarda.
+
+A leitura: *o veredito do guarda comportamental depende do layout físico nas duas
+direções*. Ele pode passar com o defeito presente (o caso de
+`ordenacao-desempate-listas-vinculo`) e pode reprovar por sorte. Só o par
+determinístico — asserção sobre o SQL emitido — reprova por construção.
+
+**3. Um `catch` genérico esconderia o defeito de arranjo, e quase escondeu.** Os
+sete primeiros testes de invocação reprovaram por desserialização: `AIFunctionFactory`
+serializa o retorno com `JsonSerializerDefaults.Web` (camelCase), e o apoio do
+teste desserializava com as opções default (sensíveis a caixa), devolvendo campos
+nulos. **Defeito do apoio, não do código**, e o sintoma — `ArgumentNullException`
+no construtor do record — não se parece nada com a causa. Registrado no XML doc do
+apoio para que a próxima pessoa não persiga o resolvedor.
+
+#### Guardas vistos reprovar, com o número
+
+Três defeitos reintroduzidos de propósito, cada um separando uma coisa diferente:
+
+| defeito reintroduzido | o que reprova | onde |
+|---|---|---|
+| removido `where knowledgeBase.IsActive` | **exatamente 1** de 16 — o do filtro | `KnowledgeToolSetResolverTests` |
+| removido o `ORDER BY` da busca | 2 de 16 — o comportamental e o par determinístico | `KnowledgeToolSetResolverTests` |
+| terceiro conjunto entra sem passar pelo dedupe | **4** de 13 — todos os de conhecimento | **`ToolNameDeduplicatorTests`** |
+
+O terceiro é o que fecha a **segunda forma da convenção 15**: os guardas de
+colisão reprovam **no `ToolNameDeduplicator`**, que é o componente que a correção
+toca — e não no resolvedor novo, que foi o erro que `0a` cometeu três vezes.
+
+E o guarda do filtro `IsActive` foi montado contra a **primeira** forma: a base
+inativa do cenário está vinculada **e com fragmentos gravados**. Sem isso o teste
+mediria ausência de conteúdo em vez do filtro, e passaria verde com o defeito
+presente.
+
+#### Fechamento da suíte, e duas dúvidas que ficam
+
+Baseline em worktree limpo de `7543674`, fechamento na árvore de trabalho, mesmo
+procedimento de carga e **saída completa guardada nos dois** (em
+`~/.cache/buteco-agents/kbtool-baseline/` e `.../kbtool-fechamento/`).
+
+| alvo | baseline | fechamento | delta |
+|---|---|---|---|
+| `libs` | 6/6 | 6/6 | — |
+| `apps/api` | 308/309 | 308/309 | mesma reprovação |
+| `apps/workers` | 223/223 (5 m 05 s) | **252/252** (6 m 50 s) | **+29 testes** |
+| `apps/inbox` | **163/164** | **162/164** | +1 reprovação |
+| `crossapp` / `roundtrip` | 2/2 · 4/4 | 2/2 · 4/4 | — |
+| `apps/frontend` | 722/722 | 722/722 | — |
+
+**A reprovação de `apps/api` é o flake já registrado, e desta vez com o nome
+capturado:** `AgentDeactivationTests.SendMessage_WithPushNotificationConfig_ForInactiveAgent_NeverPublishesJobOrCallsWebhook`.
+Perder o nome foi o erro de instrumentação da 2a; o script desta change guarda a
+saída inteira, não o resumo.
+
+**As duas de `apps/inbox` são `DebounceSweepServiceTests.InfrastructureFailure_*`,
+e a baseline já trazia uma delas.** `git status apps/inbox` devolve **zero**
+arquivos tocados por esta change. É a leitura que a convenção 19 dá para baseline
+vermelha: ela é **informação** — remove a hipótese de que a change causou aquilo.
+Fica como item aberto novo, nomeado.
+
+**A dúvida que NÃO fecha, e ela não é ambiental.**
+`AgentDelegationExecutionTests.DelegatedTask_WithMessageInstantOnSource_CarriesSameMessageInstantToTarget`
+reprovou na primeira execução completa de `apps/workers`. A discriminação foi
+feita, intercalando os dois braços na mesma máquina:
+
+| arranjo | com a change | sem a change (worktree da baseline) |
+|---|---|---|
+| o teste **sozinho**, 5 execuções | 5/5 verde | 5/5 verde |
+| a **classe inteira**, execuções | 2 reprovações em 5 | **0 em 6** |
+| a suíte completa | 1 reprovação | verde |
+| fechamento (repetição) | **verde** | — |
+
+O sintoma é `targetRecord` nulo com o Source concluído: a task delegada não chegou
+a ser criada. O diff desta change naquele arquivo é **inerte** — um `using`, o
+rename do slugificador e um registro de resolvedor nulo.
+
+**O que se pode afirmar:** o teste é dependente de ordem **dentro da sua classe**
+(sozinho passa 5/5 nos dois braços), e é a segunda ocorrência dessa família,
+ao lado de `AgentDeactivationTests` em `apps/api`.
+**O que NÃO se pode afirmar:** que é ambiental (a baseline está verde na mesma
+máquina, intercalada) nem que é regressão (2/5 contra 0/6 é fraco, e o caminho
+tocado é inerte). O mecanismo não foi estabelecido.
+**Por que não se caçou mais:** é a decisão que a 2a já tomou e continua certa —
+forçar reprodução persegue algo que não se controla. O que esta rodada acrescenta
+sobre a 2a é o **A/B intercalado**, que lá não existiu.
+
+#### Verificação contra o índice real, e o que ela mostrou
+
+Feita com o **resolvedor de produção**, o **banco de desenvolvimento** e o
+**gateway de embedding real** — sem duplo nenhum do lado da busca. O agente é o
+*Atendente Ambiente Software*, o único com base vinculada no banco de dev
+(*Gestor de Agentes*, 2 documentos, 272 fragmentos, `qwen-qwen3-embedding-8b`).
+
+```
+=== RESOLUÇÃO (1654 ms, primeira chamada) ===
+  nome: search_gestor-de-agentes  (24 chars)
+  desc: Busca trechos na base de conhecimento 'Gestor de Agentes'. Conteúdo da base: …
+
+=== "qual é a convenção sobre guardas de teste?" (993 ms) ===
+  0,3293  [01 ARQUITETURA E CONVENCOES]  … > Convenções estabelecidas (o "estilo da casa")
+  0,3347  [01 ARQUITETURA E CONVENCOES]  … > Convenções estabelecidas (o "estilo da casa")
+  0,3409  [02 HISTORICO E STATUS]        … > Bases de conhecimento
+  0,3580  [01 ARQUITETURA E CONVENCOES]  … > Convenções estabelecidas … 14.
+  0,3624  [01 ARQUITETURA E CONVENCOES]  … > Convenções estabelecidas …
+
+=== "qual o prazo de entrega de uma pizza?" (265 ms) ===
+  0,5885  [02 HISTORICO E STATUS]  …
+  0,5908  [02 HISTORICO E STATUS]  …
+  0,6151  [02 HISTORICO E STATUS]  …
+  0,6314  [02 HISTORICO E STATUS]  …
+  0,6389  [02 HISTORICO E STATUS]  …
+```
+
+Três coisas que a verificação afirma e os testes não afirmavam:
+
+1. **O SQL emitido em produção é o que V2 previu**, com o `<=>` no `ORDER BY` e o
+   `LIMIT` — capturado do log real do EF, não de uma consulta remontada.
+2. **A pergunta sem alvo devolveu cinco trechos mesmo assim**, sem nenhuma
+   afirmação de relevância — que é o comportamento desenhado, e é o que a
+   `Description` ensina o modelo a ler.
+3. **A folga de distância entre a pergunta com alvo (0,33) e a sem alvo (0,59) é
+   grande e visível.** Isso **não** contradiz `0c`, e é importante não ler como se
+   contradissesse: `0c` reprovou o **limiar**, que exige que a folga valha para
+   *todas* as consultas; um exemplo com folga larga é consistente com caudas que
+   se sobrepõem. O que ele mostra é por que **expor a distância** é útil mesmo
+   sem limiar — o agente vê 0,59 e 0,33 e tem material para decidir.
+
+**Latência batendo o orçamento de V3:** 1.654 ms na resolução inicial (primeira
+chamada de embedding, cold start do gateway), 993 ms na primeira busca e **265 ms
+na segunda** — dentro do pior caso previsto.
+
+**O que esta verificação NÃO cobriu:** a ida ao LLM de verdade — coberta depois,
+pelo teste manual pelo canal real (seção seguinte), que é o que fecha a etapa.
+
+#### O teste manual fechou a etapa, e é ele que prova o que os testes não podiam
+
+Feito em 12/09/2026, pelo canal WhatsApp real, com o agente *Atendente Ambiente
+Software* e a base *Gestor de Agentes* (os próprios `01` e `02` deste
+repositório, 272 fragmentos). Quatro trocas, **as quatro entregues** ao canal.
+
+**O que prova que a recuperação aconteceu**, e não é o log: o conteúdo das
+respostas. Perguntado *"há alguma recomendação em como executar os testes?"*, o
+agente respondeu citando **`--maxWorkers=3`**, a contenção de CPU por processos
+externos pesados, e o diagnóstico por execução isolada — que é, literalmente, o
+item aberto sobre a suíte de `apps/frontend` deste arquivo. Perguntado sobre o
+status do projeto, devolveu o resumo das linhas de trabalho concluídas.
+
+**Nada disso existe fora do índice.** O modelo é `gemini-3.6-flash`, e o
+conteúdo é o histórico interno deste repositório — não há caminho pelo qual ele
+chegasse àquelas frases sem ter chamado a tool e lido o trecho.
+
+**É a diferença entre este teste e o fim a fim automatizado, e vale dita:** o
+teste fim a fim usa `IChatClient` falso, então ele prova que o **pipeline**
+entrega o trecho ao modelo; ele não pode provar que **um modelo real decide
+chamar a tool** e usa o que voltou. O teste manual prova a segunda metade, e só
+ele podia.
+
+**E fecha o vazio que a 5a-2 tinha registrado:** lá, o teste manual confirmou
+que vincular uma base não fazia nada em tempo de execução. Aqui, a mesma
+verificação pelo mesmo caminho mostra o contrário.
+
+**Um incidente atravessou o caminho e não era desta change** — ver os três itens
+em aberto sobre entrega ao canal: as duas primeiras tentativas não chegaram ao
+WhatsApp por `422 Session "default" does not exist` do WAHA, e o sintoma no
+worker era um timeout de 5 s que apontava para o componente errado. Corrigido o
+`sessionName` do canal, as quatro trocas seguintes saíram `Sent`.
+
+#### Décima medição da convenção 18
+
+Projetado **~26 arquivos / ~1.470 linhas** de código; entregue **32 arquivos /
+1.975 linhas**.
+
+| categoria | criados | modificados |
+|---|---|---|
+| produção | 4 arq / 347 li | 7 arq / +110 −20 |
+| teste | 7 arq / 1.184 li | 14 arq / +334 −24 |
+| **código** | **11 arq / 1.531 li** | **21 arq / +444** |
+| *documentação (`.md`)* | *—* | *6 arq / +586 −58* |
+
+**Arquivos erraram por 23%, linhas por 34%** — e as duas causas são as mesmas
+três decisões tomadas durante a implementação, não escala:
+
+1. **`EmittedSqlCapture` virou arquivo próprio** (127 linhas), duplicado de
+   `apps/api/tests`. A projeção tinha o par determinístico como *asserção*, não
+   como *arquivo* — e os dois projetos de teste não se referenciam.
+2. **O duplo de embedding saiu de dentro do arquivo de teste** para
+   `Knowledge/Support/`, porque dois arquivos de teste o usam.
+3. **`ToolNameSlugifierTests` nasceu** ao mover o tipo: a teoria de função pura
+   estava numa classe que pagava um par de containers para exercitar quatro
+   strings. Divergência declarada do texto da tarefa (convenção 9), e a tarefa
+   mandava o oposto — renomear o arquivo inteiro, o que teria deixado o nome
+   **menos** exato.
+
+**A régua de DI de `0a` acertou de novo, e é o quarto acerto seguido do método de
+contar criados a partir do blast radius lido no código.** Projetado: 15 arquivos
+de custo de DI (13 harnesses + 2 nulos). Entregue: 14 — 11 harnesses de
+`apps/workers`, o `RoundTripFixture`, e os 2 nulos. A diferença de um é porque
+`AgentToolNamespaceTests` recebeu o resolvedor **real** e cenários próprios, então
+deixou de ser custo puro de DI e virou trabalho de teste.
+
+**E a razão comentário/código voltou a dominar as linhas**, como a nona medição
+previu para change cujo entregável carrega decisão: a documentação sozinha é 586
+linhas, 30% do total, e os quatro arquivos de produção criados têm 347 linhas para
+um resolvedor cuja lógica cabe em ~60.
+
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
+
+- **`openspec validate --all` não roda em fechamento nenhum, e uma spec viva
+  ficou inválida por um dia sem ninguém ver.** Achado em 12/09/2026, ao arquivar
+  `knowledge-tool-resolver`.
+
+  **O defeito, já corrigido:** `openspec/specs/knowledge-document-catalog-ui/spec.md`
+  tinha `## Purpose` e os 13 `### Requirement:` começando direto, **sem o
+  cabeçalho `## Requirements`** entre eles. Os 13 requisitos e os 50 cenários
+  estavam todos lá e bem formados — faltava só a seção-pai, e sem ela **o
+  validador não enxergava nenhum deles**: a spec passava por vazia. Entrou assim
+  em `19a5bec` (a 5a-2) e sobreviveu ao archive daquela change.
+
+  **O que não pegou, e é o ponto:**
+
+  | mecanismo | por que não pegou |
+  |---|---|
+  | `openspec validate <nome>` (o único documentado, `CONTRIBUTING.md:71`) | valida os **artefatos de uma change**, não as specs vivas |
+  | `/opsx:archive` | valida a **change** que está sendo arquivada; a spec quebrada era de outra capability |
+  | `scripts/check-docs.py` | valida caminhos e links, **não estrutura de spec**, e pula o archive |
+
+  **É uma terceira variante da família que a convenção 21 abriu.** Lá, a
+  varredura falha em silêncio e a saída vazia parece ausência real. No caso do
+  `check-docs.py` já registrado, a verificação é estrutural e passa verde sobre
+  frase que virou mentira. Aqui é a forma mais barata de todas: **o validador
+  existe, funciona, e simplesmente nunca é executado sobre o que ele protege.**
+
+  **Conserto: `openspec validate --all` na conferência de documentação de toda
+  change**, ao lado do `python3 scripts/check-docs.py` que já está lá. Os dois
+  medem coisas diferentes e nenhum cobre o outro. **Gatilho com posição: a
+  próxima change desta base** — é uma linha na lista de tarefas de documentação,
+  e o custo de rodar é de segundos.
+
+
+- **REABERTO: a verificação manual do vazamento de descritores continua pendente,
+  e o gatilho que apontava para cá FOI ALCANÇADO sem poder ser exercido.** A
+  tarefa 8.2 de `fix-vazamento-httpclient-chat` apontou para "a validação manual
+  da etapa 4, que roda no mesmo caminho de execução". A etapa 4 rodou, em
+  12/09/2026, e a medição **não foi feita** por um motivo que o próprio item
+  previa: ela exige credencial de **Gemini ou Anthropic**, e com OpenAI a medição
+  não mostra nada nem antes nem depois (o SDK usa `HttpClient` estático — C4).
+  Não há credencial desses dois neste ambiente.
+
+  **Este item está aqui, e não marcado "pendente" dentro do `tasks.md` da etapa
+  4, de propósito:** `tasks.md` some no archive, e item pendente dentro de
+  artefato arquivado morre do mesmo jeito que o `Purpose` placeholder do `4d` e
+  que o nome de teste perdido pela saída filtrada da 2a.
+
+  **Gatilho com POSIÇÃO, não só condição** — "quando houver chave" já falhou
+  nesta jornada: **a próxima change que tocar `apps/workers` com credencial de
+  provedor não-OpenAI disponível.** E a condição depende de um segundo item que
+  precisa estar dito junto, senão o gatilho aponta para algo que ninguém agendou:
+  **`Anthropic__ApiKey` e `Gemini__ApiKey` não chegam a processo nenhum no
+  `docker-compose.prod.yml`** (item próprio abaixo). Enquanto aquele não for
+  resolvido, este não tem como disparar nem em servidor.
+
+  O que **está** provado sem a medição: guarda de identidade reprovando contra o
+  defeito real no componente certo, e decompilação dos três SDKs. O que falta é o
+  fechamento do ciclo contra a medida que originou a change.
+
+- **`DebounceSweepServiceTests.InfrastructureFailure_*` reprova de forma
+  intermitente em `apps/inbox`.** Achado pela baseline de
+  `knowledge-tool-resolver` (12/09/2026), que pegou **uma** das duas, e pelo
+  fechamento da mesma change, que pegou **as duas**. Assinatura:
+  `TimeoutException : Condição não satisfeita a tempo` vindo do `PollUntil` da
+  própria classe.
+
+  **Não é da change que o achou**, e isso está verificado e não julgado:
+  `git status apps/inbox` devolve zero arquivos tocados. É a leitura que a
+  convenção 19 dá para baseline vermelha — informação, que remove a hipótese da
+  change seguinte.
+
+  **PIOROU DE 1 PARA 2 ENTRE BASELINE E FECHAMENTO, na mesma sessão — e a ordem
+  de execução é o dado que separa as hipóteses.** A ordem foi **idêntica** nas
+  duas rodadas (`libs → api → workers → inbox → crossapp → roundtrip →
+  frontend`), então ordem não explica a diferença. O que mudou foi o **peso do
+  alvo imediatamente anterior**:
+
+  | | `apps/workers` (alvo anterior) | `apps/inbox` | load antes do `inbox` |
+  |---|---|---|---|
+  | baseline | 5 m 05 s, 11 classes de host | **163/164** | 4,48 |
+  | fechamento | **6 m 50 s**, 12 classes | **162/164** | 4,81 |
+
+  **E a medição que decide já foi feita, em vez de ficar como hipótese:
+  `apps/inbox` rodado SOZINHO deu 164/164 em três execuções seguidas** — 18 s,
+  17 s e 18 s, contra os 21 s e 28 s quando rodou depois dos outros alvos.
+
+  Isso fecha a leitura: **a suíte de `apps/inbox` é derrubada pelo resíduo da
+  suíte pesada imediatamente anterior**, não por instabilidade crescente própria.
+  É a confirmação direta do refinamento que o item do limiar de carga já
+  registrava como "a combinação importa, não o espaçamento sozinho" — e que até
+  agora só tinha uma observação circunstancial a favor.
+
+  **Consequência prática, e é ela que vale carregar:** quem rodar suíte completa e
+  vir `DebounceSweepServiceTests` vermelho **confere isto antes de investigar** —
+  rodar `apps/inbox` sozinho custa 18 s e responde. Se reprovar sozinho com a
+  máquina descarregada, **este item deixa de explicar** e vira change própria.
+
+  **Gatilho: a próxima change que tocar `apps/inbox`**, que é quem terá a classe
+  na mão. O conserto provável é o mesmo da família: espaçamento real entre alvos,
+  ou `apps/inbox` antes dos alvos pesados na ordem do runner.
+
+- **`AgentDelegationExecutionTests.DelegatedTask_WithMessageInstantOnSource_CarriesSameMessageInstantToTarget`
+  é dependente de ordem dentro da sua classe — segunda ocorrência da família de
+  `AgentDeactivationTests`.** Achado no fechamento de `knowledge-tool-resolver`,
+  com A/B intercalado na mesma máquina: **sozinho passa 5/5 nos dois braços**;
+  em nível de classe deu 2 reprovações em 5 com a change e **0 em 6** sem ela.
+  Sintoma: `targetRecord` nulo com o Source concluído — a task delegada não chega
+  a ser criada.
+
+  **Deliberadamente NÃO classificado**, nem como ambiental (a baseline está verde
+  na mesma máquina, intercalada) nem como regressão (2/5 contra 0/6 é fraco, e o
+  diff da change naquele arquivo é inerte: um `using`, o rename do slugificador e
+  um registro de resolvedor nulo). O mecanismo não foi estabelecido, e o
+  fechamento repetiu verde.
+
+  **O que esta rodada acrescenta ao precedente da 2a** — que fechou uma
+  reprovação única como dúvida residual — **é o A/B intercalado**, que lá não
+  existiu e que é o que permite dizer "não é ambiental" em vez de "não dá para
+  saber".
+
+  **A MEDIÇÃO QUE DECIDE, e por que ela ainda não foi feita.** A hipótese mais
+  barata é a que esta própria change criou: `WorkerHostCollection` foi de 11 para
+  12 classes, e o limiar de carga foi recalibrado aqui. Então a pergunta é
+  direta — *o A/B rodou dentro do limiar recalibrado?*
+
+  **Conferido: não dá para saber, porque o A/B não registrou carga nenhuma.** As
+  execuções intercaladas (5×2 do teste sozinho, 3×2 da classe) não capturaram
+  `uptime` nem `ps`. O último número anotado antes delas foi load 5,41 — que,
+  pela própria recalibração acima, é resíduo e não mede competição externa.
+  **É gap de instrumentação do A/B, e é irônico: a rodada existia para
+  discriminar e não registrou a variável que discrimina.** Mesma família do erro
+  da 2a (saída filtrada perdendo o nome do teste) numa forma nova — instrumento
+  de discriminação que não registra o confundidor.
+
+  **A medição que decide, então: repetir o A/B em nível de classe, intercalado,
+  com o critério recalibrado registrado antes de CADA execução** (a foto do `ps`,
+  não o `uptime`), e com execuções suficientes para separar 2/5 de 0/6 — o que
+  hoje é fraco demais para concluir qualquer coisa. Se dentro do limiar a
+  diferença sobreviver, a hipótese de contenção cai e a próxima medição passa a
+  ser **isolamento de estado dentro da classe**: rodar os 11 testes em ordem
+  fixa, e depois só o par (o teste que reprova mais o anterior), que é o que
+  separa "ordem" de "recurso".
+
+  **Gatilho: a próxima reprovação desta mesma classe**, ou a change de
+  `ICollectionFixture` compartilhada, que mexe na isolação dessas classes.
+
+  **E é a segunda da família "teste dependente de ordem de execução".** A
+  primeira, `AgentDeactivationTests` em `apps/api`, está registrada abaixo. As
+  duas compartilham banco entre testes da mesma classe. **Na terceira, avaliar se
+  vira item único de isolação de fixture** — que é vizinho da change de
+  `ICollectionFixture` já registrada.
 
 - **Etapa 5a-3 — colunas `Documentos`/`Indexação` e filtro `Com falha` no
   catálogo de bases.** A 2b entregou `GET /knowledge-bases/indexing-summary`, que
@@ -2506,8 +3135,10 @@ Cada um tem gatilho de quando revisitar:
   | # | change | estado da dependência |
   |---|---|---|
   | 1 | ~~5a-2 — gestão de documentos na UI~~ | aplicada |
-  | 2 | **Etapa 4 — resolvedor de tool de conhecimento** (`apps/workers`) | pronta. **É o próximo passo**, e não por tamanho: até ela existir, **nada do que o operador carrega na tela de documentos chega a um agente**. Base, descrição, vínculo, índice e conteúdo existem, e nenhum agente consulta nada. |
-  | 3 | **5a-3 — colunas e filtro do catálogo** (`apps/frontend`) | pronta e **ociosa** desde a 2b |
+  | 1b | ~~`0d` — roteamento entre bases~~ | medição, fechada em 12/09/2026 |
+  | 1c | ~~**Etapa 4 — resolvedor de tool de conhecimento**~~ (`apps/workers`) | **aplicada em 12/09/2026.** `apps/workers` em 252/252. A linha deixou de terminar no vazio: o que o operador carrega chega ao agente. |
+  | 2 | **Busca unificada entre bases vinculadas** (`apps/workers`) | desbloqueada pela etapa 4, que construiu resolvedor, consulta e guardas que ela reusa. Carve-out **com posição**, de `0d`. Falta o dado: caso real com bases de tamanhos desiguais. |
+  | 3 | **5a-3 — colunas e filtro do catálogo** (`apps/frontend`) | pronta e **ociosa** desde a 2b. Ganhou carga: é onde entra a orientação de `Description` de base e o nome efetivo da tool na tela. |
   | 4 | backend do diagnóstico do índice (`apps/api`) | **não proposta** |
   | 5 | **5c — UI do diagnóstico do índice** | bloqueada por #4 |
 
@@ -2535,6 +3166,24 @@ Cada um tem gatilho de quando revisitar:
   esta é sobre *trabalho adiado sem lugar na fila*. Promover as três juntas
   esconderia a distinção. Gatilho para promover: a **quarta**, que decide de qual
   das duas famílias ela é.
+
+  **RESOLVIDO em 12/09/2026, e a quarta caiu na OUTRA família.** Ela foi o limiar
+  de carga quebrando pela segunda vez (11 → 12 classes de host, na etapa 4), que
+  é *referência medida citada depois que o estado mudou* — e essa família foi
+  promovida à **convenção 22**. A distinção que este item defendia estava certa:
+  as duas famílias não são a mesma regra, e promover juntas teria escondido isso.
+
+  **Esta família — *trabalho adiado sem lugar na fila* — continua com três
+  ocorrências e NÃO foi promovida.** Gatilho para promover: a quarta **desta**
+  família, agora que a outra saiu do caminho e a contagem deixou de ser
+  ambígua.
+
+  Duas coisas mudaram a favor dela no intervalo, e valem registradas porque são
+  a regra sendo aplicada antes de existir: `0d` saiu com a busca unificada em
+  **posição na fila, não gatilho**, citando explicitamente este item; e a fila
+  de changes acima ganhou a linha correspondente. É o segundo caso desta base em
+  que um registro não-promovido mudou uma decisão — o primeiro foi a ocorrência 2
+  da convenção 22 impedindo o bar de `0d` de herdar número de `0b`.
 
 - **Migração de banco sai só de `apps/api`** — `apps/api` e `apps/workers`
   compartilham o mesmo Postgres e têm migrações próprias que criam as
@@ -2799,15 +3448,142 @@ Cada um tem gatilho de quando revisitar:
   sem relação. Se aparecer, o caminho é fragmentar lista em grupos menores de
   entradas, não repetir mais cabeçalho.
 
-- **Roteamento entre bases de conhecimento nunca foi medido** — `0c` mediu que
-  **44,6% das consultas erram até o documento** dentro de um único corpus
-  homogêneo. Na etapa 4 o agente escolhe **qual base consultar** antes de
-  qualquer busca, pela `Description` da base, e essa escolha não tem nenhuma
-  medição — nem em `0b`, nem em `0c`. Se a recuperação já confunde assuntos
-  vizinhos dentro de um corpus, escolher entre as 100+ bases que o handoff
-  declara como volume real é problema da mesma família. **Gatilho: etapa 4**,
-  ao desenhar a tool — a pergunta a responder é se a `Description` basta para
-  rotear, e ela precisa de medição, não de raciocínio.
+- **~~Roteamento entre bases de conhecimento nunca foi medido~~ — FECHADO por
+  `0d` em 12/09/2026, e o gatilho disparou exatamente onde estava escrito**
+  ("gatilho: etapa 4"). Medido: **61,0% de acerto de roteamento** em média nos
+  três braços, contra um bar cuja faixa de baixo começava em 75%. A `Description`
+  **não** basta para rotear entre 7 bases. Ver a seção de `0d` acima.
+
+  O item previa que o problema fosse "da mesma família" que os 44,6% de erro de
+  documento dentro de uma base. **É mais que da mesma família: é a mesma coisa uma
+  escala acima**, com o mesmo mecanismo do fragmento-atrator — a base de
+  `Description` genérica engole as específicas, e o controle de ordem invertida
+  descartou viés de posição.
+
+  Substituído pelo item da **busca unificada**, logo abaixo, que é o trabalho que
+  este achado gerou.
+
+- **Busca unificada entre as bases vinculadas — CARVE-OUT COM POSIÇÃO NA FILA,
+  não com gatilho.** Consequência declarada da faixa < 75% de `0d`, e a distinção
+  entre posição e gatilho é deliberada: *"gatilho sem posição na fila é adiamento
+  indefinido com outro nome"* já tem três ocorrências registradas nesta lista.
+
+  **O trabalho:** uma tool só por agente, com
+  `WHERE KnowledgeBaseId IN (bases vinculadas e ativas)` num `ORDER BY` único — o
+  vetor escolhe a base em vez do modelo. Custo de runtime idêntico ao desenho por
+  base: um embedding, uma consulta.
+
+  **O que `0d` mede a favor:** R@5 fim a fim de 77,1% contra 57,8% do desenho por
+  base, +19,3 pontos.
+
+  **O que `0d` mede CONTRA, e que precisa acompanhar a decisão:** quando o
+  roteamento acerta, o desenho por base entrega **92,3%**, quinze pontos acima da
+  unificada. O break-even é **83,5%** de acerto de roteamento. O desenho por base
+  não é pior — ele é melhor e desperdiça a vantagem no passo anterior. Então a
+  unificada não é "a forma certa": é a forma que ganha **enquanto** o roteamento
+  estiver onde está.
+
+  **E a ressalva que pode inverter tudo:** as 7 bases de `0d` estavam equilibradas
+  (2,5:1 em fragmentos). Na unificada as bases competem no mesmo `ORDER BY`, então
+  uma base de 4.000 fragmentos domina o top-5 sobre uma de 40 **por volume**. Com
+  desequilíbrio real, a vantagem medida pode desaparecer ou inverter, e **isso não
+  foi medido**.
+
+  **Posição na fila:** depois da etapa 4 e antes da 5a-3 — a etapa 4 constrói o
+  resolvedor, a consulta e os guardas que esta reaproveita inteiros, e sem ela não
+  há o que comparar em uso real. **Pré-requisito para decidir:** um caso real com
+  bases de tamanhos desiguais, que é o dado que falta.
+
+- **`Description` de base genérica canibaliza as vizinhas — e o guarda que existe
+  na tela mede a dimensão errada.** Achado de `0d`, e é a consequência acionável
+  da reprovação do bar: não é "o roteamento deu 61%", é **o que fazer a
+  respeito**.
+
+  `knowledge-base-catalog` exige descrição **não-vazia**, e `apps/api` a valida
+  assim desde a etapa 1. `0d` mostrou que **não-vazia não basta**: a base cuja
+  descrição cobria "descontos, acordos, parcelamento, aprovação, campanhas,
+  quebra" tinha **5** intenções com alvo e foi chamada **24** vezes, enquanto a
+  maior base, com 28 intenções, foi chamada 11. Os pares de erro dominantes eram
+  as vizinhas indo para ela.
+
+  **O guarda da tela passa verde com o defeito presente**, e isso é mensurável:
+  `KnowledgeBaseForm` avisa quando a descrição tem menos de
+  `SHORT_DESCRIPTION_THRESHOLD = 80` caracteres. **A descrição atratora de `0d`
+  tinha 421** — cinco vezes o limiar, e as sete da rodada iam de 250 a 427.
+  **O aviso de comprimento passaria verde em TODAS as sete**, inclusive na que
+  causou 24 chamadas para 5 perguntas. **Comprimento não é a dimensão que decide
+  roteamento; generalidade é**, e a tela mede a primeira.
+
+  **A frase que este item existe para impedir é "o formulário já avisa sobre
+  descrição curta, então o problema está tratado".** Ele não está: o aviso
+  existente e o defeito medido não se tocam em nenhum ponto. É a primeira forma
+  da convenção 15 aplicada a um recurso de **UI** em vez de a um teste — e nessa
+  forma é **pior do que não haver guarda nenhum**, porque um campo sem aviso
+  convida a olhar, e um campo com aviso verde afirma que já foi olhado.
+
+  Escrever um aviso de generalidade **não é o conserto**, e é importante dizer
+  por quê antes que alguém tente: nenhuma regra automática distingue descrição
+  específica de genérica, e inventar uma seria a UI afirmando um critério que o
+  sistema não tem (convenção 13). O que cabe é **cópia que ensina o critério
+  certo** — do que a base trata e do que não trata — e o aviso de comprimento
+  passar a ser lido como o que ele é: um piso de "escreveu alguma coisa", não uma
+  aferição de qualidade.
+
+  **O que fazer** (orientação, não requisito — é texto de operador, e nenhum
+  teste pode afirmá-lo): descrição **específica e delimitada**, dizendo do que a
+  base trata **e do que não trata**. Duas bases irmãs precisam que cada uma
+  exclua explicitamente o assunto da outra; sem isso a mais geral vence as duas.
+  "Genérica é pior que curta, porque atrai" — curta faz o modelo não chamar,
+  genérica faz ele chamar **no lugar de outra**, que é o erro irrecuperável (`0d`
+  mediu 0 de 31 de recuperação quando o roteamento erra).
+
+  **O sintoma a procurar**, para quem for diagnosticar em uso real: **uma base
+  sendo chamada muito acima da sua fatia de intenções.** É assim que o
+  base-atrator aparece, e é a mesma assinatura do fragmento-atrator de `0c` (um
+  fragmento no topo de 38,6% das consultas) uma escala acima. A comparação é
+  entre "quantas vezes esta base foi chamada" e "quantas perguntas eram dela" —
+  não entre bases, e não contra um valor absoluto.
+
+  **Onde encosta na tela, conferido no código e não suposto:** a 5a-1 já trata a
+  descrição como campo consequente — rótulo *"Descrição — é o que o modelo lê
+  para decidir se consulta esta base"*, contador de caracteres, pré-visualização
+  do que o modelo recebe, e o comentário de que a descrição *"é campo de runtime
+  — é o texto que vira a descrição da tool"*. **O andaime existe; o que falta é o
+  critério certo dentro dele.** A cópia orienta a escrever **mais**, e `0d` diz
+  que o que falta é escrever **mais delimitado**.
+
+  **Gatilho com posição: a próxima change que tocar `KnowledgeBaseForm`** — e a
+  5a-3 (colunas e filtro do catálogo) é a próxima da fila que mexe nessa
+  feature, ainda que noutra tela. Não entra na etapa 4, que é `apps/workers` e
+  não tem tela (convenção 1). O trabalho é de cópia e talvez de um aviso novo,
+  **não** de validação bloqueante: nenhuma regra automática distingue descrição
+  específica de genérica, e inventar uma seria afirmar um critério que o sistema
+  não tem.
+
+- **A tela pode passar a exibir o nome efetivo da tool de conhecimento, e o
+  gatilho venceu agora.** `KnowledgeBaseForm` carrega um comentário dizendo que o
+  protótipo mostrava o identificador `consultar_base` e que ele **não** foi
+  implementado, porque *"nome de tool de base de conhecimento é decisão da etapa 4
+  (resolvedor de tool) e passa pelo `ToolNameDeduplicator` — não existe em spec
+  nenhuma hoje"*, e exibi-lo afirmaria um nome que o sistema não definiu
+  (convenção 13).
+
+  **A etapa 4 define: `search_<slug do nome da base>`.** A premissa do comentário
+  deixou de valer, e o gatilho que ele continha disparou sem que ninguém o
+  tivesse escrito como gatilho — vale registrar como acerto acidental de um
+  comentário bem redigido, e como argumento a favor de escrever a **condição**
+  junto com a recusa.
+
+  **Mas a ressalva do comentário continua inteira**, e ela é a metade que impede
+  copiar o protótipo: o nome passa pelo `ToolNameDeduplicator`, então o nome
+  **efetivo** pode não ser o pretendido. Exibir o pretendido como se fosse o
+  efetivo seria a convenção 13 na direção forte.
+
+  **É o mesmo item que "a renomeação por colisão é invisível na UI"** já
+  registrado por `0a`, agora com um segundo caso concreto — e os dois se resolvem
+  juntos, exibindo o nome efetivo ao lado do pretendido. **Gatilho: a mesma
+  change da orientação de descrição acima**, que já vai tocar
+  `KnowledgeBaseForm`.
 
 - **Reranker: hipótese com dado a favor, não levantada por completude** —
   `0c` mediu R@5 de 77,1% contra R@1 de 41,0%: em três de cada quatro
@@ -2845,9 +3621,110 @@ Cada um tem gatilho de quando revisitar:
   Depois de `auth-login-e-servico` o risco está classificado
   explicitamente em código (`ExternalUnauthenticated` na allowlist), mas
   segue não mitigado.
+- **A falha de entrega ao canal é diagnosticada no lugar errado: o worker loga um
+  timeout, e a causa está no banco do inbox.** Achado em 12/09/2026, no teste
+  manual da etapa 4, e a caçada inteira aconteceu antes de alguém olhar onde a
+  informação estava.
+
+  **A cadeia medida, de ponta a ponta:**
+
+  ```
+  agente responde (Gemini, 3,4 s)                                    ✓
+    └─ worker → POST /internal/push-notifications                    ✓
+         └─ inbox → WAHA POST /api/sendText  { session: "default" }
+              └─ WAHA: 422 "Session \"default\" does not exist"  (5.011 ms)
+                   └─ inbox grava DeliveryStatus=Failed, persiste, e SÓ ENTÃO responde
+                        └─ worker estoura o timeout de 5 s e loga TaskCanceledException
+  ```
+
+  **O que o operador vê é o último elo**, e ele aponta para o componente errado:
+  um `TaskCanceledException` de `HttpClient` com pilha de socket e TLS, em
+  `apps/workers`. Nada nele diz que o agente respondeu certo, que o inbox
+  recebeu, que a entrega falhou, nem por quê.
+
+  **Onde a informação realmente estava**, e nenhuma das duas é o log do worker:
+  `messages.DeliveryFailureReason` no banco `buteco_inbox`
+  (*"Response status code does not indicate success: 422"*), e o log do contêiner
+  do WAHA, que traz a frase que resolve o caso.
+
+  **O warning do worker é comportamento desenhado e deve continuar sendo** —
+  `PushNotificationSender` nunca relança, e o endpoint do inbox entrega com
+  `CancellationToken.None` justamente para o abort de 5 s não cancelar a
+  persistência. **O defeito não é o timeout: é o texto do aviso não apontar para
+  onde olhar.**
+
+  **O conserto é barato e é de mensagem, não de mecanismo:** o warning de
+  `PushNotificationSender` passar a dizer que a task **concluiu** e que o estado
+  da entrega ao canal se lê no inbox, não ali. Alguma coisa como *"a task
+  concluiu e o resultado foi enviado; o webhook não respondeu em 5 s. Isto NÃO
+  indica falha de entrega — conferir `DeliveryStatus`/`DeliveryFailureReason` em
+  `buteco_inbox.messages` antes de investigar este processo."*
+
+  **Gatilho com posição: a próxima change que tocar `PushNotificationSender` ou
+  `apps/inbox`.** É uma linha de log e um parágrafo em `docs/`; não justifica
+  change própria, e justifica menos ainda ficar esperando.
+
+- **Os 5 s do worker e os ~5 s do WAHA para devolver 422 colidem por acaso, e a
+  coincidência é o que torna o sintoma enganoso.** Segunda metade do item acima,
+  registrada à parte porque o conserto é outro e é uma decisão, não uma
+  redação.
+
+  Medido no log do próprio WAHA: `"responseTime": 5011` para devolver o
+  `422 Unprocessable Entity`. O timeout do `HttpClient` de push em
+  `apps/workers/Program.cs` é `TimeSpan.FromSeconds(5)`. **Os dois números são
+  independentes e quase idênticos**, então a falha de validação do canal — que é
+  instantânea em natureza — chega ao worker vestida de falha de rede, com pilha
+  de `SocketException` e `SslStream`.
+
+  **Por que não foi mexido agora:** subir o timeout do worker esconderia menos,
+  mas é orçamento de latência de um caminho que a Decision 3 daquela change
+  escolheu curto de propósito — o worker **não espera** a resposta, e alongar a
+  espera é contrariar aquela decisão sem medição. Baixá-lo tornaria o aviso mais
+  frequente. **Nenhuma das duas direções tem número atrás**, e é isso que falta.
+
+  **A medição que decide:** quanto o endpoint do inbox realmente leva no caminho
+  feliz, medido em uso real — se o p95 estiver muito abaixo de 5 s, o timeout
+  está certo e só o texto do aviso precisa mudar (item acima); se estiver perto,
+  o número é que está mal calibrado, e aí ele vira referência medida com o estado
+  ao lado (convenção 22). **Gatilho: a mesma change do item acima**, que já vai
+  estar nesse caminho.
+
 - **Provisionamento automático da sessão WAHA** — ainda manual (decisão
   consciente, ao contrário do Telegram — ambiguidade real de escopo de
   token no WAHA que não existe no Telegram).
+
+  **MORDEU em 12/09/2026, e o custo foi uma caçada inteira no componente
+  errado.** A credencial do canal *Waha Ambiente*
+  (`1652f791-67c4-4199-875c-d9825478471c`) guarda `sessionName = "default"`,
+  enquanto a sessão de pé no WAHA se chama
+  `session_01m2bx3e8xvxbsxx39j1eyffk3`, com status `WORKING`.
+  `WahaOutboundMessageSender` monta `{ session = credential.SessionName, … }`
+  com esse valor, e o WAHA devolve **422 `Session "default" does not exist`**.
+
+  **Duas respostas de agente foram perdidas** — `messages` com
+  `DeliveryStatus = Failed` em 22:52 e 22:54 UTC —, enquanto as de 18:49 e 19:04
+  do mesmo dia estão `Sent`. O agente respondeu certo nas quatro; só as duas
+  últimas não chegaram ao canal.
+
+  **O que o incidente acrescenta ao item, e é o que muda a prioridade:** a
+  ausência de provisionamento automático não é só trabalho manual a mais. **O
+  estado diverge em silêncio** — a sessão do WAHA pode ser recriada com nome
+  novo sem que nada no inbox saiba, e a divergência só aparece como falha de
+  entrega, três componentes adiante, disfarçada de timeout de rede (ver os dois
+  itens acima). Não há checagem de integridade entre o `sessionName` cadastrado
+  e as sessões que o WAHA realmente serve — e essa checagem é barata:
+  `GET /api/sessions` responde em milissegundos.
+
+  **Há também DOIS canais `waha` ativos** no banco de dev (`3073bc96…` e
+  `1652f791…`), e só o segundo tem webhook registrado no WAHA. Não é causa deste
+  incidente, mas é a mesma família de divergência silenciosa entre o cadastro e o
+  serviço.
+
+  **Gatilho, agora com condição observável em vez de intenção:** a primeira falha
+  de entrega com `DeliveryFailureReason` citando `422`. E a saída mínima, que não
+  é o provisionamento automático inteiro: **conferir o `sessionName` contra
+  `GET /api/sessions` na validação do canal** — a mesma forma da convenção 8,
+  aplicada a um serviço externo em vez de a um registro de DI.
 - **Assimetria de `IsActive`** — Telegram bloqueia webhook de entrada de
   canal desativado; a saída (`PushNotificationEndpoints`, qualquer canal)
   não verifica isso ainda.
@@ -3559,6 +4436,64 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   medido em 11,5-14,5; entre os dois não há medição, e o limiar é conservador
   por escolha.
 
+  > **RECALIBRADO em 12/09/2026 por `knowledge-tool-resolver`, e o que mudou não
+  > foi o número — foi qual das duas metades vale entre alvos.** A change levou a
+  > `WorkerHostCollection` de 11 para 12 classes, e a recalibração era tarefa
+  > dela (convenção 22). Medido nas duas rodadas completas:
+  >
+  > | | classes de host | `apps/workers` | load de 1 min antes do alvo |
+  > |---|---|---|---|
+  > | baseline | 11 | 5 m 05 s, 223/223 | **9,36** |
+  > | fechamento | 12 | 6 m 50 s, 252/252 | **6,35** |
+  >
+  > **As duas rodadas violaram o teto de 5,0 e as duas passaram verde.** A causa
+  > não é o limiar estar frouxo: é que, do segundo alvo em diante, o load de 1
+  > minuto é dominado pelo **resíduo da própria suíte** — 30 s de espaçamento não
+  > dão para a média decair. O número medido ali não é competição externa, que é
+  > o que o limiar quer medir.
+  >
+  > **A metade que continua valendo entre alvos é a outra:** *nenhum processo
+  > alheio à suíte ≥ 100%*, lida do `ps` e não do `uptime`. Ela é instantânea,
+  > não tem resíduo, e foi ela que pegou o confundidor real desta sessão (um
+  > processo alheio a 87-99% durante uma das execuções).
+  >
+  > **Limiar recalibrado, com o estado ao lado e o gatilho junto** (convenção 22):
+  > *load de 1 min < 5,0 **antes do primeiro alvo apenas**; do segundo em diante,
+  > só «nenhum processo ≥ 100% que não seja o runtime de contêiner nem o
+  > `dotnet`/`node` da própria suíte» — medido com 12 classes de host em
+  > `WorkerHostCollection`, `apps/workers` levando ~6 m 50 s. **Recalibrar quando
+  > entrar classe nova na coleção.***
+  >
+  > Isto **corrige o acréscimo que a 2a propôs à convenção 19** ("medir a carga
+  > antes de cada alvo"). Medir antes de cada alvo continua certo; o que estava
+  > errado era **qual número** olhar depois do primeiro.
+  >
+  > **E o critério recalibrado já nasce com um buraco conhecido, achado na mesma
+  > sessão que o recalibrou.** Ele é **por processo** — "nenhum processo alheio
+  > ≥ 100%" —, e nesta sessão houve dois processos alheios simultâneos a **88%** e
+  > **80%**, ou seja ~1,7 núcleo de competição externa, **sem que o critério
+  > disparasse**. O item da suíte de `apps/frontend` mediu que ~2,9 núcleos
+  > alheios derrubam aquela suíte; entre 0 e 2,9 não há medição, e 1,7 cai
+  > exatamente nesse vão.
+  >
+  > **Não corrigido aqui de propósito**, porque somar percentuais de `ps` como se
+  > fossem núcleos é aproximação que eu não medi. Fica registrado como o que é:
+  > **o critério mede um processo grande, não competição agregada** — e é
+  > instância da própria convenção 22, uma referência citada para responder algo
+  > que ela não mede. **Gatilho: a primeira reprovação com o critério verde e
+  > vários processos alheios médios** — aí o número a declarar passa a ser a soma,
+  > e ela precisa ser medida antes de virar limiar.
+  >
+  > **E há um segundo buraco, esse com conserto imediato: "processo alheio" tem
+  > de EXCLUIR o runtime de contêiner.** Na medição de `apps/inbox` sozinho, o
+  > processo no topo do `ps` era
+  > `com.apple.Virtualization.VirtualMachine` — a VM do Podman — a **134%**, e a
+  > suíte passou 164/164. Aquela VM **é a própria suíte**: são os containers que
+  > ela subiu. Contá-la como competição externa faria o critério disparar em toda
+  > execução com Testcontainers, que é quase toda. **O critério correto é:
+  > nenhum processo ≥ 100% que NÃO seja o runtime de contêiner nem o próprio
+  > `dotnet`/`node` da suíte.**
+
   **Primeiro exercício do limiar em uso real, em 10/09/2026, ao abrir a etapa
   2a — e ele funcionou:** a baseline da convenção 19 foi tomada com carga prévia
   de **26,04** contra o limiar de 5,0, com a VM do Podman a **464%**. Ela
@@ -3772,17 +4707,33 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
 
 ## Próximo passo
 
-**Concluído nesta sessão**: `dedupe-global-nome-de-tool` (`0a` da fila) —
-aplicada, suíte de `apps/workers` em 168/168, censo de colisão zerado. Com ela
-fora do caminho, **a etapa 2 da linha de bases de conhecimento (indexação) é o
-próximo passo**. As duas rodadas de medição que ela esperava estão fechadas:
-`0b` (head-to-head semântico, modelo e schema) e `0c` (chunker corrigido,
-invariantes, overlap, `k` e limiar), ambas registradas acima com bar declarado
-antes de medir. A exploração da etapa 2 recomendou **dividi-la em duas
-changes** — `2a`, o índice (`apps/workers` mais a tabela de fragmentos), e
-`2b`, a superfície de operação em `apps/api` (rota de reindexação e resumo por
-base), que é o que a etapa 5a-2 bloqueia. **A `2a` está pronta para ser
-proposta.**
+**Concluído nesta sessão**: a exploração da **etapa 4** (resolvedor de tool de
+conhecimento) e a rodada de medição **`0d`** (roteamento entre bases), mais três
+correções de registro — o gatilho do índice ANN contra o volume de referência de
+disco, o nome do modelo de embedding, e o gatilho de vazamento do lado do
+embedding escrito onde é lido. Ver as seções próprias acima.
+
+**A etapa 4 é o próximo passo, e está pronta para ser proposta.** A exploração
+fechou o encaixe do resolvedor, a forma do resultado da tool (três campos:
+documento, trecho, distância — `headingPath` não vai, porque o chunker já o
+injeta no texto vetorizado), o par "sem item" em dois cenários, e o censo de nome
+de tool estendido ao terceiro conjunto (zero colisões). `0d` fechou o esquema de
+nome (`search_<slug>`) e **não alterou o desenho** — como estava declarado antes
+de ela rodar, ela decidia só o que vem depois da etapa 4, nunca se a etapa 4
+acontece.
+
+Projeção da etapa 4, por componente e depois das verificações: **~26 arquivos /
+~1.470 linhas de código**, uma change só, duas capabilities
+(`knowledge-tool-execution` nova, `agent-tool-namespace` com ~5 requisitos
+`MODIFIED`). Os arquivos subiram ~50% sobre a projeção antiga, e a causa inteira é
+a régua de DI que `0a` criou depois dela: **15 dos 26 arquivos são custo de
+injetar uma dependência num serviço central** — 13 harnesses que constroem
+`AgentExecutionService`, mais 2 `Null*` novos.
+
+**Anteriormente nesta linha**: `0a` (dedupe de nome de tool), `0b` (head-to-head
+semântico, modelo e schema), `0c` (chunker, invariantes, overlap, `k` e limiar),
+`2a` (índice), `2b` (operação), e a UI em 5a-1/5a-2. Todas aplicadas ou
+registradas acima, as três rodadas de medição com bar declarado antes de medir.
 
 **Concluído em sessões anteriores**: o redesenho do painel foi fechado nas **oito
 etapas**, da identidade visual ao card A2A, mais a change de CORS de

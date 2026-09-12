@@ -12,26 +12,21 @@ using Moq;
 namespace Buteco.Workers.Tests;
 
 /// <summary>
-/// Cobre a change apps-workers-delegacao-execucao, Decision 9: slug
-/// determinístico e dedupe por sufixo numérico entre Targets com
-/// <c>Agent.Name</c> colidente, mesmo espírito dos testes de slug/dedupe já
-/// existentes para <c>AgentSkillMapper.Slugify</c> em <c>apps/api</c>.
+/// Cobre a change apps-workers-delegacao-execucao, Decision 9: nome-base
+/// determinístico por Target, incluindo Targets com <c>Agent.Name</c>
+/// colidente, mesmo espírito dos testes de slug/dedupe já existentes para
+/// <c>AgentSkillMapper.Slugify</c> em <c>apps/api</c>.
+///
+/// A teoria de função pura do slugificador saiu daqui para
+/// <c>Naming/ToolNameSlugifierTests.cs</c> quando o tipo ganhou o segundo
+/// consumidor (change knowledge-tool-resolver): ela não precisa do fixture de
+/// containers que esta classe exige, e pagava por ele.
 /// Testes de <see cref="AgentDelegationToolSetResolver.ResolveAsync"/> aqui
 /// não exercitam RabbitMQ/AgentExecutionService — só a montagem da lista de
 /// tools, então usam um container de DI mínimo em vez do host completo.
 /// </summary>
 public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixture) : IClassFixture<WorkerInfrastructureFixture>
 {
-    [Theory]
-    [InlineData("Atendimento", "atendimento")]
-    [InlineData("Consulta CEP", "consulta-cep")]
-    [InlineData("Suporte    Técnico!!", "suporte-tecnico")]
-    [InlineData("---", "agent")]
-    public void Slugify_ProducesExpectedSlug(string name, string expectedSlug)
-    {
-        Assert.Equal(expectedSlug, DelegationToolNameSlugifier.Slugify(name));
-    }
-
     [Fact]
     public async Task ResolveAsync_TwoTargetsWithCollidingName_ProducesTheSameBaseName()
     {
