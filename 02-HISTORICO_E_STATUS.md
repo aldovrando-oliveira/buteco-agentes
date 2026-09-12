@@ -1368,6 +1368,92 @@ Ela reduz o número de rodadas humanas; não substitui nenhuma.
 **Item aberto tocado:** o gatilho do carve de ordenação foi **corrigido**, não
 consumido — ver o item correspondente.
 
+##### Etapa 5a-2 — gestão de documentos na UI (aplicada em 2026-09-11)
+
+`frontend-knowledge-base-documentos` — só `apps/frontend`, consumindo as seis
+rotas de documento e a de reindexação, todas já implantadas. Tabela de documentos
+no detalhe da base com os quatro estados, faixa de falha com o motivo completo e
+o botão de reindexar, polling condicional, modal de adicionar (dois modos) e de
+atualizar (dois modos), e exclusão com confirmação nomeando os agentes afetados.
+
+Suíte do frontend: **69 arquivos / 617 testes → 75 / 722**. Entregue **19
+arquivos / 3.313 linhas** de código (15 criados / 2.974; 2 modificados / 275; 2
+removidos / 64).
+
+**O que esta etapa acrescentou ao processo vale mais que a tela**, e são quatro
+coisas, todas medidas:
+
+**1. A regra de `0 fragmentos` estava incompleta no registro, e a correta é mais
+forte.** O separador é `indexedAt`, **nunca** o estado: documento que falhou
+depois de indexado, ou que está reindexando, continua exibindo a **contagem
+anterior**, porque `FailAsync` não toca `IndexedAt` nem `FragmentCount` e os
+fragmentos antigos só são apagados dentro da transação de sucesso. Ver a lista de
+correções de protótipo acima, que passou de cinco para sete.
+
+**2. A rodada de guardas achou um defeito NOS TESTES, pela segunda vez na
+história desta base.** Três asserções negativas do modal liam
+`container.textContent` — e o `Modal` do Mantine renderiza em **portal**, fora do
+`container` do `render()`. Elas passavam com e sem o defeito. Com o aviso do
+protótipo reintroduzido, as reprovações foram de **3 para 4** depois de corrigir
+para `document.body`. É a vacuidade da convenção 15 em teste de componente,
+irmã da que a 2a registrou para checagem de boot sobre tabela vazia: *o arranjo
+não coloca o sistema no estado que eu penso que coloca*.
+
+A primeira ocorrência foi em `knowledge-base-vinculo-agente` (asserção que
+ordenava `Guid` por valor). **Duas ocorrências, e é o que sustenta o custo da
+rodada de guardas** quando alguém com pressa quiser cortá-la por parecer
+cerimônia: ela é o único passo do processo que devolve teste mal escrito de
+graça.
+
+**3. A conferência por CDP era CEGA a modal do Mantine, e ninguém sabia.** Na
+rodada 2 nenhum modal abria; a raiz existia no DOM com `innerHTML.length === 0` e
+a captura mostrava um fantasma que parecia defeito da tela. **Desmentido por
+baseline**: o modal de desativar base — código da 5a-1, intocado, com testes
+passando — não abria do mesmo jeito. Causa real: o `Modal` usa `FocusTrap`, que
+exige a página **focada**; em headless o trap não resolve e o conteúdo nunca
+monta. `Emulation.setFocusEmulationEnabled` resolve.
+
+Duas leituras plausíveis foram descartadas por medição antes da terceira
+sobreviver: "artefato de compositing" (o modal do **protótipo** sai sólido no
+mesmo navegador) e "`rAF` estrangulado" (medido: `ok`). **Destino: qualquer
+conferência futura por CDP precisa dessa chamada, ou declara convergência sobre
+um modal que nunca viu** — e os fantasmas que a 5b leu como "captura durante a
+animação" eram provavelmente isto.
+
+**4. O fechamento da suíte foi DESCARTADO uma vez, e o descarte é o registro.** A
+primeira tentativa reprovou 3 de 562 e só rodou 61 dos 75 arquivos, com 14 erros
+de `Failed to start forks worker`, em 2.155 s contra 59 s, com o load subindo de
+3,85 a **62**. Não foi classificada — foi descartada, e a repetição com a máquina
+em load 4,33 passou **722/722**. É o par que faltava ao registro da 2a, onde uma
+reprovação única virou dúvida residual porque o nome do teste se perdeu num
+`grep`: aqui a saída foi guardada inteira **desde a primeira tentativa**, os nomes
+estavam lá, e a dúvida fechou.
+
+**Décima medição da convenção 18: contagem de arquivo EXATA nas três faixas** —
+15 criados, 2 modificados, 2 removidos, cada uma batendo separadamente. Quinto
+acerto seguido do método. Linhas +19%, com o erro concentrado nos modificados
+(+57%), e a causa é reutilizável: **página que recebe N ações de um componente
+apresentacional paga por ação, não por componente** — `KnowledgeBaseDetailPage`
+saiu 152 linhas contra ~55, porque a projeção contou "buscar e repassar" e foi
+cega às quatro mutações com seus toasts, aos dois estados de modal e à
+confirmação de exclusão inteira.
+
+**E uma régua de medição que esta etapa aprendeu:** o `prettier --write` sobre o
+glob da feature reformatou **8 arquivos** que a change não precisava tocar —
+reflow puro, conferido arquivo a arquivo. Todos revertidos. Sem isso a linha
+"modificados" teria sido 10 em vez de 2, e a medição reportaria um erro de 5x que
+não era do método: era ruído de ferramenta. **Medir depois de limpar o que a
+ferramenta tocou sozinha, ou a medição mede o `prettier`.**
+
+**Dívida pré-existente encontrada e não corrigida de carona:** `format:check`
+reprova em quatro arquivos (`LoginPage.tsx`, `mcp-servers/utils/agentUsage.ts`,
+`KnowledgeBaseEditPage` e teste) — conferido no worktree limpo em `0c4a622`, é
+anterior a esta change.
+
+**Pendente com o operador:** os dois modais no esquema **escuro** (o detalhe foi
+conferido nos dois; os modais só no claro) e o **gesto** de arrastar-e-soltar,
+incluindo o `preventDefault` do `dragover`, que o jsdom não alcança.
+
 ##### Etapa 5a-1 — catálogo de bases na UI (aplicada e arquivada em 2026-09-09)
 
 `frontend-knowledge-base-catalogo` — primeira etapa de UI da linha, só
@@ -1572,7 +1658,59 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **cinco**, achadas em duas etapas diferentes. As três primeiras saíram da
+São **sete**, achadas em três etapas diferentes — a 5a-2 acrescentou duas, e
+**corrigiu duas das cinco anteriores**, uma na regra e outra na evidência. As
+correções da 5a-2 vêm primeiro, porque elas mudam o que as entradas antigas
+dizem:
+
+- **`0 fragmentos` → a regra registrada estava INCOMPLETA.** A entrada abaixo diz
+  "célula vazia: exibir quando `indexedAt` não é nulo, omitir quando é". A
+  primeira metade estava certa e a leitura corrente dela era errada: lido no
+  código de `apps/workers`, `KnowledgeIndexingService.FailAsync` grava **apenas**
+  `IndexingStatus` e `FailureReason` — não toca `IndexedAt` nem `FragmentCount`
+  —, e os fragmentos antigos só são apagados dentro da transação de sucesso.
+  Logo **documento que falhou depois de ter sido indexado continua exibindo a
+  contagem anterior**, e o mesmo vale para `Pending` e `Indexing` vindos de
+  reindexação ou atualização. O separador é `indexedAt`, **nunca** o estado.
+  Medido na rodada de guardas da 5a-2: implementar a regra como estava escrita
+  (decidir pelo estado) faz **seis** testes reprovarem, três deles em casos que a
+  entrada antiga não descreveria como erro.
+- **A evidência da frase sobre documentos grandes estava FALSA.** A entrada
+  abaixo afirma que *"a própria semente do protótipo aplica essa cópia a um
+  documento pequeno"*. Conferido no `.dc.html`: o documento que carrega a frase é
+  `d4`, com `chars: 196400` — **o maior valor de toda a semente** —, e `chars`
+  **nunca chega à tela** (o campo só alimenta a simulação de contagem de
+  fragmentos, `.dc.html:1522`). O que provavelmente foi lido é o campo `content`
+  do mesmo `d4`, uma string de 47 caracteres que só aparece no modal de
+  atualizar. A **recusa continua certa** — a convenção 13 sozinha a sustenta,
+  porque nada em `apps/workers` correlaciona tamanho com falha de embedding —,
+  mas a justificativa escrita não sustentava nada. É a convenção 6 na forma que
+  ela mesma nomeia: a frase em prosa que descreve o que o código faz é a que
+  ninguém abre o arquivo para checar.
+
+E as duas novas, as duas achadas **percorrendo** o protótipo, nenhuma na prosa do
+`CONHECIMENTO.md`:
+
+- **O aviso do modal de atualizar afirma duas coisas falsas.** Textualmente:
+  *"Salvar reindexa o documento: ele volta para pendente e sai das consultas do
+  agente até a indexação terminar. Os fragmentos antigos são descartados."* Três
+  problemas contra o código: "volta para pendente" é **condicional** (a regra do
+  `ContentHash` — atualização que só troca o título preserva o estado), "sai das
+  consultas do agente" é **falso** (garantia 3 de D9 da etapa 1: o conteúdo
+  anterior continua respondendo, e permanece se a reindexação falhar), e o
+  descarte dos antigos é atômico com a inserção dos novos, não imediato ao
+  salvar. É convenção 13 na direção mais cara: a cópia descreve uma consequência
+  **pior** que a real, e o operador adia uma correção de conteúdo por medo de
+  derrubar o agente. Corrigido na 5a-2 (D5) com **duas** cópias, uma por caso —
+  remover o que era falso era metade do trabalho.
+- **A lista de arquivos do modal não preserva a ordem da seleção.** Injetados
+  `politica-de_reembolso.md`, `horarios internos.txt` e `manual.pdf` nessa ordem,
+  a lista renderiza o `.pdf` **primeiro**. A causa está em `readFiles`: a recusa
+  por extensão é empurrada de forma síncrona e o aceite entra no callback
+  `onload` do `FileReader`. Corrigido na 5a-2 (D7) lendo com `await file.text()`
+  em sequência.
+
+As cinco anteriores, como registradas. As três primeiras saíram da
 5a-1 e valem para a 5a-2; as duas últimas saíram do percurso do protótipo feito
 ao propor a 5b (`frontend-agente-aba-conhecimento`) e valem para **qualquer**
 etapa que leia o modal de vincular — o protótipo continua sendo a fonte da 5a-2
@@ -2345,6 +2483,58 @@ terceira**.
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
+
+- **Etapa 5a-3 — colunas `Documentos`/`Indexação` e filtro `Com falha` no
+  catálogo de bases.** A 2b entregou `GET /knowledge-bases/indexing-summary`, que
+  destrava as três de uma vez, com **uma** requisição para o catálogo inteiro — e
+  o argumento que matou as colunas na 5a-1 (seria uma requisição por base, contra
+  100+ bases) morreu com a rota. A dependência foi **conferida presente no
+  código**, não julgada.
+
+  Ficou fora da 5a-2 por três motivos, com o principal sendo o segundo: é outra
+  tela (`KnowledgeBaseListPage`/`KnowledgeBaseTable`, não o detalhe); o custo real
+  é a **rodada de conferência manual por tela**, que a convenção 14 cobra e que
+  juntar duas telas dobra; e a 5a-2 já é a metade grande de uma change que
+  precisou ser dividida por tamanho.
+
+  **Este item sai com POSIÇÃO NA FILA, não com gatilho**, e a diferença é o
+  registro que ele acrescenta: *"gatilho imediato"* já foi usado nesta jornada e
+  **não disparou** — o carve de ordenação ficou com `GATILHO ATUAL: imediato` e só
+  voltou à mesa porque alguém perguntou. A 5a-3 tem o mesmo perfil: pequena,
+  dependência pronta, e nada que a puxe.
+
+  | # | change | estado da dependência |
+  |---|---|---|
+  | 1 | ~~5a-2 — gestão de documentos na UI~~ | aplicada |
+  | 2 | **Etapa 4 — resolvedor de tool de conhecimento** (`apps/workers`) | pronta. **É o próximo passo**, e não por tamanho: até ela existir, **nada do que o operador carrega na tela de documentos chega a um agente**. Base, descrição, vínculo, índice e conteúdo existem, e nenhum agente consulta nada. |
+  | 3 | **5a-3 — colunas e filtro do catálogo** (`apps/frontend`) | pronta e **ociosa** desde a 2b |
+  | 4 | backend do diagnóstico do índice (`apps/api`) | **não proposta** |
+  | 5 | **5c — UI do diagnóstico do índice** | bloqueada por #4 |
+
+  **A 5a-3 vem antes da 5c**, e a razão é verificável: a 5c está bloqueada por um
+  passo de backend que **nem foi proposto** — `KnowledgeFragments/` em `apps/api`
+  tem **um arquivo**, a entidade, e nenhuma query, handler, response ou endpoint
+  projeta a proveniência do índice —, enquanto a dependência da 5a-3 está no ar e
+  sem consumidor desde 11/09/2026.
+
+  Escopo da 5a-3, já escrito para não precisar ser reconstruído: duas colunas em
+  `KnowledgeBaseTable`, a quarta opção de filtro em `KnowledgeBaseListPage`, um
+  `useKnowledgeBaseIndexingSummaryQuery`, e o requisito `MODIFIED` na spec viva de
+  `knowledge-base-catalog-ui` que hoje **proíbe** as colunas com asserção
+  negativa.
+
+- **"Gatilho sem posição na fila é adiamento indefinido com outro nome" — terceira
+  ocorrência da família, e ela agora tem três.** As outras duas: o gatilho do
+  carve de ordenação apontando para uma tela que ninguém planejava, e o limiar de
+  carga de `WorkerHostCollection` citado depois que a suíte mudou. O mecanismo é o
+  mesmo — **referência registrada que não é revisitada porque nada a puxa**.
+
+  A convenção 18 previa promover ao `01` na terceira ocorrência. **Não promovida
+  ainda, e o motivo é que as três não são a mesma regra**: duas são sobre
+  *referência medida citada depois que o estado mudou* (limiar, bar de `0c`), e
+  esta é sobre *trabalho adiado sem lugar na fila*. Promover as três juntas
+  esconderia a distinção. Gatilho para promover: a **quarta**, que decide de qual
+  das duas famílias ela é.
 
 - **Migração de banco sai só de `apps/api`** — `apps/api` e `apps/workers`
   compartilham o mesmo Postgres e têm migrações próprias que criam as
