@@ -1,25 +1,4 @@
-# agent-tool-namespace Specification
-
-## Purpose
-
-Cobre o **espaço de nome compartilhado** dos nomes de tool entregues ao LLM em
-`apps/workers`: a unicidade dos nomes no conjunto final que une os **três**
-conjuntos resolvidos separadamente — tools MCP, tools de delegação e tools de
-conhecimento —, a precedência declarada entre eles na resolução de colisões, o
-formato e o limite de tamanho do nome exposto, a observabilidade da renomeação
-por colisão, e a estabilidade do conjunto de nomes entre execuções do mesmo
-cadastro.
-
-A capability existe porque **nenhum resolvedor sabe o que os outros produziram**,
-e era essa ignorância que produzia o defeito original: nomes iguais eram
-sombreados em silêncio no cliente de invocação de função, enquanto as duas
-declarações iam no payload para o provedor. A unicidade é propriedade do ponto
-que une os conjuntos, nunca de cada resolvedor por si.
-
-**Não cobre** como cada conjunto é resolvido — isso é `mcp-tool-execution`,
-`agent-delegation-execution` e `knowledge-tool-execution`, respectivamente.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Nomes únicos no conjunto final de tools do agente
 
@@ -89,80 +68,6 @@ não consequência da ordem em que os conjuntos são concatenados.
   de uma tool de delegação do mesmo agente
 - **THEN** a tool MCP ou de delegação é exposta com o nome pretendido e a tool
   de conhecimento é exposta com um nome derivado do seu por sufixo de dedupe
-
-### Requirement: Nome de tool dentro do limite verificado de 64 caracteres
-
-Todo nome exposto ao LLM SHALL ter no máximo 64 caracteres e conter apenas
-`[a-zA-Z0-9_-]`.
-
-Os dois valores têm fonte primária, e é a superfície de API que os fixa:
-`FunctionObject.name` da especificação OpenAPI publicada pelo OpenAI, na
-superfície **Chat Completions** — a que `apps/workers` usa, via
-`ChatClientResolver.BuildOpenAi` → `GetChatClient(model).AsIChatClient()` —,
-declara *"Must be a-z, A-Z, 0-9, or contain underscores and dashes, with a
-maximum length of 64"*. O Gemini declara 128 no seu documento de descoberta
-oficial, um superconjunto deste conjunto de caracteres. O limite do Anthropic
-**não é declarado** em nenhuma fonte primária consultada, então este requisito
-SHALL NOT ser justificado como "o mínimo entre os três provedores": está
-verificado contra dois, e a lacuna do terceiro é registrada como risco próprio
-no `design.md` (R8).
-
-A garantia SHALL valer **depois** do sufixo de dedupe, não apenas antes: um
-sufixo aplicado a um nome já no limite SHALL encurtar a base para caber, nunca
-ultrapassar o limite.
-
-#### Scenario: Sufixo de dedupe aplicado a um nome já no limite de 64
-- **WHEN** duas tools do mesmo agente colidem num nome que já ocupa exatamente
-  64 caracteres
-- **THEN** as duas tools recebem nomes distintos e ambos os nomes têm no
-  máximo 64 caracteres
-
-#### Scenario: Nome curto não é alterado pelo limite
-- **WHEN** as tools de um agente resolvem para nomes bem abaixo de 64
-  caracteres, sem colisão
-- **THEN** nenhum nome é truncado nem recebe sufixo
-
-### Requirement: Caractere inicial do nome é restrição própria do repositório
-
-`apps/workers` SHALL garantir que todo nome exposto ao LLM comece por letra
-ASCII ou `_`, prefixando `_` quando o nome derivado não satisfizer isso.
-
-Esta restrição SHALL ser declarada como **escolha do repositório**, não como
-exigência de provedor: nenhuma das fontes primárias consultadas a exige — o
-schema do OpenAI para Chat Completions aceita `[a-zA-Z0-9_-]` em qualquer
-posição, inclusive dígito inicial, e o documento de descoberta do Gemini não
-declara regra de posição. O motivo de mantê-la é não alterar nomes que hoje já
-são expostos com o `_` prefixado; removê-la mudaria o nome de tools em uso sem
-nenhum ganho verificado.
-
-#### Scenario: Nome derivado que começa com dígito recebe `_` na frente
-- **WHEN** a composição do nome de uma tool produz uma cadeia que começa com um
-  dígito
-- **THEN** o nome exposto ao LLM é essa cadeia prefixada por `_`
-
-#### Scenario: Nome derivado que já começa com letra não é alterado
-- **WHEN** a composição do nome de uma tool produz uma cadeia que já começa com
-  uma letra ASCII
-- **THEN** o nome exposto ao LLM é exatamente essa cadeia, sem prefixo
-
-### Requirement: Colisão de nome é sensível a caixa
-
-`apps/workers` SHALL considerar dois nomes colidentes apenas quando forem
-iguais caractere a caractere (comparação ordinal, sensível a caixa) — o mesmo
-critério que o cliente de invocação de função usa para resolver uma chamada de
-volta para a tool. Dois nomes que diferem apenas na caixa SHALL NOT ser
-tratados como colisão, e portanto SHALL NOT ser renomeados.
-
-#### Scenario: Duas tools cujos nomes diferem só na caixa não são renomeadas
-- **WHEN** o conjunto final de tools de um agente contém uma tool chamada
-  `Search` e outra chamada `search`
-- **THEN** as duas permanecem com exatamente esses nomes, nenhuma recebe sufixo
-  de dedupe, e nenhum aviso de renomeação é registrado
-
-#### Scenario: Duas tools com o nome idêntico são renomeadas
-- **WHEN** o conjunto final de tools de um agente contém duas tools chamadas
-  `search`, idênticas caractere a caractere
-- **THEN** uma delas é renomeada com sufixo de dedupe
 
 ### Requirement: Renomeação por colisão é observável no log
 

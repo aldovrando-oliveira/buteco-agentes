@@ -22,6 +22,8 @@ continua respondendo com os fragmentos anteriores — exibir zero ali afirmaria 
 a indexação rodou e não achou nada. Não há progresso percentual, e nenhuma cópia
 relaciona tamanho de documento a falha de indexação.
 
+## Requirements
+
 ### Requirement: Listagem de documentos no detalhe da base
 O sistema SHALL exibir, no detalhe de uma base de conhecimento em
 `apps/frontend`, os documentos daquela base, consumindo

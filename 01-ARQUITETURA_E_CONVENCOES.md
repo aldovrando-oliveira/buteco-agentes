@@ -109,11 +109,28 @@ Os quatro enums de `Message` atravessam a API como **string**
 nunca como inteiro ordinal.
 
 **`KnowledgeBase`** (`apps/api`): `Name`, `Description`, `IsActive`.
-`Description` **não é campo decorativo** — a partir da etapa de execução é o
-texto que vira a descrição da tool exposta ao modelo, e é por ele que o modelo
-decide se a base é relevante para a pergunta; por isso é obrigatória e não
-vazia, ao contrário de `McpServer.Description`. Segue o padrão da casa:
-`IsActive`, sem exclusão.
+`Description` **não é campo decorativo** — é o texto que vira a descrição da
+tool exposta ao modelo, e é por ele que o modelo decide se a base é relevante
+para a pergunta; por isso é obrigatória e não vazia, ao contrário de
+`McpServer.Description`. Segue o padrão da casa: `IsActive`, sem exclusão.
+
+> **E não-vazia NÃO basta — a etapa `0d` mediu.** Com 7 bases e 83 perguntas, o
+> modelo escolheu a base certa em **61%** dos casos, e o erro é irrecuperável (a
+> passagem certa não fica entre os candidatos). O padrão medido: uma base de
+> descrição **genérica canibaliza as vizinhas** — a que cobria "descontos,
+> acordos, parcelamento, campanhas" tinha 5 perguntas e foi chamada 24 vezes,
+> enquanto a maior base, com 28, foi chamada 11. Não é viés de posição: com ela
+> em último lugar na lista de tools, continuou atraindo 20 dos 33 erros.
+>
+> **Orientação de operação, não requisito** (nenhum teste pode afirmar qualidade
+> de texto de operador): descrição **específica e delimitada**, dizendo do que a
+> base trata **e do que não trata**. Bases irmãs precisam que cada uma exclua o
+> assunto da outra. Genérica é pior que curta — curta faz o modelo não chamar,
+> genérica faz ele chamar **no lugar de outra**.
+>
+> **Sintoma a procurar em uso real:** uma base sendo chamada muito acima da sua
+> fatia de perguntas. É a mesma assinatura do fragmento-atrator de `0c`, uma
+> escala acima. O item completo, com onde isso encosta na tela, está no `02`.
 
 **`KnowledgeDocument`** (`apps/api`): `KnowledgeBaseId`, `Title`, `SourceType`,
 `ExtractedText`, `ContentLengthBytes`, `IndexingStatus`, `IndexedAt` (nullable),
@@ -175,9 +192,38 @@ bundles de `apps/api` e `apps/inbox`. É contraintuitivo o bastante para alguém
 **Sem índice ANN**, e não por esquecimento: HNSW recusa mais de 2000 dimensões em
 `vector` e mais de 4000 em `halfvec` (medido em pgvector 0.8.6), então qualquer
 índice exige uma coluna **derivada e truncada**, que nasce por SQL quando fizer
-falta. Gatilho medido: p95 da consulta acima de 200 ms. Custo de exercê-lo,
-também medido: `ADD COLUMN ... GENERATED ... STORED` **reescreve a tabela sob
+falta. Gatilho: p95 da consulta acima de 200 ms. Custo de exercê-lo, também
+medido: `ADD COLUMN ... GENERATED ... STORED` **reescreve a tabela sob
 `ACCESS EXCLUSIVE`**, e durante o `ALTER` até leitura bloqueia.
+
+**O gatilho tem volume medido, e ele NÃO é o mesmo 7.500 do custo de disco.** Os
+dois números existiam em lugares diferentes respondendo a perguntas diferentes, e
+confundi-los faz o teto de latência parecer folgado quando não é. Medido em
+2026-09-12, `pgvector/pgvector:pg18`, busca exata com `ORDER BY <=> LIMIT 5` sobre
+`vector(4096)`, buffers quentes:
+
+| fragmentos **na base consultada** | latência |
+|---|---|
+| 272 (índice real de desenvolvimento) | ~14 ms |
+| 2.000 | 111 ms |
+| **~4.300** | **~200 ms — é aqui que o gatilho dispara** |
+| 7.500 | 333 ms |
+| 20.000 | ~950 ms |
+
+Inclinação ~47 µs por fragmento, linear e sem joelho. Três leituras:
+
+- **Os 7.500 fragmentos citados adiante são volume de referência DE DISCO**, para
+  dimensionar armazenamento. Como volume de **latência** eles já estão acima do
+  teto: dariam 333 ms. Os dois números não são comparáveis e não devem ser
+  citados como se fossem o mesmo orçamento.
+- **O filtro da consulta é `KnowledgeBaseId`, então o que conta é a MAIOR base,
+  não o índice inteiro.** Cem bases de 500 fragmentos não acionam nada; uma base
+  de 5.000 aciona. ~4.300 fragmentos são ~4,9 MB de texto naquela base, pela
+  média real medida de 1.146 caracteres por fragmento.
+- **O pior caso não é o regime quente.** A primeira consulta após ociosidade
+  pagou 265 ms com apenas 272 fragmentos, por leitura de TOAST. Ao lado da
+  segunda ida ao LLM, que custa segundos, continua sendo ruído — mas é esse o
+  número a orçar, não os 14 ms.
 
 **As quatro colunas que `KnowledgeDocument` ganhou na etapa de indexação:**
 
@@ -203,10 +249,29 @@ seleção é o próprio conjunto de ids. Consequências registradas junto, para 
 etapa de execução não as reabra:
 
 - Sem análogo de `AllowedTools` (seleção de documentos permitidos): quem precisa
-  de granularidade menor cria outra base. `TopK` e limiar de similaridade são
-  constante em `apps/workers` até haver dois consumidores reais querendo valores
-  diferentes (convenção 2). Não há flag "injetar sempre" — o acesso é sob
-  demanda, decidido pelo modelo a partir de `KnowledgeBase.Description`.
+  de granularidade menor cria outra base. `k` é constante nomeada em
+  `apps/workers` até haver dois consumidores reais querendo valores diferentes
+  (convenção 2), e **limiar de similaridade não existe** — a etapa `0c` o
+  reprovou com 20 negativas, e a busca devolve os `k` mais próximos com a
+  distância explícita para o agente decidir. Não há flag "injetar sempre" — o
+  acesso é sob demanda, decidido pelo modelo a partir de
+  `KnowledgeBase.Description`.
+**O conjunto de tools entregue ao LLM é a união de TRÊS conjuntos**, desde a
+etapa 4: tools MCP (por `AgentMcpServer`, filtradas por `AllowedTools`), tools de
+delegação (uma por `AgentDelegation`) e tools de conhecimento (uma por
+`AgentKnowledgeBase` cuja base está **ativa**). Os três dividem um espaço de nome
+único, e `ToolNameDeduplicator` é o único ponto que sabe disso — a precedência na
+colisão é **MCP → delegação → conhecimento**, declarada pela ordem dos parâmetros
+e não pela ordem de concatenação.
+
+**A tool de conhecimento se chama `search_<slug do nome da base>`**, e o esquema
+foi escolhido por censo, não por gosto: o alternativo (`<Nome>__search`) colide
+com MCP **por composição**, e o censo do banco de dev contém o padrão que torna
+isso concreto — o servidor *"Informações Gerais"* sanitiza para
+`Informa__es_Gerais`, onde o `__` não é o separador. Com `search_<slug>` a
+colisão por composição é **impossível**, porque o slugificador nunca emite `_`;
+sobra só a truncagem em 64, que é o mesmo caminho da colisão MCP × delegação.
+
 - **Base inativa continua vinculável e editável**; o filtro por `IsActive`
   pertence à resolução (`where kb.IsActive`, idioma de `McpToolSetResolver`),
   não à remoção do vínculo. Vale igual para **agente** inativo: desativar um
@@ -244,6 +309,12 @@ devia estar ali — é exatamente aquele em que "continua no banco, invisível" 
 resposta errada. Some-se o custo medido: ~60 MB de vetores por 7.500
 fragmentos **em 1536 dimensões** — com as 4096 dimensões do modelo que a
 etapa `0b` recomendou, são ~123 MB para os mesmos 7.500 fragmentos.
+
+> **7.500 aqui é volume de referência de DISCO, e só isso.** Não é o volume em
+> que a consulta continua rápida: como latência, 7.500 fragmentos **numa mesma
+> base** dão 333 ms, acima do teto de 200 ms. Ver o gatilho do índice ANN acima,
+> com a tabela medida — lá o volume que importa é ~4.300 fragmentos na maior
+> base.
 
 O critério, reutilizável para qualquer entidade futura, é esse: **catálogo
 referenciado → `IsActive`; conteúdo sem referência → exclusão real.** Duas
@@ -1016,3 +1087,53 @@ de propor algo nesta base:
     Na prática: varredura que devolve zero resultados só vale como evidência de
     ausência depois de conferir que **o comando rodou**. Um `echo $?`, um caso de
     controle que deveria casar, ou repetir a busca por outro caminho.
+
+22. **Referência medida vale sobre o estado em que foi medida — então ela nasce
+    com o estado escrito ao lado e com gatilho de recalibração.** Promovida na
+    **quarta** ocorrência, como o item aberto previa, e o que decidiu a promoção
+    não foi a contagem: foi a **mesma referência ter quebrado duas vezes, do
+    mesmo jeito**, porque ninguém tinha pendurado um gatilho nela.
+
+    O mecanismo: um número medido é citado depois com a autoridade de medição,
+    sobre um sistema que já não é o que foi medido. Ninguém mente e ninguém
+    erra a conta — o número continua correto sobre o estado antigo.
+
+    As quatro:
+
+    | # | referência | medida sobre | citada sobre | resultado |
+    |---|---|---|---|---|
+    | 1 | limiar de carga da suíte (load < 5,0) | `WorkerHostCollection` com **7** classes | **11** classes | reprovou 1/212 com a carga **dentro** do limiar |
+    | 2 | bar de recall de `0c` (R@1 ≥ 70%) | os 75% de `0b`, num benchmark **saturado** de 44 fragmentos | corpus **discriminante** de 110 | o bar reprovou a própria rodada que ele deveria calibrar |
+    | 3 | 7.500 fragmentos | **bytes em disco** | **microssegundos de busca** | o volume de referência de armazenamento já estava acima do teto de latência, e ninguém tinha notado |
+    | 4 | limiar de carga da suíte, **de novo** | 7 classes (nunca recalibrado) | **12** classes | segunda quebra da mesma referência |
+
+    **A ocorrência 3 é a variante que vale nomear junto:** ali o sistema **não**
+    mudou — mudou a **pergunta** feita ao número. Dois números sobre a mesma
+    grandeza aparente (fragmentos) respondendo a perguntas diferentes convivem
+    sem se contradizer até alguém citar um no lugar do outro. O sintoma é
+    idêntico, e por isso a regra é uma só.
+
+    **Na prática, ao escrever qualquer número medido:**
+
+    - **Escrever o estado ao lado do número**, na mesma frase. Não "load < 5,0",
+      e sim "load < 5,0, medido com 7 classes de host". Não "7.500 fragmentos", e
+      sim "7.500 fragmentos como volume de disco".
+    - **Escrever o gatilho de recalibração**, e ele aponta para uma condição
+      observável: "recalibrar quando entrar classe nova na coleção", não
+      "recalibrar quando fizer sentido".
+    - **Recalibrar é tarefa da change que muda o estado**, não descoberta da
+      change seguinte. Quem acrescenta a 12ª classe de host recalibra o limiar.
+
+    **A quinta evidência é de sinal contrário, e é ela que mostra que a regra
+    funciona quando aplicada:** o bar de `0d` **recusou** ancorar em número de
+    `0b` ou de `0c` — precisamente por causa da ocorrência 2, que já estava
+    registrada — e derivou os cortes do mecanismo do próprio desenho (um erro de
+    roteamento é irrecuperável; a alternativa tem roteamento perfeito por
+    construção). O bar reprovou a hipótese testada, que é o que um bar deve poder
+    fazer, e **nenhuma parte dele precisou ser defendida depois**. É o primeiro
+    caso desta base em que a regra foi aplicada preventivamente, e ela foi
+    aplicada porque a ocorrência 2 estava escrita.
+
+    Parente da convenção 18 (*projeção feita antes de a verificação fechar é
+    rascunho*) e da 19 (*"pré-existente" exige a baseline*): as três são sobre
+    número citado com mais autoridade do que ele tem.

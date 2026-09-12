@@ -89,7 +89,9 @@ boundary goes over authenticated HTTP. See
 - **Knowledge bases** — base and document catalog with markdown extraction,
   chunked and embedded into a vector index in the background. Operators manage
   documents from the panel: upload or write them, update, delete, watch each
-  one move through indexing, and retry a document whose indexing failed.
+  one move through indexing, and retry a document whose indexing failed. At
+  execution time each linked, active base becomes a search tool the agent can
+  call; results carry the distance, and the agent decides what is relevant.
 - **Operations panel** — a web UI for all of the above.
 
 ---
@@ -156,10 +158,6 @@ source `docs/` is written from, not project documentation themselves.
 Everything listed under [Features](#features) is implemented and running.
 Known gaps, tracked deliberately:
 
-- **Knowledge bases are indexed, but nothing queries them yet.** Documents are
-  chunked, embedded and stored as vectors, and an operator can retry a failed
-  document. The retrieval tool the agent would call does not exist yet — that
-  is the next line of work.
 - **No continuous integration.** There is no `.github/workflows/`; tests and
   the documentation integrity check run locally. See
   [CONTRIBUTING.md](CONTRIBUTING.md).

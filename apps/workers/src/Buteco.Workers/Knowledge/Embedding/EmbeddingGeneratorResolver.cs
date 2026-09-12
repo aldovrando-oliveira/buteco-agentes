@@ -40,6 +40,32 @@ public sealed class EmbeddingGeneratorResolver(
             // desconhecido. `anthropic` e `gemini` caem aqui por AUSÊNCIA DE
             // CAPACIDADE, não por omissão de implementação: o assembly Anthropic
             // referenciado não expõe nenhum tipo de embedding.
+            //
+            // LEIA ANTES DE ACRESCENTAR UM SEGUNDO PROVEDOR AQUI. Este resolvedor
+            // constrói um cliente NOVO a cada chamada, e isso é seguro hoje por um
+            // motivo que vale só para o caminho `openai`: `System.ClientModel`
+            // serve o transporte de `HttpClientPipelineTransport.Shared`, que tem
+            // um `private static readonly HttpClient` — um por processo,
+            // independentemente de quantos clientes sejam construídos (verificado
+            // por decompilação, ver C4 do design.md da change
+            // fix-vazamento-httpclient-chat).
+            //
+            // Os dois provedores que caem neste braço NÃO têm essa propriedade no
+            // lado de chat: `Google.GenAI` faz `new HttpClient()` por instância de
+            // client, e o SDK do Anthropic também. Foi exatamente esse padrão que
+            // vazou ~44 descritores por mensagem e obrigou o cache por
+            // (provider, model) em `ChatClientResolver`.
+            //
+            // E aqui a frequência é PIOR que a daquele achado: desde a etapa 4 da
+            // linha de conhecimento, a consulta gera um embedding por MENSAGEM de
+            // agente, não um por documento indexado. O vazamento que lá foi
+            // descoberto na frequência de indexação nasceria aqui ordens de
+            // grandeza acima dela, e no caminho quente.
+            //
+            // Portanto: um provedor de embedding não-OpenAI precisa vir com cache
+            // por (provider, model), no molde de `ChatClientResolver` — não depois,
+            // quando o perfilamento acusar. O perfilamento já acusou, uma vez, no
+            // lado de chat.
             _ => throw new InvalidOperationException(
                 $"Provedor de embedding '{embedding.Provider}' não é suportado."),
         };

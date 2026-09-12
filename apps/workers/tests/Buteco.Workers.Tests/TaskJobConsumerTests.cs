@@ -4,6 +4,7 @@ using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Notifications;
@@ -296,6 +297,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         builder.Services.AddSingleton<IChatClientResolver, ChatClientResolver>();
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
+        builder.Services.AddSingleton<IKnowledgeToolSetResolver, NullKnowledgeToolSetResolver>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));
@@ -327,6 +329,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         builder.Services.AddSingleton(resolverMock.Object);
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
+        builder.Services.AddSingleton<IKnowledgeToolSetResolver, NullKnowledgeToolSetResolver>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5));

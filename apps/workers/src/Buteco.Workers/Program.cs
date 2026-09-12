@@ -7,6 +7,7 @@ using Buteco.Workers.Messaging;
 using Buteco.Workers.Notifications;
 using Buteco.Workers.Knowledge.Chunking;
 using Buteco.Workers.Knowledge.Embedding;
+using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Knowledge.Indexing;
 using Buteco.Workers.Options;
 
@@ -55,6 +56,7 @@ builder.Services.AddSingleton<IMcpToolSetResolver, McpToolSetResolver>();
 
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
 builder.Services.AddSingleton<IAgentDelegationToolSetResolver, AgentDelegationToolSetResolver>();
+builder.Services.AddSingleton<IKnowledgeToolSetResolver, KnowledgeToolSetResolver>();
 
 // Dedupe global do espaço de nome de tool, aplicado no ponto que une os dois
 // conjuntos acima (change dedupe-global-nome-de-tool, Decisão 1) — sem estado,

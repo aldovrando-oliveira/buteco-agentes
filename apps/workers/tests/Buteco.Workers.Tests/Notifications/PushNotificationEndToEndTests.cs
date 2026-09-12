@@ -4,6 +4,7 @@ using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Notifications;
@@ -404,7 +405,7 @@ public class PushNotificationEndToEndTests(WorkerInfrastructureFixture fixture) 
         builder.Services.AddSingleton(resolverMock.Object);
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
-
+        builder.Services.AddSingleton<IKnowledgeToolSetResolver, NullKnowledgeToolSetResolver>();
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(() => webhookHandler);
         builder.Services.AddSingleton<PushNotificationSender>();

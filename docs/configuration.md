@@ -146,7 +146,7 @@ qual a própria API é **alcançada** de fora, do ponto de vista do AgentCard.
 | `OpenAI__BaseUrl` / `OpenAI__ApiKey` / `OpenAI__Model` | condicional | Necessária se algum agente usar o provedor |
 | `Anthropic__ApiKey` | condicional | Idem |
 | `Gemini__ApiKey` | condicional | Idem |
-| `Embedding__Provider` | condicional | Provedor do modelo de embedding da indexação de bases de conhecimento. Hoje só `openai` é suportado — `anthropic` e `gemini` não expõem tipo de embedding no SDK referenciado |
+| `Embedding__Provider` | condicional | Provedor do modelo de embedding das bases de conhecimento. Hoje só `openai` é suportado — `anthropic` e `gemini` não expõem tipo de embedding no SDK referenciado |
 | `Embedding__Model` | condicional | Modelo de embedding. **Não tem default**: foi escolhido por medição, e o modelo que um ambiente serve por padrão pode empatar com busca lexical |
 | `Embedding__Dimensions` | condicional | Dimensão declarada, **conferida contra a que o provedor devolve no momento da gravação**. O gateway pode aceitar o parâmetro `dimensions` e ignorá-lo, e sem a conferência o índice seria gravado com vetores incompatíveis sem erro nenhum |
 
@@ -174,6 +174,13 @@ descobrir.
 > quente —, a razão 1 cai e a razão 2 **não**: o cache passa a precisar de
 > invalidação na mudança, **descartando** o client removido. Sem isso a troca de
 > chave ficaria silenciosamente sem efeito, que é pior que exigir restart.
+
+**O modelo de embedding é usado em dois momentos, não só na indexação.** Ele
+vetoriza cada fragmento quando um documento é indexado, e vetoriza a **consulta**
+a cada vez que um agente chama uma tool de conhecimento — ou seja, **por
+mensagem**, no caminho quente. Os dois lados precisam do mesmo modelo: vetores de
+modelos diferentes são incomparáveis, e `apps/workers` recusa subir quando o
+modelo declarado diverge do gravado no índice.
 
 A seção `Embedding` **não tem credencial própria**: a chave e o endpoint vêm da
 seção `OpenAI` acima, reusados de propósito — aquele endpoint já é no formato

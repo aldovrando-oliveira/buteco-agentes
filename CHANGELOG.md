@@ -130,6 +130,19 @@ o versionamento pretende seguir
   conteúdo está correto e cuja indexação falhou por causa transitória. Abre uma
   rodada nova: limpa o motivo da falha e os contadores de tentativa, e preserva
   o conteúdo indexado anterior, que continua respondendo.
+- **Consulta ao índice em tempo de execução**: cada base de conhecimento
+  vinculada a um agente **e ativa** vira uma tool que o agente pode chamar, com
+  a descrição cadastrada da base como descrição da tool — é por ela que o modelo
+  decide se aquela base é relevante. A busca é por proximidade vetorial dentro
+  daquela base, devolve os cinco trechos mais próximos e traz **a distância de
+  cada um**, sem nenhum limiar: a tool não filtra por relevância e não afirma
+  que algum trecho responde à pergunta, porque o sistema não sabe isso — quem
+  decide é o agente, lendo o trecho. Base vinculada **sem conteúdo indexado** é
+  relatada como tal, e nunca como "a busca não encontrou nada": não havia onde
+  procurar. Com isso, o conjunto de tools entregue ao LLM passa a ser a união de
+  **três** conjuntos (MCP, delegação e conhecimento), com precedência declarada
+  nessa ordem na resolução de colisões de nome.
+
 - Resumo de indexação agregado por base, por
   `GET /knowledge-bases/indexing-summary`, com contagem de documentos,
   indexados e em falha. Uma requisição para o conjunto inteiro, com custo
@@ -212,6 +225,18 @@ o versionamento pretende seguir
   "manter a atual".
 
 ### Fixed
+
+- **Documentação do custo da busca vetorial citava um volume de disco como se
+  fosse orçamento de latência**: `docs/architecture.md` registrava 7.500
+  fragmentos como referência de armazenamento, e o gatilho do índice ANN falava
+  em "p95 acima de 200 ms" sem volume nenhum — dois números sobre a mesma
+  grandeza aparente, respondendo a perguntas diferentes. Medido agora, os mesmos
+  7.500 fragmentos **numa única base** custam ~333 ms de busca exata, já acima do
+  teto. A documentação passa a separar os dois: 7.500 é volume de **disco**; o
+  volume de **latência** é ~4.300 fragmentos **na maior base** — e é a maior base
+  que conta, porque a consulta filtra por `KnowledgeBaseId`. Junto, fica
+  registrado que a primeira consulta após ociosidade custa ~265 ms mesmo com
+  poucos fragmentos, por leitura de TOAST.
 
 - **Vazamento de pool de conexões HTTP por mensagem em `apps/workers`**: o
   `IChatClient` era construído a cada mensagem e nunca descartado, e os SDKs de

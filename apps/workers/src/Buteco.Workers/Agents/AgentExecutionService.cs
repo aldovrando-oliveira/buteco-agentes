@@ -4,6 +4,7 @@ using global::A2A;
 using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Notifications;
@@ -21,6 +22,7 @@ public sealed class AgentExecutionService(
     IChatClientResolver chatClientResolver,
     IMcpToolSetResolver mcpToolSetResolver,
     IAgentDelegationToolSetResolver delegationToolSetResolver,
+    IKnowledgeToolSetResolver knowledgeToolSetResolver,
     ToolNameDeduplicator toolNameDeduplicator,
     PushNotificationSender pushNotificationSender,
     TimeProvider timeProvider,
@@ -195,6 +197,20 @@ public sealed class AgentExecutionService(
             var delegationTools = await delegationToolSetResolver.ResolveAsync(
                 dbContext, agent, message.ContextId, delegationDepth, messageInstant, cancellationToken);
 
+            // Terceiro conjunto, e também SEM await using — pelo mesmo motivo da
+            // delegação e não por simetria com ela: não há conexão externa viva
+            // por trás. A busca usa um escopo próprio aberto dentro da invocação
+            // (FunctionInvokingChatClient pode chamar duas tools do mesmo turno
+            // em paralelo, e DbContext não é thread-safe), e o gerador de
+            // embedding é resolvido lá dentro, não aqui (design.md da change
+            // knowledge-tool-resolver, D7/D9).
+            //
+            // Depois desta change são DOIS resolvedores sem `using` contra UM
+            // com — a assimetria virou maioria, e o único `await using` do
+            // método é o do toolSet MCP, que tem conexão viva de verdade.
+            var knowledgeTools = await knowledgeToolSetResolver.ResolveAsync(
+                dbContext, message.AgentId, cancellationToken);
+
             // Bloco de contexto temporal concatenado às Instructions do
             // operador — sem tocar Agent.Instructions no banco, sem entrar
             // no histórico de conversa (design.md da change
@@ -225,12 +241,14 @@ public sealed class AgentExecutionService(
                 // `toolSet.Tools.Concat(delegationTools)` cru, e um nome
                 // duplicado era sombreado em silêncio por
                 // FunctionInvokingChatClient.FindTool. A ordem dos argumentos é
-                // a precedência declarada (Decisão 5): MCP mantém o nome, a
-                // tool de delegação é a renomeada.
+                // a precedência declarada (Decisão 5, estendida em
+                // knowledge-tool-resolver D8): MCP mantém o nome, a tool de
+                // delegação é renomeada contra MCP, e a de conhecimento é
+                // renomeada contra as duas.
                 ChatOptions = new ChatOptions
                 {
                     Instructions = instructionsWithContext,
-                    Tools = [.. toolNameDeduplicator.Deduplicate(message.AgentId, toolSet.Tools, delegationTools)],
+                    Tools = [.. toolNameDeduplicator.Deduplicate(message.AgentId, toolSet.Tools, delegationTools, knowledgeTools)],
                 },
                 ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
                 {

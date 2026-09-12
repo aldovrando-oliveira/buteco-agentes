@@ -4,6 +4,7 @@ using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Infrastructure;
+using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Messaging;
 using Buteco.Workers.Notifications;
@@ -342,6 +343,7 @@ public class ConversationHistoryTests(WorkerInfrastructureFixture fixture) : ICl
         builder.Services.AddSingleton(resolverMock.Object);
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
+        builder.Services.AddSingleton<IKnowledgeToolSetResolver, NullKnowledgeToolSetResolver>();
         // Gap pré-existente deste harness (não introduzido por esta change):
         // AgentExecutionService já dependia de PushNotificationSender antes,
         // e BuildHost nunca registrava — achado rodando os testes desta
