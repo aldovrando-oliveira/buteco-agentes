@@ -70,9 +70,11 @@ builder.Services.AddSingleton<PushNotificationSender>();
 // Singleton porque é injetado no TaskJobConsumer (BackgroundService, singleton) —
 // AgentExecutionService não segura estado escopado diretamente, abre um
 // IServiceScope novo por execução via IServiceScopeFactory quando precisa do
-// AppDbContext. IChatClientResolver constrói o IChatClient por chamada (sem
-// cache entre execuções), então ser singleton aqui não implica reaproveitar
-// nenhuma instância de IChatClient — ver design.md, Decision 7.
+// AppDbContext. IChatClientResolver mantém UMA instância de IChatClient viva por
+// par (provider, model) pelo resto da vida do processo, então ser singleton aqui
+// é o que sustenta esse cache — ver design.md da change
+// fix-vazamento-httpclient-chat. O resolver injeta só IOptions<T>, também
+// singleton: não há dependência escopada capturada por singleton.
 builder.Services.AddSingleton<AgentExecutionService>();
 builder.Services.AddHostedService<TaskJobConsumer>();
 builder.Services.AddHostedService<KnowledgeIndexingConsumer>();

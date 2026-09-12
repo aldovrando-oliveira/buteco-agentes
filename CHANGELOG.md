@@ -213,6 +213,26 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Vazamento de pool de conexões HTTP por mensagem em `apps/workers`**: o
+  `IChatClient` era construído a cada mensagem e nunca descartado, e os SDKs de
+  Gemini e de Anthropic instanciam um `HttpClient` próprio por client — então
+  cada mensagem processada deixava para trás um pool de conexões inteiro.
+  Medido: **~44 descritores de arquivo por mensagem, sem retorno**, em duas
+  instâncias (322→366 e 323→367). O processo degradava com o tempo de execução
+  e parava de responder depois de horas, com as chamadas estourando em 100 s
+  esperando **conexão do pool**, não resposta do servidor. O SDK da OpenAI usa
+  um `HttpClient` estático compartilhado e por isso não vazava — foi essa
+  assimetria que manteve o defeito invisível, já que a indexação de bases de
+  conhecimento só usa OpenAI e rodava sem sintoma enquanto o chat degradava. O
+  client passa a ser resolvido uma vez por par `(provider, model)` e reutilizado
+  pelo resto da vida do processo, que é o que a documentação do próprio
+  `IChatClient` sempre pediu. Junto, entra o instrumento que faltava: a
+  **duração de cada requisição ao provedor de LLM** passa a ser registrada em
+  log, medindo a requisição em si e não o turno inteiro do agente — o
+  diagnóstico deste defeito custou caro exatamente por não existir essa
+  separação. **Rotação de chave de provedor exige reiniciar o processo**, agora
+  registrado em `docs/configuration.md`.
+
 - **Colisão silenciosa de nome de tool no conjunto entregue ao LLM**: as tools
   MCP e as de delegação eram concatenadas sem que nenhum dos dois lados
   soubesse que dividia espaço de nome com o outro, e o lado MCP não

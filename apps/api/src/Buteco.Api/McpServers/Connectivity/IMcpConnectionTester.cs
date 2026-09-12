@@ -5,9 +5,16 @@ namespace Buteco.Api.McpServers.Connectivity;
 /// <summary>
 /// Executa o handshake MCP real (mensagem <c>initialize</c>) contra um
 /// servidor remoto, e a descoberta de tools (<c>tools/list</c>) do mesmo
-/// servidor. Interface existe para permitir substituição em teste, mesmo
-/// espírito de <c>IChatClientResolver</c> em apps/workers — construído por
-/// chamada, sem cache entre chamadas.
+/// servidor. Interface existe para permitir substituição em teste.
+///
+/// <para>
+/// Esta docstring citava o ciclo de vida de <c>IChatClientResolver</c> em
+/// apps/workers como precedente ("construído por chamada, sem cache"). A citação
+/// foi REMOVIDA, não atualizada: aquele componente passou a cachear por
+/// <c>(provider, model)</c> e a frase virou mentira em silêncio, sem que nada
+/// aqui quebrasse. Afirmação sobre o ciclo de vida de código de OUTRO app decai
+/// sem deixar rastro — nem o compilador nem scripts/check-docs.py alcançam.
+/// </para>
 /// </summary>
 public interface IMcpConnectionTester
 {

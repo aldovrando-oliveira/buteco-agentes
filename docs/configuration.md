@@ -150,6 +150,31 @@ qual a própria API é **alcançada** de fora, do ponto de vista do AgentCard.
 | `Embedding__Model` | condicional | Modelo de embedding. **Não tem default**: foi escolhido por medição, e o modelo que um ambiente serve por padrão pode empatar com busca lexical |
 | `Embedding__Dimensions` | condicional | Dimensão declarada, **conferida contra a que o provedor devolve no momento da gravação**. O gateway pode aceitar o parâmetro `dimensions` e ignorá-lo, e sem a conferência o índice seria gravado com vetores incompatíveis sem erro nenhum |
 
+### Rotação de chave de provedor exige reiniciar o processo
+
+**Trocar `OpenAI__ApiKey`, `Anthropic__ApiKey` ou `Gemini__ApiKey` não tem efeito
+num processo já em execução.** É preciso reiniciar `apps/workers` (e `apps/api`,
+que lê as mesmas seções para decidir quais provedores oferecer).
+
+São duas razões independentes, e a primeira sozinha já basta:
+
+1. As chaves são lidas via `IOptions<T>`, que resolve o valor **uma vez**; e na
+   prática chegam por variável de ambiente, que um processo em execução não vê
+   mudar de qualquer forma.
+2. O client de LLM é **cacheado por `(provider, model)`** e captura a credencial
+   no momento da construção (ver [architecture.md](architecture.md)).
+
+Não há invalidação a acionar nem endpoint de recarga — a rotação é: atualizar a
+variável e reiniciar. Está escrito aqui de propósito: "precisa reiniciar"
+descoberto durante uma rotação de emergência é o pior momento possível para
+descobrir.
+
+> **Gatilho.** Se um dia `IOptionsMonitor<T>` substituir `IOptions<T>` em
+> qualquer uma das três `Options` de provedor — para fazer configuração fluir a
+> quente —, a razão 1 cai e a razão 2 **não**: o cache passa a precisar de
+> invalidação na mudança, **descartando** o client removido. Sem isso a troca de
+> chave ficaria silenciosamente sem efeito, que é pior que exigir restart.
+
 A seção `Embedding` **não tem credencial própria**: a chave e o endpoint vêm da
 seção `OpenAI` acima, reusados de propósito — aquele endpoint já é no formato
 OpenAI, e duplicar o segredo criaria duas fontes que divergem no primeiro
