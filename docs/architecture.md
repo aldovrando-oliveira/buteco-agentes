@@ -79,6 +79,18 @@ RabbitMQ; quem executa é `apps/workers`.
 `AppDbContext` mantidas sincronizadas por disciplina, não por schema separado
 — mas **nunca cria nem migra** esse schema.
 
+O client de LLM de `apps/workers` é **uma instância viva por par
+`(provider, model)`**, resolvida na primeira mensagem que precisa dela e
+reutilizada pelo resto da vida do processo — nunca construída por mensagem. O
+motivo é concreto: os SDKs de Gemini e de Anthropic instanciam um `HttpClient`
+próprio por client, então construir por mensagem vazava um pool de conexões por
+mensagem (o SDK da OpenAI não, porque usa um `HttpClient` estático
+compartilhado — foi essa assimetria que escondeu o defeito, já que a indexação
+de conhecimento só usa OpenAI). A chave é `(provider, model)` e **só é
+suficiente porque a credencial é por processo, não por agente**; credencial por
+agente obrigaria a mudar a chave. **Rotação de chave de provedor exige reiniciar
+o processo** — ver [configuration.md](configuration.md).
+
 ---
 
 ## Isolamento entre apps

@@ -3666,6 +3666,109 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   telas de conhecimento. **Não há causa conhecida e não há ação pedida.** Fica
   registrado só para que, se repetir, se saiba que já aconteceu antes e quando.
 
+### Abertos por `fix-vazamento-httpclient-chat` (2026-09-12)
+
+- **PRIMEIRO GATILHO ANTIGO ACIONADO EXATAMENTE COMO PREVISTO.** Não é item a
+  resolver — é evidência de método, e vale registrar porque é a primeira da
+  jornada. A Decision 7 do `design.md` de `backend-multi-provedor-llm`
+  (2026-08-01) recusou cachear o `IChatClient` e escreveu o gatilho junto:
+  *"nenhuma instância é reaproveitada entre execuções (Non-Goal explícito;
+  simples de trocar por cache depois, **se perfilamento mostrar necessidade**)"*.
+  O perfilamento veio — ~44 descritores por mensagem, sem retorno — e o gatilho
+  foi reconhecido e disparado sem discussão. A change não contrariou a decisão:
+  executou a condição que ela mesma escreveu.
+
+  **O que torna esse gatilho bom, e é isso que se leva adiante:** ele nomeia a
+  **condição** (perfilamento mostrar necessidade), **o que fazer** (trocar por
+  cache) e **onde** (o resolver). Três coisas verificáveis por quem chegasse
+  depois sem o contexto de quem escreveu.
+
+  **Contraste deliberado — o gatilho do carve de ordenação**, que apontava para
+  uma tela que ninguém planejava construir. Gatilho que depende de trabalho
+  futuro **não agendado** não é gatilho: é intenção, e nunca dispara porque a
+  condição nunca é avaliada por ninguém. A régua que sai daqui: **gatilho aponta
+  para uma condição observável, nunca para um trabalho hipotético.**
+
+- **Decisão registrada em docstring e em nenhum teste sobrevive até virar
+  defeito.** A outra metade do mesmo achado, e esta é sobre custo. A propriedade
+  "construído por chamada, sem cache" estava afirmada em **quatro** lugares do
+  código (três em `apps/workers`, um em `apps/api` citando o outro app) e em
+  **zero** testes: varredura de `Assert.Same`/`NotSame`/`ReferenceEquals` em
+  `apps/workers/tests/` devolve uma única ocorrência, sobre um `Task` sem
+  relação.
+
+  **E o arranjo de teste padrão da casa CONTRADIZIA a propriedade.** Todo
+  `Mock<IChatClientResolver>` da base faz `.Setup(...).Returns(chatClient)` — uma
+  instância fixa devolvida em toda chamada —, nos oito sítios de
+  `apps/workers/tests/` e em `tests/InboxOrchestratorRoundTrip.Tests`. A suíte
+  inteira vinha exercitando a **semântica cacheada** enquanto a produção
+  construía por mensagem, e ninguém leu isso como divergência. É a explicação de
+  por que um pool de conexões vazado por mensagem atravessou desde agosto sem
+  ser notado.
+
+  **Gatilho:** ao registrar um Non-Goal que é escolha de **ciclo de vida ou de
+  recurso** (não ausência de funcionalidade), perguntar qual teste o afirma. Se
+  nenhum, ele é intenção em prosa, não propriedade do sistema — e o mock que o
+  contradiz é o sinal mais barato de que ele já não vale.
+
+- **CONTRADIÇÃO: quantas instâncias de `apps/workers` são suportadas.** Achado
+  durante esta change, **não corrigido aqui** — é de outra natureza e maior que
+  o vazamento. Três afirmações que não fecham:
+
+  1. `docker-compose.prod.yml:11-16` lista como Non-Goal explícito "múltiplas
+     réplicas de apps/workers/apps/inbox (lock hoje é `pg_advisory_lock`/`xmin`,
+     não distribuído — **nunca usar `replicas > 1`**)".
+  2. `AgentDelegationConcurrencyTests` usa **duas** instâncias, e a docstring diz
+     por quê: com `prefetchCount: 1`, uma tool de delegação que aguarda a task do
+     Target é **autodeadlock estrutural** numa instância só. Conferido que a
+     espera é real — `AgentDelegationToolSetResolver.WaitForTerminalStateAsync`
+     faz polling até estado terminal, prendendo o worker.
+  3. Logo, com `replicas: 1` como o compose manda, **delegação trava**. Não é
+     contradição só de documentação: é funcional.
+
+  **A justificativa escrita no compose está factualmente errada.**
+  `pg_advisory_lock` e `xmin` são **distribuídos por construção** — o lock vive
+  no servidor Postgres compartilhado e coordena todos os clientes, que é
+  exatamente o que os dois apps precisam. O motivo real para limitar réplicas,
+  se existir, é outro e não está escrito.
+
+  **E há um ponto novo, sobre LARGURA e não profundidade.** O motivo registrado
+  do `DelegationDepthLimit = 5` (`AgentExecutionService.cs:63-69`) fala só de
+  **profundidade**: "cada nível a mais na cadeia ocupa mais uma instância de
+  apps/workers presa em espera". Mas **N conversas concorrentes delegando ao
+  mesmo tempo prendem N workers, independentemente da profundidade** — o teto de
+  profundidade não limita isso, e nada no repositório escreve essa propriedade de
+  escala. **Gatilho:** qualquer change que toque delegação, o compose de
+  produção, ou a primeira vez que se pensar em subir réplica. **Exploração
+  própria**, não carona numa correção.
+
+- **`Anthropic__ApiKey` e `Gemini__ApiKey` não chegam a processo nenhum no
+  `docker-compose.prod.yml`.** Achado incidental da mesma conferência.
+  `docs/configuration.md:213-214` afirma que `ANTHROPIC_API_KEY`/`GEMINI_API_KEY`
+  mapeiam para `Anthropic__ApiKey`/`Gemini__ApiKey` nos processos, e
+  `.env.prod.example:47-48` oferece as duas (comentadas) — mas o compose só passa
+  `OpenAI__*` (linhas 88-89 para `api`, 140-141 para `workers`). Quem
+  descomentar as variáveis em `.env.prod` ganha um worker que continua sem saber
+  usar Anthropic nem Gemini, e a documentação diz o contrário.
+
+  Sem consequência hoje — **não há produção** —, e essa mesma ausência é o que
+  confirma o enquadramento: os dois provedores que vazavam sequer são
+  configuráveis no compose de servidor, então o vazamento só era alcançável no
+  desenvolvimento, fora do compose. **Gatilho:** o primeiro deploy real, ou a
+  primeira vez que alguém tentar usar Claude ou Gemini em servidor.
+
+- **Verificação manual do vazamento não foi executada.** A tarefa 8.2 do
+  `tasks.md` — contar descritores (`lsof -p <pid> | wc -l`) antes e depois de
+  processar uma sequência de mensagens — **exige credencial real de Gemini ou
+  Anthropic e um worker rodando contra o provedor**, e não foi feita. A
+  correção está provada por teste (guarda de identidade reprovando contra o
+  defeito real, no componente certo) e por decompilação dos três SDKs, mas o
+  fechamento do ciclo contra a medida que originou a change está **pendente**.
+  **Importa fazer com Gemini ou Anthropic**: com OpenAI a medição não mostra
+  nada nem antes nem depois, porque aquele SDK usa `HttpClient` estático — rodar
+  só com OpenAI produziria um "corrigido" vazio. **Gatilho:** a validação manual
+  da etapa 4 da linha de conhecimento, que roda no mesmo caminho de execução.
+
 
 ## Próximo passo
 

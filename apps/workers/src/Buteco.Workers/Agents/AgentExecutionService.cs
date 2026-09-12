@@ -168,6 +168,19 @@ public sealed class AgentExecutionService(
             // aqui; o operador nulo-tolerante (!) documenta essa garantia, não a
             // ignora — se ela falhar, o resolver/aiAgent lançará e cairá no catch
             // abaixo, terminando a task como failed (Decision 5).
+            // COMPARTILHADO E NÃO DESCARTÁVEL: o resolver devolve a MESMA
+            // instância para o mesmo (provider, model) durante toda a vida do
+            // processo (change fix-vazamento-httpclient-chat). Não acrescentar
+            // `using`/`await using` aqui nem no aiAgent montado abaixo — o
+            // contraste com o `await using` do toolSet logo adiante é
+            // deliberado, e é justamente a assimetria que engana:
+            // DelegatingChatClient.Dispose() descarta o InnerClient em cascata,
+            // e ChatClientAgent empilha middleware delegante sobre este client,
+            // então um `using` aqui quebraria TODA mensagem seguinte daquele par
+            // com ObjectDisposedException. Hoje nada descarta (ChatClientAgent
+            // não é IDisposable), e é essa garantia que
+            // TaskJobConsumerTests.Consumer_ProcessesTwoTasksInSequence_SharedChatClientIsNeverDisposed
+            // prende.
             var chatClient = chatClientResolver.Resolve(agent.Provider!, agent.Model!);
 
             // Precisa ficar vivo durante todo o RunAsync abaixo, não só

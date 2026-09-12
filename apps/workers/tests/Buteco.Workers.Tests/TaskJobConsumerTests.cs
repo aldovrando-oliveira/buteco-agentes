@@ -57,6 +57,71 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         }
     }
 
+    /// <summary>
+    /// GUARDA DE R1 (design.md da change fix-vazamento-httpclient-chat): com o
+    /// <see cref="IChatClient"/> cacheado por <c>(provider, model)</c> e
+    /// compartilhado entre execuções, um descarte passa a quebrar TODAS as
+    /// mensagens seguintes daquele par — e o sintoma seria "funciona só a
+    /// primeira vez depois do boot", que é caro de ler.
+    ///
+    /// <para>
+    /// NÃO reprova contra o defeito que esta change corrige: passa antes e
+    /// depois dela, porque hoje nada descarta o client (<c>ChatClientAgent</c>
+    /// não é <c>IDisposable</c> e <c>AgentExecutionService</c> não usa
+    /// <c>using</c> no agente). Existe para reprovar no dia em que alguém
+    /// acrescentar esse <c>using</c> — <c>DelegatingChatClient.Dispose()</c>
+    /// descarta o <c>InnerClient</c> em cascata.
+    /// </para>
+    ///
+    /// <para>
+    /// Usa <see cref="DisposalTrackingChatClient"/> e não um <c>Mock</c>: o
+    /// <c>Dispose()</c> de um mock é inócuo, então o mock passaria verde com o
+    /// descarte em cascata presente.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Consumer_ProcessesTwoTasksInSequence_SharedChatClientIsNeverDisposed()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var firstTaskId = Guid.NewGuid().ToString("N");
+        var secondTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAndTaskAsync(agentId, "Atendente", "Responda com simpatia.", firstTaskId, contextId, "primeira");
+
+        var chatClient = new DisposalTrackingChatClient("ok");
+
+        using var host = BuildHost(chatClient);
+        await host.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(firstTaskId, agentId, contextId);
+            var first = await PollUntilTerminalAsync(firstTaskId);
+            Assert.Equal(nameof(TaskState.Completed), first.State);
+
+            await SeedTaskAsync(secondTaskId, agentId, contextId, "segunda");
+            await PublishJobAsync(secondTaskId, agentId, contextId);
+            var second = await PollUntilTerminalAsync(secondTaskId);
+
+            // A asserção que importa: a SEGUNDA chega a completed. Se o client
+            // compartilhado tivesse sido descartado pela primeira execução, ela
+            // terminaria failed por ObjectDisposedException.
+            Assert.Equal(nameof(TaskState.Completed), second.State);
+
+            // Asserção determinística pareada (convenção 15, quinta forma): a
+            // primeira sozinha depende de a exceção virar `failed`, que é o
+            // caminho de degradação graciosa e poderia mascarar outra causa.
+            // Esta afirma o artefato que a correção produz — o client nunca
+            // recebeu Dispose.
+            Assert.Equal(0, chatClient.DisposeCount);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+    }
+
     [Fact]
     public async Task Consumer_WhenChatClientFails_TaskEndsFailed()
     {
