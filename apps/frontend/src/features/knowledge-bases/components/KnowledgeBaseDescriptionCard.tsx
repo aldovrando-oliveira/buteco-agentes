@@ -15,9 +15,7 @@ interface KnowledgeBaseDescriptionCardProps {
 // e na edição, e o campo do response não é anulável. O callout âmbar que o
 // protótipo tem para esse caso não foi implementado, porque seria código para um
 // estado inalcançável (D7).
-export function KnowledgeBaseDescriptionCard({
-  description,
-}: KnowledgeBaseDescriptionCardProps) {
+export function KnowledgeBaseDescriptionCard({ description }: KnowledgeBaseDescriptionCardProps) {
   return (
     <SectionedCard title="Descrição — texto lido pelo modelo">
       <SectionedCard.Body>

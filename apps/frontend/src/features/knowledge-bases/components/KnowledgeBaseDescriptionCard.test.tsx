@@ -33,7 +33,9 @@ describe('KnowledgeBaseDescriptionCard', () => {
     renderCard();
 
     expect(screen.getByText(/não é mostrado ao cliente/i)).toBeInTheDocument();
-    expect(screen.getByText(/o modelo decide se a pergunta pertence a esta base/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/o modelo decide se a pergunta pertence a esta base/i),
+    ).toBeInTheDocument();
   });
 
   it('preserva as quebras de linha do texto cadastrado', () => {

@@ -102,11 +102,7 @@ export function KnowledgeBaseForm({
 
             {/* Contador sempre visível, como no protótipo — o aviso é o sufixo e
                 a cor, não a presença do contador. */}
-            <Text
-              size="xs"
-              c={isShort ? 'yellow' : 'dimmed'}
-              data-testid="description-char-count"
-            >
+            <Text size="xs" c={isShort ? 'yellow' : 'dimmed'} data-testid="description-char-count">
               {description.length} {description.length === 1 ? 'caractere' : 'caracteres'}
               {isShort && ' · curto demais para o modelo decidir com segurança'}
             </Text>
@@ -136,7 +132,12 @@ export function KnowledgeBaseForm({
               >
                 Como o agente vê esta base
               </Text>
-              <Text size="sm" ff="monospace" c="var(--mantine-primary-color-filled)" data-testid="preview-name">
+              <Text
+                size="sm"
+                ff="monospace"
+                c="var(--mantine-primary-color-filled)"
+                data-testid="preview-name"
+              >
                 {form.values.name.trim() || 'nome da base'}
               </Text>
               <Text

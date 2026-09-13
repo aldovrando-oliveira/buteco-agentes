@@ -70,7 +70,9 @@ describe('KnowledgeBaseForm', () => {
     await user.type(screen.getByLabelText(/Nome/), 'Políticas de Cobrança');
     await user.click(screen.getByRole('button', { name: 'Criar base' }));
 
-    expect(await screen.findByText(/A descrição da base de conhecimento é obrigatória/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/A descrição da base de conhecimento é obrigatória/),
+    ).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -82,7 +84,9 @@ describe('KnowledgeBaseForm', () => {
     await user.type(screen.getByLabelText(/Descrição/), '    ');
     await user.click(screen.getByRole('button', { name: 'Criar base' }));
 
-    expect(await screen.findByText(/A descrição da base de conhecimento é obrigatória/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/A descrição da base de conhecimento é obrigatória/),
+    ).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -172,7 +176,9 @@ describe('KnowledgeBaseForm', () => {
   it('orienta o campo de nome', () => {
     renderForm();
 
-    expect(screen.getByText(/identifica a base nas listas e no vínculo com o agente/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/identifica a base nas listas e no vínculo com o agente/i),
+    ).toBeInTheDocument();
   });
 
   it('exibe erro por campo devolvido pela API, não erro genérico', () => {
@@ -224,8 +230,6 @@ describe('KnowledgeBaseForm', () => {
     });
 
     expect(screen.getByLabelText(/Nome/)).toHaveValue('Cardápio');
-    expect(
-      screen.getByText('O nome da base de conhecimento é obrigatório.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('O nome da base de conhecimento é obrigatório.')).toBeInTheDocument();
   });
 });
