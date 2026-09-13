@@ -131,8 +131,10 @@ o versionamento pretende seguir
   rodada nova: limpa o motivo da falha e os contadores de tentativa, e preserva
   o conteúdo indexado anterior, que continua respondendo.
 - **Consulta ao índice em tempo de execução**: cada base de conhecimento
-  vinculada a um agente **e ativa** vira uma tool que o agente pode chamar, com
-  a descrição cadastrada da base como descrição da tool — é por ela que o modelo
+  vinculada a um agente **e ativa** vira uma tool que o agente pode chamar. A
+  descrição da tool é montada: um prefixo que nomeia a base, a descrição
+  cadastrada, e um bloco fixo — igual para toda base — que ensina a ler o
+  resultado. A parte cadastrada é o critério de escolha: é por ela que o modelo
   decide se aquela base é relevante. A busca é por proximidade vetorial dentro
   daquela base, devolve os cinco trechos mais próximos e traz **a distância de
   cada um**, sem nenhum limiar: a tool não filtra por relevância e não afirma
@@ -217,6 +219,24 @@ o versionamento pretende seguir
   informaria menos fragmentos do que o índice tem.
 - A aba **não repete** a lista de documentos em falha: informa quantos são e leva à
   aba de documentos, onde o motivo completo e a ação de reindexar já vivem.
+- A orientação da descrição no formulário de base passa a pedir **delimitação** —
+  dizer também do que a base **não** trata — e a informar que, quando o agente tem
+  mais de uma base, ele escolhe comparando as descrições, e a mais genérica atrai
+  as perguntas que eram das outras. Não há aviso automático de generalidade:
+  nenhuma regra do sistema distingue descrição específica de genérica, e a tela
+  não afirma critério que o sistema não tem. O aviso de descrição curta continua,
+  agora dito como **piso** de campo mal preenchido, e não como aferição de
+  qualidade — comprimento não é a dimensão que decide roteamento entre bases.
+- O preview do formulário e a seção de descrição do detalhe param de afirmar que
+  a descrição cadastrada **é** a descrição da ferramenta: ela é a parte que o
+  operador escreve dentro de um texto que o sistema monta. As duas telas passam a
+  dizer que o sistema envolve esse texto em instruções fixas, **sem reproduzi-las**
+  — elas vivem em `apps/workers` e são iguais para toda base.
+- O formulário continua **não exibindo nome de ferramenta**, e agora por três
+  razões verificadas: nenhuma spec fixa o formato; o painel não tem fonte para
+  calculá-lo sem reimplementar regra que vive em `apps/workers`; e o nome
+  calculável seria o **pretendido**, não o efetivo, porque a deduplicação global
+  renomeia a tool de conhecimento na execução.
 - Vínculo N:N entre agente e base de conhecimento em `apps/api`, definido por
   `PUT /agents/{id}/knowledge-bases` com substituição integral do conjunto.
   Base inativa continua vinculável, e agente inativo continua configurável.

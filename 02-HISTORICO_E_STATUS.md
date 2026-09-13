@@ -38,6 +38,15 @@ censo de colisão contra dev sem ressalva — dev é onde estão os agentes reai
 que só faz sentido contra dados de produção está agrupado na subseção
 "Primeiro deploy em produção (checklist)".
 
+A linha de trabalho de **bases de conhecimento** está **concluída na fila de UI**,
+com a 5a-4 (`frontend-knowledge-base-form-orientacao`) aplicada em 13/09/2026 e
+**ainda não sincronizada nem arquivada**. Ela fechou os dois itens abertos que
+apontavam para ela — a orientação de generalidade da `Description` e o nome
+efetivo da tool — e achou um terceiro defeito que nenhum dos dois previa: três
+superfícies afirmavam que a descrição cadastrada **é** a descrição da tool, e
+desde a etapa 4 ela é **parte** dela. Ver "Achados da 5a-4" abaixo, e a forma nova
+da convenção 13 no arquivo 01. `apps/frontend` em **861/861**.
+
 `inbox-session-indice-unico` fechou o último item da dívida de baseline
 com causa de produção conhecida (`ContactSessionResolver` sem índice
 único protegendo `Session` contra concorrência) — sequenciada antes da
@@ -1658,10 +1667,41 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **treze**, achadas em seis etapas diferentes. A oitava vem primeiro porque
-é de **tipo novo** e muda o que a lista cobre; depois as duas da 5c, depois as
-três da 5a-3, depois as duas da 5a-2, que **corrigiram duas das cinco
+São **catorze**, achadas em sete etapas diferentes. A décima quarta vem primeiro
+porque é de **tipo novo** e muda o critério de detecção da lista inteira; depois
+a oitava, que também era de tipo novo quando entrou; depois as duas da 5c, depois
+as três da 5a-3, depois as duas da 5a-2, que **corrigiram duas das cinco
 anteriores**, uma na regra e outra na evidência.
+
+**As treze primeiras são sobre o protótipo estar errado sobre o sistema. A
+décima quarta é sobre o protótipo estar CERTO e o sistema ter mudado depois** —
+e ela vale menos pelo defeito que pelo que diz sobre a lista: até a 5a-4, todas as
+correções vinham de conferir o protótipo contra o código **de hoje**. Essa
+conferência não pega a tela que foi implementada fielmente e envelheceu. Ver a
+forma nova da convenção 13 em `01-ARQUITETURA_E_CONVENCOES.md`.
+
+- **O preview do formulário se intitulava como tudo o que o agente recebe.** O
+  protótipo mostra `Como o agente vê esta base` sobre duas linhas — nome e
+  descrição — e a 5a-1 implementou fiel, corretamente: em 09/09/2026 não havia
+  montagem de descrição de tool em lugar nenhum. A **etapa 4** criou
+  `KnowledgeToolDescription.Build`
+  (`apps/workers/.../Knowledge/Execution/KnowledgeToolDescription.cs:52`), que
+  entrega ao modelo um prefixo nomeando a base, a descrição cadastrada, e **441
+  caracteres fixos** de como ler o resultado, iguais para toda base. O rótulo
+  passou a afirmar o todo exibindo uma parte.
+
+  **A mesma frase estava em três superfícies, e a terceira mostra o alcance:**
+  `KnowledgeBaseDescriptionCard` dizia que a descrição *"é a descrição da
+  ferramenta que o agente vê"*, e o `CHANGELOG` da própria etapa 4 registrou *"com
+  a descrição cadastrada da base como descrição da tool"* — ou seja **nasceu
+  falsa**, escrita pela change que a tornou falsa. Corrigido nas três pela 5a-4
+  (D5 e D6), com a afirmação virando **estrutural** ("o sistema envolve este
+  texto") e nunca a reprodução do texto fixo, que seria segunda fonte de verdade.
+
+  **E um terceiro membro menor, achado só porque a correção já estava na tela:**
+  `kfPreviewDesc` dizia *"Sem descrição: o modelo recebe só o nome"*, que ao lado
+  da nota nova virava contradição na mesma tela. Corrigido para *"só o nome
+  **desta base**"* — o bloco fixo é igual para todas e não distingue nenhuma.
 
 **As sete primeiras são sobre o que a tela AFIRMA. A oitava é sobre o que a tela
 CALCULA ERRADO** — e o modo de detecção também é outro: as sete saíram de ler a
@@ -3143,6 +3183,80 @@ Quatro registros que valem além da change que os produziu.
   Se a frase descreve uma condição, é gatilho, por mais que comece com a palavra
   "posição".**
 
+### Achados da 5a-4 (`frontend-knowledge-base-form-orientacao`, 2026-09-13)
+
+A última change da linha de bases de conhecimento. Só `apps/frontend`, **0
+arquivos criados e 4 modificados**, e mesmo assim sete registros que valem além
+dela.
+
+- **Afirmação de tela que envelhece é uma forma própria da convenção 13**, e
+  nenhuma revisão da tela a pega, porque a tela não mudou. Registrada em
+  `01-ARQUITETURA_E_CONVENCOES.md`, convenção 13, com a régua: afirmação sobre o
+  que outro app faz carrega o arquivo, a linha e o **gatilho** no comentário, e é
+  **estrutural**, nunca a reprodução do texto do outro app.
+
+- **As treze correções de protótipo foram conferidas uma a uma, e NENHUMA tocava
+  esta tela.** Não porque o protótipo acertasse o formulário, mas porque os
+  achados dele nunca tinham sido procurados — a 5a-1 o implementou fiel e as seis
+  etapas seguintes olharam outras telas. Resultado negativo que vale registrar: a
+  lista cobre bem o que foi visitado, e diz **nada** sobre o que não foi.
+
+- **A quarta causa da convenção 18 usada para PROJETAR, e o degrau seguinte.**
+  Projetadas 6 asserções negativas, entregues **8**, com o total de testes
+  acertando exato (861 contra ~861, sobre baseline de 850). Nenhuma negativa
+  imprevista apareceu — **as oito estavam nos cenários do delta de spec**. Régua
+  nova em `01`, convenção 18: projetar negativas lendo os cenários da delta.
+
+- **Guardas de duas telas que carregam a MESMA correção precisam reprovar
+  separados, e isso se mede nos dois sentidos.** Oito defeitos reintroduzidos um a
+  um: os sete do formulário reprovaram **1 de 35** cada, sempre no formulário; o
+  do card reprovou **2 de 35**, as duas no card — a negativa e a positiva da mesma
+  frase. Nenhum cruzou. Saída completa em
+  `~/.cache/buteco-agents/kb-5a4-baseline-f925ebc/guardas-convencao-15.txt`.
+
+  **E o veículo do defeito também precisa ser limpo**, o que custou uma volta: a
+  primeira versão do patch de N5 alterava o texto da nota do preview, e derrubava
+  **dois** testes — um deles por artefato do patch, não por alcance do guarda.
+  **Régua: defeito injetado que altera texto vizinho mede o guarda errado.**
+
+  **E a metade que costuma faltar:** contra a cópia velha, os três testes de
+  `/curto demais/` e o de *"não é mostrado ao cliente"* **continuaram verdes**. As
+  850 asserções da baseline não enxergavam nenhuma das correções desta change —
+  que é o argumento da convenção 15 medido, e não argumentado.
+
+- **A projeção de modificados prevê blast radius; não prevê consequência de
+  cópia.** Previstas 4 asserções existentes a editar: **nenhuma** foi necessária,
+  porque as quatro liam a metade estável de cada frase. A única edição que apareceu
+  veio da **conferência manual**.
+
+- **A conferência manual rendeu dois achados, um por modo, e nenhum sairia do
+  outro.** *Medindo*: a nota nova do preview saiu com **1058px** de linha contra os
+  **620px** de toda a prosa da tela — cabia, não quebrava feio, e olhar não pegaria.
+  *Lendo o protótipo contra a spec viva*: a contradição do preview vazio. É o par
+  que a 5c registrou, confirmado numa terceira change.
+
+  **E o arranjo da conferência, para quem repetir:** sem ambiente de produção e
+  sem stack no ar, o painel subiu no Vite real com um **stub de `apps/api` que loga
+  toda chamada e devolve 200**, e o acesso pelo `ProtectedRoute` com token posto em
+  `sessionStorage`. Zero rotas "não prevista" no log. **Não cobre** dado real,
+  migração nem login de verdade.
+
+- **Dois erros de instrumentação desta change, os dois da família "o instrumento
+  não falha visivelmente, produz número errado".** Valem mais que os incidentes:
+
+  1. **Saída de suíte truncada com `tail -8`.** A primeira execução da baseline
+     reprovou 3 testes, e a identidade deles **se perdeu** — ficou só o número. As
+     duas execuções seguintes deram 850/850, o que resolve o caso mas não o
+     método. **Régua: saída de suíte se guarda inteira; o `tail` é para ler, nunca
+     para gravar.**
+  2. **`prettier` rodado sobre cópias em `/tmp` resolve config pelo caminho do
+     ARQUIVO, não pelo `cwd`** — então formatava com o default (`printWidth` 80) e
+     não com o do projeto. O "reflow" medido saiu **332 linhas** em vez de 37, um
+     fator de 9, sem erro visível. Refeito com as cópias dentro de
+     `apps/frontend/`, bateu com a medição independente. **Régua: ferramenta que
+     resolve configuração por caminho de arquivo precisa da cópia dentro da
+     árvore.**
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -3323,7 +3437,7 @@ Cada um tem gatilho de quando revisitar:
   | 1c | ~~**Etapa 4 — resolvedor de tool de conhecimento**~~ (`apps/workers`) | **aplicada em 12/09/2026.** `apps/workers` em 252/252. A linha deixou de terminar no vazio: o que o operador carrega chega ao agente. |
   | 1d | ~~**5a-3 — colunas e filtro do catálogo**~~ (`apps/frontend`) | **aplicada em 13/09/2026.** `apps/frontend` em 765/765. A rota `indexing-summary`, ociosa desde 11/09, ganhou consumidor. |
   | 2 | **Busca unificada entre bases vinculadas** (`apps/workers`) | desbloqueada pela etapa 4, que construiu resolvedor, consulta e guardas que ela reusa. Carve-out **com posição**, de `0d`. Falta o dado: caso real com bases de tamanhos desiguais. |
-  | 3 | **5a-4 — formulário de base: generalidade da descrição e nome efetivo da tool** (`apps/frontend`) | **pronta.** As duas dependências existem: `0d` mediu a canibalização por descrição genérica, e a etapa 4 definiu `search_<slug>` mais o `ToolNameDeduplicator`. Toca `KnowledgeBaseForm`, e só ele. |
+  | 3 | ~~**5a-4 — formulário de base: generalidade da descrição e nome efetivo da tool**~~ (`apps/frontend`) | **aplicada em 13/09/2026**, sobre `f925ebc`. `apps/frontend` em **861/861** (baseline 850/850; **0 arquivos criados**, 4 modificados, +11 testes, zero reprovações). Fechou os dois itens abertos e achou um terceiro defeito que nenhum deles previa — ver "Achados da 5a-4" abaixo. **Tocou `KnowledgeBaseForm` E `KnowledgeBaseDescriptionCard`**, não só o formulário: a mesma afirmação falsa vivia nas duas telas. |
   | 4 | ~~**backend do diagnóstico do índice**~~ (`apps/api`) | **aplicada em 13/09/2026.** `GET /knowledge-index/diagnostics`. `apps/api` em 317/318 — +9 testes, e a única falha é a pré-existente de `AgentDeactivationTests` (ver o item próprio abaixo). |
   | 5 | ~~**5c — UI do diagnóstico do índice**~~ (`apps/frontend`) | **aplicada em 13/09/2026.** `apps/frontend` em **833/833** (baseline 765/765; +4 arquivos, +68 testes, zero reprovações). Consumiu a rota e as três correções herdadas, e **acrescentou duas** — C12 e C13, abaixo. |
 
@@ -3333,19 +3447,31 @@ Cada um tem gatilho de quando revisitar:
 
   - a **linha 2** (busca unificada entre bases vinculadas), esperando o caso real
     com bases de tamanhos desiguais;
-  - a **linha 3** (5a-4, formulário de base), pronta e sem nada que a puxe;
+  - ~~a **linha 3** (5a-4, formulário de base)~~ — **aplicada em 13/09/2026**;
   - o item aberto do **terceiro comparador de ordem em `apps/frontend`**
     (`knowledgeBaseRows.ts:26-27`), com gatilho imediato. A 5c **não o tocou de
     propósito**: é outra feature, e misturá-lo aqui juntaria dois escopos. Ela
     reusou o argumento dele — a aba de diagnóstico **não reordena no cliente**,
     com guarda que reprova contra a reordenação —, mas não o corrigiu.
-  - **8 arquivos reprovando `prettier --check` em `apps/frontend`**, achado ao
-    fechar a 5c e **conferido em `git worktree` limpo no `853038c`**: são
-    pré-existentes, e nenhum deles foi tocado por esta change. Seis são
-    `KnowledgeBaseForm`, `KnowledgeBaseEditPage` e `KnowledgeBaseDescriptionCard`
-    com os testes deles — **escopo exato da 5a-4**, que já está na fila —, e os
-    outros dois são `LoginPage` e `mcp-servers/utils/agentUsage.ts`. Quem tocar
+  - **3 arquivos reprovando `prettier --check` em `apps/frontend`**: restam
+    `KnowledgeBaseEditPage` ×2 e `mcp-servers/utils/agentUsage.ts`. Quem tocar
     esses arquivos formata junto; ninguém precisa abrir change para isso.
+
+    **DUAS CORREÇÕES de 13/09/2026, e as causas valem mais que os números.** Este
+    item dizia **8 arquivos**, dos quais *"seis são escopo exato da 5a-4"*.
+
+    Primeiro: eram **7**, não 8, quando a 5a-4 mediu — `LoginPage.tsx` saiu da
+    lista porque a `frontend-marca-visual` o tocou e formatou junto, que é
+    exatamente a regra deste item funcionando. Contagem de item aberto envelhece
+    sozinha, sem ninguém errar.
+
+    Segundo: eram **quatro** os da 5a-4, não seis. `KnowledgeBaseEditPage` **não é
+    aberta** por ela — só monta o formulário e passa `initialValues`, `errors`,
+    `submitting` e `submitLabel`, e nada da change muda o que ela passa. A
+    atribuição contou por **vizinhança de nome de arquivo**, não por leitura do que
+    a change abre. É a mesma família da convenção 6 que este arquivo já registra.
+    **Régua: o que decide formatar é a change abrir o arquivo, nunca o arquivo
+    estar na mesma lista de reprovação.**
 
   **A linha 3 nasceu ao aplicar a 5a-3, corrigindo uma atribuição errada.** A
   tabela dizia que a 5a-3 "ganhou carga: é onde entra a orientação de
@@ -3879,8 +4005,18 @@ Cada um tem gatilho de quando revisitar:
   há o que comparar em uso real. **Pré-requisito para decidir:** um caso real com
   bases de tamanhos desiguais, que é o dado que falta.
 
-- **`Description` de base genérica canibaliza as vizinhas — e o guarda que existe
-  na tela mede a dimensão errada.** Achado de `0d`, e é a consequência acionável
+- ~~**`Description` de base genérica canibaliza as vizinhas — e o guarda que
+  existe na tela mede a dimensão errada.**~~ — **RESOLVIDO em 13/09/2026 pela
+  5a-4** (`frontend-knowledge-base-form-orientacao`). O que foi decidido, com o
+  motivo, está no `design.md` da change, D1 a D3. Em resumo: a orientação passou a
+  pedir **delimitação** ("do que esta base não trata") e a dizer que o agente
+  escolhe comparando as descrições entre si; **nenhum aviso automático de
+  generalidade nasceu**, pelo motivo que este item já registrava; e o aviso de
+  comprimento ficou, com a cópia reescrita para parar de prometer o que não compra.
+  O texto do item fica abaixo porque o diagnóstico continua valendo — é ele que
+  impede alguém de "melhorar" o aviso subindo o limiar.
+
+  Achado de `0d`, e é a consequência acionável
   da reprovação do bar: não é "o roteamento deu 61%", é **o que fazer a
   respeito**.
 
@@ -3922,7 +4058,18 @@ Cada um tem gatilho de quando revisitar:
   genérica faz ele chamar **no lugar de outra**, que é o erro irrecuperável (`0d`
   mediu 0 de 31 de recuperação quando o roteamento erra).
 
-  **O sintoma a procurar**, para quem for diagnosticar em uso real: **uma base
+  **O sintoma a procurar** — e a 5a-4 decidiu que ele fica **aqui, não na tela**
+  (D2), conferido e não suposto: `apps/api/.../KnowledgeBases/` não tem contador
+  de consulta nenhum, e `knowledge-tool-execution` prevê **log**, não contagem
+  persistida. A outra metade da comparação ("quantas perguntas eram dela") é
+  rótulo humano sobre corpus de avaliação, que `0d` produziu à mão. Sem nenhuma
+  das duas metades, exibir o sintoma exigiria backend novo — e backend de
+  improviso dentro de change de tela é o corolário da convenção 1. **Gatilho para
+  isso mudar:** se nascer contagem de invocação por tool, este item e o de "a
+  renomeação por colisão é invisível na UI" passam a ter dado, e os dois encostam
+  na aba de tools do agente.
+
+  Para quem for diagnosticar em uso real: **uma base
   sendo chamada muito acima da sua fatia de intenções.** É assim que o
   base-atrator aparece, e é a mesma assinatura do fragmento-atrator de `0c` (um
   fragmento no topo de 38,6% das consultas) uma escala acima. A comparação é
@@ -3952,8 +4099,31 @@ Cada um tem gatilho de quando revisitar:
   posição, mesmo quando a frase começa com "gatilho com posição". Posição é uma
   linha na fila.
 
-- **A tela pode passar a exibir o nome efetivo da tool de conhecimento, e o
-  gatilho venceu agora.** `KnowledgeBaseForm` carrega um comentário dizendo que o
+- ~~**A tela pode passar a exibir o nome efetivo da tool de conhecimento, e o
+  gatilho venceu agora.**~~ — **RESOLVIDO em 13/09/2026 pela 5a-4, e a decisão foi
+  NÃO EXIBIR**, que este item já admitia como resultado legítimo. Três razões
+  independentes, cada uma bastando, no `design.md` da change (D4).
+
+  **E uma correção de convenção 6 sobre este próprio item, que é o registro que
+  ele acrescenta.** Ele afirma abaixo que *"a premissa do comentário deixou de
+  valer"*. **Só metade dela deixou.** O comentário dizia duas coisas: que o nome
+  *"é decisão da etapa 4"* — resolvida — e que *"não existe em spec nenhuma hoje"*
+  — **que continua verdadeira**, conferida na árvore: `grep search_` em
+  `openspec/specs/knowledge-tool-execution/spec.md` não devolve nada, porque
+  aquela spec exige nomes **distintos** e ordem determinística *"independente do
+  nome da base"* e de propósito não fixa o formato, que é `private const` em
+  `KnowledgeToolSetResolver.cs:20`.
+
+  A metade que sobreviveu é justamente a que decidiria a questão sozinha: exibir
+  um nome cujo formato nenhuma spec fixa faria a UI virar a definição de fato. É a
+  convenção 6 na forma que ela mesma nomeia — a frase em prosa de um item aberto
+  que descreve o que o código faz, e que ninguém abre o arquivo para checar. O
+  item estava certo no lugar (a 5a-4) e errado no detalhe.
+
+  O texto original fica abaixo, porque a ressalva dele é a razão que **não
+  caduca**.
+
+  `KnowledgeBaseForm` carrega um comentário dizendo que o
   protótipo mostrava o identificador `consultar_base` e que ele **não** foi
   implementado, porque *"nome de tool de base de conhecimento é decisão da etapa 4
   (resolvedor de tool) e passa pelo `ToolNameDeduplicator` — não existe em spec
@@ -5122,33 +5292,34 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
 
 ## Próximo passo
 
-**Concluído nesta sessão**: a exploração da **etapa 4** (resolvedor de tool de
-conhecimento) e a rodada de medição **`0d`** (roteamento entre bases), mais três
-correções de registro — o gatilho do índice ANN contra o volume de referência de
-disco, o nome do modelo de embedding, e o gatilho de vazamento do lado do
-embedding escrito onde é lido. Ver as seções próprias acima.
+**Concluído nesta sessão**: a **5a-4**
+(`frontend-knowledge-base-form-orientacao`), última change da linha de bases de
+conhecimento. Aplicada e conferida, **não sincronizada nem arquivada** — a spec
+delta espera revisão antes de virar viva. `apps/frontend` em **861/861**, contra a
+baseline de 850/850 medida sobre `f925ebc`.
 
-**A etapa 4 é o próximo passo, e está pronta para ser proposta.** A exploração
-fechou o encaixe do resolvedor, a forma do resultado da tool (três campos:
-documento, trecho, distância — `headingPath` não vai, porque o chunker já o
-injeta no texto vetorizado), o par "sem item" em dois cenários, e o censo de nome
-de tool estendido ao terceiro conjunto (zero colisões). `0d` fechou o esquema de
-nome (`search_<slug>`) e **não alterou o desenho** — como estava declarado antes
-de ela rodar, ela decidia só o que vem depois da etapa 4, nunca se a etapa 4
-acontece.
+**A linha de bases de conhecimento fechou a fila de UI.** Das cinco etapas
+previstas, todas foram aplicadas. O que **sobra** na linha está na tabela da fila
+acima, e é preciso dizer para que ninguém a leia como concluída:
 
-Projeção da etapa 4, por componente e depois das verificações: **~26 arquivos /
-~1.470 linhas de código**, uma change só, duas capabilities
-(`knowledge-tool-execution` nova, `agent-tool-namespace` com ~5 requisitos
-`MODIFIED`). Os arquivos subiram ~50% sobre a projeção antiga, e a causa inteira é
-a régua de DI que `0a` criou depois dela: **15 dos 26 arquivos são custo de
-injetar uma dependência num serviço central** — 13 harnesses que constroem
-`AgentExecutionService`, mais 2 `Null*` novos.
+- a **linha 2** (busca unificada entre bases vinculadas), esperando o dado que
+  falta — um caso real com bases de tamanhos desiguais;
+- o **terceiro comparador de ordem em `apps/frontend`**
+  (`knowledgeBaseRows.ts:26-27`), com gatilho imediato e sem nada que o puxe;
+- o **bar de roteamento de `0d`, que continua reprovado** (61,0% contra 75%). A
+  5a-4 não o move e nunca prometeu mover: ela é cópia, não mecanismo. O gatilho é
+  a linha 2, que muda o mecanismo de roteamento e é onde o bar volta a ser
+  medível.
+
+**Pendente desta sessão, por decisão de quem revisa:** `/opsx:sync` e
+`/opsx:archive` da 5a-4. O trabalho está na árvore, sem commit.
 
 **Anteriormente nesta linha**: `0a` (dedupe de nome de tool), `0b` (head-to-head
 semântico, modelo e schema), `0c` (chunker, invariantes, overlap, `k` e limiar),
-`2a` (índice), `2b` (operação), e a UI em 5a-1/5a-2. Todas aplicadas ou
-registradas acima, as três rodadas de medição com bar declarado antes de medir.
+`0d` (roteamento entre bases), `2a` (índice), `2b` (operação), a **etapa 4**
+(resolvedor de tool, aplicada em 12/09/2026), o backend do diagnóstico do índice,
+e a UI em 5a-1, 5a-2, 5b, 5a-3, 5c e 5a-4. Todas aplicadas ou registradas acima,
+as quatro rodadas de medição com bar declarado antes de medir.
 
 **Concluído em sessões anteriores**: o redesenho do painel foi fechado nas **oito
 etapas**, da identidade visual ao card A2A, mais a change de CORS de

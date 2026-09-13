@@ -33,7 +33,31 @@ describe('KnowledgeBaseDescriptionCard', () => {
     renderCard();
 
     expect(screen.getByText(/não é mostrado ao cliente/i)).toBeInTheDocument();
-    expect(screen.getByText(/o modelo decide se a pergunta pertence a esta base/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/o modelo decide se a pergunta pertence a esta base/i),
+    ).toBeInTheDocument();
+  });
+
+  // P4 — "entra na", não "é a". Desde a etapa 4 a descrição da tool é uma cadeia
+  // montada (KnowledgeToolDescription.cs:52), e o texto cadastrado é a parte que o
+  // operador escreve.
+  it('diz que o texto entra na descrição da ferramenta, envolvido por instruções fixas', () => {
+    renderCard();
+
+    expect(screen.getByText(/entra na descrição da ferramenta/i)).toBeInTheDocument();
+    expect(screen.getByText(/envolvido por instruções fixas do sistema/i)).toBeInTheDocument();
+  });
+
+  // N8 — a asserção negativa MORA AQUI, no componente que carrega a frase, e não
+  // no teste do formulário (design.md, D6; convenção 15, segunda forma). O
+  // formulário carrega a MESMA correção em outra forma — o preview se intitulando
+  // como o texto completo —, e o guarda dele é N6, em KnowledgeBaseForm.test.tsx.
+  // Reintroduzir a frase aqui tem de reprovar só este teste; reintroduzi-la lá,
+  // só aquele.
+  it('não afirma que a descrição cadastrada É a descrição da ferramenta', () => {
+    renderCard();
+
+    expect(screen.queryByText(/é a descrição da ferramenta/i)).not.toBeInTheDocument();
   });
 
   it('preserva as quebras de linha do texto cadastrado', () => {
