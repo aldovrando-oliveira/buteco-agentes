@@ -34,6 +34,47 @@ export function fragmentCountLabel(document: KnowledgeDocumentSummary): string |
   return document.fragmentCount === 1 ? '1 fragmento' : `${document.fragmentCount} fragmentos`;
 }
 
+// A MESMA REGRA, APLICADA À SOMA DA BASE INTEIRA — e o protótipo erra aqui de
+// novo, por dois caminhos.
+//
+// A aba de diagnóstico do índice exibe "fragmentos desta base" e "documentos com
+// fragmentos no índice". O protótipo calcula o primeiro com
+// `d.reduce((n, x) => n + (x.status === 'indexed' ? x.chunks : 0), 0)`, o que
+// SUBCONTA o índice real pelo mecanismo já descrito acima: documento que indexou
+// e falhou ao reindexar continua com os fragmentos antigos vivos, respondendo às
+// consultas do agente, e some da soma. A tela informaria menos fragmentos do que
+// o índice tem.
+//
+// O predicado certo é `indexedAt !== null`, QUALQUER QUE SEJA O ESTADO, e é o que
+// a spec viva de knowledge-document-indexing já diz sobre a contagem de
+// fragmentos.
+//
+// SEGUNDO CAMINHO, registrado porque quem consertar só o `reduce` não o fecha: no
+// mock do protótipo, `reindex` e a atualização de conteúdo gravam `chunks: 0` na
+// hora, enquanto o backend PRESERVA a contagem. No painel real esse caminho não
+// existe — a contagem vem da resposta da API —, e é por isso que nenhuma
+// atualização otimista daqui pode espelhar o comportamento do mock.
+//
+// O rótulo da contagem de documentos NÃO reusa a palavra `Indexado`, que é o
+// badge de estado da tabela vizinha: com este predicado, um documento exibido
+// como `Falhou` conta aqui, e duas telas usando a mesma palavra com predicados
+// diferentes é a confusão que essa regra já custou uma vez.
+function hasFragmentsInIndex(document: KnowledgeDocumentSummary): boolean {
+  return document.indexedAt !== null;
+}
+
+export function indexedFragmentTotal(documents: KnowledgeDocumentSummary[] | undefined): number {
+  return (documents ?? [])
+    .filter(hasFragmentsInIndex)
+    .reduce((total, document) => total + document.fragmentCount, 0);
+}
+
+export function documentsWithFragmentsCount(
+  documents: KnowledgeDocumentSummary[] | undefined,
+): number {
+  return (documents ?? []).filter(hasFragmentsInIndex).length;
+}
+
 // Estados terminais são aqueles em que o pipeline parou. `Pending` e `Indexing`
 // são os dois estados não-terminais do ciclo — a reindexação passa pelos dois
 // com fragmentos antigos vivos, e é por isso que não existe valor de enum

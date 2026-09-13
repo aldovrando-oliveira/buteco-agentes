@@ -829,6 +829,30 @@ de propor algo nesta base:
     vazio, é **desconhecido**, e zerar ali afirma uma contagem que ninguém fez.
     Três estados, três textos: valor, vazio, travessão.
 
+    **E existe um QUARTO estado, que é o mais fácil de colapsar no travessão:
+    "sei que não existe".** Achado na aba de diagnóstico do índice (5c), onde os
+    quatro convivem na mesma tela:
+
+    | estado | exemplo na aba de diagnóstico | como se diz |
+    |---|---|---|
+    | valor | o índice tem uma combinação gravada | provedor, modelo, dimensão |
+    | vazio | a base não tem documento, e a contagem mediu zero | `0 de 0` |
+    | travessão | **não sei** — a consulta não respondeu, ou o registro não veio | `—`, ou o aviso de indisponibilidade |
+    | **sei que não existe** | o índice **inteiro** está vazio: a rota respondeu `200` com `[]` | uma **explicação**, e nenhuma linha |
+
+    A diferença entre os dois últimos é o que decide a tela. `—` afirma *"houve
+    uma pergunta sem resposta"*; índice vazio é uma resposta que **chegou**, e
+    dizê-la com travessão perde a única informação que ela carrega. Pior: a mesma
+    aba tem um caminho de falha de leitura, que é o travessão de verdade — usar o
+    símbolo nos dois apaga a distinção **onde ela existe**.
+
+    O protótipo colapsava os dois, e o custo era o inverso do esperado: não
+    exibia nada falso, mas gastava o vocabulário de "não sei" num fato conhecido.
+    A régua continua sendo **a proveniência do dado, nunca o tipo do campo** — e
+    ela agora separa quatro origens, não três: medição que deu zero, medição que
+    não aconteceu, registro que não veio, e **resposta que chegou dizendo que não
+    há**.
+
     Quem acrescentar contagem a uma tela **escreve a proveniência do zero junto
     com o campo**, e não só a regra de exibição — foi assim que a etapa das
     colunas do catálogo de bases pôde reusar a distinção em vez de reabrir a

@@ -191,14 +191,37 @@ o versionamento pretende seguir
   marcado como desconhecido, e **nunca** zerado. Se o resumo não carregar, a
   listagem continua servindo e a opção `Com falha` aparece desabilitada, em vez
   de filtrar para o vazio e afirmar que nenhuma base tem falha.
-- A consulta do índice pelo agente ainda não existe: não há tool de busca.
+- O detalhe da base passa a ter **duas abas**, `Documentos` e
+  `Diagnóstico do índice`, com a aba ativa no endereço. A barra nasce agora, e não
+  antes: com uma aba só ela afirmaria uma estrutura que a tela não tinha.
+- A aba de diagnóstico exibe a **proveniência gravada do índice** — provedor,
+  modelo, dimensão e fragmentos de cada combinação —, lida de
+  `GET /knowledge-index/diagnostics`. Ela é apresentada como propriedade **do
+  sistema**, em grupo próprio e rotulado como tal, separada do **volume desta
+  base**, que é derivado da listagem de documentos que a tela já carrega — sem
+  requisição adicional.
+- Índice vazio é **explicado**, não preenchido: a tela diz que provedor, modelo e
+  dimensão passam a existir quando o primeiro documento terminar de indexar, em
+  qualquer base, e não insinua qual modelo seria usado. O gate é a vacuidade do
+  índice **inteiro**, nunca a contagem da base — a proveniência é global, e negá-la
+  numa base sem documento esconderia um fato que o sistema conhece.
+- **Mais de uma combinação é nomeada como corrupção**, com a contagem de
+  fragmentos de cada uma, que é o número que torna a reindexação decidível. A tela
+  não elege nenhuma como a correta: `apps/api` não conhece a configuração
+  declarada de embedding.
+- Falha ao ler a proveniência é dita como falha, e **nunca** como índice vazio —
+  uma requisição que não respondeu não é evidência de ausência.
+- A contagem de fragmentos da base soma os documentos cujo `indexedAt` não é nulo,
+  **qualquer que seja o estado**: documento que indexou e falhou ao reindexar
+  continua com os fragmentos anteriores respondendo, e somar só os indexados
+  informaria menos fragmentos do que o índice tem.
+- A aba **não repete** a lista de documentos em falha: informa quantos são e leva à
+  aba de documentos, onde o motivo completo e a ação de reindexar já vivem.
 - Vínculo N:N entre agente e base de conhecimento em `apps/api`, definido por
   `PUT /agents/{id}/knowledge-bases` com substituição integral do conjunto.
   Base inativa continua vinculável, e agente inativo continua configurável.
 - As respostas de agente passam a incluir `knowledgeBases`, com id e nome de
   cada base vinculada, ordenados por nome e desempatados por identificador.
-- O vínculo ainda não é oferecido ao agente em execução: não há tool nem
-  resolvedor de conhecimento.
 
 **Entrega containerizada**
 
