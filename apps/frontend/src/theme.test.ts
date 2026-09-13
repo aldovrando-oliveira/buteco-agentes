@@ -78,7 +78,7 @@ describe('theme — âncoras da identidade visual', () => {
     expect(neutral[9]).toBe('#191a1c'); // --fg: texto principal
   });
 
-  it.each(['--buteco-page-bg', '--buteco-surface-subtle'] as const)(
+  it.each(['--buteco-page-bg', '--buteco-surface-subtle', '--buteco-brand-ink'] as const)(
     'declara %s nos dois esquemas de cor',
     (variavel: `--${string}`) => {
       const resolvido = cssVariablesResolver(DEFAULT_THEME);
@@ -92,6 +92,21 @@ describe('theme — âncoras da identidade visual', () => {
       expect(resolvido.light?.[variavel]).not.toBe(resolvido.dark?.[variavel]);
     },
   );
+
+  it('ancora a tinta da marca nos tons que o manual da marca pede', () => {
+    const resolvido = cssVariablesResolver(DEFAULT_THEME);
+
+    // O manual da marca especifica a tinta como #191a1c no claro e #e9eaec no
+    // escuro. Nenhum dos dois é cor nova — são gray[9] e dark[0] — mas nenhuma
+    // variável do Mantine entrega esse par: --mantine-color-text lê
+    // theme.black no claro, e sem `black` declarado vale o default #000, que é
+    // preto puro. Daí a variável própria (design.md da change
+    // frontend-marca-visual, D3).
+    expect(resolvido.light?.['--buteco-brand-ink']).toBe('var(--mantine-color-gray-9)');
+    expect(resolvido.dark?.['--buteco-brand-ink']).toBe('var(--mantine-color-dark-0)');
+    expect(shades('gray')[9]).toBe('#191a1c');
+    expect(shades('dark')[0]).toBe('#e9eaec');
+  });
 
   it('mantém o fundo da página fora da escala neutra', () => {
     const pageBackground = cssVariablesResolver(DEFAULT_THEME).light?.['--buteco-page-bg'];
