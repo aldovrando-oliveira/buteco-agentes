@@ -1658,9 +1658,88 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **sete**, achadas em três etapas diferentes — a 5a-2 acrescentou duas, e
-**corrigiu duas das cinco anteriores**, uma na regra e outra na evidência. As
-correções da 5a-2 vêm primeiro, porque elas mudam o que as entradas antigas
+São **onze**, achadas em cinco etapas diferentes. A oitava vem primeiro porque
+é de **tipo novo** e muda o que a lista cobre; depois as três da 5a-3, depois as
+duas da 5a-2, que **corrigiram duas das cinco anteriores**, uma na regra e outra
+na evidência.
+
+**As sete primeiras são sobre o que a tela AFIRMA. A oitava é sobre o que a tela
+CALCULA ERRADO** — e o modo de detecção também é outro: as sete saíram de ler a
+cópia e de percorrer o protótipo, a oitava saiu de **ler o código do mock contra
+a spec viva**. Vale como método: uma lista construída só olhando texto de tela
+não teria achado nenhuma soma errada, e havia uma.
+
+- **A soma de fragmentos filtra por estado e SUBCONTA o índice real.** O
+  protótipo faz
+  `chunks: d.reduce((n, x) => n + (x.status === 'indexed' ? (x.chunks || 0) : 0), 0)`
+  (`.dc.html:1667`), e o consumidor é a aba **Diagnóstico do índice**, na linha
+  `{ label: 'Fragmentos no índice', value: String(t.chunks) }` (`:1805`) — ou
+  seja, a tela da **5c**, que é a change que vai implementar essa soma.
+
+  Contra o código: `KnowledgeDocument.RequestReindex()`
+  (`apps/api/.../KnowledgeDocuments/Entities/KnowledgeDocument.cs:282`) altera
+  `IndexingStatus`, `FailureReason`, `IndexingAttempts` e `LastAttemptAt` e
+  **não toca** `IndexedAt` nem `FragmentCount`, com a docstring de `:271`
+  declarando a preservação. Somado à garantia 3 de D9 da etapa 1 —
+  `KnowledgeIndexingService.FailAsync` não apaga fragmento, e o descarte é
+  atômico com a inserção dentro de `CommitAsync` —, um documento que **indexou e
+  falhou ao reindexar** continua com fragmentos vivos respondendo às consultas e
+  **some da soma**. A tela informaria menos fragmentos do que o índice tem.
+
+  **E o protótipo erra a mesma coisa por um segundo caminho**, que fica
+  registrado junto porque quem consertar só o `reduce` não fecha o buraco:
+  `reindex` (`:1695`) e a atualização de conteúdo (`:1923`, `:1941`) gravam
+  `chunks: 0` na hora, enquanto o backend preserva a contagem. O mock descarta o
+  que o sistema mantém.
+
+  É a mesma regra da primeira correção da lista — **o separador é `indexedAt`,
+  nunca o estado** — aplicada a outro lugar. Que ela reapareça num segundo ponto
+  é o argumento para a regra viver aqui e não só no `design.md` de uma change:
+  **quem propuser a 5c precisa encontrá-la antes de escrever a soma**, e é esta
+  entrada que a põe no caminho.
+
+  Achada na exploração do backend do diagnóstico, e conferida nos dois lados ao
+  revisar a proposta da 5a-3 — protótipo e `apps/api` — antes de ser escrita
+  aqui. Nada da exploração foi aplicado ao código; o backend do diagnóstico segue
+  **não proposto**, e vem depois da 5a-3.
+
+**As três da 5a-3 (13/09/2026), do catálogo de bases.** Nenhuma das oito
+anteriores tocava essa tela — conferidas uma a uma —, porque na 5a-1 as colunas
+caíram por falta de dado antes de haver o que conferir. Duas destas saíram de
+**dirigir** o protótipo, não de ler o `CONHECIMENTO.md`:
+
+- **A coluna `Indexação` distingue `pendente` de `indexando`, e a rota não.**
+  Lido na tela, linha `Catálogo de Produtos`: `1 indexado · 1 indexando ·
+  1 pendente`. `GET /knowledge-bases/indexing-summary` devolve **três** contagens
+  e não separa `Pending` de `Indexing`, por decisão registrada na spec viva de
+  `knowledge-document-indexing` — quem precisa da distinção é o detalhe da base,
+  que recebe o estado por documento, e *"o total não terminal permanece exato por
+  subtração"*. **Não é lacuna a reportar; é a tela que se ajusta ao dado**, com
+  uma parcela só, `em andamento`. A asserção que protege isso é negativa **e mora
+  no DOM**: o modo de falha é alguém montar as duas parcelas direto na célula,
+  caminho em que a função pura fica intocada e o teste dela continua verde
+  (medido: 22/22 com o defeito presente).
+- **O badge `Nada indexado` dispara em base que não tem o que indexar.** Achado
+  **dirigindo**: na semente, a única base sem documento é inativa e o badge é
+  condicionado a `isActive`, então o defeito **não aparece** sem interagir.
+  Percurso: abrir `Rotinas Internas`, acionar `Ativar`, voltar ao catálogo. A
+  linha sai `Rotinas Internas | Nenhum | Nenhum documento | … | Ativa
+  Nada indexado` — três células dizendo a mesma coisa, uma em tom de alerta,
+  sobre uma base que não tem nada para indexar. O mesmo badge foi visto em
+  `Promoções Vigentes` enquanto o único documento dela **indexava**, ou seja
+  marcando como problema o funcionamento normal do pipeline. Recusado junto com
+  o badge `Falha`, que repete o que a coluna vizinha já diz na mesma linha.
+- **A célula inteira vai a tom de aviso, misturando progresso com falha.**
+  `idxFg: (t.failed || t.pending || t.indexing) ? 'var(--wa)' : 'var(--mut)'`.
+  Conferido nos dois esquemas: `3 indexados · 1 falhou` sai âmbar **por inteiro**,
+  e `1 indexando` sai âmbar também. Corrigido pondo o tom de alerta **só** na
+  parcela de falha, com a cor semântica que `statusPresentation('Failed')` já
+  devolve — assim falha tem a mesma aparência nas duas telas da área, por
+  construção e não por coincidência de duas literais iguais. **Virou requisito de
+  spec**, e não só decisão de `design.md`: comportamento observável que fica só no
+  design some no archive, e a próxima change que tocar a tabela o reintroduz.
+
+As correções da 5a-2, que vêm em seguida porque mudam o que as entradas antigas
 dizem:
 
 - **`0 fragmentos` → a regra registrada estava INCOMPLETA.** A entrada abaixo diz
@@ -2958,6 +3037,66 @@ linhas, 30% do total, e os quatro arquivos de produção criados têm 347 linhas
 um resolvedor cuja lógica cabe em ~60.
 
 
+### Achados de método de `frontend-knowledge-base-resumo-indexacao` (2026-09-13)
+
+Quatro registros que valem além da change que os produziu.
+
+- **Mock parcial deixa de cobrir o módulo quando o módulo cresce — e a falha é
+  deslocada no tempo e no arquivo.** `router.test.tsx` mocka `knowledgeBasesApi`
+  com `importOriginal` + override e **não stuba `fetch`**. A função nova desta
+  change (`listKnowledgeBaseIndexingSummary`) não entrou no override, **escapou
+  para a rede**, e o `apps/api` **real rodando na máquina do desenvolvedor**
+  devolveu 401 → `clearToken()` → `window.location.href = '/login'` → **o teste
+  SEGUINTE** renderizou a tela de login e reprovou.
+
+  É o **espelho** do risco do mock total que a 5a-2 registrou: lá a função nova
+  vira `undefined` e quebra na hora, alto e claro; aqui ela vira **uma chamada de
+  rede real**, que só atrapalha quando há servidor escutando e só atinge outro
+  teste. Sobreviveu a **três** execuções verdes da suíte inteira.
+
+  **Régua:** ao acrescentar função a um módulo de API, varrer quem o mocka
+  **parcialmente** — `grep -l "vi.mock(.*<modulo>"` — e conferir se a função nova
+  precisa entrar. E a impressão digital, para não redescobrir: *"Not implemented:
+  navigation to another Document"* na saída é `request<T>` tomando 401.
+  **Instrumento que isola em uma rodada:** apontar `VITE_API_BASE_URL` para um
+  servidor que **loga e devolve 200** — a suíte passa e o log nomeia a chamada que
+  escapou.
+
+- **Medir largura, não comparar aparência.** A conferência da convenção 14 ganhou
+  instrumento novo: em tabela com muitas colunas, **medir** `getBoundingClientRect`
+  de cada `th` e comparar com a proporção do protótipo. As duas colunas novas do
+  catálogo empurraram a distribuição para `Base` com **844px** (protótipo ~572) e
+  `Consultada por` esmagada em **196px** (~334), com nomes quebrando ao lado de
+  uma coluna quase vazia. **Percorrer e olhar responde "está parecido"**; o defeito
+  só apareceu no número. Foi o único passo da conferência que produziu achado de
+  tela.
+
+- **Encerrar processo por PORTA, não por linha de comando.**
+  `pkill -f "<caminho>/server.mjs"` não casou com nada, porque o processo tinha
+  sido lançado de dentro do diretório e a linha era só `node server.mjs`. O
+  processo velho continuou vivo, o novo falhou ao ligar, e a medição seguinte saiu
+  **falsa** (HTTP 200 com a variável de falha ligada) — não vazia. Mesmo perfil do
+  erro de instrumentação do A/B: **o instrumento não falha visivelmente, produz
+  número errado.** Usar `lsof -ti :<porta> | xargs kill`. Vale também para o
+  oposto: subir um stub na mesma porta de um serviço real já no ar faz os dois
+  escutarem (um por família de endereço), e qual responde vira acaso de resolução
+  de nome.
+
+- **O furo do "gatilho com posição", que é a forma que essa família toma quando
+  quem escreve já conhece a regra.** Um item aberto dizia, textualmente,
+  *"**gatilho com posição**: a próxima change que tocar `KnowledgeBaseForm` — e a
+  5a-3 é a próxima da fila que mexe nessa feature, **ainda que noutra tela**"*.
+  A frase **se autodeclara posição e continua sendo gatilho**: "a próxima change
+  que tocar X" não é uma linha na fila, é uma condição. E o "ainda que noutra
+  tela" era o furo visível — a 5a-3 é o catálogo e nunca abre o formulário, então
+  o item não tinha para onde ir.
+
+  **É a quarta ocorrência da família**, e a primeira em que o rótulo certo estava
+  escrito e mesmo assim não havia posição. Corrigido criando a **5a-4** com linha
+  própria na fila. **Régua: posição é uma linha numa tabela de fila, com número.
+  Se a frase descreve uma condição, é gatilho, por mais que comece com a palavra
+  "posição".**
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -3137,12 +3276,23 @@ Cada um tem gatilho de quando revisitar:
   | 1 | ~~5a-2 — gestão de documentos na UI~~ | aplicada |
   | 1b | ~~`0d` — roteamento entre bases~~ | medição, fechada em 12/09/2026 |
   | 1c | ~~**Etapa 4 — resolvedor de tool de conhecimento**~~ (`apps/workers`) | **aplicada em 12/09/2026.** `apps/workers` em 252/252. A linha deixou de terminar no vazio: o que o operador carrega chega ao agente. |
+  | 1d | ~~**5a-3 — colunas e filtro do catálogo**~~ (`apps/frontend`) | **aplicada em 13/09/2026.** `apps/frontend` em 765/765. A rota `indexing-summary`, ociosa desde 11/09, ganhou consumidor. |
   | 2 | **Busca unificada entre bases vinculadas** (`apps/workers`) | desbloqueada pela etapa 4, que construiu resolvedor, consulta e guardas que ela reusa. Carve-out **com posição**, de `0d`. Falta o dado: caso real com bases de tamanhos desiguais. |
-  | 3 | **5a-3 — colunas e filtro do catálogo** (`apps/frontend`) | pronta e **ociosa** desde a 2b. Ganhou carga: é onde entra a orientação de `Description` de base e o nome efetivo da tool na tela. |
+  | 3 | **5a-4 — formulário de base: generalidade da descrição e nome efetivo da tool** (`apps/frontend`) | **pronta.** As duas dependências existem: `0d` mediu a canibalização por descrição genérica, e a etapa 4 definiu `search_<slug>` mais o `ToolNameDeduplicator`. Toca `KnowledgeBaseForm`, e só ele. |
   | 4 | backend do diagnóstico do índice (`apps/api`) | **não proposta** |
   | 5 | **5c — UI do diagnóstico do índice** | bloqueada por #4 |
 
-  **A 5a-3 vem antes da 5c**, e a razão é verificável: a 5c está bloqueada por um
+  **A linha 3 nasceu ao aplicar a 5a-3, corrigindo uma atribuição errada.** A
+  tabela dizia que a 5a-3 "ganhou carga: é onde entra a orientação de
+  `Description` de base e o nome efetivo da tool na tela". Os dois vivem em
+  `KnowledgeBaseForm`, e a 5a-3 é o catálogo — `KnowledgeBaseTable` e
+  `KnowledgeBaseListPage`, sem abrir o formulário. Um item cujo gatilho é *"a
+  change que já vai tocar `KnowledgeBaseForm`"* pendurado numa change que não
+  toca o formulário é **gatilho sem posição** com outro nome, que é a família de
+  defeito registrada três vezes logo abaixo. Agora tem posição: é a **5a-4**, e
+  os dois itens abertos apontam para ela.
+
+  **A 5a-3 veio antes da 5c**, e a razão é verificável: a 5c está bloqueada por um
   passo de backend que **nem foi proposto** — `KnowledgeFragments/` em `apps/api`
   tem **um arquivo**, a entidade, e nenhuma query, handler, response ou endpoint
   projeta a proveniência do índice —, enquanto a dependência da 5a-3 está no ar e
@@ -3552,13 +3702,20 @@ Cada um tem gatilho de quando revisitar:
   critério certo dentro dele.** A cópia orienta a escrever **mais**, e `0d` diz
   que o que falta é escrever **mais delimitado**.
 
-  **Gatilho com posição: a próxima change que tocar `KnowledgeBaseForm`** — e a
-  5a-3 (colunas e filtro do catálogo) é a próxima da fila que mexe nessa
-  feature, ainda que noutra tela. Não entra na etapa 4, que é `apps/workers` e
-  não tem tela (convenção 1). O trabalho é de cópia e talvez de um aviso novo,
+  **Posição na fila: a 5a-4**, linha 3 da fila da linha de bases de conhecimento,
+  junto com o nome efetivo da tool — os dois tocam `KnowledgeBaseForm` e se
+  resolvem na mesma change. O trabalho é de cópia e talvez de um aviso novo,
   **não** de validação bloqueante: nenhuma regra automática distingue descrição
   específica de genérica, e inventar uma seria afirmar um critério que o sistema
   não tem.
+
+  **Correção de 13/09/2026:** até aplicar a 5a-3, este item dizia *"gatilho com
+  posição: a próxima change que tocar `KnowledgeBaseForm`* — e a 5a-3 é a próxima
+  da fila que mexe nessa feature, ainda que noutra tela". **"Ainda que noutra
+  tela" era o furo**: a 5a-3 é o catálogo e nunca abre o formulário, então o
+  item não tinha para onde ir. "A próxima change que tocar X" é gatilho, não
+  posição, mesmo quando a frase começa com "gatilho com posição". Posição é uma
+  linha na fila.
 
 - **A tela pode passar a exibir o nome efetivo da tool de conhecimento, e o
   gatilho venceu agora.** `KnowledgeBaseForm` carrega um comentário dizendo que o
@@ -3581,9 +3738,14 @@ Cada um tem gatilho de quando revisitar:
 
   **É o mesmo item que "a renomeação por colisão é invisível na UI"** já
   registrado por `0a`, agora com um segundo caso concreto — e os dois se resolvem
-  juntos, exibindo o nome efetivo ao lado do pretendido. **Gatilho: a mesma
-  change da orientação de descrição acima**, que já vai tocar
-  `KnowledgeBaseForm`.
+  juntos, exibindo o nome efetivo ao lado do pretendido.
+
+  **Posição, não gatilho: é a 5a-4**, linha 3 da fila da linha de bases de
+  conhecimento, junto com a orientação de generalidade da descrição. Até
+  13/09/2026 este item dizia *"gatilho: a mesma change da orientação de descrição
+  acima, que já vai tocar `KnowledgeBaseForm`"*, e a fila pendurava essa carga na
+  5a-3 — que é o catálogo e não abre o formulário. Corrigido ao aplicar a 5a-3:
+  gatilho sem posição é adiamento indefinido com outro nome.
 
 - **Reranker: hipótese com dado a favor, não levantada por completude** —
   `0c` mediu R@5 de 77,1% contra R@1 de 41,0%: em três de cada quatro
@@ -4456,6 +4618,25 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   > alheio à suíte ≥ 100%*, lida do `ps` e não do `uptime`. Ela é instantânea,
   > não tem resíduo, e foi ela que pegou o confundidor real desta sessão (um
   > processo alheio a 87-99% durante uma das execuções).
+
+  > **CONTRAEXEMPLO de 13/09/2026, de `frontend-knowledge-base-resumo-indexacao`,
+  > e ele é o registro mais útil deste item.** Uma reprovação **isolada** de
+  > `router.test.tsx` com `load` 29,63 foi classificada como este item — carga
+  > alta, arquivo que a change não tocava, e a suíte passando 765/765 depois com
+  > a máquina descarregada. **Não era contenção: era regressão da própria
+  > change.**
+  >
+  > O que desmentiu foi o **passo (1) da discriminação acima**, que estava escrito
+  > e não tinha sido usado: rodar o arquivo isolado. Reprovou **~1 em 3 com a
+  > máquina descarregada**, enquanto a baseline em `b58e6e8` deu **6/6**.
+  >
+  > **A régua que falta neste item, e que o contraexemplo fornece:** carga alta
+  > explica *que houve* reprovação, nunca *por que este arquivo*. A assinatura
+  > registrada acima — 21 a 26 reprovações, em testes que digitam em formulário —
+  > é de **massa**. **Uma** reprovação solitária não casa com ela, e a suíte verde
+  > na execução seguinte não absolve: intermitência é justamente o que uma
+  > execução verde não distingue. Quando reprova **um** teste, o arquivo isolado
+  > repetido decide, e é barato.
   >
   > **Limiar recalibrado, com o estado ao lado e o gatilho junto** (convenção 22):
   > *load de 1 min < 5,0 **antes do primeiro alvo apenas**; do segundo em diante,

@@ -6,11 +6,13 @@ import {
   useActivateKnowledgeBaseMutation,
   useCreateKnowledgeBaseMutation,
   useDeactivateKnowledgeBaseMutation,
+  useKnowledgeBaseIndexingSummaryQuery,
   useKnowledgeBaseQuery,
   useKnowledgeBasesQuery,
+  indexingSummaryQueryKey,
   useUpdateKnowledgeBaseMutation,
 } from './useKnowledgeBases';
-import type { KnowledgeBase } from '../types/knowledgeBase';
+import type { KnowledgeBase, KnowledgeBaseIndexingSummary } from '../types/knowledgeBase';
 
 const knowledgeBase: KnowledgeBase = {
   id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
@@ -172,12 +174,14 @@ describe('mutações do catálogo de bases', () => {
   it('expõe erro de validação da criação sem escrever no cache', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse(
-          { title: 'validação', status: 400, errors: { description: ['obrigatória'] } },
-          400,
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            { title: 'validação', status: 400, errors: { description: ['obrigatória'] } },
+            400,
+          ),
         ),
-      ),
     );
     const { Wrapper, queryClient } = createWrapper();
 
@@ -186,5 +190,62 @@ describe('mutações do catálogo de bases', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(queryClient.getQueryData(['knowledge-bases', knowledgeBase.id])).toBeUndefined();
+  });
+});
+
+describe('useKnowledgeBaseIndexingSummaryQuery', () => {
+  const summary: KnowledgeBaseIndexingSummary = {
+    knowledgeBaseId: knowledgeBase.id,
+    documentCount: 5,
+    indexedCount: 3,
+    failedCount: 1,
+  };
+
+  it('retorna o resumo de indexação em caso de sucesso', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([summary])));
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useKnowledgeBaseIndexingSummaryQuery(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([summary]);
+  });
+
+  // O par sem item: catálogo sem base nenhuma responde 200 com lista vazia,
+  // nunca 404 (convenção 5).
+  it('retorna lista vazia quando não existe base cadastrada', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useKnowledgeBaseIndexingSummaryQuery(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual([]);
+  });
+
+  // AFIRMA O MECANISMO, não confia nele (design.md, D8).
+  //
+  // A chave do resumo começa com `knowledge-bases` de propósito, para que a
+  // invalidação por prefixo das mutações de base o alcance sem uma linha a mais.
+  // Isso é fácil de quebrar sem perceber — basta alguém "organizar" a chave como
+  // `['indexing-summary']` —, e nenhum outro teste notaria.
+  it('é alcançado pela invalidação por prefixo das mutações de base', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([summary])));
+    const { queryClient, Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useKnowledgeBaseIndexingSummaryQuery(), {
+      wrapper: Wrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    // O mesmo prefixo que cacheUpdatedKnowledgeBase usa após criar, editar,
+    // ativar e desativar uma base.
+    await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
+
+    expect(queryClient.getQueryState(indexingSummaryQueryKey)?.isInvalidated ?? false).toBe(true);
   });
 });

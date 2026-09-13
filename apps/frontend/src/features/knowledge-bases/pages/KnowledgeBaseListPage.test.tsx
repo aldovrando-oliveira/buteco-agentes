@@ -6,12 +6,15 @@ import { MantineProvider } from '@mantine/core';
 import { MemoryRouter } from 'react-router';
 import { theme } from '../../../theme';
 import { KnowledgeBaseListPage } from './KnowledgeBaseListPage';
-import { listKnowledgeBases } from '../api/knowledgeBasesApi';
+import { listKnowledgeBaseIndexingSummary, listKnowledgeBases } from '../api/knowledgeBasesApi';
 import { listAgents } from '../../agents/api/agentsApi';
-import type { KnowledgeBase } from '../types/knowledgeBase';
+import type { KnowledgeBase, KnowledgeBaseIndexingSummary } from '../types/knowledgeBase';
 
+// Mock TOTAL (fábrica sem `importOriginal`): toda função que a página importa
+// deste módulo precisa estar aqui, ou ela recebe `undefined`.
 vi.mock('../api/knowledgeBasesApi', () => ({
   listKnowledgeBases: vi.fn(),
+  listKnowledgeBaseIndexingSummary: vi.fn(),
 }));
 
 vi.mock('../../agents/api/agentsApi', async (importOriginal) => {
@@ -39,17 +42,33 @@ const rotinas = base({
   isActive: false,
 });
 
+function summary(
+  knowledgeBaseId: string,
+  overrides: Partial<KnowledgeBaseIndexingSummary> = {},
+): KnowledgeBaseIndexingSummary {
+  return {
+    knowledgeBaseId,
+    documentCount: 5,
+    indexedCount: 3,
+    failedCount: 1,
+    ...overrides,
+  };
+}
+
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <MantineProvider theme={theme}>
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <KnowledgeBaseListPage />
-        </MemoryRouter>
-      </QueryClientProvider>
-    </MantineProvider>,
-  );
+  return {
+    queryClient,
+    ...render(
+      <MantineProvider theme={theme}>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <KnowledgeBaseListPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </MantineProvider>,
+    ),
+  };
 }
 
 describe('KnowledgeBaseListPage', () => {
@@ -57,6 +76,8 @@ describe('KnowledgeBaseListPage', () => {
     vi.mocked(listKnowledgeBases).mockReset();
     vi.mocked(listAgents).mockReset();
     vi.mocked(listAgents).mockResolvedValue([]);
+    vi.mocked(listKnowledgeBaseIndexingSummary).mockReset();
+    vi.mocked(listKnowledgeBaseIndexingSummary).mockResolvedValue([]);
   });
 
   it('exibe indicador de carregamento enquanto a lista não chega', () => {
@@ -222,9 +243,11 @@ describe('KnowledgeBaseListPage', () => {
     expect(screen.queryByRole('link', { name: rotinas.name })).not.toBeInTheDocument();
   });
 
-  // Asserção negativa: a quarta opção do protótipo depende de estado de
-  // indexação agregado por base, que a API não devolve (design.md, D9).
-  it('oferece exatamente três opções de filtro, sem falha de indexação', async () => {
+  // Quatro opções. Eram três até a etapa 5a-1, com asserção negativa contra a
+  // quarta, porque ela dependia de estado de indexação agregado por base que a
+  // API não devolvia. O resumo passou a existir e a opção passou a ter o que
+  // filtrar — a regra não mudou, o dado mudou.
+  it('oferece exatamente quatro opções de filtro, incluindo falha de indexação', async () => {
     vi.mocked(listKnowledgeBases).mockResolvedValue([cobranca]);
 
     renderPage();
@@ -234,7 +257,96 @@ describe('KnowledgeBaseListPage', () => {
       'todas',
       'ativas',
       'inativas',
+      'com-falha',
     ]);
-    expect(screen.queryByRole('radio', { name: /falha/i })).not.toBeInTheDocument();
+  });
+
+  describe('colunas de documentos e indexação', () => {
+    it('preenche as duas colunas a partir do resumo', async () => {
+      vi.mocked(listKnowledgeBases).mockResolvedValue([cobranca]);
+      vi.mocked(listKnowledgeBaseIndexingSummary).mockResolvedValue([
+        summary(cobranca.id, { documentCount: 4, indexedCount: 3, failedCount: 1 }),
+      ]);
+
+      renderPage();
+      await screen.findByRole('link', { name: cobranca.name });
+
+      expect(await screen.findByText('4 documentos')).toBeInTheDocument();
+      expect(screen.getByText('3 indexados')).toBeInTheDocument();
+      expect(screen.getByText('1 falhou')).toBeInTheDocument();
+    });
+
+    // A listagem é governada só pela consulta de bases: falha do resumo não a
+    // derruba (design.md, D2).
+    it('continua listando as bases quando o resumo falha, e diz por quê', async () => {
+      vi.mocked(listKnowledgeBases).mockResolvedValue([cobranca]);
+      vi.mocked(listKnowledgeBaseIndexingSummary).mockRejectedValue(new Error('rede'));
+
+      renderPage();
+
+      expect(await screen.findByRole('link', { name: cobranca.name })).toBeInTheDocument();
+      expect(await screen.findByTestId('resumo-indisponivel')).toBeInTheDocument();
+    });
+  });
+
+  describe('filtro Com falha', () => {
+    it('isola as bases com documento em falha, inclusive a inativa', async () => {
+      vi.mocked(listKnowledgeBases).mockResolvedValue([cobranca, rotinas]);
+      vi.mocked(listKnowledgeBaseIndexingSummary).mockResolvedValue([
+        summary(cobranca.id, { documentCount: 2, indexedCount: 2, failedCount: 0 }),
+        summary(rotinas.id, { documentCount: 3, indexedCount: 1, failedCount: 2 }),
+      ]);
+
+      renderPage();
+      await screen.findByRole('link', { name: cobranca.name });
+      await screen.findByText('2 indexados');
+
+      await userEvent.click(screen.getByRole('radio', { name: 'Com falha' }));
+
+      // `rotinas` é inativa: desativar impede o uso pelo agente, não a
+      // manutenção do conteúdo, e é a linha que mais pede atenção.
+      expect(screen.getByRole('link', { name: rotinas.name })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: cobranca.name })).not.toBeInTheDocument();
+    });
+
+    it('fica desabilitado quando o resumo não está disponível', async () => {
+      vi.mocked(listKnowledgeBases).mockResolvedValue([cobranca]);
+      vi.mocked(listKnowledgeBaseIndexingSummary).mockRejectedValue(new Error('rede'));
+
+      renderPage();
+      await screen.findByTestId('resumo-indisponivel');
+
+      expect(screen.getByRole('radio', { name: 'Com falha' })).toBeDisabled();
+    });
+
+    // ARRANJO PRÓPRIO (design.md, R3): a opção selecionada E o resumo ausente.
+    //
+    // O `disabled` sozinho não cobre este caminho — o operador seleciona `Com
+    // falha` com o resumo em mãos, ele é invalidado, e a nova consulta falha.
+    // Esvaziar a listagem afirmaria que nenhuma base tem falha, que é o que uma
+    // consulta sem resposta não permite dizer.
+    it('com a opção selecionada e o resumo ausente, não esvazia a listagem', async () => {
+      vi.mocked(listKnowledgeBases).mockResolvedValue([cobranca, rotinas]);
+      vi.mocked(listKnowledgeBaseIndexingSummary).mockResolvedValue([
+        summary(cobranca.id, { documentCount: 1, indexedCount: 0, failedCount: 1 }),
+      ]);
+
+      const { queryClient } = renderPage();
+      await screen.findByRole('link', { name: cobranca.name });
+      await screen.findByText('1 falhou');
+
+      await userEvent.click(screen.getByRole('radio', { name: 'Com falha' }));
+      expect(screen.queryByRole('link', { name: rotinas.name })).not.toBeInTheDocument();
+
+      // O resumo some do cache e a próxima consulta falha. `resetQueries` é o
+      // que mais se parece com o caminho real: a consulta volta ao estado
+      // inicial e é refeita, e desta vez ela reprova.
+      vi.mocked(listKnowledgeBaseIndexingSummary).mockRejectedValue(new Error('rede'));
+      await queryClient.resetQueries({ queryKey: ['knowledge-bases', 'indexing-summary'] });
+
+      expect(await screen.findByRole('link', { name: rotinas.name })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: cobranca.name })).toBeInTheDocument();
+      expect(screen.queryByText('Nenhuma base corresponde à busca.')).not.toBeInTheDocument();
+    });
   });
 });

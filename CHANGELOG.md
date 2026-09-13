@@ -166,6 +166,20 @@ o versionamento pretende seguir
 - Envio de vários arquivos é tratado como N operações independentes, com estado
   por linha: se uma falhar, as que já entraram continuam criadas, o modal
   permanece aberto com o motivo, e um novo envio não recria o que já entrou.
+- O catálogo de bases passa a exibir, por linha, **a contagem de documentos** e
+  **o resumo de indexação** — indexados, em andamento e em falha —, e ganha a
+  quarta opção de filtro, `Com falha`. Tudo a partir de **uma** requisição para o
+  conjunto das bases, e não uma por base: era esse custo que mantinha as colunas
+  de fora.
+- A coluna de indexação **não distingue documento pendente de documento em
+  indexação**: o resumo agrega os dois, e a tela não afirma uma separação que o
+  dado não carrega. Só a parcela de falha recebe tom de alerta — documento em
+  andamento é o funcionamento normal do pipeline.
+- Base **sem documento nenhum** é exibida como tal, porque o zero do resumo é uma
+  contagem medida. Base para a qual o resumo não respondeu fica com o dado
+  marcado como desconhecido, e **nunca** zerado. Se o resumo não carregar, a
+  listagem continua servindo e a opção `Com falha` aparece desabilitada, em vez
+  de filtrar para o vazio e afirmar que nenhuma base tem falha.
 - A consulta do índice pelo agente ainda não existe: não há tool de busca.
 - Vínculo N:N entre agente e base de conhecimento em `apps/api`, definido por
   `PUT /agents/{id}/knowledge-bases` com substituição integral do conjunto.

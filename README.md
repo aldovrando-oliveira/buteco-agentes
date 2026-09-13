@@ -89,9 +89,12 @@ boundary goes over authenticated HTTP. See
 - **Knowledge bases** — base and document catalog with markdown extraction,
   chunked and embedded into a vector index in the background. Operators manage
   documents from the panel: upload or write them, update, delete, watch each
-  one move through indexing, and retry a document whose indexing failed. At
-  execution time each linked, active base becomes a search tool the agent can
-  call; results carry the distance, and the agent decides what is relevant.
+  one move through indexing, and retry a document whose indexing failed. The
+  base catalog shows, per base, how many documents it holds and how many are
+  indexed, in progress or failed, and can filter down to the bases that have a
+  failure. At execution time each linked, active base becomes a search tool the
+  agent can call; results carry the distance, and the agent decides what is
+  relevant.
 - **Operations panel** — a web UI for all of the above.
 
 ---

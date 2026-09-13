@@ -1,6 +1,7 @@
 import type {
   CreateKnowledgeBaseInput,
   KnowledgeBase,
+  KnowledgeBaseIndexingSummary,
   UpdateKnowledgeBaseInput,
 } from '../types/knowledgeBase';
 import { clearToken, getToken } from '../../../auth/token';
@@ -48,8 +49,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const problem = (await response.json().catch(() => undefined)) as
-      | ValidationProblemDetails
-      | undefined;
+      ValidationProblemDetails | undefined;
     throw new ApiError(
       response.status,
       problem?.title ?? `Erro ${response.status} ao chamar ${path}`,
@@ -97,4 +97,17 @@ export function activateKnowledgeBase(id: string): Promise<KnowledgeBase> {
 
 export function deactivateKnowledgeBase(id: string): Promise<KnowledgeBase> {
   return request<KnowledgeBase>(`/knowledge-bases/${id}/deactivate`, { method: 'POST' });
+}
+
+// Recurso PRÓPRIO, e não campos em KnowledgeBaseResponse — a spec viva de
+// knowledge-base-catalog proíbe o campo, com três razões: a resposta do catálogo
+// é construída em seis lugares, quatro deles handlers de comando que nada têm a
+// ver com indexação; devolver zero neles seria falso em atualizar, ativar e
+// desativar; e o catálogo tem consumidores que nunca olham contagem.
+//
+// Uma requisição para o conjunto inteiro, com custo independente do número de
+// bases. É exatamente isso que destrava as colunas que a etapa 5a-1 recusou com
+// 100+ bases declaradas (design.md, D1).
+export function listKnowledgeBaseIndexingSummary(): Promise<KnowledgeBaseIndexingSummary[]> {
+  return request<KnowledgeBaseIndexingSummary[]>('/knowledge-bases/indexing-summary');
 }
