@@ -12,6 +12,11 @@ A capability existe por um motivo que não é CRUD: antes dela, a base existia, 
 descrição que o modelo lê existia, o vínculo com o agente existia e o índice
 existia — e o **conteúdo**, que é a razão de tudo isso, só entrava por `curl`.
 
+Desde a etapa do diagnóstico do índice, tudo isso vive na aba `Documentos` do
+detalhe da base — a aba canônica, a que abre sem parâmetro no endereço. A barra
+de abas em si é especificada por `knowledge-base-catalog-ui`; o que está **dentro**
+desta aba é o que esta capability cobre.
+
 Duas regras atravessam a capability. A primeira é que a indexação é assíncrona e
 a tela **acompanha a transição** em vez de pedir recarga: enquanto houver
 documento não-terminal a listagem se refaz sozinha, e para quando todos chegam a

@@ -1658,16 +1658,35 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **onze**, achadas em cinco etapas diferentes. A oitava vem primeiro porque
-é de **tipo novo** e muda o que a lista cobre; depois as três da 5a-3, depois as
-duas da 5a-2, que **corrigiram duas das cinco anteriores**, uma na regra e outra
-na evidência.
+São **treze**, achadas em seis etapas diferentes. A oitava vem primeiro porque
+é de **tipo novo** e muda o que a lista cobre; depois as duas da 5c, depois as
+três da 5a-3, depois as duas da 5a-2, que **corrigiram duas das cinco
+anteriores**, uma na regra e outra na evidência.
 
 **As sete primeiras são sobre o que a tela AFIRMA. A oitava é sobre o que a tela
 CALCULA ERRADO** — e o modo de detecção também é outro: as sete saíram de ler a
 cópia e de percorrer o protótipo, a oitava saiu de **ler o código do mock contra
 a spec viva**. Vale como método: uma lista construída só olhando texto de tela
 não teria achado nenhuma soma errada, e havia uma.
+
+**E a 5c fechou a outra metade desse argumento, que é a que responde a quem
+propuser cortar um dos dois modos.** Não é que ler o mock seja o modo bom e
+percorrer seja o modo antigo — os dois alcançam coisas que o outro não alcança,
+e a 5c produziu o par que prova isso na mesma change:
+
+> **A semente não consegue produzir o defeito da soma, então C8 nunca sairia de
+> percorrer — como C12 nunca sairia de ler.**
+
+Conferido nos dois lados ao aplicar a 5c: **nenhum documento da semente do
+protótipo está no estado "indexou e falhou ao reindexar"**, que é exatamente o
+estado em que a soma filtrada por estado subconta — então nenhuma quantidade de
+cliques exibiria C8. E C12 é um defeito de **cópia e vocabulário visual**, que
+nenhuma leitura do `reduce` do mock revelaria: ele só aparece com a tela
+renderizada na frente.
+
+Na prática: **percorrer não alcança estado que a semente não produz; ler o código
+do mock contra a spec viva não alcança cópia nem layout.** Change que fizer só um
+dos dois está cega para uma família inteira, e a cegueira é silenciosa.
 
 - **A soma de fragmentos filtra por estado e SUBCONTA o índice real.** O
   protótipo faz
@@ -1702,6 +1721,34 @@ não teria achado nenhuma soma errada, e havia uma.
   revisar a proposta da 5a-3 — protótipo e `apps/api` — antes de ser escrita
   aqui. Nada da exploração foi aplicado ao código; o backend do diagnóstico segue
   **não proposto**, e vem depois da 5a-3.
+
+**As duas da 5c (13/09/2026), da aba de diagnóstico do índice.** As duas saíram
+de **percorrer** a aba no protótipo, nos dois esquemas — nenhuma está na prosa do
+`CONHECIMENTO.md`, e nenhuma sairia de ler o código do mock.
+
+- **O estado vazio empresta o vocabulário de "não sei" para dizer "sei que não
+  existe".** Percorrido na base `Rotinas Internas`: a aba renderiza o bloco
+  explicativo **e**, logo abaixo, `Provedor de embedding —`, `Modelo de
+  embedding —`, `Dimensão do vetor —`. Dizer a mesma coisa duas vezes é o menor
+  dos problemas. O travessão tem significado **fixado por decisão registrada** nesta
+  área desde a 5a-3 (`utils/indexingSummary.ts`, a gramática de três estados):
+  `—` é **dado desconhecido** — a consulta não respondeu, ou o registro não veio.
+  Índice vazio é o oposto disso: a rota respondeu `200`, o fato é conhecido e
+  medido. Usar o mesmo símbolo para os dois apaga a distinção **justamente na tela
+  em que o desconhecido também existe** — a mesma aba tem um caminho de falha de
+  leitura, que é o `—` de verdade. Corrigido na 5c (D9): no vazio, o card do
+  sistema contém **só** a explicação, e nenhuma linha de proveniência.
+- **A aba repete inteira a lista de falhas que a tabela de documentos já mostra.**
+  Título, motivo completo e botão `Reindexar documento`, idênticos aos da faixa de
+  falha entregue pela 5a-2. No protótipo isso é duplicação **do próprio
+  protótipo** — as duas abas dele mostram o mesmo bloco, o que não é desenho, é
+  uma decisão que ninguém tomou. No painel real seriam **duas superfícies
+  disparando a mesma mutação**, com estados de carregamento independentes (o
+  `reindexingId` da página vale para uma das duas), e dois lugares onde a cópia do
+  motivo pode divergir na próxima change. Corrigido na 5c (D10): a aba informa
+  **quantos** documentos falharam e leva à aba `Documentos`, onde o motivo e a
+  ação vivem. Omitir a falha inteiramente foi considerado e recusado — é aqui que
+  o operador está tentando explicar um número de fragmentos menor do que esperava.
 
 **As três da 5a-3 (13/09/2026), do catálogo de bases.** Nenhuma das oito
 anteriores tocava essa tela — conferidas uma a uma —, porque na 5a-1 as colunas
@@ -3278,7 +3325,27 @@ Cada um tem gatilho de quando revisitar:
   | 2 | **Busca unificada entre bases vinculadas** (`apps/workers`) | desbloqueada pela etapa 4, que construiu resolvedor, consulta e guardas que ela reusa. Carve-out **com posição**, de `0d`. Falta o dado: caso real com bases de tamanhos desiguais. |
   | 3 | **5a-4 — formulário de base: generalidade da descrição e nome efetivo da tool** (`apps/frontend`) | **pronta.** As duas dependências existem: `0d` mediu a canibalização por descrição genérica, e a etapa 4 definiu `search_<slug>` mais o `ToolNameDeduplicator`. Toca `KnowledgeBaseForm`, e só ele. |
   | 4 | ~~**backend do diagnóstico do índice**~~ (`apps/api`) | **aplicada em 13/09/2026.** `GET /knowledge-index/diagnostics`. `apps/api` em 317/318 — +9 testes, e a única falha é a pré-existente de `AgentDeactivationTests` (ver o item próprio abaixo). |
-  | 5 | **5c — UI do diagnóstico do índice** (`apps/frontend`) | **desbloqueada.** A rota existe e os corpos reais das três respostas estão no `design.md` de `knowledge-index-diagnostics`. Herda três correções de protótipo, abaixo. |
+  | 5 | ~~**5c — UI do diagnóstico do índice**~~ (`apps/frontend`) | **aplicada em 13/09/2026.** `apps/frontend` em **833/833** (baseline 765/765; +4 arquivos, +68 testes, zero reprovações). Consumiu a rota e as três correções herdadas, e **acrescentou duas** — C12 e C13, abaixo. |
+
+  **A linha de bases de conhecimento fechou o que estava previsto.** A 5c era a
+  última tela do plano. O que **sobra** na linha, e é preciso dizer explicitamente
+  para que ninguém a leia como concluída:
+
+  - a **linha 2** (busca unificada entre bases vinculadas), esperando o caso real
+    com bases de tamanhos desiguais;
+  - a **linha 3** (5a-4, formulário de base), pronta e sem nada que a puxe;
+  - o item aberto do **terceiro comparador de ordem em `apps/frontend`**
+    (`knowledgeBaseRows.ts:26-27`), com gatilho imediato. A 5c **não o tocou de
+    propósito**: é outra feature, e misturá-lo aqui juntaria dois escopos. Ela
+    reusou o argumento dele — a aba de diagnóstico **não reordena no cliente**,
+    com guarda que reprova contra a reordenação —, mas não o corrigiu.
+  - **8 arquivos reprovando `prettier --check` em `apps/frontend`**, achado ao
+    fechar a 5c e **conferido em `git worktree` limpo no `853038c`**: são
+    pré-existentes, e nenhum deles foi tocado por esta change. Seis são
+    `KnowledgeBaseForm`, `KnowledgeBaseEditPage` e `KnowledgeBaseDescriptionCard`
+    com os testes deles — **escopo exato da 5a-4**, que já está na fila —, e os
+    outros dois são `LoginPage` e `mcp-servers/utils/agentUsage.ts`. Quem tocar
+    esses arquivos formata junto; ninguém precisa abrir change para isso.
 
   **A linha 3 nasceu ao aplicar a 5a-3, corrigindo uma atribuição errada.** A
   tabela dizia que a 5a-3 "ganhou carga: é onde entra a orientação de

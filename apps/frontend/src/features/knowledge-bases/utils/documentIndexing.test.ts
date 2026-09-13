@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   documentNote,
+  documentsWithFragmentsCount,
   fragmentCountLabel,
   hasNonTerminalDocument,
+  indexedFragmentTotal,
   isNonTerminal,
   nonTerminalCount,
   statusPresentation,
@@ -195,5 +197,80 @@ describe('documentNote', () => {
     expect(documentNote(doc({ indexingStatus: 'Failed' }), '01/09/2026')).toBe(
       'atualizado em 01/09/2026',
     );
+  });
+});
+
+// AS DUAS SOMAS DA ABA DE DIAGNÓSTICO, governadas por `indexedAt` e nunca pelo
+// estado. O caso que decide está no meio: documento que INDEXOU E FALHOU DEPOIS.
+//
+// Ele é o cenário que a semente do protótipo não consegue produzir — nenhum
+// documento dela chega a esse estado —, e por isso o defeito da soma só apareceu
+// lendo o código do mock contra a spec viva, nunca percorrendo a tela.
+describe('indexedFragmentTotal', () => {
+  it('soma os fragmentos dos documentos com indexedAt preenchido', () => {
+    expect(
+      indexedFragmentTotal([
+        doc({ id: 'a', fragmentCount: 14 }),
+        doc({ id: 'b', fragmentCount: 7 }),
+      ]),
+    ).toBe(21);
+  });
+
+  // O caso que reprova quando alguém filtra por `status === 'Indexed'`.
+  it('conta o documento que indexou e falhou ao reindexar', () => {
+    expect(
+      indexedFragmentTotal([
+        doc({ id: 'a', indexingStatus: 'Indexed', fragmentCount: 14 }),
+        doc({
+          id: 'b',
+          indexingStatus: 'Failed',
+          indexedAt: '2026-09-02T03:14:00Z',
+          failureReason: 'O provedor devolveu 429.',
+          fragmentCount: 9,
+        }),
+      ]),
+    ).toBe(23);
+  });
+
+  // Reindexação em curso: os fragmentos antigos continuam vivos até o commit.
+  it('conta o documento em reindexação, que ainda responde com os fragmentos antigos', () => {
+    expect(
+      indexedFragmentTotal([
+        doc({ id: 'a', indexingStatus: 'Pending', fragmentCount: 5 }),
+        doc({ id: 'b', indexingStatus: 'Indexing', fragmentCount: 6 }),
+      ]),
+    ).toBe(11);
+  });
+
+  it('ignora o documento nunca indexado', () => {
+    expect(
+      indexedFragmentTotal([
+        doc({ id: 'a', fragmentCount: 14 }),
+        doc({ id: 'b', indexingStatus: 'Pending', indexedAt: null, fragmentCount: 0 }),
+        doc({ id: 'c', indexingStatus: 'Failed', indexedAt: null, fragmentCount: 0 }),
+      ]),
+    ).toBe(14);
+  });
+
+  it('devolve zero sem documento, e zero com a listagem ainda indefinida', () => {
+    expect(indexedFragmentTotal([])).toBe(0);
+    expect(indexedFragmentTotal(undefined)).toBe(0);
+  });
+});
+
+describe('documentsWithFragmentsCount', () => {
+  it('conta os documentos com indexedAt preenchido, qualquer que seja o estado', () => {
+    expect(
+      documentsWithFragmentsCount([
+        doc({ id: 'a', indexingStatus: 'Indexed' }),
+        doc({ id: 'b', indexingStatus: 'Failed', indexedAt: '2026-09-02T03:14:00Z' }),
+        doc({ id: 'c', indexingStatus: 'Failed', indexedAt: null, fragmentCount: 0 }),
+      ]),
+    ).toBe(2);
+  });
+
+  it('devolve zero sem documento, e zero com a listagem ainda indefinida', () => {
+    expect(documentsWithFragmentsCount([])).toBe(0);
+    expect(documentsWithFragmentsCount(undefined)).toBe(0);
   });
 });

@@ -92,7 +92,11 @@ boundary goes over authenticated HTTP. See
   one move through indexing, and retry a document whose indexing failed. The
   base catalog shows, per base, how many documents it holds and how many are
   indexed, in progress or failed, and can filter down to the bases that have a
-  failure. At execution time each linked, active base becomes a search tool the
+  failure. A diagnostics tab on each base reports the provenance actually
+  recorded in the index — embedding provider, model and vector dimension, with
+  the fragment count behind each — read from the index itself rather than from
+  configuration, and names the corrupt state where more than one combination is
+  present. At execution time each linked, active base becomes a search tool the
   agent can call; results carry the distance, and the agent decides what is
   relevant.
 - **Operations panel** — a web UI for all of the above.

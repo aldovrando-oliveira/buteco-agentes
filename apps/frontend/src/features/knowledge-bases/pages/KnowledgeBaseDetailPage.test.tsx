@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { RouterProvider, createMemoryRouter } from 'react-router';
 import { theme } from '../../../theme';
 import { KnowledgeBaseDetailPage } from './KnowledgeBaseDetailPage';
 import {
@@ -14,6 +14,7 @@ import {
   getKnowledgeBase,
 } from '../api/knowledgeBasesApi';
 import { listAgents } from '../../agents/api/agentsApi';
+import { listKnowledgeIndexDiagnostics } from '../api/knowledgeIndexApi';
 import {
   deleteKnowledgeDocument,
   listKnowledgeDocuments,
@@ -22,6 +23,7 @@ import {
 import type { KnowledgeBase } from '../types/knowledgeBase';
 import type { KnowledgeDocumentSummary } from '../types/knowledgeDocument';
 import type { Agent } from '../../agents/types/agent';
+import type { KnowledgeIndexProvenance } from '../types/knowledgeIndex';
 
 vi.mock('../api/knowledgeBasesApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/knowledgeBasesApi')>();
@@ -36,6 +38,11 @@ vi.mock('../api/knowledgeBasesApi', async (importOriginal) => {
 vi.mock('../../agents/api/agentsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../agents/api/agentsApi')>();
   return { ...actual, listAgents: vi.fn() };
+});
+
+vi.mock('../api/knowledgeIndexApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api/knowledgeIndexApi')>();
+  return { ...actual, listKnowledgeIndexDiagnostics: vi.fn() };
 });
 
 vi.mock('../api/knowledgeDocumentsApi', async (importOriginal) => {
@@ -98,20 +105,33 @@ function documento(overrides: Partial<KnowledgeDocumentSummary> = {}): Knowledge
   };
 }
 
-function renderPage() {
+// Devolve o router para que os testes de aba possam afirmar o ENDEREÇO, e não só
+// o DOM — a aba ativa vive na URL, e é isso que torna o link compartilhável.
+function renderPage(search = '') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const router = createMemoryRouter(
+    [
+      { path: '/knowledge-bases/:id', element: <KnowledgeBaseDetailPage /> },
+      { path: '/knowledge-bases', element: <p>listagem de bases</p> },
+      { path: '/knowledge-bases/:id/edit', element: <p>edição de base</p> },
+    ],
+    { initialEntries: [`/knowledge-bases/${knowledgeBase.id}${search}`] },
+  );
+
+  render(
     <MantineProvider theme={theme}>
       <QueryClientProvider client={queryClient}>
         <Notifications />
-        <MemoryRouter initialEntries={[`/knowledge-bases/${knowledgeBase.id}`]}>
-          <Routes>
-            <Route path="/knowledge-bases/:id" element={<KnowledgeBaseDetailPage />} />
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </MantineProvider>,
   );
+
+  return router;
+}
+
+function tab(name: RegExp) {
+  return screen.getByRole('tab', { name });
 }
 
 describe('KnowledgeBaseDetailPage', () => {
@@ -126,6 +146,8 @@ describe('KnowledgeBaseDetailPage', () => {
     vi.mocked(deleteKnowledgeDocument).mockReset();
     vi.mocked(deleteKnowledgeDocument).mockResolvedValue(undefined);
     vi.mocked(reindexKnowledgeDocument).mockReset();
+    vi.mocked(listKnowledgeIndexDiagnostics).mockReset();
+    vi.mocked(listKnowledgeIndexDiagnostics).mockResolvedValue([]);
   });
 
   it('exibe indicador de carregamento enquanto a base não chega', () => {
@@ -327,17 +349,151 @@ describe('KnowledgeBaseDetailPage', () => {
     expect(deleteKnowledgeDocument).not.toHaveBeenCalled();
   });
 
-  // Asserção negativa: as duas abas do protótipo pertencem à 5a-2 e à 5c, e uma
-  // barra com uma aba só afirmaria estrutura que a tela não tem (design.md, D3).
-  it('não apresenta controle de abas', async () => {
-    vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+  // A ASSERÇÃO QUE MORREU AQUI era a negativa da 5a-1: "não apresenta controle de
+  // abas", com o gatilho registrado de que ela cairia quando existisse a segunda
+  // aba de verdade. A segunda chegou, e o gatilho foi exercido — não removido por
+  // conveniência. Ela é a ÚNICA asserção existente desta suíte que mudou; as
+  // outras 22 continuam valendo palavra por palavra, porque `Documentos` é a aba
+  // default e a tela default é a que era.
+  describe('barra de abas', () => {
+    it('apresenta as duas abas, com Documentos ativa por padrão', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
 
-    renderPage();
+      renderPage();
 
-    await screen.findByRole('heading', { name: knowledgeBase.name });
-    expect(screen.queryAllByRole('tab')).toHaveLength(0);
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
-    expect(screen.queryByText(/diagnóstico do índice/i)).not.toBeInTheDocument();
+      expect(await screen.findByRole('tab', { name: /documentos/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(tab(/diagnóstico do índice/i)).toBeInTheDocument();
+      expect(screen.getAllByRole('tab')).toHaveLength(2);
+    });
+
+    it('a aba selecionada vai para o endereço', async () => {
+      const user = userEvent.setup();
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+
+      const router = renderPage();
+      await screen.findByRole('tab', { name: /documentos/i });
+
+      await user.click(tab(/diagnóstico do índice/i));
+
+      await waitFor(() => expect(router.state.location.search).toBe('?tab=diagnostico'));
+    });
+
+    it('abrir o endereço da aba de diagnóstico abre a aba de diagnóstico', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+
+      renderPage('?tab=diagnostico');
+
+      expect(await screen.findByRole('tab', { name: /diagnóstico do índice/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
+
+    it('a aba canônica volta ao endereço sem parâmetro', async () => {
+      const user = userEvent.setup();
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+
+      const router = renderPage('?tab=diagnostico');
+      await screen.findByRole('tab', { name: /documentos/i });
+
+      await user.click(tab(/documentos/i));
+
+      await waitFor(() => expect(router.state.location.search).toBe(''));
+    });
+
+    it('aba desconhecida cai na primeira, sem reescrever o endereço', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+
+      const router = renderPage('?tab=inexistente');
+
+      expect(await screen.findByRole('tab', { name: /documentos/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(router.state.location.search).toBe('?tab=inexistente');
+    });
+
+    // `keepMounted={false}`: a aba inativa não existe no DOM. É o que sustenta o
+    // `enabled` da consulta de proveniência.
+    it('a aba inativa não está montada', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+      vi.mocked(listKnowledgeDocuments).mockResolvedValue([documento()]);
+
+      renderPage();
+
+      await screen.findByRole('tab', { name: /documentos/i });
+      expect(screen.queryByTestId('diagnostics-readonly-note')).not.toBeInTheDocument();
+      expect(screen.queryByText('Volume desta base')).not.toBeInTheDocument();
+    });
+
+    it('não busca a proveniência com a aba de documentos ativa', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+      vi.mocked(listKnowledgeDocuments).mockResolvedValue([documento()]);
+
+      renderPage();
+
+      await screen.findByRole('tab', { name: /documentos/i });
+      await screen.findByText(documento().title);
+      expect(listKnowledgeIndexDiagnostics).not.toHaveBeenCalled();
+    });
+
+    it('busca a proveniência ao entrar na aba de diagnóstico', async () => {
+      const provenance: KnowledgeIndexProvenance[] = [
+        {
+          provider: 'openai',
+          model: 'qwen-qwen3-embedding-8b',
+          dimensions: 4096,
+          fragmentCount: 3,
+        },
+      ];
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+      vi.mocked(listKnowledgeIndexDiagnostics).mockResolvedValue(provenance);
+
+      renderPage('?tab=diagnostico');
+
+      expect(await screen.findByText('qwen-qwen3-embedding-8b')).toBeInTheDocument();
+      expect(listKnowledgeIndexDiagnostics).toHaveBeenCalled();
+    });
+
+    // O contador não afirma zero enquanto a listagem não respondeu: a contagem
+    // vem de uma segunda requisição, e `0` durante o carregamento seria uma
+    // contagem que ninguém fez (design.md, D4).
+    it('não exibe contador enquanto a listagem de documentos não respondeu', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+      vi.mocked(listKnowledgeDocuments).mockReturnValue(new Promise(() => {}));
+
+      renderPage();
+
+      const documentos = await screen.findByRole('tab', { name: /documentos/i });
+      expect(within(documentos).queryByText('0')).not.toBeInTheDocument();
+      expect(documentos.textContent).toBe('Documentos');
+    });
+
+    it('não exibe contador com a base sem documento', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+      vi.mocked(listKnowledgeDocuments).mockResolvedValue([]);
+
+      renderPage();
+
+      await screen.findByTestId('documents-empty');
+      expect(tab(/documentos/i).textContent).toBe('Documentos');
+    });
+
+    it('exibe o contador quando a listagem traz documentos', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+      vi.mocked(listKnowledgeDocuments).mockResolvedValue([
+        documento({ id: 'a' }),
+        documento({ id: 'b' }),
+      ]);
+
+      renderPage();
+
+      await screen.findByRole('tab', { name: /documentos/i });
+      await waitFor(() => expect(within(tab(/documentos/i)).getByText('2')).toBeInTheDocument());
+    });
   });
 
   it('desativar passa por confirmação antes de qualquer requisição', async () => {
