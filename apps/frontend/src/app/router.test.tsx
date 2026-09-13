@@ -12,7 +12,10 @@ import { listMcpServers } from '../features/mcp-servers/api/mcpServersApi';
 import type { Agent } from '../features/agents/types/agent';
 import { listProviders } from '../features/agents/api/providersApi';
 import { listChannels } from '../features/channels/api/channelsApi';
-import { listKnowledgeBases } from '../features/knowledge-bases/api/knowledgeBasesApi';
+import {
+  listKnowledgeBaseIndexingSummary,
+  listKnowledgeBases,
+} from '../features/knowledge-bases/api/knowledgeBasesApi';
 import { clearToken, setToken } from '../auth/token';
 
 // importOriginal preserva ApiError: o detalhe do agente faz `instanceof
@@ -36,10 +39,19 @@ vi.mock('../features/channels/api/channelsApi', () => ({
   listChannels: vi.fn(),
 }));
 
+// MOCK PARCIAL: `importOriginal` preserva `request`/`ApiError` e substitui as
+// funções de rota. Toda função deste módulo que alguma rota da árvore chame
+// precisa estar aqui — a que faltar **escapa para a rede**, e este arquivo não
+// stuba `fetch`.
+//
+// O modo de falha é indireto e por isso caro: contra uma API real a chamada volta
+// 401, `request<T>` chama `clearToken()` e navega para `/login`, e quem reprova é
+// o teste SEGUINTE, renderizando a tela de login em vez da rota pedida. Aconteceu
+// com `listKnowledgeBaseIndexingSummary` quando ela nasceu.
 vi.mock('../features/knowledge-bases/api/knowledgeBasesApi', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('../features/knowledge-bases/api/knowledgeBasesApi')>();
-  return { ...actual, listKnowledgeBases: vi.fn() };
+  return { ...actual, listKnowledgeBases: vi.fn(), listKnowledgeBaseIndexingSummary: vi.fn() };
 });
 
 const agent: Agent = {
@@ -90,6 +102,8 @@ describe('appRoutes', () => {
     vi.mocked(listChannels).mockResolvedValue([]);
     vi.mocked(listKnowledgeBases).mockReset();
     vi.mocked(listKnowledgeBases).mockResolvedValue([]);
+    vi.mocked(listKnowledgeBaseIndexingSummary).mockReset();
+    vi.mocked(listKnowledgeBaseIndexingSummary).mockResolvedValue([]);
     vi.mocked(getAgent).mockReset();
     vi.mocked(getAgent).mockResolvedValue(agent);
     vi.mocked(listMcpServers).mockReset();

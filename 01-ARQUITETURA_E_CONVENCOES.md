@@ -787,6 +787,29 @@ de propor algo nesta base:
     indicador), porque é ela que impede a regressão bem-intencionada de
     "deixar parecido com o WhatsApp".
 
+    **E a pergunta que a convenção mais custa a responder não é "exibo ou não",
+    é "este zero pode ser exibido".** Dois zeros do mesmo domínio, com o mesmo
+    valor na tela e significados opostos, decidiram duas etapas em direções
+    contrárias:
+
+    | zero | o que é | pode exibir? |
+    |---|---|---|
+    | `documentCount` do resumo de indexação | contagem **medida** — a agregação percorreu os documentos daquela base e não achou nenhum; a projeção final é sobre as BASES, não sobre os grupos do `GroupBy`, exatamente para que a base vazia apareça | **sim** — `Nenhum` na tela é verdade |
+    | `fragmentCount` de documento nunca indexado | **default de uma coluna que ninguém escreveu** | **não** — exibir afirmaria que a indexação rodou e não achou nada |
+
+    A régua é **a proveniência do zero, nunca o tipo do campo**: um veio de uma
+    medição que aconteceu, o outro de uma medição que não aconteceu. E há um
+    terceiro caso que os dois primeiros ensinam a não confundir com nenhum deles
+    — **a ausência de linha**: quando o consumidor faz duas requisições
+    independentes e uma delas não trouxe aquele registro, isso não é zero nem é
+    vazio, é **desconhecido**, e zerar ali afirma uma contagem que ninguém fez.
+    Três estados, três textos: valor, vazio, travessão.
+
+    Quem acrescentar contagem a uma tela **escreve a proveniência do zero junto
+    com o campo**, e não só a regra de exibição — foi assim que a etapa das
+    colunas do catálogo de bases pôde reusar a distinção em vez de reabrir a
+    decisão, e é a frase que impede a etapa seguinte de "consertar" a exibição.
+
 14. **Mudança visual só é verificada por olho humano** — a suíte roda em
     jsdom, que não enxerga cor, contraste nem layout. Uma mudança de tema
     ou de composição pode deixar a suíte inteira verde e o painel
@@ -984,6 +1007,25 @@ de propor algo nesta base:
       projeção; é escopo que não existia quando ela foi feita. **Medição de
       método só compara o escopo que estava projetado.**
 
+    **Quinta medição (`frontend-knowledge-base-resumo-indexacao`), e ela acrescenta
+    uma TERCEIRA dimensão de blast radius que a projeção não sabia varrer.** 11
+    projetados, **12** entregues — criados exatos (2×2), modificados 10 contra 9.
+    O arquivo a mais é `src/app/router.test.tsx`, de **outra feature**, e nenhuma
+    leitura do código de produção o apontaria: ele entrou porque mocka
+    `knowledgeBasesApi` **parcialmente**, e a função nova precisava entrar no
+    override — sem isso a chamada escapava para a rede e derrubava outro teste.
+
+    É a mesma forma das duas já registradas — fixtures de teste ao tornar um campo
+    obrigatório; os N handlers que constroem um response compartilhado —, e as
+    três dizem a mesma coisa: **o blast radius não está onde se está olhando, e
+    cada dimensão dele tem um comando que a enumera de graça.**
+
+    | o que se acrescenta | quem é arrastado | como enumerar |
+    |---|---|---|
+    | campo obrigatório a um tipo compartilhado | fixtures de teste | `tsc` |
+    | campo a um response construído em N lugares | os N handlers | compilação |
+    | **função exportada a um módulo de API** | **todo arquivo que o mocke, inclusive em outra feature** | `grep -rl "vi.mock(.*<modulo>"` |
+
     E um refinamento menor da régua de modificados: **todo arquivo modificado
     arrasta o teste dele.** A projeção de modificados desta change (2 arquivos)
     contou os de produção e foi cega aos testes deles; os três testes modificados
@@ -1040,6 +1082,45 @@ de propor algo nesta base:
     pergunta que não tem mais resposta. **Isto pertence ao `tasks.md` da change,
     na tarefa de fechamento, e não à disciplina de quem roda** — escrito como
     tarefa, deixa de depender de alguém lembrar.
+
+    **E a variável ambiental mais provável desta base é a própria ferramenta da
+    conferência de protótipo, que disputa a máquina com a suíte.** Medido em
+    `frontend-knowledge-base-resumo-indexacao`, no mesmo commit e na mesma
+    árvore limpa:
+
+    | | `load` na largada | resultado |
+    |---|---|---|
+    | com o Chrome headless da conferência vivo | **23,95** | **6 reprovações** em 4 arquivos, todas `Test timed out in 15000ms` |
+    | com ele encerrado, esperando a carga cair | **3,57** | **722/722** |
+
+    Uma variável mudou, e só uma. A leitura fácil — "timeout de 15 s, deve ser
+    flake" — teria fechado como "ambiental" um resultado que some ao encerrar um
+    processo.
+
+    **E uma quarta leitura errada, na mesma change, na direção oposta — vale mais
+    que as três acima.** Uma reprovação isolada de `router.test.tsx` com `load`
+    29,63 foi classificada como contenção pelo mesmo raciocínio, e **não era**:
+    era regressão da própria change. O que desmentiu foi o passo (1) da
+    discriminação já escrita abaixo — **rodar o arquivo isolado** —, que reprovou
+    ~1 em 3 com a máquina descarregada, enquanto a baseline dava 6/6.
+
+    **"A suíte inteira passou depois" é evidência fraca para absolver um teste
+    intermitente**, porque a intermitência é exatamente o que uma execução verde
+    não distingue. Carga alta explica reprovação; não explica **por que este
+    arquivo**. Quando a reprovação é de **um** teste, o arquivo isolado repetido
+    decide — e é barato.
+
+    A consequência é de **método, não de disciplina**: a conferência da convenção
+    14 é iterativa e mantém o navegador aberto entre rodadas, e a tentação é
+    rodar a suíte no meio. **Encerrar o navegador e esperar a carga cair antes de
+    CADA execução da suíte**, não só da primeira, e escrever isso como passo nas
+    tarefas de baseline e de fechamento. Encerrar por **porta**
+    (`lsof -ti :9222 | xargs kill`), não por padrão de linha de comando: na mesma
+    change, `pkill -f "<caminho>/server.mjs"` não casou com nada, porque o
+    processo tinha sido lançado de dentro do diretório e a linha de comando era
+    só `node server.mjs` — o processo velho continuou vivo e a medição seguinte
+    saiu falsa.
+
 20. **A UI de acompanhamento de processo assíncrono usa polling CONDICIONAL, com
     a condição em função pura** — `refetchInterval` do TanStack Query aceita
     `(query) => number | false | undefined`, e a primeira consulta do painel a

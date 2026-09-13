@@ -5,12 +5,13 @@ import {
   createKnowledgeBase,
   deactivateKnowledgeBase,
   getKnowledgeBase,
+  listKnowledgeBaseIndexingSummary,
   listKnowledgeBases,
   request,
   updateKnowledgeBase,
 } from './knowledgeBasesApi';
 import { clearToken, getToken, setToken } from '../../../auth/token';
-import type { KnowledgeBase } from '../types/knowledgeBase';
+import type { KnowledgeBase, KnowledgeBaseIndexingSummary } from '../types/knowledgeBase';
 
 const id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
@@ -185,5 +186,33 @@ describe('rotas do catálogo de bases', () => {
     expect(url).toMatch(new RegExp(`/knowledge-bases/${id}/deactivate$`));
     expect(init.method).toBe('POST');
     expect(init.body).toBeUndefined();
+  });
+});
+
+describe('resumo de indexação por base', () => {
+  const summary: KnowledgeBaseIndexingSummary = {
+    knowledgeBaseId: id,
+    documentCount: 5,
+    indexedCount: 3,
+    failedCount: 1,
+  };
+
+  it('monta GET /knowledge-bases/indexing-summary e devolve os itens', async () => {
+    const fetchMock = stubFetch([summary]);
+
+    await expect(listKnowledgeBaseIndexingSummary()).resolves.toEqual([summary]);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit | undefined];
+    expect(url).toMatch(/\/knowledge-bases\/indexing-summary$/);
+    expect(init?.method).toBeUndefined();
+  });
+
+  // O par vazio da convenção 5. Não é simetria de fachada: a API responde 200
+  // com lista vazia quando não existe base nenhuma, nunca 404, e é esse o caminho
+  // que o catálogo vazio percorre.
+  it('devolve lista vazia sem erro quando não existe base cadastrada', async () => {
+    stubFetch([]);
+
+    await expect(listKnowledgeBaseIndexingSummary()).resolves.toEqual([]);
   });
 });
