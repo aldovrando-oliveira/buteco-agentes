@@ -858,6 +858,37 @@ de propor algo nesta base:
     colunas do catálogo de bases pôde reusar a distinção em vez de reabrir a
     decisão, e é a frase que impede a etapa seguinte de "consertar" a exibição.
 
+    **E existe uma forma da convenção que NENHUMA revisão da tela pega, porque a
+    tela não mudou: a afirmação que era verdadeira quando foi escrita e que outra
+    etapa tornou falsa.** As formas acima decidem *o que exibir agora*, a partir
+    da proveniência do dado. Esta é sobre o **momento**: a tela continua correta
+    contra o sistema que existia no dia em que foi implementada, e passa a mentir
+    sem ninguém a tocar.
+
+    Medido na 5a-4. O formulário de base tinha um bloco intitulado *"Como o agente
+    vê esta base"* exibindo nome e descrição, e o detalhe uma nota dizendo que a
+    descrição *"é a descrição da ferramenta que o agente vê"*. As duas eram
+    verdade na 5a-1. A etapa 4 criou `KnowledgeToolDescription.Build`, que monta a
+    descrição da tool com um prefixo, o texto cadastrado e um bloco fixo de como
+    ler o resultado — e as duas viraram afirmação de identidade onde passou a
+    haver **parte**. **A frase estava em três superfícies**, e a terceira é a que
+    mostra o alcance: o `CHANGELOG` da própria etapa 4 registrou *"com a descrição
+    cadastrada da base como descrição da tool"*, ou seja **nasceu falsa**, escrita
+    pela change que a tornou falsa.
+
+    **Por que engana mais que as outras formas:** não há nada de errado no código
+    da tela, nenhum dado novo chegou, nenhum teste reprova — as asserções da suíte
+    estavam escritas contra a metade estável da frase e passaram verdes com o
+    defeito presente. É a convenção 15 aplicada a cópia, e o único modo de detecção
+    que funciona é **ler o que a tela afirma contra o código que ela descreve**,
+    periodicamente e sobretudo depois de uma etapa que mexa no mecanismo descrito.
+
+    **Régua:** afirmação de tela sobre o que outro app faz carrega, no comentário,
+    **o arquivo e a linha de onde foi lida, mais o gatilho** — a condição sob a
+    qual ela deixa de valer. E a afirmação é **estrutural** ("o sistema envolve
+    este texto em instruções fixas"), nunca a reprodução do texto do outro app, que
+    seria segunda fonte de verdade e envelheceria a cada edição de prosa lá.
+
 14. **Mudança visual só é verificada por olho humano** — a suíte roda em
     jsdom, que não enxerga cor, contraste nem layout. Uma mudança de tema
     ou de composição pode deixar a suíte inteira verde e o painel
@@ -1078,6 +1109,43 @@ de propor algo nesta base:
     arrasta o teste dele.** A projeção de modificados desta change (2 arquivos)
     contou os de produção e foi cega aos testes deles; os três testes modificados
     somaram 60 das 99 linhas do escopo original. Projetar modificados em pares.
+
+    **Quarta causa, e ela não é sobre contagem de arquivo: a unidade de projeção
+    precisa casar com a de entrega.** Numa tela cujo valor está no que ela se
+    **recusa** a afirmar, cada negativa é um `it()` próprio, nunca uma cláusula
+    dentro de um teste positivo — senão a negativa some na primeira refatoração
+    que "limpar" o teste. Quem projetar uma tela dessas conta **as negativas**
+    antes de projetar linhas.
+
+    **E a 5a-4, primeira a usar essa contagem para PROJETAR em vez de explicar,
+    achou o degrau seguinte: a unidade tem de casar com a da SPEC, não só com a de
+    entrega.** Projetadas 6 negativas, entregues **8**, com o total de testes
+    acertando exato (861 contra ~861 projetados, sobre baseline de 850). A causa
+    não foi escopo novo nem negativa imprevista — **as oito estavam nos cenários do
+    delta de spec**. A projeção contou negativas *por afirmação recusada*; a spec
+    as escreveu *por estado observável*, e duas afirmações têm dois estados cada:
+    "o contador não emite veredito de qualidade" vira **abaixo do piso** e **acima
+    do piso**; "o preview não se declara o texto completo" vira **o rótulo** e
+    **não reproduzir o texto fixo**. Contar afirmações subestima; contar estados
+    acerta. **Régua: projetar negativas lendo os cenários da delta, não a lista de
+    coisas que a tela se recusa a dizer.**
+
+    **E o que a projeção de modificados não sabe prever, medido na mesma change:**
+    ela previu 4 asserções existentes a editar e **nenhuma** foi necessária — as
+    quatro estavam escritas contra a metade estável de cada frase, e a change
+    editava a outra metade. A única edição que apareceu veio da **conferência
+    manual**, não de leitura de código: a tela na frente revelou uma contradição
+    entre duas linhas vizinhas que nenhuma varredura apontaria. Blast radius se
+    varre; consequência de cópia, não.
+
+    **E a causa estrutural do desvio de LINHAS da 5a-4, que é reusável: numa change
+    cujo entregável é a RECUSA, o artefato é a razão registrada — e razão
+    registrada mora em comentário, não em código.** Dos +93 de produção, **+80 são
+    comentário e +13 são código**; um dos dois arquivos entregou *menos* código do
+    que tinha. A projeção leu "duas telas de cópia" e contou JSX. **Régua: quando o
+    entregável é uma recusa ou uma decisão registrada, projetar as linhas de
+    comentário como item próprio, com custo por razão citada.** Custo unitário
+    medido: ~26 linhas para uma recusa de três razões com arquivo e linha.
 
 19. **"Pré-existente" e "ambiental" são conclusões que exigem a baseline, e a
     baseline não fecha sozinha.** Três vezes nesta base uma falha de teste foi
