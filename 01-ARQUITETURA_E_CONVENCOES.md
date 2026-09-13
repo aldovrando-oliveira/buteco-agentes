@@ -184,6 +184,30 @@ checagem bidirecional do boot de `apps/workers` (convenção 8), e sem elas a
 troca silenciosa de modelo — que corrompe o índice sem erro nenhum — deixa de
 ser detectável.
 
+**E desde `knowledge-index-diagnostics` elas têm um segundo leitor**:
+`GET /knowledge-index/diagnostics` em `apps/api` devolve as combinações gravadas,
+cada uma com a contagem de fragmentos. A rota é **global** — não aceita id de base
+—, e a razão é a mesma que torna a checagem de boot possível: a dimensão é fixada
+pelo tipo da coluna (gravar 1536 numa `vector(4096)` responde
+`expected 4096 dimensions, not 1536`, medido) e só pode existir uma combinação no
+índice inteiro. Ela devolve o **gravado**, nunca o declarado, e não poderia fazer
+diferente: `apps/api` não tem a seção `Embedding` de configuração. Mais de uma
+combinação é resposta válida dessa rota e não erro — é o estado em que
+`apps/workers` está no chão e o operador abre o painel para entender por quê.
+
+**O `SELECT DISTINCT` sobre as três colunas é mais barato do que o tamanho da
+tabela sugere, e isso foi medido** (150.000 fragmentos, `pgvector/pgvector:pg18`):
+a varredura lê **só o heap**, 234 MB em 30.000 páginas, porque o `attstorage` da
+coluna de vetor é `EXTERNAL` e os 2,4 GB de vetor ficam em TOAST, fora do caminho
+da projeção. De 0,24 s a 0,82 s, e **sem sujar o cache** — o *ring buffer* de
+leitura em massa deixou 282 páginas em `shared_buffers` das 30.000 lidas, então a
+rota não evicta o cache que a busca usa. Gatilho registrado para criar um índice nas
+três colunas: p95 da rota acima de 500 ms ou heap acima de 500 MB; o índice custaria
+1,08 MB para 150.000 linhas, porque a deduplicação do btree colapsa valores
+idênticos — **o invariante que torna a varredura cara é o mesmo que torna o índice
+barato**. E `LIMIT 1` não serve: leria três páginas e seria cego à corrupção de duas
+combinações, que é o único estado que motiva a tela.
+
 **A tabela nasce na migração de `apps/api`, que não escreve nela.** Quem escreve
 é `apps/workers`, e o motivo é de deploy: o `migrator` do compose só empacota
 bundles de `apps/api` e `apps/inbox`. É contraintuitivo o bastante para alguém
