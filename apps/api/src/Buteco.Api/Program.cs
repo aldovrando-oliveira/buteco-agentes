@@ -11,6 +11,7 @@ using Buteco.Api.Knowledge.Indexing;
 using Buteco.Api.KnowledgeBases.Endpoints;
 using Buteco.Api.KnowledgeDocuments.Endpoints;
 using Buteco.Api.KnowledgeDocuments.Extraction;
+using Buteco.Api.KnowledgeFragments.Endpoints;
 using Buteco.Api.McpServers.Connectivity;
 using Buteco.Api.McpServers.Endpoints;
 using Buteco.Api.McpServers.Security;
@@ -95,6 +96,7 @@ app.MapAgentDelegationEndpoints();
 app.MapAgentKnowledgeBindingEndpoints();
 app.MapKnowledgeBaseEndpoints();
 app.MapKnowledgeDocumentEndpoints();
+app.MapKnowledgeIndexEndpoints();
 app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a");
 app.MapAgentCardEndpoint();
 

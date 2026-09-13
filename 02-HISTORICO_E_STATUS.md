@@ -3036,7 +3036,6 @@ previu para change cujo entregável carrega decisão: a documentação sozinha �
 linhas, 30% do total, e os quatro arquivos de produção criados têm 347 linhas para
 um resolvedor cuja lógica cabe em ~60.
 
-
 ### Achados de método de `frontend-knowledge-base-resumo-indexacao` (2026-09-13)
 
 Quatro registros que valem além da change que os produziu.
@@ -3131,7 +3130,6 @@ Cada um tem gatilho de quando revisitar:
   medem coisas diferentes e nenhum cobre o outro. **Gatilho com posição: a
   próxima change desta base** — é uma linha na lista de tarefas de documentação,
   e o custo de rodar é de segundos.
-
 
 - **REABERTO: a verificação manual do vazamento de descritores continua pendente,
   e o gatilho que apontava para cá FOI ALCANÇADO sem poder ser exercido.** A
@@ -3279,8 +3277,8 @@ Cada um tem gatilho de quando revisitar:
   | 1d | ~~**5a-3 — colunas e filtro do catálogo**~~ (`apps/frontend`) | **aplicada em 13/09/2026.** `apps/frontend` em 765/765. A rota `indexing-summary`, ociosa desde 11/09, ganhou consumidor. |
   | 2 | **Busca unificada entre bases vinculadas** (`apps/workers`) | desbloqueada pela etapa 4, que construiu resolvedor, consulta e guardas que ela reusa. Carve-out **com posição**, de `0d`. Falta o dado: caso real com bases de tamanhos desiguais. |
   | 3 | **5a-4 — formulário de base: generalidade da descrição e nome efetivo da tool** (`apps/frontend`) | **pronta.** As duas dependências existem: `0d` mediu a canibalização por descrição genérica, e a etapa 4 definiu `search_<slug>` mais o `ToolNameDeduplicator`. Toca `KnowledgeBaseForm`, e só ele. |
-  | 4 | backend do diagnóstico do índice (`apps/api`) | **não proposta** |
-  | 5 | **5c — UI do diagnóstico do índice** | bloqueada por #4 |
+  | 4 | ~~**backend do diagnóstico do índice**~~ (`apps/api`) | **aplicada em 13/09/2026.** `GET /knowledge-index/diagnostics`. `apps/api` em 317/318 — +9 testes, e a única falha é a pré-existente de `AgentDeactivationTests` (ver o item próprio abaixo). |
+  | 5 | **5c — UI do diagnóstico do índice** (`apps/frontend`) | **desbloqueada.** A rota existe e os corpos reais das três respostas estão no `design.md` de `knowledge-index-diagnostics`. Herda três correções de protótipo, abaixo. |
 
   **A linha 3 nasceu ao aplicar a 5a-3, corrigindo uma atribuição errada.** A
   tabela dizia que a 5a-3 "ganhou carga: é onde entra a orientação de
@@ -3298,11 +3296,102 @@ Cada um tem gatilho de quando revisitar:
   projeta a proveniência do índice —, enquanto a dependência da 5a-3 está no ar e
   sem consumidor desde 11/09/2026.
 
+  **RESOLVIDO em 13/09/2026**: o passo #4 foi proposto, aplicado, e o que ele
+  mediu mudou o tamanho da 5c. Ver o item próprio logo abaixo.
+
   Escopo da 5a-3, já escrito para não precisar ser reconstruído: duas colunas em
   `KnowledgeBaseTable`, a quarta opção de filtro em `KnowledgeBaseListPage`, um
   `useKnowledgeBaseIndexingSummaryQuery`, e o requisito `MODIFIED` na spec viva de
   `knowledge-base-catalog-ui` que hoje **proíbe** as colunas com asserção
   negativa.
+
+- **`knowledge-index-diagnostics` aplicada (13/09/2026) — e a exploração encolheu a
+  5c antes de ela existir.** Só `apps/api`: `GET /knowledge-index/diagnostics`
+  devolve as combinações de provedor/modelo/dimensão **gravadas** nos fragmentos,
+  cada uma com a contagem. `apps/api` em **317/318**, +9 testes sobre a baseline de
+  308/309.
+
+  **O achado de escopo:** das cinco linhas da aba do protótipo, só **três**
+  precisavam de backend. "Documentos indexados: X de Y" e "Fragmentos no índice" já
+  estavam no fio — `KnowledgeBaseDetailPage.tsx:44` já carrega a listagem de
+  documentos e `ListKnowledgeDocumentsQueryHandler` não pagina
+  (`ListKnowledgeDocumentsQueryHandler.cs:37-54`, lido). A lista de falhas com botão
+  de reindexar também. Faltava apenas a proveniência.
+
+  **Por que a rota é global e não por base**, com três evidências independentes:
+  a dimensão é inescrevível de outro jeito (`vector(4096)` em
+  `AppDbContext.cs:250`; gravar 1536 responde `expected 4096 dimensions, not 1536`,
+  **medido** contra `pgvector/pgvector:pg18`); a checagem de boot faz
+  `SELECT DISTINCT` sem filtro de base e reprova com mais de uma combinação
+  (`EmbeddingIndexConsistencyValidation.cs:52-82`, lido); e o protótipo modela a
+  proveniência como um objeto no estado raiz
+  (`Buteco Agentes.dc.html:1487`, lido). A resposta é a **lista** de combinações,
+  não três escalares, porque mais de uma combinação é o estado em que
+  `apps/workers` está no chão e `apps/api` de pé — é nele que o operador abre a
+  tela.
+
+  **Custo medido, e o estado da máquina junto** (convenção 22): 150.000 fragmentos
+  em 50 bases, `pgvector/pgvector:pg18`, PostgreSQL 18.6, VM do podman amd64 com
+  disco virtualizado, `shared_buffers` no default de 128 MB.
+
+  - A varredura lê **só o heap** — 234 MB, 30.000 páginas — porque o `attstorage`
+    da coluna de vetor é `EXTERNAL`: os 2,4 GB de vetor ficam em TOAST, fora da
+    projeção. **0,24 s a 0,82 s.**
+  - **Não suja o cache**: despejada a tabela de `shared_buffers` e rodada a
+    varredura de 30.000 páginas, sobraram **282 páginas (2,2 MB)** — *ring buffer*
+    de leitura em massa. Era o custo que mais preocupava (evictar o cache que a
+    busca usa) e **não existe**.
+  - `LIMIT 2` **não** curto-circuita: o `HashAggregate` consome toda a entrada
+    antes de emitir a primeira linha.
+  - O índice de cobertura custaria **1,08 MB** para 150.000 linhas, porque a
+    deduplicação do btree colapsa valores idênticos. **Não criado**, com gatilho:
+    p95 da rota acima de 500 ms ou heap acima de 500 MB.
+
+  **O aviso que tem de viajar com qualquer número daqui:**
+  `EXPLAIN (ANALYZE, BUFFERS, TIMING ON)` reportou **5,78 s** (com 50.000 linhas)
+  onde a consulta **sem instrumentação** rodou em 0,65–0,82 s (com 150.000) —
+  inflação de 7 a 9 vezes nesta VM. **Contagem de `BUFFERS` é confiável;
+  `Execution Time` com `TIMING ON` não é.** Os números acima são todos de consulta
+  sem instrumentação. Se o 5,78 vazar daqui, volta como "a consulta leva 6
+  segundos".
+
+  **Uma premissa do prompt desta change estava errada, e seguir ao pé da letra
+  teria quebrado o boot.** O prompt afirmava que
+  `ValidateRouteAuthenticationClassification` falharia o boot se a rota nova não
+  fosse classificada. Lido em `RouteAuthenticationExtensions.cs:23-54`: ela varre
+  **só** o caminho anônimo — rota `AllowAnonymous` sem motivo declarado, e
+  allowlist defasada. Rota autenticada não aparece em nenhuma das duas varreduras
+  porque não há nada a declarar: ela é fechada **por omissão** pela
+  `FallbackPolicy` (`Program.cs:66-70`). Pôr a rota nova na allowlist de
+  `Program.cs:107-110` **reprovaria** o boot, já que aquela lista é de rotas que
+  precisam estar anônimas. O guarda real da rota são os testes de 401 e 403.
+  **O `01` já estava certo** — a convenção 8 diz "classificação de rotas
+  **anônimas**" (`01-ARQUITETURA_E_CONVENCOES.md:702-703`) —, então a convenção foi
+  conferida e **não** alterada.
+
+  **O que a 5c herda, e nenhuma é rota nova:**
+
+  1. **O predicado da soma de fragmentos** muda de `status === 'indexed'` para
+     `indexedAt != null`. O protótipo subconta o índice (`:1500`), e pelo mecanismo
+     que é garantia deliberada do backend: a falha **preserva os fragmentos
+     anteriores** (`KnowledgeIndexingService.cs:193-196`, lido). Documento que
+     indexou com 14 fragmentos e falhou ao reindexar continua com 14 vivos,
+     continua respondendo consultas, e sai da soma. `docs/architecture.md:186-196`
+     **já escreve essa regra** — "não é 'omitir quando o documento não está
+     `Indexed`'" —, então o protótipo contradiz documentação viva, não só a spec.
+     Há um **segundo caminho** para o mesmo subcontar: no mock, `reindex` e a
+     atualização de conteúdo gravam `chunks: 0` enquanto o backend preserva.
+  2. **O gate do vazio passa a ser global** — a vacuidade do índice inteiro, não
+     `t.indexed > 0` da base (`:1632`, com o texto "Nada indexado nesta base" em
+     `:781`). Com a proveniência global, o gate por base esconde um fato que o
+     sistema sabe e insinua que o fato é da base.
+  3. **A aba separa as duas escalas** — três linhas de sistema e duas de base sob
+     um cabeçalho que só descreve as três primeiras.
+
+  **E a 5c não precisa subir o app para descobrir o contrato:** os **três** corpos
+  reais da rota — índice vazio, uma combinação, duas combinações — estão no
+  `design.md` da change, capturados com `apps/api` de pé contra Postgres real. O
+  tipo do cliente é uma lista, nunca um objeto de três campos.
 
 - **"Gatilho sem posição na fila é adiamento indefinido com outro nome" — terceira
   ocorrência da família, e ela agora tem três.** As outras duas: o gatilho do
@@ -3540,6 +3629,64 @@ Cada um tem gatilho de quando revisitar:
   placeholder porque parece preenchido. **Corolário:** o placeholder deixa de
   ser aceitável em spec nova — quem cria a capability escreve o `Purpose`.
 
+  **REVISTO em 13/09/2026, e o gatilho muda de verbo: de "escreve" para uma
+  pergunta.** `knowledge-index-diagnostics` modificou
+  `knowledge-document-indexing` e a conferência do arquivo vivo depois do sync
+  encontrou uma forma que este item não previa — **`Purpose` real, sem
+  placeholder, e incompleto**. Ele era de verdade, escrito na época certa, e
+  correto em tudo o que afirmava; só não afirmava a superfície de leitura que a
+  capability passou a cobrir (o resumo por base já estava de fora desde a 2b, e a
+  proveniência entrou agora). Nenhuma verificação automática alcança isso,
+  porque **não há nada errado no texto** — há algo que falta.
+
+  As duas formas, e o que as distingue:
+
+  | forma | origem | como se detecta |
+  |---|---|---|
+  | **placeholder** | o passo `4d` do skill manda escrever `TBD` | presença de string; estoque conhecido e contável |
+  | **`Purpose` envelhecido** | escrito de verdade, e a capability cresceu depois | **nada automático** — o texto está correto, só desatualizado |
+
+  **Por que isto reescreve o gatilho em vez de virar item próprio**, decidido e
+  não deixado implícito: a forma nova já está **dentro do escopo** da regra
+  ("criar **ou modificar** uma spec viva"); o que falha não é a regra, é o
+  **verbo** — "escreve o `Purpose`" resolve para nada-a-fazer quando já existe um
+  `Purpose` real, e é exatamente aí que a forma nova mora. E há evidência de
+  sessão para a alternativa: a mesma change **duplicou** o item de
+  `AgentDeactivationTests` porque escreveu um segundo registro em vez de
+  atualizar o existente, e os dois saíram **discordando do agendamento**
+  (`Gatilho: imediato` contra "posição na fila"). Dois itens para uma regra é
+  como a discordância nasce.
+
+  **O gatilho revisto:** toda change que criar ou modificar uma spec viva
+  responde, antes do archive, **"o `Purpose` ainda descreve o que esta capability
+  cobre DEPOIS desta change?"** — e escreve a resposta, não a ausência de
+  placeholder. É a pergunta da convenção 9 (implementação que diverge do
+  aprovado vira registro) aplicada ao texto que resume a capability.
+
+  **E a razão de a forma nova ficar mais cara com o tempo, não menos:** o estoque
+  de placeholders só cai, e a cada queda a forma envelhecida ocupa uma fração
+  maior do total. **Contado em 13/09/2026** (`grep "TBD - defined by change"`
+  sobre `openspec/specs/*/spec.md`, zero falsos positivos): **47 capabilities, 35
+  com placeholder, 12 com `Purpose` real.** No dia em que o estoque zerar, **100%
+  do risco de `Purpose` passa a ser a forma que nenhuma verificação pega** — e uma
+  conferência que pergunta "tem `TBD`?" vai passar verde em todas as 47.
+
+  **O número também corrige este item para cima: o gatilho está funcionando mais
+  do que ele registrava.** O parágrafo acima dizia "cinco com `Purpose` real" em
+  11/09; são **doze** dois dias depois — `a2a-task-lifecycle`,
+  `agent-tool-namespace`, `api-response-ordering`, `knowledge-document-catalog`,
+  `knowledge-document-catalog-ui`, `knowledge-document-indexing` e
+  `knowledge-tool-execution` entraram desde então, pelo gatilho e não por mutirão.
+  Sete em dois dias é o hábito formado — e é justamente por isso que a forma
+  envelhecida deixa de ser hipótese: quanto mais `Purpose` real existe, mais
+  superfície há para envelhecer.
+
+  **A família é a do aviso de comprimento de descrição da 5a-3** (item mais
+  abaixo): uma verificação que mede a dimensão errada não é neutra — ela é
+  **pior que verificação nenhuma**, porque um campo sem aviso convida a olhar e
+  um campo com aviso verde afirma que já foi olhado. `grep TBD` verde diz "o
+  `Purpose` foi conferido". Não diz.
+
 - **`AgentDeactivationTests` depende da ordem de execução** — achado durante
   `knowledge-base-catalogo-documentos`, pré-existente e não relacionado a ela.
   `AgentDeactivationFixture.TaskJobPublisher` é uma instância única
@@ -3551,6 +3698,27 @@ Cada um tem gatilho de quando revisitar:
   Gatilho: imediato — carve de defeito pré-existente, no mesmo idioma de
   `inbox-enums-json-string` e dos dois encoders de codec. Correção provável:
   limpar a coleção por teste, ou trocar `Assert.Empty` por contagem relativa.
+
+  **13/09/2026 — o `Gatilho: imediato` NÃO disparou, e agora há número.** A
+  baseline de `knowledge-index-diagnostics`, em `git worktree` limpo no `HEAD`
+  `35b7f01`, deu **308 aprovados / 1 reprovado / 309** — a reprovada é esta, duas
+  changes depois de o item ser aberto como "imediato". É a família *"gatilho sem
+  posição na fila é adiamento indefinido com outro nome"*, que este arquivo já
+  registra três vezes: **o item tem gatilho e não tem posição**, e nada o puxa.
+
+  A discriminação em três passos foi refeita e confirma o mecanismo já descrito
+  aqui: isolado (`--filter FullyQualifiedName=<o teste>`) **passa**; com a classe
+  **reprova**; em worktree limpo no `HEAD` reprova igual — logo pré-existente, não
+  da change que encontrou.
+
+  **Custo de deixar como está, que é o argumento para dar posição:** toda baseline
+  futura de `apps/api` sai com uma falha conhecida, e quem a ler precisa
+  reconstruir estes três passos para separar "já estava assim" de "foi minha
+  change". Foi o que aconteceu nesta — e a change ainda **duplicou este item**
+  antes de encontrá-lo, escrevendo um segundo registro que discordava do
+  agendamento ("posição na fila, não gatilho"). O segundo registro foi removido e
+  os fatos dobrados aqui. **Posição sugerida: antes da próxima change que tocar
+  `apps/api`.**
 - **`.env` local com nomes obsoletos de provedor de LLM** — usa
   `ChatClient__BaseUrl`/`ChatClient__ApiKey`/`ChatClient__Model`, mas
   `ChatClientOptions.SectionName` é `"OpenAI"` e `Program.cs` de
@@ -4884,7 +5052,6 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   nada nem antes nem depois, porque aquele SDK usa `HttpClient` estático — rodar
   só com OpenAI produziria um "corrigido" vazio. **Gatilho:** a validação manual
   da etapa 4 da linha de conhecimento, que roda no mesmo caminho de execução.
-
 
 ## Próximo passo
 

@@ -148,6 +148,17 @@ o versionamento pretende seguir
   indexados e em falha. Uma requisição para o conjunto inteiro, com custo
   independente do número de bases. A resposta de base **não** carrega essas
   contagens, de propósito.
+- Proveniência do índice de conhecimento, por
+  `GET /knowledge-index/diagnostics`: as combinações de provedor, modelo e
+  dimensão de embedding **gravadas nos fragmentos**, cada uma com a contagem de
+  fragmentos que a usa. A rota é **global**, fora do grupo de bases, porque a
+  proveniência é propriedade do sistema e não da base — a dimensão é fixada pelo
+  tipo da coluna e a checagem de boot exige combinação única no índice inteiro.
+  Devolve o que está **gravado**, nunca o que a configuração declara, e índice
+  vazio responde lista vazia em vez de insinuar o modelo que seria usado. Mais de
+  uma combinação é resposta válida, não erro: é o estado em que `apps/workers` se
+  recusa a subir, e é nele que o operador abre o painel — a contagem por
+  combinação é o que torna a reindexação decidível.
 - Gestão de documentos no painel, dentro do detalhe da base: listagem com o
   estado de indexação de cada documento, adição por arquivo
   (`.md`/`.markdown`/`.txt`, vários por vez, com título sugerido a partir do nome

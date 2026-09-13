@@ -89,6 +89,19 @@ public class KnowledgeRouteAuthenticationTests(ApiFactoryFixture factory) : ICla
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // A rota de diagnóstico do índice é global, fora do grupo de bases — e cai na
+    // mesma FallbackPolicy. Ela NÃO entra na allowlist de rotas anônimas de
+    // Program.cs: aquela lista é de rotas que precisam estar anônimas, e
+    // ValidateRouteAuthenticationClassification reprovaria o boot se a rota
+    // autenticada aparecesse lá. O guarda desta rota é este teste.
+    [Fact]
+    public async Task KnowledgeIndexDiagnostics_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await UnauthenticatedClient().GetAsync("/knowledge-index/diagnostics");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     [Fact]
     public async Task ReindexKnowledgeDocument_WithoutToken_ReturnsUnauthorizedAndDoesNotEnqueue()
     {

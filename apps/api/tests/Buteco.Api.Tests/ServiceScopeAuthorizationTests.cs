@@ -59,6 +59,14 @@ public class ServiceScopeAuthorizationTests(ApiFactoryFixture factory) : IClassF
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task ServiceToken_OnKnowledgeIndexDiagnostics_ReturnsForbidden()
+    {
+        var response = await ServiceScopedClient().GetAsync("/knowledge-index/diagnostics");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private HttpClient ServiceScopedClient()
     {
         var client = factory.CreateClient();
