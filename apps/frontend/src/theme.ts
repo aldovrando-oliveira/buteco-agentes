@@ -211,9 +211,19 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     // mais claro que a superfície, no escuro é o mais escuro. Cravar `gray[1]`
     // deixava a faixa branca no tema escuro.
     '--buteco-surface-subtle': 'var(--mantine-color-gray-1)',
+    // Tinta da marca. Entra aqui pelo mesmo critério das duas acima: o papel
+    // troca de ponta da escala entre os esquemas, então precisa ser variável e
+    // não tom cravado. Nenhuma cor nova — #191a1c é gray[9] e #e9eaec é
+    // dark[0], que já existem. O que faltava era nome para o papel:
+    // --mantine-color-text lê theme.black no claro, e como o tema não declara
+    // `black` vale o default #000, que é preto puro e não a tinta da marca.
+    // Consumido pelo componente Logo, que passa a tinta ao `currentColor` do
+    // desenho (design.md da change frontend-marca-visual, D3).
+    '--buteco-brand-ink': 'var(--mantine-color-gray-9)',
   },
   dark: {
     '--buteco-page-bg': 'var(--mantine-color-dark-9)',
     '--buteco-surface-subtle': 'var(--mantine-color-dark-6)',
+    '--buteco-brand-ink': 'var(--mantine-color-dark-0)',
   },
 });

@@ -54,6 +54,27 @@ describe('LoginPage', () => {
     clearToken();
   });
 
+  it('encabeça a tela com a marca, nomeando o produto uma única vez', () => {
+    const { container } = renderPage();
+
+    // O lockup desenha o nome, mas é decorativo: quem carrega o nome acessível
+    // é o <h2>, por texto visualmente oculto. Se o SVG também o expusesse, o
+    // leitor de tela anunciaria "Buteco Agentes" duas vezes (D9, D11).
+    expect(screen.getByRole('heading', { level: 2, name: 'Buteco Agentes' })).toBeInTheDocument();
+
+    // Contando só o que a tecnologia assistiva alcança: o <text> do lockup
+    // também escreve o nome no DOM, mas está sob aria-hidden e não é anunciado.
+    const anunciado = screen.getAllByText('Buteco Agentes', {
+      ignore: '[aria-hidden="true"], [aria-hidden="true"] *',
+    });
+    expect(anunciado).toHaveLength(1);
+
+    const svg = container.querySelector('svg');
+    expect(svg?.getAttribute('aria-hidden')).toBe('true');
+    // O nome desenhado é o do lockup, não uma peça sem assinatura.
+    expect(svg?.querySelector('text')?.textContent).toBe('Buteco Agentes');
+  });
+
   it('em sucesso, armazena o token e redireciona para a área autenticada', async () => {
     vi.mocked(login).mockResolvedValue({
       token: 'token-emitido',

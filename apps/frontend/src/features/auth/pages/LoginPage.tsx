@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Center, Paper, Stack, Title } from '@mantine/core';
+import { Center, Paper, Stack, Title, VisuallyHidden } from '@mantine/core';
+import { Logo } from '../../../components/brand/Logo';
 import { useNavigate } from 'react-router';
 import { setToken } from '../../../auth/token';
 import { useLoginMutation } from '../api/useAuth';
@@ -31,8 +32,23 @@ export function LoginPage() {
     <Center h="100vh">
       <Paper withBorder shadow="sm" p="xl" w={360}>
         <Stack>
-          <Title order={2}>Buteco Agentes</Title>
-          <LoginForm onSubmit={handleSubmit} submitting={mutation.isPending} errorMessage={errorMessage} />
+          {/* A única tela com espaço vertical para o lockup, que é a
+              assinatura da marca: símbolo e nome com o espaçamento óptico e a
+              escala tipográfica desenhados no pacote, e não empilhados aqui.
+              O nome vem desenhado, então o <Title> guarda só a semântica de
+              cabeçalho e o nome acessível — anunciado uma vez, porque o lockup
+              é decorativo (design.md da change frontend-marca-visual, D11). */}
+          <Stack align="center" gap={0}>
+            <Title order={2}>
+              <Logo variant="vertical" size={110} />
+              <VisuallyHidden>Buteco Agentes</VisuallyHidden>
+            </Title>
+          </Stack>
+          <LoginForm
+            onSubmit={handleSubmit}
+            submitting={mutation.isPending}
+            errorMessage={errorMessage}
+          />
         </Stack>
       </Paper>
     </Center>

@@ -1,7 +1,6 @@
 import {
   ActionIcon,
   AppShell as MantineAppShell,
-  Box,
   Group,
   NavLink,
   ScrollArea,
@@ -9,6 +8,7 @@ import {
 } from '@mantine/core';
 import { BookOpen, Bot, MessagesSquare, Moon, Server, Sun } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
+import { Logo } from '../brand/Logo';
 import { useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
 
 const navItems = [
@@ -21,29 +21,6 @@ const navItems = [
   { to: '/knowledge-bases', label: 'Conhecimento', icon: BookOpen },
   { to: '/channels', label: 'Canais', icon: MessagesSquare },
 ];
-
-// Quadrado de identidade do protótipo: 24px, raio 6px, fundo na cor de
-// destaque, "B" em monoespaçada branca.
-function ProductMark() {
-  return (
-    <Box
-      w={24}
-      h={24}
-      bg="var(--mantine-primary-color-filled)"
-      style={{
-        borderRadius: 'var(--mantine-radius-xs)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-      }}
-    >
-      <Text c="white" ff="monospace" fw={700} fz={12} lh={1} aria-hidden>
-        B
-      </Text>
-    </Box>
-  );
-}
 
 export function AppShell() {
   const location = useLocation();
@@ -68,7 +45,7 @@ export function AppShell() {
           style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
         >
           <Group gap="xs" wrap="nowrap">
-            <ProductMark />
+            <Logo size={24} />
             <Text fw={600} fz="sm" style={{ letterSpacing: '-0.01em' }}>
               Buteco Agentes
             </Text>

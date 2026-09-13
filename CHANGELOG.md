@@ -243,6 +243,12 @@ o versionamento pretende seguir
 - Busca com normalização de acentos e filtro por estado nas listagens.
 - Padrões visuais compartilhados: card seccionado, rótulo de seção e
   cabeçalho de detalhe.
+- Marca do produto no painel: símbolo Robô-garçom na barra lateral e na tela
+  de login, favicon e ícone de aplicativo próprios, e título de documento com
+  o nome do produto — no lugar do quadrado com a letra "B", do favicon do
+  scaffold e do título `frontend`. A marca é servida por um componente único,
+  troca de cor junto com o esquema do painel e degrada para a peça legível
+  quando o tamanho pedido fica abaixo do mínimo do manual.
 
 **Documentação e governança**
 
