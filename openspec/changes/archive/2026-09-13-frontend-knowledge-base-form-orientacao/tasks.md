@@ -264,12 +264,25 @@ não previsse — as oito estão nos cenários do delta.
 
 ## 11. Documentação, um artefato por vez
 
-- [ ] 11.1 **ADIADO POR DECISÃO DE QUEM REVISA — não fazer sem ordem explícita.**
-      `openspec/specs/knowledge-base-catalog-ui/spec.md` — sincronizar os dois
-      requisitos `MODIFIED`. A delta está escrita e validada; falta só o
-      `/opsx:sync`.
-- [ ] 11.2 **ADIADO junto com 11.1**, mas a **leitura foi feita** e o resultado
-      fica aqui para o sync não precisar redescobri-lo.
+- [x] 11.1 `openspec/specs/knowledge-base-catalog-ui/spec.md` — sincronizar os dois
+      requisitos `MODIFIED`. **Feito em 13/09/2026, depois da revisão e do merge do
+      PR #18.** Os dois foram substituídos inteiros: `A descrição da base é
+      apresentada como texto lido pelo modelo` (19 → 30 linhas, +1 cenário) e
+      `Orientação e preview da descrição no formulário` (46 → 133 linhas, de 5 para
+      **14** cenários). Conferido depois: `## Requirements` no lugar, 10 requisitos
+      sem duplicata, nenhum cabeçalho de delta vazado, nenhuma cópia velha
+      sobrevivente, `openspec validate --all` em **50/50**.
+- [x] 11.2 O `## Purpose` foi editado **nas duas metades da mesma frase**, que era
+      a armadilha registrada aqui. Não bastava trocar `três` por `quatro`: a frase
+      também afirmava *"sempre da mesma forma"*, e o quarto lugar **não** é da
+      mesma forma. Ficou:
+
+      > *"…se manifesta em **quatro** lugares desta interface, **não todos da mesma
+      > forma**: nos três primeiros, distinguindo 'sei que é zero' de 'não sei'; no
+      > quarto, distinguindo **a parte do todo**."*
+
+      Com um quarto marcador na lista, na mesma voz dos outros três. A leitura que
+      antecipou isso está preservada abaixo.
 
       O `## Purpose` vivo não tem `TBD`, e mesmo assim **fica incompleto com esta
       change**. Ele diz que a regra de não afirmar o que o sistema não sabe *"se
