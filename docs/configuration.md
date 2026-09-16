@@ -101,11 +101,11 @@ restrito, a extensão precisa ser criada antes, por fora da migração.
 | `POSTGRES_USER` | `buteco` | Usuário do Postgres local |
 | `POSTGRES_PASSWORD` | `buteco_dev_password` | Senha do Postgres local |
 | `POSTGRES_DB` | `buteco_agents` | Banco criado na subida |
-| `POSTGRES_PORT` | `5432` | Porta publicada no host |
+| `POSTGRES_PORT` | `5432` | Porta publicada no host. **`.env.example` define `15532`**, que é o que os `appsettings.Development.json` versionados esperam — o default só vale se a variável estiver ausente |
 | `RABBITMQ_USER` | `buteco` | Usuário do RabbitMQ local |
 | `RABBITMQ_PASSWORD` | `buteco_dev_password` | Senha do RabbitMQ local |
-| `RABBITMQ_AMQP_PORT` | `5672` | Porta AMQP publicada no host |
-| `RABBITMQ_MANAGEMENT_PORT` | `15672` | Porta da UI de management |
+| `RABBITMQ_AMQP_PORT` | `5672` | Porta AMQP publicada no host. **`.env.example` define `15772`**, idem acima |
+| `RABBITMQ_MANAGEMENT_PORT` | `15672` | Porta da UI de management. **`.env.example` define `15872`** |
 | `WAHA_PORT` | `3000` | Porta do WAHA, usado pelo adapter `waha` |
 
 ---
@@ -243,7 +243,8 @@ de configuração que o processo enxerga.
 | `PUBLIC_DOMAIN` | `PublicUrl__BaseUrl` de `apps/api` **e** de `apps/inbox` |
 | `TZ` | `TZ` de `apps/workers` |
 | `OPENAI_BASE_URL` / `OPENAI_API_KEY` | `OpenAI__BaseUrl` / `OpenAI__ApiKey` nos dois processos |
-| `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | `Anthropic__ApiKey` / `Gemini__ApiKey` |
+| `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | `Anthropic__ApiKey` / `Gemini__ApiKey`, em `apps/api` **e** `apps/workers`. Opcionais: vazias, os provedores não aparecem em `GET /providers` |
+| `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS` | `Embedding__Provider` / `__Model` / `__Dimensions` de `apps/workers`. **`MODEL` e `DIMENSIONS` são obrigatórias** — o compose falha ao processar o arquivo sem elas, porque a ausência não impede o boot e só aparece na primeira indexação |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` — byte-idêntica entre `apps/api` e `apps/workers` |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` — só `apps/inbox` |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` — byte-idêntica entre `apps/api` e `apps/inbox` |

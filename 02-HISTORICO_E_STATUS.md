@@ -5290,6 +5290,79 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   só com OpenAI produziria um "corrigido" vazio. **Gatilho:** a validação manual
   da etapa 4 da linha de conhecimento, que roda no mesmo caminho de execução.
 
+### Abertos por `fix-stack-servidor-lacunas` (2026-09-16)
+
+- **A RÉGUA QUE SAI DESTA CHANGE: contorno manual que entra em runbook é
+  candidato a defeito na origem.** Os três furos de roteamento do nginx —
+  `internal`, `knowledge-bases` e `knowledge-index` — **só apareceram porque
+  alguém subiu o stack numa máquina nova e escreveu o que precisou contornar**.
+  Nenhum guarda os pegava: `check-docs.py` não lê `.conf`, `openspec validate`
+  mede estrutura de spec, e a spec viva de `server-deployment` **enumerava
+  exatamente os mesmos oito prefixos do `nginx.conf`** — foi escrita contra a
+  implementação, então o cenário passava porque descrevia o defeito.
+
+  **A pergunta se faz na hora de escrever o contorno, não meses depois:** *"por
+  que isto não vem certo do repositório?"*. O `RUNBOOK-LOCAL.md` documentava dez
+  contornos; oito eram defeitos na origem, e ficaram lá porque documentar é mais
+  barato que consertar no momento em que morde.
+
+  **Gatilho:** qualquer passo manual que entre em runbook, nota de máquina ou
+  troubleshooting. Antes de escrevê-lo, perguntar se o ponto de origem não
+  deveria entregá-lo pronto.
+
+- **O runbook achou DOIS dos três furos; o terceiro saiu da enumeração.**
+  `knowledge-index` não estava no patch documentado — aplicar aquele patch como
+  estava corrigiria duas telas e deixaria a aba de diagnóstico quebrada. Patch de
+  runbook se escreve de memória, a partir do que mordeu; correção no repositório
+  se escreve a partir da enumeração. **A régua entrou no comentário do
+  `nginx.conf`**, com os dois comandos de conferência, para não depender de
+  memória na próxima vez.
+
+- **Varredura de segredo se faz por FORMATO DO VALOR, não por nome do campo.**
+  A varredura da tarefa 1.3 falhou **três vezes** antes de achar: `(?!...)` é
+  PCRE e `grep -E` não o suporta (o "zero achados" não valia); alternação com
+  ramo vazio erra no `ugrep`; e o padrão por nome de campo
+  (`ApiKey|BaseUrl|Password|Token|Secret`) **não listava
+  `CredentialEncryptionKey`** e perdeu duas chaves AES. Só o padrão por formato
+  (base64 de 32 bytes) as encontrou. Nome de campo é a lista do que se espera
+  encontrar.
+
+- **PENDENTE — duas classes de valor commitado, achadas pela 1.3 e NÃO
+  corrigidas**, porque não estavam na lista de oito defeitos do `proposal.md` e
+  absorvê-las seria expansão de escopo:
+  1. **chaves de criptografia e assinatura de desenvolvimento** em
+     `appsettings.Development.json` versionado — `apps/api:33`
+     (`Mcp:CredentialEncryptionKey`), `apps/api:36` e `apps/inbox:32`
+     (`Auth:TokenSigningKey`, mesmo valor nos dois), `apps/inbox:12`
+     (`Inbox:CredentialEncryptionKey`). São material criptográfico **local de
+     dev**, classe diferente da credencial de serviço externo que a change
+     corrigiu; a de `apps/api:33` é **a mesma** constante usada como fixture em
+     nove arquivos de teste. **Decidir se dev-local justifica ficar versionado**
+     — e, se ficar, escrever por quê, porque hoje não está escrito em lugar
+     nenhum;
+  2. **`apps/inbox/.../appsettings.Development.json:18`** — URL de túnel
+     Cloudflare commitada e **morta** (conferido: `HTTP 000`). Não é segredo; é
+     valor de máquina que força contorno manual a cada execução, e o
+     `RUNBOOK-LOCAL.md` (B3) manda sobrescrevê-la. Mesma família dos oito
+     defeitos, fora da lista por não ter sido enumerada a tempo.
+
+- **PENDENTE — a verificação de ponta a ponta dos três prefixos (tarefa 2.4).**
+  Feito: `nginx -t` aprova a configuração editada. **Não feito:** subir o stack e
+  confirmar que cada prefixo responde JSON em vez de `200` com HTML, e que o
+  round-trip de push notification completa com a resposta saindo no canal. Exige
+  `.env.prod` completo, provedor de LLM alcançável e um canal real — nada disso
+  disponível no ambiente onde a change foi aplicada. **É a única verificação que
+  fecha o defeito mais caro dos três**, e o `nginx -t` não a substitui: sintaxe
+  válida não é roteamento correto.
+
+- **`docker compose` não foi testado — só `podman compose`.** A sintaxe de
+  variável obrigatória (`${VAR:?mensagem}`) foi **medida** no `podman-compose`
+  5.8.3 (falha com a mensagem customizada, exit 1, nenhum serviço criado) e
+  **não** no `docker compose`, ausente na máquina. É da especificação do Compose
+  e ambos a implementam, mas **paridade não medida não é paridade verificada**.
+  **Gatilho:** o primeiro deploy num ambiente com Docker repete o teste — são
+  dois comandos.
+
 ## Próximo passo
 
 **Concluído nesta sessão**: a **5a-4**
