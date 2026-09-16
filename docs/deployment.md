@@ -38,7 +38,21 @@ de ambiente.
    preencha todos os valores `changeme` (ver seção "Variáveis por processo"
    abaixo e [configuration.md](configuration.md)). Nunca versionar
    `.env.prod`.
-2. `docker compose -f docker-compose.prod.yml up -d`
+2. `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`
+
+   > **`--env-file .env.prod` não é opcional.** O compose interpola `${VAR}` mas
+   > não declara `env_file:` — o Compose, sozinho, lê `.env`, nunca `.env.prod`.
+   >
+   > **Omiti-lo agora falha no processamento do arquivo**, nomeando a variável
+   > que falta e como fornecê-la; nenhum serviço é criado. Antes desta proteção,
+   > o mesmo comando subia o Postgres **sem senha configurada** quando não havia
+   > `.env` na pasta, ou comia as variáveis de **dev** quando havia.
+   >
+   > Variável homônima **exportada no shell vence o `--env-file`**, e sem aviso.
+   > Confira antes de subir:
+   > ```bash
+   > env | grep -E 'OPENAI|EMBEDDING|POSTGRES|RABBITMQ|AUTH_|MCP_|INBOX_|PUBLIC_DOMAIN|STACK_HTTP_PORT|^TZ='
+   > ```
    - `postgres`/`rabbitmq` sobem primeiro (healthcheck).
    - `migrator` roda depois de `postgres` saudável, aplica as migrations
      de `apps/api` e `apps/inbox` (cria `buteco_agents`/`buteco_inbox` se
@@ -88,6 +102,8 @@ o índice único envolvido nesse caminho.
 | `PUBLIC_DOMAIN` | `PublicUrl__BaseUrl` | api (externa — `AgentCard.SupportedInterfaces`), inbox (D8 — mesmo domínio, ver nota abaixo) | sim | mesmo valor nos dois, mas por motivos diferentes (não é o mesmo requisito, é coincidência desta change) |
 | `TZ` | `TZ` (env var direta, não `IConfiguration`) | workers | sim, fail-fast | N/A |
 | `OPENAI_BASE_URL`/`OPENAI_API_KEY` | `OpenAI__BaseUrl`/`OpenAI__ApiKey` | api (só checa presença), workers (usa de verdade) | sim (workers) | precisa ser a mesma chave configurada nos dois |
+| `ANTHROPIC_API_KEY`/`GEMINI_API_KEY` | `Anthropic__ApiKey`/`Gemini__ApiKey` | api (só checa presença), workers (usa de verdade) | não | vazias, os provedores não aparecem em `GET /providers` |
+| `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` | `Embedding__Provider`/`__Model`/`__Dimensions` | workers | **sim** — o compose falha sem `MODEL` e `DIMENSIONS` | N/A. Sem elas o boot **passa** e a **primeira indexação** falha com modelo vazio e dimensão 0. A coluna do índice é `vector(4096)`, fixa na migration |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` | api (cifra), workers (decifra) | sim | **sim, byte-idêntica** |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` | api, inbox | sim, fail-fast | **sim, byte-idêntica** |

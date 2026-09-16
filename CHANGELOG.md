@@ -300,6 +300,45 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Três prefixos de API não eram roteados pelo nginx do stack de servidor, e
+  caíam no fallback de SPA**: `internal`, `knowledge-bases` e `knowledge-index`
+  respondiam `200` com HTML onde o consumidor esperava JSON — a resposta errada
+  com o status certo. O mais caro era `internal`: `apps/workers` entrega a push
+  notification em `/internal/push-notifications`, então a task completava, o
+  agente respondia, e **nada saía no canal**, sem erro em lugar nenhum.
+  `knowledge-bases` e `knowledge-index` quebravam o painel de bases e a aba de
+  diagnóstico do índice. A lista de prefixos do nginx passa a ser derivada dos
+  prefixos que `apps/api` e `apps/inbox` de fato servem, com o comando de
+  conferência escrito no próprio arquivo, em vez de mantida de memória — foi por
+  enumerar, e não por lembrar, que o terceiro apareceu.
+- **O compose de produção não entregava a seção `Embedding` a `apps/workers`**:
+  o boot passava, porque a checagem de consistência do índice não diverge de um
+  índice vazio, e a **primeira indexação** falhava com modelo vazio e dimensão 0
+  — erro longe da causa. `Embedding__Provider`, `__Model` e `__Dimensions`
+  passam a ser interpoladas, e as duas últimas são obrigatórias.
+- **`ANTHROPIC_API_KEY` e `GEMINI_API_KEY` não chegavam a processo nenhum no
+  stack de servidor**: `.env.prod.example` as oferecia e `docs/configuration.md`
+  prometia o mapeamento, mas nenhum serviço do compose as consumia — só OpenAI
+  funcionava. Passam a ser interpoladas em `apps/api` e `apps/workers`.
+- **Variável de ambiente ausente produzia configuração insegura em silêncio**:
+  sem `--env-file .env.prod`, o Compose lia `.env` ou nada, e todo `${VAR}`
+  virava string vazia — o Postgres subia **sem senha configurada**. As variáveis
+  cuja ausência tem esse efeito passam a ser obrigatórias na interpolação, com
+  mensagem que diz o que fazer, e o Compose falha ao processar o arquivo em vez
+  de criar serviço nenhum.
+- **Credencial funcional de serviço externo commitada em arquivo versionado**:
+  `apps/workers/.../appsettings.Development.json` trazia endpoint de gateway
+  interno e chave de API, entregues a todo clone do repositório. A chave foi
+  rotacionada e os campos passam a `changeme`. O worker agora exige
+  `OpenAI__BaseUrl`/`OpenAI__ApiKey` no ambiente para o ambiente híbrido de
+  desenvolvimento, e `docs/development.md` registra que sem elas toda task
+  termina `failed`.
+- **`.env.example` publicava Postgres e RabbitMQ em portas que os
+  `appsettings.Development.json` versionados não usavam**: copiar o exemplo como
+  a documentação manda fazia os três apps falharem a conexão, com sintoma de
+  banco fora do ar. O exemplo passa a trazer `15532`/`15772`/`15872`, que é o
+  que os `appsettings` esperam.
+
 - **Documentação do custo da busca vetorial citava um volume de disco como se
   fosse orçamento de latência**: `docs/architecture.md` registrava 7.500
   fragmentos como referência de armazenamento, e o gatilho do índice ANN falava

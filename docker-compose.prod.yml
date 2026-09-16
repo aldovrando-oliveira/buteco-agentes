@@ -28,8 +28,8 @@ services:
     image: pgvector/pgvector:pg18
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER — use --env-file .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD — use --env-file .env.prod}
       POSTGRES_DB: buteco_agents
     volumes:
       - buteco-postgres-data-prod:/var/lib/postgresql
@@ -45,8 +45,8 @@ services:
     image: rabbitmq:4.3-management
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?defina RABBITMQ_USER — use --env-file .env.prod}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD — use --env-file .env.prod}
     volumes:
       - buteco-rabbitmq-data-prod:/var/lib/rabbitmq
     healthcheck:
@@ -87,11 +87,16 @@ services:
       RabbitMq__Password: ${RABBITMQ_PASSWORD}
       OpenAI__BaseUrl: ${OPENAI_BASE_URL}
       OpenAI__ApiKey: ${OPENAI_API_KEY}
-      Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY}
-      PublicUrl__BaseUrl: ${PUBLIC_DOMAIN}
-      Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY}
-      Auth__OperatorUsername: ${AUTH_OPERATOR_USERNAME}
-      Auth__OperatorPasswordHash: ${AUTH_OPERATOR_PASSWORD_HASH}
+      # apps/api só checa PRESENÇA destas duas para listar o provedor em
+      # GET /providers; quem as usa de verdade é apps/workers. Precisam
+      # existir nos dois, senão a api anuncia e a task falha no worker.
+      Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
+      Gemini__ApiKey: ${GEMINI_API_KEY:-}
+      Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY:?defina MCP_CREDENTIAL_ENCRYPTION_KEY — use --env-file .env.prod}
+      PublicUrl__BaseUrl: ${PUBLIC_DOMAIN:?defina PUBLIC_DOMAIN — use --env-file .env.prod}
+      Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY:?defina AUTH_TOKEN_SIGNING_KEY — use --env-file .env.prod}
+      Auth__OperatorUsername: ${AUTH_OPERATOR_USERNAME:?defina AUTH_OPERATOR_USERNAME — use --env-file .env.prod}
+      Auth__OperatorPasswordHash: ${AUTH_OPERATOR_PASSWORD_HASH:?defina AUTH_OPERATOR_PASSWORD_HASH — use --env-file .env.prod}
     # Sem porta publicada — só o nginx do stack (serviço "frontend")
     # alcança apps/api, via nome de serviço na rede do compose.
 
@@ -105,7 +110,7 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=buteco_inbox;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
-      Inbox__CredentialEncryptionKey: ${INBOX_CREDENTIAL_ENCRYPTION_KEY}
+      Inbox__CredentialEncryptionKey: ${INBOX_CREDENTIAL_ENCRYPTION_KEY:?defina INBOX_CREDENTIAL_ENCRYPTION_KEY — use --env-file .env.prod}
       Api__BaseUrl: "http://api:8080"
       # D8: mesmo domínio público de apps/api nesta change (trade-off
       # documentado — push notification interna sai e volta pela
@@ -131,7 +136,7 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      TZ: ${TZ}
+      TZ: ${TZ:?defina TZ com nome IANA canônico, sem prefixo ":" — use --env-file .env.prod}
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=buteco_agents;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       RabbitMq__Host: rabbitmq
       RabbitMq__Port: "5672"
@@ -139,6 +144,16 @@ services:
       RabbitMq__Password: ${RABBITMQ_PASSWORD}
       OpenAI__BaseUrl: ${OPENAI_BASE_URL}
       OpenAI__ApiKey: ${OPENAI_API_KEY}
+      Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
+      Gemini__ApiKey: ${GEMINI_API_KEY:-}
+      # Sem estas três o boot PASSA — a checagem de consistência do índice
+      # não diverge de um índice vazio — e a PRIMEIRA indexação falha, com
+      # modelo vazio e dimensão 0. appsettings.json (Production) não tem
+      # default; só o appsettings.Development.json tem, e ele não é lido
+      # dentro do contêiner.
+      Embedding__Provider: ${EMBEDDING_PROVIDER:-openai}
+      Embedding__Model: ${EMBEDDING_MODEL:?defina EMBEDDING_MODEL — sem default seguro, foi escolhido por medição}
+      Embedding__Dimensions: ${EMBEDDING_DIMENSIONS:?defina EMBEDDING_DIMENSIONS — a coluna do índice é vector(4096), fixa na migration}
       Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY}
     # Sem porta — apps/workers nunca serviu HTTP.
 
@@ -164,7 +179,7 @@ services:
       # Só porta interna do host — nunca 80/443 diretamente. Quem recebe
       # tráfego público é o nginx/Cloudflare já existentes, fora deste
       # stack, fazendo proxy_pass pra essa porta.
-      - "127.0.0.1:${STACK_HTTP_PORT}:80"
+      - "127.0.0.1:${STACK_HTTP_PORT:?defina STACK_HTTP_PORT — porta interna do host, nunca 80/443}:80"
 
 volumes:
   buteco-postgres-data-prod:

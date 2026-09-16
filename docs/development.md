@@ -89,16 +89,23 @@ correta não impede transcrição pela metade; a saída do runner impede.
 ## Subir as dependências (Postgres, RabbitMQ, WAHA)
 
 ```bash
-cp .env.example .env   # ajuste as portas se 5432/5672/15672 já estiverem em uso
+cp .env.example .env   # as portas já vêm alinhadas; não edite sem necessidade
 docker compose up -d   # ou: podman compose up -d
 ```
 
 Isso sobe:
 
-- **Postgres** na porta `5432` (padrão), com banco, usuário e senha definidos
-  no `.env`.
-- **RabbitMQ** nas portas `5672` (AMQP) e `15672` (UI de management, em
-  `http://localhost:15672`, com as mesmas credenciais do `.env`).
+- **Postgres** na porta `15532`, com banco, usuário e senha definidos no `.env`.
+- **RabbitMQ** nas portas `15772` (AMQP) e `15872` (UI de management, em
+  `http://localhost:15872`, com as mesmas credenciais do `.env`).
+
+> **Por que portas não-padrão.** Os `appsettings.Development.json` dos três apps
+> são **versionados** e apontam para `15532`/`15772`. O `.env.example` traz os
+> mesmos valores, de modo que copiar o exemplo e subir o compose produza um
+> ambiente que conecta, sem ajuste manual. Se você mudar as portas no `.env`,
+> mude também nos `appsettings` — ou exporte `ConnectionStrings__Postgres` e
+> `RabbitMq__Port` no ambiente, que é o caminho que não mexe em arquivo
+> versionado.
 - **WAHA** (WhatsApp HTTP API) na porta `3000` (padrão), usado por
   `apps/inbox` para exercitar o adapter `waha`. Sobe sem sessão
   pré-configurada — ver
@@ -215,7 +222,7 @@ cada provedor de LLM:
 
 | Variável | Provedor |
 |---|---|
-| `OpenAI:BaseUrl` / `OpenAI:ApiKey` / `OpenAI:Model` | OpenAI, ou Azure OpenAI / gateway compatível (basta trocar `BaseUrl` e `ApiKey`) |
+| `OpenAI:BaseUrl` / `OpenAI:ApiKey` / `OpenAI:Model` | OpenAI, ou Azure OpenAI / gateway compatível. **Não há valor utilizável no `appsettings.Development.json` versionado** — ver a nota abaixo |
 | `Embedding:Provider` / `Embedding:Model` / `Embedding:Dimensions` | Modelo de embedding da indexação de bases de conhecimento (`apps/workers`). Sem credencial própria — reusa a de `OpenAI`. `apps/workers` **falha o boot** se divergir do que já está gravado no índice |
 | `Anthropic:ApiKey` | Claude, via pacote oficial `Anthropic` |
 | `Gemini:ApiKey` | Gemini, via pacote oficial `Google.GenAI` |
@@ -225,6 +232,19 @@ fato, mas **a mesma chave precisa existir nos dois processos**. `apps/api` e
 `apps/workers` são deploys separados: se `apps/api` anunciar um provedor
 disponível em `GET /providers` e `apps/workers` não tiver a mesma chave, a
 task termina `failed` (com log de erro no worker) em vez de travar.
+
+> **O endpoint e a chave de LLM não vêm no repositório, e isso é deliberado.**
+> `apps/workers/src/Buteco.Workers/appsettings.Development.json` traz
+> `OpenAI:BaseUrl` e `OpenAI:ApiKey` como `changeme` — arquivo versionado não
+> carrega credencial funcional de serviço externo. **Sem configurá-las, toda
+> task termina `failed`**, e o motivo só aparece no log do worker.
+>
+> Passe as suas no ambiente, sem tocar o arquivo versionado:
+>
+> ```bash
+> OpenAI__BaseUrl=https://api.openai.com/v1 OpenAI__ApiKey=sk-... \
+>   dotnet run --project apps/workers/src/Buteco.Workers
+> ```
 
 `apps/workers` também exige a variável de ambiente **`TZ` do sistema
 operacional** — não lida via `IConfiguration` — com o nome IANA canônico da
