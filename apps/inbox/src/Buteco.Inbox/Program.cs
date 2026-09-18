@@ -134,6 +134,7 @@ app.MapContactEndpoints();
 app.MapChannelSessionEndpoints();
 app.MapSessionSummaryEndpoints();
 app.MapMessageEndpoints();
+app.MapMessageSummaryEndpoints();
 app.MapPushNotificationEndpoints();
 app.MapWebhookEndpoints();
 

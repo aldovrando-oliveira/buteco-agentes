@@ -93,6 +93,12 @@ o versionamento pretende seguir
   período (`startedCount`), agregada no banco. Conta por instante de início,
   não por atividade nem por sessão aberta durante o intervalo; os dois limites
   são obrigatórios e inclusivos.
+- `GET /messages/summary?from=…&to=…` — contagem de mensagens **recebidas** no
+  período (`inboundCount`), agregada no banco. Conta **só as de entrada**: as
+  respostas enviadas pelo agente ficam de fora, em qualquer estado de entrega.
+  A unidade contada é a mensagem distinta, não a entrega de webhook — um evento
+  reentregue pelo provedor conta uma vez. Os dois limites são obrigatórios e
+  inclusivos.
 - Painel de catálogo de canais, e de sessões e histórico de conversa.
 
 **Autenticação**
