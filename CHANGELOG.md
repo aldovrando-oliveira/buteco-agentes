@@ -347,6 +347,21 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **A contagem de mensagens recebidas da tela de entrada nunca chegava ao
+  `apps/inbox`**: o prefixo `messages`, que ganhou rota de nível superior com
+  `GET /messages/summary`, não foi acrescentado ao nginx do stack de servidor. A
+  chamada caía no fallback de SPA e respondia `200` com HTML, para todo mundo,
+  em todo carregamento. É a quarta vez que um prefixo servido fica fora da lista
+  do nginx. A nota de conferência do arquivo passa a listar também os quatro
+  falsos positivos que os greps devolvem.
+- **O browser podia servir o shell do SPA no lugar da resposta da API**: o nginx
+  devolve, para a mesma URL (ex. `/agents`), o shell numa navegação e JSON num
+  `fetch()`. O `index.html` saía sem `Cache-Control`, e o browser o guardava por
+  heurística. Depois de um refresh em `/agents`, a lista de agentes deixava de
+  carregar, com a requisição servida do cache de disco sem chegar ao servidor.
+  O defeito só aparecia com o deploy já envelhecido. O shell passa a sair com
+  `Cache-Control: no-store`, e os assets com hash de conteúdo continuam
+  cacheáveis.
 - **Três prefixos de API não eram roteados pelo nginx do stack de servidor, e
   caíam no fallback de SPA**: `internal`, `knowledge-bases` e `knowledge-index`
   respondiam `200` com HTML onde o consumidor esperava JSON — a resposta errada
