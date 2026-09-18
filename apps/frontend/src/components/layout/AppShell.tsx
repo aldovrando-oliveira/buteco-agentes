@@ -6,12 +6,16 @@ import {
   ScrollArea,
   Text,
 } from '@mantine/core';
-import { BookOpen, Bot, MessagesSquare, Moon, Server, Sun } from 'lucide-react';
+import { BookOpen, Bot, LayoutGrid, MessagesSquare, Moon, Server, Sun } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
 import { Logo } from '../brand/Logo';
 import { useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
 
 const navItems = [
+  // Aponta para /inventory, e NÃO para '/', embora a raiz redirecione para cá:
+  // o `active` abaixo é `startsWith(to)`, e com `to="/"` este item ficaria
+  // permanentemente ativo em toda rota do painel (design.md, D1).
+  { to: '/inventory', label: 'Inventário', icon: LayoutGrid },
   { to: '/agents', label: 'Agentes', icon: Bot },
   { to: '/mcp-servers', label: 'Servidores MCP', icon: Server },
   // Terceira posição, antes de Canais, como no protótipo. O ícone é BookOpen do

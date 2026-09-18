@@ -17,7 +17,13 @@ export function LoginPage() {
     mutation.mutate(values, {
       onSuccess: (result) => {
         setToken(result.token);
-        navigate('/agents', { replace: true });
+        // Para a RAIZ, e não para uma tela específica: qual é a entrada do
+        // painel é definido num lugar só, a árvore de rotas (design.md, D2).
+        //
+        // Este é o caminho de entrada DOMINANTE, não um dos dois: ProtectedRoute
+        // não preserva a rota tentada, e o tratamento de 401 força /login a
+        // partir de qualquer tela — então toda expiração de token passa por aqui.
+        navigate('/', { replace: true });
       },
       onError: () => {
         // Mesma mensagem genérica que apps/api já responde para usuário

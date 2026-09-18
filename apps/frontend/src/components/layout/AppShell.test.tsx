@@ -38,9 +38,16 @@ describe('AppShell', () => {
     window.localStorage.clear();
   });
 
-  it('lista os itens de navegação Agentes, Servidores MCP, Conhecimento e Canais', () => {
+  it('lista os itens de navegação Inventário, Agentes, Servidores MCP, Conhecimento e Canais', () => {
     renderAppShell();
 
+    // A negativa de 'Dashboard' INVERTEU, e o motivo está no design.md: a
+    // decisão de 2026-07-27 removeu o item porque não existia página, e escreveu
+    // a condição de reabertura — "reintroduzi-los quando a página existir de
+    // fato". A página existe; o item volta, com o nome que a tela tem.
+    //
+    // 'Inboxes' continua ausente: aquele item segue sem página.
+    expect(screen.getByRole('link', { name: 'Inventário' })).toHaveAttribute('href', '/inventory');
     expect(screen.getByRole('link', { name: 'Agentes' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Servidores MCP' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Conhecimento' })).toHaveAttribute(
@@ -48,7 +55,6 @@ describe('AppShell', () => {
       '/knowledge-bases',
     );
     expect(screen.getByRole('link', { name: 'Canais' })).toBeInTheDocument();
-    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
     expect(screen.queryByText('Inboxes')).not.toBeInTheDocument();
   });
 
@@ -102,7 +108,7 @@ describe('AppShell', () => {
     const { container } = renderAppShell();
 
     // O rótulo textual continua sendo o nome acessível; o ícone é decoração.
-    for (const label of ['Agentes', 'Servidores MCP', 'Conhecimento', 'Canais']) {
+    for (const label of ['Inventário', 'Agentes', 'Servidores MCP', 'Conhecimento', 'Canais']) {
       const link = screen.getByRole('link', { name: label });
       const icon = link.querySelector('svg');
 
@@ -110,10 +116,11 @@ describe('AppShell', () => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     }
 
-    expect(container.querySelectorAll('a svg')).toHaveLength(4);
+    expect(container.querySelectorAll('a svg')).toHaveLength(5);
   });
 
   it.each([
+    ['/inventory', 'Inventário'],
     ['/agents/abc-123', 'Agentes'],
     ['/agents/new', 'Agentes'],
     ['/mcp-servers/abc-123/edit', 'Servidores MCP'],
@@ -129,9 +136,13 @@ describe('AppShell', () => {
     // não só a raiz dele.
     expect(screen.getByRole('link', { name: ativo })).toHaveAttribute('data-active', 'true');
 
-    for (const outro of ['Agentes', 'Servidores MCP', 'Conhecimento', 'Canais'].filter(
-      (l) => l !== ativo,
-    )) {
+    for (const outro of [
+      'Inventário',
+      'Agentes',
+      'Servidores MCP',
+      'Conhecimento',
+      'Canais',
+    ].filter((l) => l !== ativo)) {
       expect(screen.getByRole('link', { name: outro })).not.toHaveAttribute('data-active');
     }
   });

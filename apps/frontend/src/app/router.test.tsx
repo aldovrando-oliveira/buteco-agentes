@@ -121,18 +121,21 @@ describe('appRoutes', () => {
     renderRoutesFrom('/');
 
     expect(await screen.findByLabelText(/usuário/i)).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Agentes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Inventário' })).not.toBeInTheDocument();
   });
 
-  it('redireciona a rota raiz para a listagem de agentes sem exibir página vazia', async () => {
+  it('redireciona a rota raiz para o inventário sem exibir página vazia', async () => {
     renderRoutesFrom('/');
 
-    expect(await screen.findByRole('heading', { name: 'Agentes' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Inventário' })).toBeInTheDocument();
   });
 
   it('preserva o layout do AppShell ao navegar entre rotas', async () => {
     const user = userEvent.setup();
-    renderRoutesFrom('/');
+    // Parte de /agents, e não da raiz: o que este caso prova é que a casca
+    // sobrevive à navegação. O destino da raiz tem caso próprio acima, e fazê-lo
+    // atravessar o inventário aqui só acrescentaria um passo sem asserção.
+    renderRoutesFrom('/agents');
 
     // O item de navegação é procurado dentro da barra lateral: a página de
     // criação também tem um link chamado "Agentes", o de voltar para a
@@ -152,7 +155,7 @@ describe('appRoutes', () => {
 
   it('navega para a listagem de canais pelo item de navegação "Canais"', async () => {
     const user = userEvent.setup();
-    renderRoutesFrom('/');
+    renderRoutesFrom('/agents');
 
     await screen.findByRole('heading', { name: 'Agentes' });
     await user.click(screen.getByRole('link', { name: 'Canais' }));
@@ -163,7 +166,7 @@ describe('appRoutes', () => {
 
   it('navega para o catálogo de bases pelo item de navegação "Conhecimento"', async () => {
     const user = userEvent.setup();
-    renderRoutesFrom('/');
+    renderRoutesFrom('/agents');
 
     await screen.findByRole('heading', { name: 'Agentes' });
     await user.click(screen.getByRole('link', { name: 'Conhecimento' }));
@@ -200,6 +203,40 @@ describe('appRoutes', () => {
     expect(screen.getByRole('link', { name: 'Servidores MCP' })).toBeInTheDocument();
   });
 
+  it('a contagem do inventário e a da listagem de agentes não divergem', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listAgents).mockResolvedValue([
+      { ...agent, id: '11111111-1111-1111-1111-111111111111', name: 'Atendente' },
+      { ...agent, id: '22222222-2222-2222-2222-222222222222', name: 'Cobrança' },
+      { ...agent, id: '33333333-3333-3333-3333-333333333333', name: 'Triagem' },
+    ]);
+
+    renderRoutesFrom('/');
+
+    // A contagem é LIDA do inventário, não escrita aqui. Fixar o número no
+    // teste provaria outra coisa — que o mock tem três agentes —, e é o acordo
+    // entre as duas telas que este caso existe para provar.
+    // Espera pelo NÚMERO, não pelo card: o card renderiza de imediato, com o
+    // esqueleto de carregamento, e só depois ganha a contagem.
+    const contagem = (await screen.findByTestId('inventario-agents-contagem')).textContent?.trim();
+    const item = screen.getByTestId('inventario-agents');
+
+    // Guarda do próprio teste: sem ela, uma contagem vazia faria a asserção
+    // final virar /  agentes cadastrados/ e casar por acidente.
+    //
+    // Checa que é UM número, nunca QUAL número: prender ao valor mockado faria
+    // este caso reprovar ao mudar a fixture, por um motivo que não é o que ele
+    // prova. O número certo quem confere é a asserção final, contra a listagem.
+    expect(contagem).toMatch(/^\d+$/);
+
+    await user.click(within(item).getByRole('link', { name: 'Ver agentes' }));
+
+    expect(await screen.findByRole('heading', { name: 'Agentes' })).toBeInTheDocument();
+    // Mesmo idioma de asserção de AgentListPage.test.tsx:126, com o número
+    // vindo do card e não do teste.
+    expect(screen.getByText(new RegExp(`${contagem} agentes cadastrados`))).toBeInTheDocument();
+  });
+
   it('monta a partir de uma rota interna sem token e leva para o login', async () => {
     clearToken();
 
@@ -212,8 +249,19 @@ describe('appRoutes', () => {
 
 describe('AppRouter', () => {
   beforeEach(() => {
+    // AS QUATRO, e não só listAgents: a raiz passou a levar ao inventário, que
+    // consulta os quatro catálogos. Configurar só uma deixaria as outras três
+    // dependendo do `mockResolvedValue` VAZADO do describe anterior — vitest não
+    // limpa mocks entre describes e vite.config.ts não liga `clearMocks`, então
+    // o caso passaria por ordem de execução, não por estar correto.
     vi.mocked(listAgents).mockReset();
     vi.mocked(listAgents).mockResolvedValue([]);
+    vi.mocked(listMcpServers).mockReset();
+    vi.mocked(listMcpServers).mockResolvedValue([]);
+    vi.mocked(listKnowledgeBases).mockReset();
+    vi.mocked(listKnowledgeBases).mockResolvedValue([]);
+    vi.mocked(listChannels).mockReset();
+    vi.mocked(listChannels).mockResolvedValue([]);
     setToken('token-de-teste');
   });
 
@@ -228,6 +276,6 @@ describe('AppRouter', () => {
   it('monta a aplicação com o browser router de produção', async () => {
     renderProviders(<AppRouter />);
 
-    expect(await screen.findByRole('heading', { name: 'Agentes' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Inventário' })).toBeInTheDocument();
   });
 });

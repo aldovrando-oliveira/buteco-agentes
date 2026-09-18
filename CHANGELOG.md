@@ -269,6 +269,19 @@ o versionamento pretende seguir
   scaffold e do título `frontend`. A marca é servida por um componente único,
   troca de cor junto com o esquema do painel e degrada para a peça legível
   quando o tamanho pedido fica abaixo do mínimo do manual.
+- Tela de inventário dos catálogos em `/inventory`, que passa a ser a entrada
+  do painel e ganha o quinto item da barra lateral: um item por catálogo —
+  agentes, servidores MCP, bases de conhecimento e canais — com a contagem, o
+  estado da consulta que a produziu e o atalho para a listagem correspondente.
+  Cada item **consulta, falha e recarrega por conta própria**: um catálogo
+  indisponível não impede os outros de exibir contagem, e oferece nova
+  tentativa que refaz só a consulta dele. Nenhuma rota nova de backend — a
+  contagem sai da mesma consulta que alimenta a listagem daquele catálogo, de
+  modo que as duas telas não têm como divergir. Contagem apurada que deu zero
+  é dita por extenso; consulta que não respondeu aparece como desconhecida,
+  **com a razão** — nunca como zero, que afirmaria uma contagem que ninguém
+  fez. O item não repete o texto explicativo da listagem: a explicação de cada
+  catálogo continua tendo um lugar só.
 
 **Documentação e governança**
 
@@ -289,6 +302,14 @@ o versionamento pretende seguir
   navegação.
 - A página separada de vínculo MCP deixou de existir, absorvida como aba do
   detalhe do agente; a rota antiga sobrevive como redirect.
+- **A rota raiz do painel passou a levar ao inventário**, e não mais à
+  listagem de agentes — muda a tela de entrada de todo operador. Junto, o
+  login passou a navegar para a raiz em vez de `/agents`, para que o destino
+  da entrada tenha uma definição só, na árvore de rotas. A segunda troca não é
+  cosmética: a rota tentada não é preservada no redirect para o login e toda
+  resposta `401` força aquela tela, então o login é o caminho de entrada
+  dominante — sem ela, a maior parte das entradas continuaria caindo na
+  listagem de agentes.
 - Explicação de falha no painel passou a usar `failureReason` em vez da
   mensagem crua da API.
 - Imagens Docker passaram a usar a variante default de

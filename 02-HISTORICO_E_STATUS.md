@@ -81,6 +81,15 @@ de cabeçalho compartilhados, e o protocolo A2A finalmente visível para quem
 opera. A suíte do frontend saiu de 341 para 451 testes ao longo dessas oito
 etapas.
 
+**O painel ganhou tela de entrada** em `frontend-inventario-catalogos`
+(2026-09-17): `/inventory` responde "o que existe cadastrado, e as quatro
+consultas responderam?", e a rota raiz e o login passam a levar até lá.
+Aplicada, sincronizada — `catalog-inventory-ui`, capability nova — e
+arquivada; `apps/frontend` em **874/874**. Não é a nona etapa do redesenho: o
+handoff original não tem essa tela e abre em `/agents` por escolha, então ela
+é divergência registrada, não continuação. Ver "Tela de entrada do painel"
+abaixo.
+
 ## Changes aplicadas, por linha de trabalho
 
 ### Fundação (backend + frontend básico)
@@ -3257,6 +3266,72 @@ dela.
      resolve configuração por caminho de arquivo precisa da cópia dentro da
      árvore.**
 
+### Tela de entrada do painel (`frontend-inventario-catalogos`, 2026-09-17)
+
+`/inventory` passa a ser a entrada do painel, com um item por catálogo —
+agentes, servidores MCP, bases de conhecimento e canais —, cada um com a
+contagem, o estado da consulta que a produziu e o atalho para a listagem.
+Aplicada, sincronizada (`catalog-inventory-ui`, capability nova) e arquivada.
+`apps/frontend` em **874/874**, contra baseline de 861/861 medida na mesma
+sessão, antes de tocar em qualquer arquivo. Só `apps/frontend`; nenhuma rota
+nova de backend.
+
+**Não é a nona etapa do redesenho, e vale dizer por quê.** O handoff original
+**não tem** tela de entrada: o mapa de rotas dele é "o de hoje, menos uma", a
+barra lateral tem quatro itens, e percorrido no navegador ele **abre em
+`/agents` por escolha**. Esta change diverge dele — é a **sexta** divergência
+registrada do redesenho (convenção 17), e o protótipo que ela implementa é
+posterior, feito para ela. A resposta do handoff para "quem chega sem nada
+cadastrado" é o card *Primeiros passos* dentro de `/agents`, adiado desde
+2026-09-05; para "o que existe cadastrado aqui" ele não responde em lugar
+nenhum.
+
+**A tela entrou pelo sinal de saúde, não pelo inventário.** As quatro contagens
+já estavam na tela, cada uma no subtítulo da sua listagem — a exploração mediu
+isso e o enunciado original ("hoje se responde abrindo quatro telas e contando
+linha") estava errado na segunda metade: o subtítulo dá o número pronto. O que
+não existia em tela nenhuma era o estado das quatro consultas ao mesmo tempo.
+
+**Sétima divergência, medida:** o protótipo põe o texto de consulta em andamento
+no tom terciário, que dá **3,21:1** sobre a superfície no claro — abaixo do
+mínimo de 4,5:1 que o próprio tema exige (`theme.ts:168-171`). Mesma forma da
+quinta divergência do redesenho. A tela usa `c="dimmed"` (5,21:1 / 6,40:1). No
+mesmo cálculo, os contrastes que o handoff **declarou** para o texto de falha
+(6,5:1 / 8,4:1) saíram **5,93:1 / 7,84:1** — ~0,6 acima do real, sem mudar
+veredito: os dois passam AA.
+
+Três coisas a carregar:
+
+- **O breakpoint do protótipo não existe como `@media`.** A grade é `auto-fit`
+  com mínimo de 256px; o reflow é **emergente**. Os números do handoff (1348px
+  de janela, cards de 318px) conferem — mas vêm da aritmética do `auto-fit` mais
+  o cromo simulado (barra 224px + 2×26px + invólucro de 1320px), não de uma
+  regra no arquivo. **No app o cromo é outro** (224 + 2×16 = 256px), e o
+  invólucro de 1320px **não foi adotado** — nenhuma página do painel tem
+  container de largura máxima. Reflow real: **1328 / 1056 / 784px** de janela.
+- **`apps/inbox` entrou no caminho de entrada.** Abrir o painel passou de uma
+  requisição a um processo para quatro a dois. Aceito, e a razão que decide não
+  é nenhuma das mitigações: a change **não cria** a dependência, ela a torna
+  visível mais cedo — `apps/inbox` fora do ar já quebrava `/channels`. Não há
+  convenção que governe isto: a seção *Degradação graciosa* de
+  `docs/conventions.md` é inteira de backend, e a de *Frontend* não cobre falha
+  parcial de uma de N origens numa tela. O precedente é código —
+  `KnowledgeBaseListPage.tsx:157-167`.
+- **O login era o caminho de entrada dominante, e quase passou despercebido.**
+  `ProtectedRoute` não preserva a rota tentada e todo `401` força `/login`, que
+  navegava para `/agents` fixo. Sem trocar isso, a tela nova só seria vista por
+  quem digitasse a URL raiz. Achado na rodada de fechamento da proposta, por
+  leitura do arquivo — não estava no blast radius da primeira projeção.
+
+**Três specs vivas foram conferidas e NENHUMA precisou de `MODIFIED`**, o que
+contrariou a projeção: `frontend-scaffold` diz que a raiz redireciona para "a
+primeira feature disponível" (`:79-80`), `operator-login-ui` diz "a página
+inicial autenticada" (`:12-13`), e `frontend-app-shell` já exige "um item para
+cada área do painel que possua página real" (`:33`). As três são regras, não
+listas — e a recusa de 2026-07-27 que tirou "Dashboard" da navegação tinha
+escrito a própria condição de reabertura: *"reintroduzi-los quando a página
+existir de fato"*.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -4309,6 +4384,17 @@ Cada um tem gatilho de quando revisitar:
   frontend de fato consome) ainda só devolve `LastActivityAt`, sem
   `closedAt`. Gatilho: a lista de sessões do frontend precisar distinguir
   conversa viva de conversa encerrada.
+
+  **DISPAROU em 2026-09-17 — por um consumidor que não é o previsto aqui, e a
+  diferença importa.** `frontend-inventario-catalogos` quis um quadro de
+  "sessões ativas" e esbarrou na mesma lacuna, conferida nos records e não neste
+  item: `SessionResponse` (`:21-27`) tem `ClosedAt?`, `ChannelSessionResponse`
+  (`:5-10`) não. Mas o gatilho escrito acima é *a lista distinguir* conversa
+  viva de encerrada; o que apareceu foi *contar* as vivas. **Segunda ocorrência
+  da mesma lacuna, não o gatilho previsto batendo** — quem for atender isto
+  atende dois consumidores com formas diferentes, e dimensionar pela lista
+  sozinha subestima. O quadro ficou fora daquela change por sequenciamento
+  (convenção 1): backend não se improvisa dentro de change de tela.
 - **Aplicação em produção da migration `AddUniqueOpenSessionIndex`**
   (`inbox-session-indice-unico`) — aplicada e verificada em dev nesta
   change; **não aplicada em produção nesta sessão, sem acesso**. Quatro
@@ -5365,11 +5451,33 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
 
 ## Próximo passo
 
-**Concluído nesta sessão**: a **5a-4**
-(`frontend-knowledge-base-form-orientacao`), última change da linha de bases de
-conhecimento. Aplicada e conferida, **não sincronizada nem arquivada** — a spec
-delta espera revisão antes de virar viva. `apps/frontend` em **861/861**, contra a
-baseline de 850/850 medida sobre `f925ebc`.
+**Concluído nesta sessão**: `frontend-inventario-catalogos` — a tela de entrada
+do painel. Explorada, proposta, aplicada, conferida à mão, sincronizada
+(`catalog-inventory-ui`, capability nova) e arquivada. `apps/frontend` em
+**874/874**, contra baseline de 861/861 medida na mesma sessão antes de tocar em
+qualquer arquivo. `CHANGELOG.md` atualizado. **Nada commitado** — o trabalho está
+na árvore, incluindo os artefatos arquivados e a spec viva nova.
+
+**Um achado de método desta sessão, e ele custou tempo:** a suíte do frontend
+reprovou **18, depois 25, depois 10** testes em três rodadas seguidas, sempre em
+arquivos que a change não toca nem importa. Nenhuma era regressão. A máquina
+estava saturada por `com.apple.Virtualization` a **251% de CPU** — a VM do
+Podman —, com load average chegando a 56, e todas as falhas eram testes de
+formulário estourando o `asyncUtilTimeout` de 15s. **O que fechou o diagnóstico
+não foi rodar isolado** (isso só mostra que passa isolado, que é compatível com
+regressão de ordem): foi o **conjunto de falhas mudar entre rodadas** —
+regressão real reprova o mesmo teste toda vez. Com a máquina calma, a mesma
+árvore deu 874/874 em 61s, **mais rápido que a baseline de 79s**. Régua: antes
+de investigar falha de suíte, olhar o load average; e conjunto de falhas
+instável é diagnóstico, não ruído a ignorar.
+
+**Anteriormente**: a **5a-4** (`frontend-knowledge-base-form-orientacao`),
+última change da linha de bases de conhecimento, e `fix-stack-servidor-lacunas`
+(2026-09-16), que corrigiu os prefixos não roteados pelo nginx e a configuração
+que o compose de produção não entregava. Ambas aplicadas, sincronizadas,
+arquivadas e commitadas. **`fix-stack-servidor-lacunas` tem seção em "Itens em
+aberto" mas não em "Changes aplicadas"** — lacuna de registro da sessão dela,
+anotada aqui para quem for fechá-la.
 
 **A linha de bases de conhecimento fechou a fila de UI.** Das cinco etapas
 previstas, todas foram aplicadas. O que **sobra** na linha está na tabela da fila
@@ -5384,8 +5492,10 @@ acima, e é preciso dizer para que ninguém a leia como concluída:
   a linha 2, que muda o mecanismo de roteamento e é onde o bar volta a ser
   medível.
 
-**Pendente desta sessão, por decisão de quem revisa:** `/opsx:sync` e
-`/opsx:archive` da 5a-4. O trabalho está na árvore, sem commit.
+**Pendente desta sessão, por decisão de quem revisa:** o commit. Estamos na
+`main`, então o caminho é branch + PR. Na árvore: seis arquivos de
+`apps/frontend` modificados, `features/inventory/` novo, `CHANGELOG.md`,
+`openspec/specs/catalog-inventory-ui/` e a change arquivada.
 
 **Anteriormente nesta linha**: `0a` (dedupe de nome de tool), `0b` (head-to-head
 semântico, modelo e schema), `0c` (chunker, invariantes, overlap, `k` e limiar),
