@@ -27,20 +27,43 @@ para o que vem a seguir.
 de MCP + delegação (nome de tool sombreado em silêncio no conjunto entregue ao
 LLM), sequenciada antes da etapa 4 de bases de conhecimento pela convenção 12.
 Suíte de `apps/workers` em 168/168; censo de colisão em todos os agentes reais do
-sistema deu zero. Duas perguntas ficaram em aberto **com gatilho, sem bloquear**:
+sistema deu zero. *(Correção de status em 18/09/2026: "agentes reais" era
+verdade só enquanto não havia produção. O censo foi rodado em dev e não cobre o
+cadastro do piloto. Ver o parágrafo de produção abaixo.)* Duas perguntas ficaram em aberto **com gatilho, sem bloquear**:
 o comportamento dos provedores diante de histórico citando função ausente da lista
 (R7) e o limite de nome de função do Anthropic (R8) — as duas dependem da mesma
 chave de API que `0b` espera. Ver "Itens em aberto".
 
-**Não existe ambiente de produção**: tudo está em desenvolvimento. Isso não é
-pendência, é o estado do projeto, e é o que permite fechar verificações como o
-censo de colisão contra dev sem ressalva — dev é onde estão os agentes reais. O
-que só faz sentido contra dados de produção está agrupado na subseção
-"Primeiro deploy em produção (checklist)".
+**Existe ambiente de produção.** Um piloto atende em
+`https://agente.butecandoespetobar.com.br`, com o stack de servidor
+(`docker-compose.prod.yml`) atrás do Cloudflare, e em 18/09/2026 estava
+respondendo em WAHA e Telegram.
+
+*(Correção de status em 18/09/2026: este parágrafo dizia "**Não existe ambiente
+de produção**: tudo está em desenvolvimento", e que isso "permite fechar
+verificações como o censo de colisão contra dev sem ressalva — dev é onde estão
+os agentes reais". Com o piloto em produção, essa justificativa é falsa. **Dev
+deixou de ser onde estão os agentes reais**, e verificação fechada contra dev
+passa a valer só para dev. A data exata do primeiro deploy do piloto não está
+registrada neste arquivo. Os pontos que se apoiavam na premissa estão marcados
+com esta mesma nota, **sem reabrir as decisões** (isso é exploração própria):
+o censo de colisão de `dedupe-global-nome-de-tool`; o checklist "Primeiro
+deploy em produção"; a verificação de autenticidade do webhook do WAHA, que é
+risco não mitigado **agora exposto**, com o WAHA ativo no piloto; o
+"sem consequência hoje" das chaves de Anthropic/Gemini; o `docker compose` não
+testado; e os índices por volume real. Fora deste arquivo, encosta também no
+**risco aceito do placeholder `changeme`** (`docs/deployment.md`, "Risco
+aceito: placeholder `changeme` não é rejeitado no boot", e `SECURITY.md`), que
+passa a valer contra um stack real.)*
 
 A linha de trabalho de **bases de conhecimento** está **concluída na fila de UI**,
-com a 5a-4 (`frontend-knowledge-base-form-orientacao`) aplicada em 13/09/2026 e
-**ainda não sincronizada nem arquivada**. Ela fechou os dois itens abertos que
+com a 5a-4 (`frontend-knowledge-base-form-orientacao`) aplicada em 13/09/2026,
+sincronizada (`knowledge-base-catalog-ui`) e arquivada em
+`openspec/changes/archive/2026-09-13-frontend-knowledge-base-form-orientacao/`
+(commit `3fb4b7a`). *(Correção de status em 18/09/2026: este parágrafo dizia
+"ainda não sincronizada nem arquivada", o que estava defasado desde `3fb4b7a`.
+Conferido contra o arquivo e contra a spec viva: as duas requirements da delta
+estão em `openspec/specs/knowledge-base-catalog-ui/spec.md`.)* Ela fechou os dois itens abertos que
 apontavam para ela — a orientação de generalidade da `Description` e o nome
 efetivo da tool — e achou um terceiro defeito que nenhum dos dois previa: três
 superfícies afirmavam que a descrição cadastrada **é** a descrição da tool, e
@@ -94,7 +117,7 @@ abaixo.
 (2026-09-18): dois itens, sessões iniciadas e mensagens recebidas nos últimos 7
 dias, consumindo as duas rotas agregadas que `apps/inbox` ganhou em #23 e #24.
 Aplicada, sincronizada (`catalog-inventory-ui`, com `Purpose` reescrito) e
-arquivada; nada commitado. `apps/frontend` em **921/921**, contra baseline de
+arquivada; mergeada na `main` (#25). *(Correção de status em 18/09/2026: dizia "nada commitado"; está commitada e mergeada na `main` pelo #25, `e7212e9`.)* `apps/frontend` em **921/921**, contra baseline de
 874/874. Ver "Atividade na tela de entrada"
 abaixo.
 
@@ -3347,8 +3370,8 @@ recebidas**, cada um com a contagem dos últimos 7 dias (janela rolante de 168h
 que termina no instante da consulta). Só `apps/frontend`; as rotas são as de
 `inbox-sessoes-por-periodo` e `inbox-mensagens-recebidas-periodo`. Baseline
 **82 arquivos / 874 testes**, fechamento **84 / 921**. Aplicada, sincronizada
-(`Purpose` de `catalog-inventory-ui` reescrito inteiro) e arquivada; nada
-commitado.
+(`Purpose` de `catalog-inventory-ui` reescrito inteiro) e arquivada; mergeada
+na `main` (#25). *(Correção de status em 18/09/2026: dizia "nada commitado"; está commitada e mergeada na `main` pelo #25, `e7212e9`.)*
 
 **O D10 de `frontend-inventario-catalogos` foi fechado, não contradito.** Ele
 deixava fora "qualquer quadro de atividade" por dois motivos: nenhuma rota
@@ -3378,6 +3401,89 @@ Coisas a carregar:
   Nova York (08/03/2026) lida por `Intl` com fuso explícito.
 - **Os 187/182px de linha com "não sei" eram do protótipo.** No app, 201,4px a
   389px de largura, medido **igual na `main`**: não é regressão.
+
+### Hotfix do nginx: shell sem cache e prefixo `messages` (`nginx-shell-sem-cache-e-prefixo-messages`, 2026-09-18)
+
+Hotfix de estabilização do piloto em produção. Na tela de entrada, os cards
+**Agentes** e **Mensagens recebidas** estavam em erro, e `/agents` não carregava.
+Eram **dois defeitos independentes** no mesmo arquivo
+(`apps/frontend/deploy/nginx.conf`), com perfis de risco opostos. Só
+`apps/frontend`, sem rota de backend e sem migration.
+**Estado: aplicada, sincronizada (`server-deployment`) e arquivada em
+`openspec/changes/archive/2026-09-18-nginx-shell-sem-cache-e-prefixo-messages/`, commitada na branch
+`fix/nginx-shell-sem-cache-e-prefixo-messages`.** O `tasks.md` fechou 100%. Ele
+contém só o verificável no repositório, e o deploy acontece depois do merge. O
+merge na `main` e o deploy são do mantenedor. **A verificação pós-deploy é
+obrigação aberta**, com comando e critério, em "Abertos por
+`nginx-shell-sem-cache-e-prefixo-messages`". Depois do archive, este é o único
+lugar onde ela é acionável: o `design.md` arquivado descreve a verificação, mas
+não a executa.
+
+Além do `nginx.conf`: `docs/deployment.md` §2 ganhou o caso "Redeploy só do
+frontend", com a verificação que o acompanha (procedimento permanente, não só
+desta change). O `CHANGELOG.md` registra os dois defeitos em "Fixed". O
+`Purpose` de `server-deployment`, placeholder `TBD` desde
+`containerizacao-stack-servidor`, foi escrito no sync, pela regra de que
+quem modifica uma spec viva resolve o `Purpose` dela na mesma passada.
+
+- **R1: `messages` fora da enumeração do nginx.** `GET /messages/summary`
+  respondia `200 text/html` em produção. A rota nasceu no #24 sem entrar no
+  bloco do `apps/inbox`. É a **quarta ocorrência** da classe corrigida em
+  `fix-stack-servidor-lacunas` (`internal`, `knowledge-bases`,
+  `knowledge-index`). É determinístico, e o `curl` fecha.
+- **R2: o browser guardava o shell do SPA sob URL de API.** O nginx devolve, para
+  a mesma URL, o shell numa navegação e JSON num `fetch()`, conforme o
+  `Sec-Fetch-Mode`. O `index.html` saía sem `Cache-Control` e sem `Vary`, só com
+  `Last-Modified`, e era cacheável por heurística. Um F5 em `/agents` gravava o
+  HTML, e o `fetch('/agents')` seguinte saía do cache de disco com HTML, sem
+  chegar ao Cloudflare nem ao nginx. Corrigido com
+  `Cache-Control: no-store` em `location = /index.html`, que é **só o
+  shell**: `location /` também serve `/assets/*`.
+- **Por que "funcionava antes": a idade do deploy.** O browser calcula a janela
+  de reuso no momento em que grava a cópia: 10% de `Date − Last-Modified`, em
+  que `Last-Modified` é a hora do build. Com 45 min de deploy a janela é de
+  ~4,5 min; com 1 dia, ~2,4 h. Logo depois de um deploy ela é praticamente zero,
+  e o defeito se cura sozinho. **Consequência que vale além desta change:**
+  verificação no browser minutos depois do deploy passaria igual **sem** o
+  patch. A prova do R2 é o header, e não o painel funcionando.
+- **Pendência 2.4 de `fix-stack-servidor-lacunas`: fechada inteira** (e retirada
+  de "Itens em aberto").
+  - **Roteamento:** medido em 18/09/2026 contra o stack real, sem token. Os
+    doze prefixos chegam ao backend, menos `messages` (o R1). O `401`
+    uniforme não identifica o app, porque os dois usam a mesma
+    `FallbackPolicy`. Então cada upstream foi atribuído por comportamento que só
+    ele tem, sem efeito colateral: 404 do agent-card anônimo e 400 de corpo
+    vazio em `/auth/login` identificam o `apps/api`; 404 de canal inexistente em
+    `/webhooks` e 400 de corpo vazio em `/internal/push-notifications`
+    identificam o `apps/inbox`.
+  - **Round-trip no canal:** observação do mantenedor em produção, em
+    18/09/2026, nos **dois** canais (WAHA e Telegram). A resposta só sai no
+    canal se o push notification sair de `apps/workers`, passar pelo domínio
+    público e **voltar** pelo Cloudflare e pelo nginx até
+    `/internal/push-notifications`. Não há caminho alternativo. **É observação
+    em produção, não teste automatizado.** É um ponto no tempo, e o caminho
+    continua sem cobertura automatizada: uma regressão futura passaria
+    despercebida do mesmo jeito que a original.
+
+Coisas a carregar:
+
+- **A reenumeração achou um quarto falso positivo nos greps de conferência.**
+  `"/agents` aparece no grep do **inbox**, porque é chamada de saída do
+  `AgentReferenceValidator` para o `apps/api`. `agents` é prefixo real, só que
+  do outro app. Uma leitura que confere "o literal está em algum bloco?" o
+  aprova sem ver que ele veio do grep errado. A exploração o deixou passar
+  exatamente assim. **Régua:** classificar cada literal pela linha de código
+  que o contém (`Map*` = servido; cliente HTTP = saída), e não pela lista
+  esperada. A nota de ruído do `nginx.conf` passou a listar os quatro.
+- **`add_header` não é acumulativo entre níveis.** A partir desta change, um
+  `add_header` global futuro no `server` (`X-Content-Type-Options`, CSP) vale
+  em tudo **menos** em `/index.html`, em silêncio. Registrado no comentário do
+  próprio bloco.
+- **Verificar em nginx descartável, sobre o arquivo editado.** `nginx -t`
+  aprova sintaxe, não roteamento. A bateria de 20 requisições (shell por índice,
+  rewrite e `try_files`; `fetch` em cada upstream; assets) rodou sobre o
+  arquivo do repositório, com uma única troca documentada (`resolver`, porque o
+  DNS embutido do Docker não existe numa rede do podman).
 
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
@@ -4309,7 +4415,9 @@ Cada um tem gatilho de quando revisitar:
   implementada. Telegram já resolve isso (via `secret_token`); WAHA não.
   Depois de `auth-login-e-servico` o risco está classificado
   explicitamente em código (`ExternalUnauthenticated` na allowlist), mas
-  segue não mitigado.
+  segue não mitigado. *(Correção de status em 18/09/2026: premissa mudou. Com
+  o WAHA ativo no piloto em produção, o risco deixou de ser teórico e está
+  exposto. A classificação não foi reaberta aqui.)*
 - **A falha de entrega ao canal é diagnosticada no lugar errado: o worker loga um
   timeout, e a causa está no banco do inbox.** Achado em 12/09/2026, no teste
   manual da etapa 4, e a caçada inteira aconteceu antes de alguém olhar onde a
@@ -4926,6 +5034,12 @@ Cada um tem gatilho de quando revisitar:
 
 ### Primeiro deploy em produção (checklist)
 
+*(Correção de status em 18/09/2026: premissa mudou. Existe produção, com o
+piloto atendendo; ver "Status atual". Este arquivo **não registra** se os dois
+itens abaixo foram executados no deploy do piloto. O item 1 é aplicado pelo
+`migrator` do compose no primeiro boot, mas a query de diagnóstico prévia não
+tem registro, e o censo do item 2 também não. A decisão não foi reaberta aqui.)*
+
 **Não existe ambiente de produção hoje** — o projeto está todo em
 desenvolvimento. Duas verificações da lista acima não são pendências: são coisas
 que só fazem sentido contra dados de produção e que, por isso, ficam agrupadas
@@ -5434,6 +5548,7 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   descomentar as variáveis em `.env.prod` ganha um worker que continua sem saber
   usar Anthropic nem Gemini, e a documentação diz o contrário.
 
+  *(Correção de status em 18/09/2026: premissa mudou. Existe produção, com o piloto atendendo. Ver o parágrafo de produção em "Status atual". A decisão abaixo não foi reaberta aqui.)*
   Sem consequência hoje — **não há produção** —, e essa mesma ausência é o que
   confirma o enquadramento: os dois provedores que vazavam sequer são
   configuráveis no compose de servidor, então o vazamento só era alcançável no
@@ -5508,22 +5623,14 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
      `RUNBOOK-LOCAL.md` (B3) manda sobrescrevê-la. Mesma família dos oito
      defeitos, fora da lista por não ter sido enumerada a tempo.
 
-- **PENDENTE — a verificação de ponta a ponta dos três prefixos (tarefa 2.4).**
-  Feito: `nginx -t` aprova a configuração editada. **Não feito:** subir o stack e
-  confirmar que cada prefixo responde JSON em vez de `200` com HTML, e que o
-  round-trip de push notification completa com a resposta saindo no canal. Exige
-  `.env.prod` completo, provedor de LLM alcançável e um canal real — nada disso
-  disponível no ambiente onde a change foi aplicada. **É a única verificação que
-  fecha o defeito mais caro dos três**, e o `nginx -t` não a substitui: sintaxe
-  válida não é roteamento correto.
-
 - **`docker compose` não foi testado — só `podman compose`.** A sintaxe de
   variável obrigatória (`${VAR:?mensagem}`) foi **medida** no `podman-compose`
   5.8.3 (falha com a mensagem customizada, exit 1, nenhum serviço criado) e
   **não** no `docker compose`, ausente na máquina. É da especificação do Compose
   e ambos a implementam, mas **paridade não medida não é paridade verificada**.
   **Gatilho:** o primeiro deploy num ambiente com Docker repete o teste — são
-  dois comandos.
+  dois comandos. *(Correção de status em 18/09/2026: premissa mudou. Existe produção, com o piloto atendendo. Ver o parágrafo de produção em "Status atual". A decisão abaixo não foi reaberta aqui.)* Não está registrado se o deploy do piloto
+  usou Docker nem se o teste foi repetido.
 
 ### Abertos por `inbox-sessoes-por-periodo` (2026-09-17)
 
@@ -5538,7 +5645,8 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   (design.md, D8 e D9). São a mesma pergunta — *"qual o volume real?"* — e
   separá-los criaria duas referências a envelhecer em vez de uma. Hoje não há
   número que os justifique: dev tem ~10 sessões e não existe produção, e a 10
-  linhas o Postgres faz seq scan e ignoraria o índice.
+  linhas o Postgres faz seq scan e ignoraria o índice. *(Correção de status em 18/09/2026: premissa mudou. Existe produção, com o piloto atendendo. Ver o parágrafo de produção em "Status atual". A decisão abaixo não foi reaberta aqui.)* O
+  volume do piloto não foi medido.
 
   **Gatilho:** o primeiro deploy em produção com volume real, condição já
   rastreada no checklist de "Primeiro deploy em produção" acima. Quem
@@ -5575,17 +5683,19 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
 
 ## Próximo passo
 
-**Concluído, não commitado**: `frontend-inventario-atividade-periodo` —
-aplicada, sincronizada (`catalog-inventory-ui`, `Purpose` reescrito) e
-arquivada, na branch `feat/frontend-inventario-atividade-periodo`. Falta só o
-commit.
+**Concluído**: `frontend-inventario-atividade-periodo` — aplicada,
+sincronizada (`catalog-inventory-ui`, `Purpose` reescrito), arquivada e
+mergeada na `main` pelo #25 (`e7212e9`). *(Correção de status em 18/09/2026:
+dizia "Concluído, não commitado… Falta só o commit"; o commit e o merge já
+aconteceram.)*
 
 **Concluído nesta sessão**: `frontend-inventario-catalogos` — a tela de entrada
 do painel. Explorada, proposta, aplicada, conferida à mão, sincronizada
 (`catalog-inventory-ui`, capability nova) e arquivada. `apps/frontend` em
 **874/874**, contra baseline de 861/861 medida na mesma sessão antes de tocar em
-qualquer arquivo. `CHANGELOG.md` atualizado. **Nada commitado** — o trabalho está
-na árvore, incluindo os artefatos arquivados e a spec viva nova.
+qualquer arquivo. `CHANGELOG.md` atualizado. Mergeada na `main` pelo #22
+(`cdd15a0`). *(Correção de status em 18/09/2026: dizia "**Nada commitado** — o
+trabalho está na árvore"; o commit e o merge já aconteceram.)*
 
 **Um achado de método desta sessão, e ele custou tempo:** a suíte do frontend
 reprovou **18, depois 25, depois 10** testes em três rodadas seguidas, sempre em
@@ -5621,10 +5731,10 @@ acima, e é preciso dizer para que ninguém a leia como concluída:
   a linha 2, que muda o mecanismo de roteamento e é onde o bar volta a ser
   medível.
 
-**Pendente desta sessão, por decisão de quem revisa:** o commit. Estamos na
-`main`, então o caminho é branch + PR. Na árvore: seis arquivos de
-`apps/frontend` modificados, `features/inventory/` novo, `CHANGELOG.md`,
-`openspec/specs/catalog-inventory-ui/` e a change arquivada.
+*(Correção de status em 18/09/2026: aqui havia "**Pendente desta sessão, por
+decisão de quem revisa:** o commit. Estamos na `main`, então o caminho é branch
++ PR", referente a `frontend-inventario-catalogos`. Resolvido: branch + PR
+feitos e mergeados na `main` pelo #22, `cdd15a0`.)*
 
 **Anteriormente nesta linha**: `0a` (dedupe de nome de tool), `0b` (head-to-head
 semântico, modelo e schema), `0c` (chunker, invariantes, overlap, `k` e limiar),
@@ -5731,7 +5841,7 @@ candidatos abaixo são independentes entre si, sem ordem imposta.
 - **Índice único na criação de `Session`** — gap de concorrência já com
   causa, local e teste conhecidos. Change pequena.
 - **Verificação de autenticidade do webhook do WAHA** — o único risco de
-  segurança nomeado e não mitigado que sobrou.
+  segurança nomeado e não mitigado que sobrou. *(Correção de status em 18/09/2026: premissa mudou. Existe produção, com o piloto atendendo. Ver o parágrafo de produção em "Status atual". A decisão abaixo não foi reaberta aqui.)*
 - **Estado da sessão exposto pela API** — pré-requisito para a lista de
   sessões distinguir conversa viva de encerrada.
 ### Abertos por `inbox-mensagens-recebidas-periodo` (2026-09-18)
@@ -5860,3 +5970,103 @@ candidatos abaixo são independentes entre si, sem ordem imposta.
 - **O aviso de chunk acima de 500 kB no build** vem de um bundle único de
   ~935 kB. Esta change não o causa (acrescenta poucos KB), mas ele não estava
   registrado em lugar nenhum. Registrado aqui, sem medição da `main`.
+
+### Abertos por `nginx-shell-sem-cache-e-prefixo-messages` (2026-09-18)
+
+- **OBRIGAÇÃO PÓS-DEPLOY: verificar que o `no-store` do shell sobrevive ao
+  Cloudflare.** Não é tarefa da change, porque o deploy vem depois do archive e
+  do merge. Este item é o **único** lugar onde a verificação é acionável: a
+  pasta arquivada é imutável, e o `design.md` descreve a verificação sem
+  executá-la. **Quando:** logo depois do primeiro redeploy do `frontend` que
+  inclua esta change. **Deploy:** só o frontend, sem parar o `apps/inbox` e sem
+  `migrator` (`docs/deployment.md` §2, "Redeploy só do frontend").
+
+  **Comando**, de fora do servidor:
+
+  ```
+  H=https://agente.butecandoespetobar.com.br
+  UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+  for p in / /index.html /agents /inventory; do
+    curl -sI "$H$p" -H 'Sec-Fetch-Mode: navigate'                                             | grep -i '^cache-control'
+    curl -sI "$H$p" -H 'Sec-Fetch-Mode: navigate' -H "User-Agent: $UA" -H 'Accept: text/html' | grep -i '^cache-control'
+  done
+  A=$(curl -s "$H/" | grep -oE '/assets/[^"]+\.js' | head -1); curl -sI "$H$A" | grep -i '^cache-control'
+  curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -H 'Sec-Fetch-Mode: cors' "$H/messages/summary"
+  ```
+
+  **Critério de aprovação, os três juntos:**
+  1. `cache-control: no-store` presente nas **8** linhas do shell (4 paths × 2
+     formas). Linha vazia ou outro valor reprova;
+  2. o asset com `cache-control: max-age=14400`, **sem** `no-store`;
+  3. `/messages/summary` → `401`, **sem** `text/html`.
+
+  **Se o critério 1 reprovar:** a causa provável é o Browser Cache TTL da zona em
+  valor fixo, em vez de *"Respect Existing Headers"*. A correção é uma Cache Rule
+  de exceção para `text/html` (ou para o hostname) que preserve o
+  `Cache-Control` da origem. É **configuração de borda, fora do repositório**
+  (V3 do `design.md` em `openspec/changes/archive/2026-09-18-nginx-shell-sem-cache-e-prefixo-messages/`). Depois, repetir
+  o comando e **registrar aqui a configuração de borda aplicada**.
+
+  **O R1 não depende disso.** O critério 3 prova o roteamento do `messages`
+  sozinho, seja qual for o resultado do 1. Se o 3 reprovar, o problema é no
+  nginx, não na borda.
+
+  **Linha de base, 18/09/2026, antes do deploy desta change** (o mesmo comando,
+  rodado para conferir que ele funciona e que discrimina): critério 1 **reprova**
+  (as 8 linhas vazias, sem `cache-control`); critério 2 aprova
+  (`/assets/index-Z24MtrRr.js`: `cache-control: max-age=14400`); critério 3
+  **reprova** (`200 text/html`). Depois do deploy, os critérios 1 e 3 têm de
+  virar.
+
+  **Para fechar este item:** colar aqui a saída do comando com a data, e remover o
+  item. Sem a saída colada, ele continua aberto.
+- **Quem já tem a cópia errada no browser.** O `no-store` impede novas
+  gravações e não apaga as que existem. Recuperação: F5 em `/agents`, que deve
+  descartar a entrada (hipótese não medida); senão, Clear site data (custa um
+  login e a preferência de tema; o token vive em `sessionStorage`). **Fechar a
+  aba não resolve**, porque o cache HTTP não depende de aba.
+- **Respostas de API sem `Cache-Control`.** Hoje isso é seguro **só** porque
+  elas também não têm validador. **Gatilho explícito:** qualquer change que
+  acrescente `ETag` ou `Last-Modified` a resposta de API reabre o envenenamento
+  no sentido inverso: uma navegação em `/agents` receberia o JSON do cache no
+  lugar do shell. Enquanto o truque do `Sec-Fetch-Mode` existir, essa change
+  precisa declarar `Cache-Control` nas respostas de API.
+- **A lista de prefixos do nginx mantida à mão: change própria candidata.**
+  Quatro ocorrências (`internal`, `knowledge-bases`, `knowledge-index`,
+  `messages`) já cumprem qualquer gatilho razoável. A change do prefixo
+  `/painel/` **não** resolve isso: ela separa o frontend das APIs, não o
+  `apps/api` do `apps/inbox`. Forma: checagem **bidirecional** entre os prefixos
+  mapeados pelos apps e a lista do `nginx.conf`, no molde de
+  `ValidateRouteAuthenticationClassification`/`ValidateChannelAdapterRegistrations`
+  ou de um guarda em `scripts/` como o `check-docs.py`, com o descarte dos
+  quatro falsos positivos embutido.
+
+  **Forma provável: o guarda em `scripts/`.** Ele deriva os prefixos por app a
+  partir do código, classificando `Map*`/`MapGroup` como rota servida e
+  descartando chamada de cliente HTTP, e compara com os blocos `location ~` do
+  `nginx.conf`. **A bateria de `curl` do `docs/deployment.md` §2 é a segunda
+  metade dele**: o guarda pega a divergência antes do merge, e o `curl` confirma
+  o roteamento real depois do deploy. **O peso do gatilho:** foram quatro
+  ocorrências em defeito real, mais um falso positivo que **escapou** da
+  conferência humana. `"/agents` no grep do `apps/inbox` é chamada de saída do
+  `AgentReferenceValidator.cs:27`, e passou na exploração desta change porque
+  `agents` estava na lista esperada, só que do outro app. Um método que depende
+  de classificação humana a cada rodada já errou nas duas direções.
+- **Para a change do prefixo `/painel/`: o `no-store` do shell já está no
+  `nginx.conf`.** Ela não deve propô-lo de novo nem assumir que está ausente.
+  Ela decide se o mantém depois de remover o truque do `Sec-Fetch-Mode`; é boa
+  prática para shell de SPA mesmo sem ele.
+- **O Cloudflare remove o `ETag` de todo `text/html`**, inclusive quando o corpo
+  chega byte a byte idêntico à origem. A causa provável é uma reescrita de HTML
+  ativa na zona: a injeção automática do Web Analytics é a candidata visível, e
+  Email Obfuscation teria o mesmo efeito. Desligar uma não devolve o `ETag` se a
+  outra estiver ativa. Não foi medido e exige o painel do Cloudflare. Com
+  `no-store` isso deixa de importar para o R2, mas muda o comportamento de
+  validador do HTML se alguém mexer nessas opções.
+- **A sequência de redeploy existente em `docs/deployment.md` §2 não passa
+  `--env-file .env.prod`.** Desde `fix-stack-servidor-lacunas`, catorze
+  variáveis são obrigatórias na interpolação, e sem o `--env-file` o Compose
+  falha ao processar o arquivo. O §1 do mesmo documento usa o `--env-file`, e o
+  caso novo "Redeploy só do frontend" também. Achado ao escrever o caso novo. Não
+  foi corrigido, porque a instrução era não reescrever a sequência existente.
+  **Gatilho:** o próximo redeploy completo, ou qualquer change que toque o §2.

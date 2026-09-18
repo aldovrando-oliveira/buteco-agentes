@@ -93,6 +93,76 @@ precisa ser feito manualmente nesta ordem:
 `apps/inbox` precisa estar parado durante a migration, porque só ele tem
 o índice único envolvido nesse caminho.
 
+### Redeploy só do frontend
+
+Quando a mudança toca **só** `apps/frontend` (código do SPA ou
+`apps/frontend/deploy/nginx.conf`), sem migration e sem os apps .NET, a
+sequência acima não se aplica. Parar o `apps/inbox` nesse caso é risco
+gratuito para um stack que está atendendo.
+
+```
+1. docker compose --env-file .env.prod -f docker-compose.prod.yml build frontend
+2. docker compose --env-file .env.prod -f docker-compose.prod.yml up -d frontend
+```
+
+Sem `stop inbox` e sem `migrator`. Os outros serviços continuam no ar.
+
+#### Verificação depois do redeploy do frontend
+
+Rodar **logo depois** do `up -d`, de fora do servidor, contra o domínio
+público. Cada checagem do shell roda **em duas formas**, `curl` simples e com
+cabeçalhos de browser. O Cloudflare trata os dois pedidos por caminhos
+diferentes: só o segundo recebe o beacon do Web Analytics injetado no HTML.
+
+```
+H=https://<domínio público>
+UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+
+# 1. Shell do SPA: as 8 linhas devem trazer "cache-control: no-store"
+for p in / /index.html /agents /inventory; do
+  curl -sI "$H$p" -H 'Sec-Fetch-Mode: navigate'                                             | grep -i '^cache-control'
+  curl -sI "$H$p" -H 'Sec-Fetch-Mode: navigate' -H "User-Agent: $UA" -H 'Accept: text/html' | grep -i '^cache-control'
+done
+
+# 2. Assets: o JS atual, referenciado pelo shell
+A=$(curl -s "$H/" | grep -oE '/assets/[^"]+\.js' | head -1)
+curl -sI "$H$A" | grep -i '^cache-control'
+
+# 3. Prefixo de API do apps/inbox, sem token, como fetch da SPA
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -H 'Sec-Fetch-Mode: cors' "$H/messages/summary"
+```
+
+| Checagem | Aprovado quando |
+|---|---|
+| 1. Shell | `cache-control: no-store` nas **8** linhas (4 paths × 2 formas). Linha vazia ou outro valor reprova |
+| 2. Assets | `cache-control: max-age=14400` (injetado pelo Cloudflare), **sem** `no-store`. Se aparecer `no-store`, o header vazou para os assets e o nginx está errado |
+| 3. Prefixo de API | `401` **sem** `text/html`. `200 text/html` quer dizer que o prefixo caiu no fallback de SPA: faltou prefixo no `nginx.conf` |
+
+A checagem 3 não depende das checagens 1 e 2. Ela prova o roteamento do
+nginx sozinha. Para conferir **todos** os prefixos, e não só `/messages`, a
+lista está nos blocos `location ~` do `nginx.conf`. Cada prefixo com
+`Sec-Fetch-Mode: cors` e sem token tem de responder um status do app
+(`401`/`400`/`404`), nunca `200 text/html`.
+
+**Se a checagem 1 reprovar** (o `no-store` não chega ao browser): a causa
+provável é a borda, não o nginx. O Browser Cache TTL do Cloudflare em valor fixo,
+em vez de *"Respect Existing Headers"*, sobrescreve o header da origem. A
+correção é uma Cache Rule de exceção para `text/html` (ou para o hostname) que
+preserve o `Cache-Control` da origem. É **configuração de borda, fora do
+repositório**. Depois de aplicá-la, repetir a checagem 1 e registrar a
+configuração aplicada em `02-HISTORICO_E_STATUS.md`, porque é estado do ambiente
+que o repositório não versiona. Contexto completo: V3 do `design.md` em
+`openspec/changes/archive/2026-09-18-nginx-shell-sem-cache-e-prefixo-messages/`.
+
+**Checagem no browser só confirma que o painel funciona, não o header.** Minutos
+depois de um deploy, um browser passa igual com ou sem o `no-store`. O browser
+reusa o `index.html` sem `Cache-Control` por 10% do intervalo desde o
+`Last-Modified`, que é a hora do build, e essa janela é praticamente zero
+logo depois do deploy. A prova do `no-store` é a checagem 1. Antes de julgar o
+painel no browser, usar perfil limpo, janela anônima ou "Disable cache". Um
+browser que gravou a cópia errada **antes** do deploy continua servindo-a até
+um F5 na URL afetada ou um Clear site data. Fechar a aba não limpa o cache HTTP.
+
 ## 3. Variáveis por processo
 
 | Variável (host, `.env.prod`) | Chave de configuração | Processo(s) | Obrigatória | Idêntica entre processos? |
