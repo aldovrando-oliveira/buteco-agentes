@@ -5682,3 +5682,93 @@ candidatos abaixo são independentes entre si, sem ordem imposta.
   segurança nomeado e não mitigado que sobrou.
 - **Estado da sessão exposto pela API** — pré-requisito para a lista de
   sessões distinguir conversa viva de encerrada.
+### Abertos por `inbox-mensagens-recebidas-periodo` (2026-09-18)
+
+- **`GET /messages/summary?from=…&to=…`** — segunda rota de atividade do
+  `apps/inbox`, e **a primeira rota de nível superior sob `/messages`**. As sete
+  registradoras de `Program.cs` não abriam esse prefixo: mensagens sempre
+  apareceram aninhadas sob a sessão (`/sessions/{sessionId:guid}/messages`).
+  Inaugurar prefixo **não** cria caso novo de autenticação — `Program.cs`
+  classifica toda rota como autenticada por padrão e a lista de exceções é só das
+  anônimas —, mas passou a estar dito em vez de silencioso, porque a change
+  anterior tinha registrado a conclusão **inversa** para `/sessions/summary` e
+  quem lesse as duas em sequência poderia transportá-la.
+
+- **O campo se chama `inboundCount`, e o motivo NÃO é o mesmo de `startedCount`.**
+  Lá o problema era vagueza (`count` não afirma nada). Aqui é **ambiguidade de
+  ponto de vista**: "mensagem recebida" é, do sistema, a que o contato mandou;
+  do contato, é a que o agente mandou. `receivedCount` seria re-lível ao
+  contrário, e o rótulo de tela que fixaria o referencial ainda não existe.
+  `Inbound` vem de `MessageDirection`, definido em relação ao sistema.
+
+- **GATILHO NOVO — `OccurredAt` não é o que o nome diz, e a estabilidade desta
+  rota depende disso.** O campo guarda o instante de **recebimento pelo
+  servidor** (`DateTimeOffset.UtcNow` capturado no adapter —
+  `TelegramInboundWebhookHandler.cs:105`, `WahaInboundWebhookHandler.cs:64`;
+  Outbound em `PushNotificationEndpoints.cs:130`), **não** o instante que o
+  provedor registrou no evento. `TelegramWebhookModels.cs` nem desserializa o
+  campo `date` do Telegram.
+
+  É isso que torna a contagem estável: nenhum provedor consegue inserir mensagem
+  "no passado", então um período **fechado** responde sempre o mesmo número — a
+  propriedade que faltou a `LastActivityAt` e que eliminou aquela definição para
+  sessões. **Mas ela é acidental**, vinda de três `UtcNow` espalhados, não de
+  decisão escrita.
+
+  > **Gatilho:** se uma change futura passar a parsear o instante do **provedor**
+  > para dentro de `OccurredAt` — pedido natural de *"mostrar a mensagem no
+  > horário em que o contato realmente enviou"* —, esta rota se torna
+  > **retroativamente backdatable** e a estabilidade que a spec promete deixa de
+  > valer **sem ninguém tocar o código da rota**. Quem fizer aquela change decide
+  > entre manter os dois instantes em campos separados (recebimento × emissão) ou
+  > reescrever o requisito de estabilidade. O que não pode é acontecer em
+  > silêncio.
+
+- **O teto de intervalo e o índice agora valem para DUAS rotas, e a razão do
+  índice aqui é OUTRA.** Para `sessions` a afirmação era "não há índice em
+  `StartedAt`". Para `messages` **existe** `IX_messages_SessionId_OccurredAt`
+  (`AppDbContext.cs:164`), mas composto e com `SessionId` como coluna **líder**:
+  esta consulta não restringe `SessionId`, então não há range seek, e `Direction`
+  nem está no índice. **O índice existe e não serve** — copiar o texto de D9 da
+  change anterior produziria uma afirmação falsa.
+
+  Ressalva que aperta o gatilho: `messages` cresce por um **múltiplo** de
+  `sessions` (N mensagens por sessão), então o volume que torna o índice
+  necessário chega antes aqui. O argumento é **estrutural, não medido** — nenhum
+  `EXPLAIN` foi rodado. **Gatilho:** o mesmo primeiro deploy com volume real, e
+  quem recalibrar um recalibra os dois, agora para as duas rotas.
+
+- **`outboundCount` adiado COM a pergunta que ele carrega.** Outbound é
+  persistida em dois estados (`Sent` e `Failed` — `PushNotificationEndpoints.cs:163`
+  e `:182`), então *"uma entrega que falhou conta como enviada?"* precisa de
+  resposta antes do campo existir. Incluí-lo nesta change obrigaria a respondê-la
+  de passagem, sem rótulo de tela e sem consumidor. A resposta é objeto, não
+  inteiro nu, então o campo entra depois sem quebrar contrato. **Gatilho:** a
+  change do card "mensagens enviadas".
+
+- **A dedup de mensagem é garantida pelo BANCO, não pela consulta de aplicação —
+  e isso foi medido, não suposto.** Mutar `IsDuplicateAsync`
+  (`InboundMessageOrchestrator.cs:151`) para retornar sempre `false` deixa a
+  suíte **inteira verde** (`203/203`): o `INSERT` seguinte viola o índice único
+  parcial `IX_messages_SessionId_ExternalId` e o `catch` de `:67` converte a
+  violação em "deduplicada". Com as **duas** peças mutadas, cinco testes reprovam.
+
+  Registrado como **não-achado para varredura de código morto**: `IsDuplicateAsync`
+  parece removível — nenhum teste reprova sem ela — mas é o que evita um
+  round-trip que falharia em toda reentrega de webhook. Quem for simplificar essa
+  área precisa saber que das três peças (consulta, índice, `catch`), **só a
+  primeira** pode sair sem quebrar o requisito de `inbox-message-period-summary`.
+
+- **Retrodatar sessão e retrodatar mensagem exigem ordens opostas de escrita, por
+  dois mecanismos independentes** — os dois custaram um teste vermelho cada, nas
+  duas changes desta linha:
+
+  | mecanismo | onde | se a ordem inverter |
+  |---|---|---|
+  | `DebounceSweepService` roda nos testes (`Program.cs:115`; `Window` 10 s, sweep 2 s) | passar `receivedAt` passado ao orquestrador | dispatch dispara no meio do teste |
+  | `InactivityTimeout` de 1 h (`SessionOptions.cs:7`, `ContactSessionResolver.cs:57-58`) | retrodatar a sessão **antes** de receber | o resolver **fecha** a sessão e abre outra; a mensagem cai na nova e a contagem dá zero |
+
+  **Regra que vale para as duas:** criar tudo pelo caminho real em "agora" e
+  retrodatar por `UPDATE` **depois**, mensagem e sessão. Está escrita como
+  comentário nos próprios testes, com a medição ao lado, para ninguém "arrumar" a
+  ordem mais tarde.
