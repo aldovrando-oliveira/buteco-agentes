@@ -132,6 +132,7 @@ app.MapHealthChecks("/health")
 app.MapChannelEndpoints();
 app.MapContactEndpoints();
 app.MapChannelSessionEndpoints();
+app.MapSessionSummaryEndpoints();
 app.MapMessageEndpoints();
 app.MapPushNotificationEndpoints();
 app.MapWebhookEndpoints();

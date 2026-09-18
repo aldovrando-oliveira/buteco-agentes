@@ -4375,6 +4375,35 @@ Cada um tem gatilho de quando revisitar:
   de verdade em produção.
 - **Encerramento explícito de sessão** (CRM) — só inatividade automática
   hoje; decisão consciente de escopo mínimo, não esquecimento.
+
+  **E a inatividade automática é mais fraca do que o nome sugere — medido em
+  `inbox-sessoes-por-periodo` (2026-09-17), lendo o código, não o item.**
+  `ContactSessionResolver.cs:59` (`session?.Close(DateTimeOffset.UtcNow)`) é o
+  **único** sítio que escreve `ClosedAt` em todo o `apps/inbox` — confirmado por
+  `grep -rn "\.Close(" apps/inbox/src`, um resultado. E ele só roda **dentro de
+  `TryResolveSessionOnceAsync`, na chegada de uma mensagem nova daquele mesmo
+  contato**, quando a sessão anterior já estourou o `InactivityTimeout`
+  (`SessionOptions.cs:7`, 1h). **Não há varredor**: `DebounceSweepService` varre
+  `PendingDispatch`, não `Session`.
+
+  **Consequência, e é ela que importa para quem for consumir o dado:
+  `ClosedAt = null` NÃO significa "sessão aberta" — significa "ninguém voltou a
+  escrever desde então".** O timeout não fecha nada sozinho; ele só decide, na
+  próxima mensagem, se a sessão antiga é reaproveitada ou encerrada. Um contato
+  que escreveu uma vez há seis meses e nunca mais voltou tem, hoje, uma sessão
+  com `ClosedAt` nulo — indistinguível no banco de uma conversa viva.
+
+  O caso concreto que fechou a decisão daquela exploração: sessão com
+  `StartedAt` em março e `ClosedAt` nulo hoje seria contada pela definição de
+  *overlap* (`StartedAt <= to AND (ClosedAt IS NULL OR ClosedAt >= from)`) em
+  **qualquer** período de março até o presente. Foi o que eliminou o overlap
+  como definição de "sessão no período" e fez a contagem ser por `StartedAt`.
+
+  **Gatilho:** qualquer card ou tela que precise distinguir **sessão viva de
+  sessão morta** depende do encerramento explícito existir antes — não é
+  derivável do estado atual. Vale para o card "sessões ativas" (ainda não
+  explorado) e para o item seguinte desta lista, que é sobre **expor** o estado
+  e pressupõe que exista estado a expor.
 - **Estado da sessão (aberta/encerrada) não é exposto pela API** —
   atualizado por `inbox-session-indice-unico`: o estado agora **é
   derivável** (`Session.ClosedAt` passou a ser escrito de verdade, e já
@@ -5448,6 +5477,54 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   e ambos a implementam, mas **paridade não medida não é paridade verificada**.
   **Gatilho:** o primeiro deploy num ambiente com Docker repete o teste — são
   dois comandos.
+
+### Abertos por `inbox-sessoes-por-periodo` (2026-09-17)
+
+- **`GET /sessions/summary?from=…&to=…`** — primeira rota de atividade do
+  `apps/inbox`, e **a primeira query string de todo o monorepo** (`grep` por
+  `FromQuery`/`AsParameters` em `apps/api/src` e `apps/inbox/src` dava zero).
+  Conta sessões **iniciadas** no período (`startedCount`), por `StartedAt`,
+  inclusivo nos dois limites. `COUNT` no banco, sem migração.
+
+- **DOIS GATILHOS PENDURADOS, E ELES SE RECALIBRAM JUNTOS** — teto de intervalo
+  e índice em `sessions."StartedAt"`, os dois deliberadamente **fora** da change
+  (design.md, D8 e D9). São a mesma pergunta — *"qual o volume real?"* — e
+  separá-los criaria duas referências a envelhecer em vez de uma. Hoje não há
+  número que os justifique: dev tem ~10 sessões e não existe produção, e a 10
+  linhas o Postgres faz seq scan e ignoraria o índice.
+
+  **Gatilho:** o primeiro deploy em produção com volume real, condição já
+  rastreada no checklist de "Primeiro deploy em produção" acima. Quem
+  recalibrar um recalibra o outro.
+
+- **O parse de data em query string tem uma armadilha que só aparece fora de
+  UTC, e ela foi medida.** `DateTimeOffset.TryParse` sem
+  `AssumeUniversal | AdjustToUniversal` produz um `DateTimeOffset` com o offset
+  **local do processo**, e o `Npgsql` **recusa** offset diferente de zero para
+  `timestamp with time zone`:
+
+  ```
+  System.ArgumentException: Cannot write DateTimeOffset with Offset=-03:00:00 to
+  PostgreSQL type 'timestamp with time zone', only offset 0 (UTC) is supported.
+  ```
+
+  **A falha é 500, não número errado em silêncio** — e some numa máquina em UTC,
+  onde o offset local já é zero. A proposta desta change afirmava o contrário
+  ("responderia números diferentes conforme o `TZ`"); a mutação corrigiu, e o
+  `design.md` foi corrigido junto (convenção 9). **Régua para a próxima rota que
+  aceitar data em query string:** os dois estilos, e um `[Fact]` para cada um —
+  eles sustentam coisas diferentes (qual instante um valor nu significa × aceitar
+  valor com offset explícito).
+
+- **A contagem é global, e a suíte de `apps/inbox` compartilha banco por classe
+  de teste.** `InboxFactoryFixture` é `IClassFixture`, então sessão criada por um
+  `[Fact]` entra na contagem de outro. A defesa é janela própria por teste, e a
+  primeira versão dela **reprovou dois testes**: janelas de ano inteiro deixam
+  `from.AddSeconds(-1)` e `to.AddSeconds(1)` atravessarem a fronteira do ano e
+  caírem na janela do vizinho. A janela virou uma **fatia no meio do ano**
+  (março-setembro), para que tudo que um teste cria fique dentro do próprio ano.
+  **Gatilho:** qualquer contagem global nova que a suíte venha a testar herda o
+  mesmo problema, e a fatia é a forma já verificada de resolver.
 
 ## Próximo passo
 
