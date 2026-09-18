@@ -3409,15 +3409,39 @@ Hotfix de estabilização do piloto em produção. Na tela de entrada, os cards
 Eram **dois defeitos independentes** no mesmo arquivo
 (`apps/frontend/deploy/nginx.conf`), com perfis de risco opostos. Só
 `apps/frontend`, sem rota de backend e sem migration.
-**Estado: aplicada, sincronizada (`server-deployment`) e arquivada em
-`openspec/changes/archive/2026-09-18-nginx-shell-sem-cache-e-prefixo-messages/`, commitada na branch
-`fix/nginx-shell-sem-cache-e-prefixo-messages`.** O `tasks.md` fechou 100%. Ele
-contém só o verificável no repositório, e o deploy acontece depois do merge. O
-merge na `main` e o deploy são do mantenedor. **A verificação pós-deploy é
-obrigação aberta**, com comando e critério, em "Abertos por
-`nginx-shell-sem-cache-e-prefixo-messages`". Depois do archive, este é o único
-lugar onde ela é acionável: o `design.md` arquivado descreve a verificação, mas
-não a executa.
+**Estado: aplicada, sincronizada (`server-deployment`), arquivada em
+`openspec/changes/archive/2026-09-18-nginx-shell-sem-cache-e-prefixo-messages/`,
+mergeada na `main` pelo #26 (`a9e6235`), em produção e verificada.** O
+`tasks.md` fechou 100%. Ele contém só o verificável no repositório, e o deploy
+aconteceu depois do merge. A verificação pós-deploy ficou como obrigação em
+"Abertos por `nginx-shell-sem-cache-e-prefixo-messages`" até ser executada.
+
+**Verificação pós-deploy, 18/09/2026: aprovada nos três critérios.** O comando
+foi rodado pelo mantenedor, depois do redeploy só do frontend
+(`docs/deployment.md` §2), contra `https://agente.butecandoespetobar.com.br`:
+
+```
+cache-control: no-store      # /            curl simples
+cache-control: no-store      # /            cabeçalhos de browser
+cache-control: no-store      # /index.html  curl simples
+cache-control: no-store      # /index.html  cabeçalhos de browser
+cache-control: no-store      # /agents      curl simples
+cache-control: no-store      # /agents      cabeçalhos de browser
+cache-control: no-store      # /inventory   curl simples
+cache-control: no-store      # /inventory   cabeçalhos de browser
+cache-control: max-age=14400 # asset .js atual
+401                          # /messages/summary, Sec-Fetch-Mode: cors, sem token
+```
+
+Contra a linha de base medida antes do deploy (critério 1 com as 8 linhas vazias,
+critério 3 com `200 text/html`), os critérios 1 e 3 mudaram de resultado, e o 2
+ficou igual. **A pergunta que só produção respondia está fechada:** o
+Cloudflare **preserva** o `Cache-Control` da origem no HTML, inclusive nos pedidos
+com cabeçalhos de browser, que passam pela reescrita de HTML da zona (beacon do
+Web Analytics). **A contingência V3 (Cache Rule de borda) não foi acionada**, e
+nenhuma configuração de borda foi aplicada. O `401` sai sem content-type e com
+corpo vazio, que é a resposta da `FallbackPolicy` do `apps/inbox`. O R1 está
+fechado.
 
 Além do `nginx.conf`: `docs/deployment.md` §2 ganhou o caso "Redeploy só do
 frontend", com a verificação que o acompanha (procedimento permanente, não só
@@ -5973,53 +5997,6 @@ candidatos abaixo são independentes entre si, sem ordem imposta.
 
 ### Abertos por `nginx-shell-sem-cache-e-prefixo-messages` (2026-09-18)
 
-- **OBRIGAÇÃO PÓS-DEPLOY: verificar que o `no-store` do shell sobrevive ao
-  Cloudflare.** Não é tarefa da change, porque o deploy vem depois do archive e
-  do merge. Este item é o **único** lugar onde a verificação é acionável: a
-  pasta arquivada é imutável, e o `design.md` descreve a verificação sem
-  executá-la. **Quando:** logo depois do primeiro redeploy do `frontend` que
-  inclua esta change. **Deploy:** só o frontend, sem parar o `apps/inbox` e sem
-  `migrator` (`docs/deployment.md` §2, "Redeploy só do frontend").
-
-  **Comando**, de fora do servidor:
-
-  ```
-  H=https://agente.butecandoespetobar.com.br
-  UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
-  for p in / /index.html /agents /inventory; do
-    curl -sI "$H$p" -H 'Sec-Fetch-Mode: navigate'                                             | grep -i '^cache-control'
-    curl -sI "$H$p" -H 'Sec-Fetch-Mode: navigate' -H "User-Agent: $UA" -H 'Accept: text/html' | grep -i '^cache-control'
-  done
-  A=$(curl -s "$H/" | grep -oE '/assets/[^"]+\.js' | head -1); curl -sI "$H$A" | grep -i '^cache-control'
-  curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -H 'Sec-Fetch-Mode: cors' "$H/messages/summary"
-  ```
-
-  **Critério de aprovação, os três juntos:**
-  1. `cache-control: no-store` presente nas **8** linhas do shell (4 paths × 2
-     formas). Linha vazia ou outro valor reprova;
-  2. o asset com `cache-control: max-age=14400`, **sem** `no-store`;
-  3. `/messages/summary` → `401`, **sem** `text/html`.
-
-  **Se o critério 1 reprovar:** a causa provável é o Browser Cache TTL da zona em
-  valor fixo, em vez de *"Respect Existing Headers"*. A correção é uma Cache Rule
-  de exceção para `text/html` (ou para o hostname) que preserve o
-  `Cache-Control` da origem. É **configuração de borda, fora do repositório**
-  (V3 do `design.md` em `openspec/changes/archive/2026-09-18-nginx-shell-sem-cache-e-prefixo-messages/`). Depois, repetir
-  o comando e **registrar aqui a configuração de borda aplicada**.
-
-  **O R1 não depende disso.** O critério 3 prova o roteamento do `messages`
-  sozinho, seja qual for o resultado do 1. Se o 3 reprovar, o problema é no
-  nginx, não na borda.
-
-  **Linha de base, 18/09/2026, antes do deploy desta change** (o mesmo comando,
-  rodado para conferir que ele funciona e que discrimina): critério 1 **reprova**
-  (as 8 linhas vazias, sem `cache-control`); critério 2 aprova
-  (`/assets/index-Z24MtrRr.js`: `cache-control: max-age=14400`); critério 3
-  **reprova** (`200 text/html`). Depois do deploy, os critérios 1 e 3 têm de
-  virar.
-
-  **Para fechar este item:** colar aqui a saída do comando com a data, e remover o
-  item. Sem a saída colada, ele continua aberto.
 - **Quem já tem a cópia errada no browser.** O `no-store` impede novas
   gravações e não apaga as que existem. Recuperação: F5 em `/agents`, que deve
   descartar a entrada (hipótese não medida); senão, Clear site data (custa um
