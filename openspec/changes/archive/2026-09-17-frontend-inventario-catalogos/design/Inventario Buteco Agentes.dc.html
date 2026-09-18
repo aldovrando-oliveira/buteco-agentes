@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Buteco Agentes — Inventário</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/lucide@0.454.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root{
+    --bg:#f6f5f3; --sf:#ffffff; --sf2:#faf9f8;
+    --bd:rgba(20,18,15,.11); --bd2:rgba(20,18,15,.06);
+    --fg:#191a1c; --mut:#686d74; --mut2:#8b9097;
+    --ac:#2a6ecb; --acsf:rgba(42,110,203,.08);
+    --ok:#1a7a49; --okbg:#e9f6ee;
+    --wa:#8a5a00; --wabg:#fbf1de;
+    --da:#b02a1f; --dabg:#fdeceb;
+    --sh:0 1px 2px rgba(16,14,10,.05);
+  }
+  [data-scheme="dark"]{
+    --bg:#121316; --sf:#1b1d21; --sf2:#22252b;
+    --bd:rgba(255,255,255,.11); --bd2:rgba(255,255,255,.06);
+    --fg:#e9eaec; --mut:#9aa0a8; --mut2:#7d838b;
+    --ac:#6493df; --acsf:rgba(100,147,223,.13);
+    --ok:#4cc38a; --okbg:rgba(76,195,138,.13);
+    --wa:#e2a63f; --wabg:rgba(226,166,63,.13);
+    --da:#f0766a; --dabg:rgba(240,118,106,.13);
+    --sh:none;
+  }
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--fg);font-family:'IBM Plex Sans',system-ui,sans-serif;line-height:1.45;-webkit-font-smoothing:antialiased}
+  a{color:var(--ac);text-decoration:none}
+  a:hover{color:var(--ac);text-decoration:underline}
+  *{box-sizing:border-box}
+  @keyframes butecoPulse{0%,100%{opacity:.55}50%{opacity:1}}
+  @container (max-width: 719px){
+    [data-shell-side]{width:58px!important;flex:0 0 58px!important}
+    [data-shell-label]{display:none!important}
+  }
+</style>
+</helmet>
+
+<div data-scheme="{{ scheme }}" style="container-type:inline-size;display:flex;min-height:100vh;background:var(--bg);color:var(--fg)">
+
+  <aside data-shell-side="" style="width:224px;flex:0 0 224px;position:sticky;top:0;align-self:flex-start;height:100vh;background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:9px;padding:16px 14px 14px;border-bottom:1px solid var(--bd2)">
+      <div style="width:24px;height:24px;flex:0 0 auto;border-radius:6px;background:var(--ac);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">B</div>
+      <div data-shell-label="" style="font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap">Buteco Agentes</div>
+    </div>
+
+    <nav style="display:flex;flex-direction:column;gap:2px;padding:10px 8px">
+      <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="5">
+        <a href="#" title="{{ n.route }}" onClick="{{ n.onNav }}" style="{{ n.style }}" style-hover="text-decoration:none">
+          <i data-lucide="{{ n.icon }}" style="width:16px;height:16px;flex:0 0 auto"></i><span data-shell-label="" style="white-space:nowrap">{{ n.label }}</span>
+        </a>
+      </sc-for>
+    </nav>
+
+    <div style="margin-top:auto;padding:12px 10px;border-top:1px solid var(--bd2);display:flex;flex-wrap:wrap;gap:4px">
+      <sc-for list="{{ schemeOpts }}" as="opt" hint-placeholder-count="3">
+        <button type="button" onClick="{{ opt.onClick }}" title="{{ opt.title }}" style="{{ opt.style }}">
+          <i data-lucide="{{ opt.icon }}" style="width:14px;height:14px"></i>
+        </button>
+      </sc-for>
+    </div>
+  </aside>
+
+  <main style="flex:1;min-width:0;padding:22px 26px 40px">
+    <div style="max-width:1320px">
+
+      <h1 style="margin:0 0 18px;font-size:20px;font-weight:600;letter-spacing:-.015em;color:var(--fg)">Inventário</h1>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(256px,100%),1fr));gap:16px">
+        <sc-for list="{{ cards }}" as="c" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;min-height:148px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;box-shadow:var(--sh);padding:13px 14px;color:var(--fg)">
+
+            <div style="display:flex;align-items:center;gap:7px;color:var(--mut)">
+              <i data-lucide="{{ c.icon }}" style="width:14px;height:14px"></i>
+              <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">{{ c.label }}</span>
+            </div>
+
+            <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:14px 0 12px">
+              <sc-if value="{{ c.isValue }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;align-items:baseline;gap:7px">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;color:var(--fg)">{{ c.num }}</span>
+                  <span style="font-size:13px;color:var(--mut)">{{ c.unit }}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ c.isZero }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:18px;font-weight:600;line-height:1.2;color:var(--fg)">{{ c.zeroText }}</div>
+              </sc-if>
+              <sc-if value="{{ c.isUnknown }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:500;line-height:1;color:var(--mut)">—</div>
+                  <div style="font-size:12px;color:var(--wa);margin-top:7px;text-wrap:pretty">{{ c.reason }}</div>
+                  <button type="button" onClick="{{ c.onRetry }}" style="margin-top:9px;padding:5px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;font-weight:600;cursor:pointer" style-hover="background:var(--sf2)">Tentar novamente</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ c.isLoading }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:7px">
+                  <div style="width:96px;height:24px;border-radius:6px;background:var(--sf2);border:1px solid var(--bd2);animation:butecoPulse 1.2s ease-in-out infinite"></div>
+                  <div style="font-size:12px;color:var(--mut2)">Consultando…</div>
+                </div>
+              </sc-if>
+            </div>
+
+            <a href="#" title="{{ c.route }}" onClick="{{ c.onNav }}" style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--ac);border-top:1px solid var(--bd2);padding-top:10px;text-decoration:none" style-hover="text-decoration:underline">
+              {{ c.linkText }}<i data-lucide="arrow-right" style="width:13px;height:13px"></i>
+            </a>
+          </div>
+        </sc-for>
+      </div>
+
+      <section style="margin-top:34px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;box-shadow:var(--sh);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;background:var(--sf2);border-bottom:1px solid var(--bd);padding:9px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)">
+          <i data-lucide="sliders-horizontal" style="width:13px;height:13px"></i>Controles do protótipo
+        </div>
+        <div style="padding:14px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="width:150px;flex:0 0 auto;font-size:11.5px;font-weight:600;color:var(--mut)">Cenário de tela</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <sc-for list="{{ scenarios }}" as="s" hint-placeholder-count="4">
+                <button type="button" onClick="{{ s.onClick }}" style="{{ s.style }}">{{ s.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="height:1px;background:var(--bd2);margin:14px 0"></div>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ cards }}" as="c" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <div style="width:150px;flex:0 0 auto;font-size:11.5px;font-weight:500;color:var(--fg)">{{ c.label }}</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <sc-for list="{{ c.stateBtns }}" as="b" hint-placeholder-count="4">
+                    <button type="button" onClick="{{ b.onClick }}" style="{{ b.style }}">{{ b.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--bd2);font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mut)">provisório · rota {{ rota }} · rótulo “{{ rotulo }}”</div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1860, &quot;height&quot;: 1000 },
+  &quot;cenarioInicial&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;A&quot;, &quot;B&quot;, &quot;C&quot;, &quot;L&quot;], &quot;default&quot;: &quot;A&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Protótipo&quot; },
+  &quot;esquemaInicial&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;sistema&quot;, &quot;claro&quot;, &quot;escuro&quot;], &quot;default&quot;: &quot;sistema&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Protótipo&quot; },
+  &quot;rota&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;/inventory&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Provisório&quot; },
+  &quot;rotulo&quot;: { &quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Inventário&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Provisório&quot; }
+}">
+const CATALOGS = [
+  { key:'agents', label:'Agentes', icon:'bot', route:'/agents', linkText:'Ver agentes',
+    num:4, unit:'agentes', unitOne:'agente', zeroText:'Nenhum agente',
+    reason:'A requisição falhou.' },
+  { key:'servers', label:'Servidores MCP', icon:'server', route:'/mcp-servers', linkText:'Ver servidores MCP',
+    num:4, unit:'servidores', unitOne:'servidor', zeroText:'Nenhum servidor MCP',
+    reason:'A requisição falhou.' },
+  { key:'kbs', label:'Bases de conhecimento', icon:'library', route:'/knowledge-bases', linkText:'Ver bases',
+    num:9, unit:'bases', unitOne:'base', zeroText:'Nenhuma base de conhecimento',
+    reason:'A requisição falhou.' },
+  { key:'channels', label:'Canais', icon:'messages-square', route:'/channels', linkText:'Ver canais',
+    num:2, unit:'canais', unitOne:'canal', zeroText:'Nenhum canal',
+    reason:'A requisição falhou.' },
+];
+
+const SCENARIOS = {
+  A: { label:'A · quatro com número', states:{ agents:'value', servers:'value', kbs:'value', channels:'value' } },
+  B: { label:'B · falha isolada (dois cards)', states:{ agents:'value', servers:'value', kbs:'unknown', channels:'unknown' } },
+  C: { label:'C · instalação nova', states:{ agents:'zero', servers:'zero', kbs:'zero', channels:'zero' } },
+  L: { label:'Carregando', states:{ agents:'loading', servers:'loading', kbs:'loading', channels:'loading' } },
+};
+
+const NAV = [
+  { icon:'layout-grid', label:'Inventário', route:'/inventory', active:true },
+  { icon:'bot', label:'Agentes', route:'/agents' },
+  { icon:'server', label:'Servidores MCP', route:'/mcp-servers' },
+  { icon:'library', label:'Conhecimento', route:'/knowledge-bases' },
+  { icon:'messages-square', label:'Canais', route:'/channels' },
+];
+
+const STATE_LABELS = { value:'valor', zero:'zero medido', unknown:'não sei', loading:'carregando' };
+
+class Component extends DCLogic {
+  state = {
+    scheme: 'light',
+    schemePref: 'system',
+    scenario: 'A',
+    states: Object.assign({}, SCENARIOS.A.states),
+  };
+
+  componentDidMount() {
+    const pref = this.props.esquemaInicial || 'sistema';
+    const sc = this.props.cenarioInicial || 'A';
+    this.mq = window.matchMedia('(prefers-color-scheme: dark)');
+    this.onMq = () => { if (this.state.schemePref === 'system') this.setState({ scheme: this.mq.matches ? 'dark' : 'light' }); };
+    this.mq.addEventListener('change', this.onMq);
+    const key = pref === 'claro' ? 'light' : pref === 'escuro' ? 'dark' : 'system';
+    this.setState({
+      schemePref: key,
+      scheme: key === 'system' ? (this.mq.matches ? 'dark' : 'light') : key,
+      scenario: sc,
+      states: Object.assign({}, (SCENARIOS[sc] || SCENARIOS.A).states),
+    });
+    this.icons();
+  }
+  componentDidUpdate() { this.icons(); }
+  componentWillUnmount() {
+    if (this.mq) this.mq.removeEventListener('change', this.onMq);
+  }
+
+  icons() {
+    if (window.lucide) { try { window.lucide.createIcons(); } catch (e) {} }
+    else if (!this.waiting) { this.waiting = true; setTimeout(() => { this.waiting = false; this.icons(); }, 120); }
+  }
+
+  setScheme(pref) {
+    this.setState({ schemePref: pref, scheme: pref === 'system' ? (this.mq && this.mq.matches ? 'dark' : 'light') : pref });
+  }
+  setScenario(id) {
+    this.setState({ scenario: id, states: Object.assign({}, SCENARIOS[id].states) });
+  }
+  setCardState(key, val) {
+    this.setState(s => ({ scenario: null, states: Object.assign({}, s.states, { [key]: val }) }));
+  }
+  retry(key) {
+    this.setState(s => ({ scenario: null, states: Object.assign({}, s.states, { [key]: 'loading' }) }));
+    setTimeout(() => this.setState(s => (
+      s.states[key] === 'loading' ? { states: Object.assign({}, s.states, { [key]: 'value' }) } : null
+    )), 1400);
+  }
+
+  btn(active) {
+    return {
+      padding: '4px 10px', borderRadius: '6px', cursor: 'pointer',
+      fontFamily: "'IBM Plex Sans', sans-serif", fontSize: '11.5px', fontWeight: 600,
+      border: '1px solid ' + (active ? 'transparent' : 'var(--bd)'),
+      background: active ? 'var(--acsf)' : 'var(--sf)',
+      color: active ? 'var(--ac)' : 'var(--mut)',
+    };
+  }
+
+  renderVals() {
+    const st = this.state.states;
+    const nav = e => { e.preventDefault(); };
+
+    const cards = CATALOGS.map(c => {
+      const s = st[c.key];
+      return {
+        key: c.key, label: c.label, icon: c.icon, route: c.route, linkText: c.linkText,
+        num: c.num, unit: c.num === 1 ? c.unitOne : c.unit,
+        zeroText: c.zeroText, reason: c.reason,
+        isValue: s === 'value', isZero: s === 'zero', isUnknown: s === 'unknown', isLoading: s === 'loading',
+        onNav: nav,
+        onRetry: () => this.retry(c.key),
+        stateBtns: ['value','zero','unknown','loading'].map(v => ({
+          label: STATE_LABELS[v], style: this.btn(s === v), onClick: () => this.setCardState(c.key, v),
+        })),
+      };
+    });
+
+    return {
+      scheme: this.state.scheme,
+      cards,
+      navItems: NAV.map(n => ({
+        icon: n.icon, label: n.label, route: n.route, onNav: nav,
+        style: {
+          display: 'flex', alignItems: 'center', gap: '9px', padding: '7px 8px', borderRadius: '7px',
+          fontSize: '12.5px', textDecoration: 'none',
+          background: n.active ? 'var(--acsf)' : 'transparent',
+          color: n.active ? 'var(--ac)' : 'var(--mut)',
+          fontWeight: n.active ? 600 : 500,
+        },
+      })),
+      scenarios: Object.keys(SCENARIOS).map(id => ({
+        label: SCENARIOS[id].label, style: this.btn(this.state.scenario === id), onClick: () => this.setScenario(id),
+      })),
+      schemeOpts: [
+        { icon:'sun', title:'Tema claro', style: this.btn(this.state.schemePref === 'light'), onClick: () => this.setScheme('light') },
+        { icon:'moon', title:'Tema escuro', style: this.btn(this.state.schemePref === 'dark'), onClick: () => this.setScheme('dark') },
+        { icon:'monitor', title:'Seguir o sistema', style: this.btn(this.state.schemePref === 'system'), onClick: () => this.setScheme('system') },
+      ],
+      rota: this.props.rota || '/inventory',
+      rotulo: this.props.rotulo || 'Inventário',
+    };
+  }
+}
+
+</script>
+</body>
+</html>

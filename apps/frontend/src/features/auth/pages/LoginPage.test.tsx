@@ -85,7 +85,7 @@ describe('LoginPage', () => {
 
     await fillAndSubmit(user);
 
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/agents', { replace: true }));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/', { replace: true }));
     expect(getToken()).toBe('token-emitido');
   });
 

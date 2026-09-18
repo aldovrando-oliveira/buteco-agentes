@@ -19,6 +19,7 @@ import { ChannelListPage } from '../features/channels/pages/ChannelListPage';
 import { ChannelCreatePage } from '../features/channels/pages/ChannelCreatePage';
 import { ChannelDetailPage } from '../features/channels/pages/ChannelDetailPage';
 import { ChannelEditPage } from '../features/channels/pages/ChannelEditPage';
+import { InventoryPage } from '../features/inventory/pages/InventoryPage';
 
 // A árvore de rotas mora aqui, e não em router.tsx, porque router.tsx cria
 // o browser router no escopo do módulo — importá-lo tem efeito colateral
@@ -35,7 +36,12 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
     <Route path="login" element={<LoginPage />} />
     <Route element={<ProtectedRoute />}>
       <Route element={<AppShell />}>
-        <Route index element={<Navigate to="/agents" replace />} />
+        {/* A raiz redireciona para o inventário; ela não É o inventário. O item
+            ativo da casca é calculado por `location.pathname.startsWith(to)`
+            (AppShell.tsx:65), e um item com `to="/"` ficaria permanentemente
+            ativo em toda rota do painel (design.md, D1). */}
+        <Route index element={<Navigate to="/inventory" replace />} />
+        <Route path="inventory" element={<InventoryPage />} />
         <Route path="agents">
           <Route index element={<AgentListPage />} />
           <Route path="new" element={<AgentCreatePage />} />
