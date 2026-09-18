@@ -89,6 +89,10 @@ o versionamento pretende seguir
   por canal.
 - Histórico durável de mensagens por sessão, em tabela relacional própria,
   com status de despacho e de entrega.
+- `GET /sessions/summary?from=…&to=…` — contagem de sessões **iniciadas** no
+  período (`startedCount`), agregada no banco. Conta por instante de início,
+  não por atividade nem por sessão aberta durante o intervalo; os dois limites
+  são obrigatórios e inclusivos.
 - Painel de catálogo de canais, e de sessões e histórico de conversa.
 
 **Autenticação**
