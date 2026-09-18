@@ -1,4 +1,9 @@
-import type { ChannelSession, SessionMessage } from '../types/session';
+import type {
+  ChannelSession,
+  MessagesSummary,
+  SessionMessage,
+  SessionsSummary,
+} from '../types/session';
 import { clearToken, getToken } from '../../../auth/token';
 
 export interface ValidationProblemDetails {
@@ -22,6 +27,14 @@ export class ApiError extends Error {
 
 // Mesmo padrão de duplicação deliberada de request<T>/ApiError já usado por
 // channelsApi.ts/agentsApi.ts/mcpServersApi.ts (design.md, Decisão 1).
+//
+// ESTE MÓDULO É O CLIENTE DE CONVERSAS DE apps/inbox, NÃO O CLIENTE DO RECURSO
+// `/sessions`. Ele já falava com `/channels/{id}/sessions` e com
+// `/sessions/{id}/messages`, e por isso `/messages/summary` mora aqui também, em
+// vez de num `messagesApi.ts` que seria a sétima cópia de request<T>/ApiError
+// para uma função só, numa pasta `features/messages/` sem tela nenhuma.
+// Gatilho para separar: surgir uma tela própria de mensagens
+// (frontend-inventario-atividade-periodo, design.md, D4).
 const INBOX_BASE_URL = import.meta.env.VITE_INBOX_BASE_URL ?? 'http://localhost:5027';
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -63,4 +76,19 @@ export function listChannelSessions(channelId: string): Promise<ChannelSession[]
 
 export function getSessionMessages(sessionId: string): Promise<SessionMessage[]> {
   return request<SessionMessage[]>(`/sessions/${sessionId}/messages`);
+}
+
+// Os dois limites são obrigatórios na rota e não há período implícito: quem
+// chama decide a janela (features/inventory/utils/activityWindow.ts). Ambos são
+// inclusivos no backend.
+function periodQuery(from: string, to: string): string {
+  return new URLSearchParams({ from, to }).toString();
+}
+
+export function getSessionsSummary(from: string, to: string): Promise<SessionsSummary> {
+  return request<SessionsSummary>(`/sessions/summary?${periodQuery(from, to)}`);
+}
+
+export function getMessagesSummary(from: string, to: string): Promise<MessagesSummary> {
+  return request<MessagesSummary>(`/messages/summary?${periodQuery(from, to)}`);
 }
