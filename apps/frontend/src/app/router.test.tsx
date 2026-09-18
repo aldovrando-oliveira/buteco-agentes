@@ -16,6 +16,7 @@ import {
   listKnowledgeBaseIndexingSummary,
   listKnowledgeBases,
 } from '../features/knowledge-bases/api/knowledgeBasesApi';
+import { getMessagesSummary, getSessionsSummary } from '../features/sessions/api/sessionsApi';
 import { clearToken, setToken } from '../auth/token';
 
 // importOriginal preserva ApiError: o detalhe do agente faz `instanceof
@@ -52,6 +53,21 @@ vi.mock('../features/knowledge-bases/api/knowledgeBasesApi', async (importOrigin
   const actual =
     await importOriginal<typeof import('../features/knowledge-bases/api/knowledgeBasesApi')>();
   return { ...actual, listKnowledgeBases: vi.fn(), listKnowledgeBaseIndexingSummary: vi.fn() };
+});
+
+// MOCK PARCIAL, pelo mesmo motivo do aviso acima: a raiz leva ao inventário, e o
+// inventário chama os dois resumos de atividade de apps/inbox. Sem eles aqui, as
+// duas chamadas escapam para a rede. `importOriginal` preserva `request`/`ApiError`
+// e as funções que as telas de canal usam (`listChannelSessions`,
+// `getSessionMessages`) — só os dois resumos são substituídos.
+//
+// Registro do apply: sem este mock o arquivo ainda passava, mas só porque
+// apps/inbox não estava de pé na máquina — a chamada falhava como erro de rede,
+// sem 401 e sem redirecionar para /login. Com o inbox rodando, o modo de falha
+// descrito acima apareceria. Passar por ambiente não é passar.
+vi.mock('../features/sessions/api/sessionsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../features/sessions/api/sessionsApi')>();
+  return { ...actual, getSessionsSummary: vi.fn(), getMessagesSummary: vi.fn() };
 });
 
 const agent: Agent = {
@@ -108,6 +124,10 @@ describe('appRoutes', () => {
     vi.mocked(getAgent).mockResolvedValue(agent);
     vi.mocked(listMcpServers).mockReset();
     vi.mocked(listMcpServers).mockResolvedValue([]);
+    vi.mocked(getSessionsSummary).mockReset();
+    vi.mocked(getSessionsSummary).mockResolvedValue({ startedCount: 0 });
+    vi.mocked(getMessagesSummary).mockReset();
+    vi.mocked(getMessagesSummary).mockResolvedValue({ inboundCount: 0 });
     setToken('token-de-teste');
   });
 
@@ -249,11 +269,12 @@ describe('appRoutes', () => {
 
 describe('AppRouter', () => {
   beforeEach(() => {
-    // AS QUATRO, e não só listAgents: a raiz passou a levar ao inventário, que
-    // consulta os quatro catálogos. Configurar só uma deixaria as outras três
-    // dependendo do `mockResolvedValue` VAZADO do describe anterior — vitest não
-    // limpa mocks entre describes e vite.config.ts não liga `clearMocks`, então
-    // o caso passaria por ordem de execução, não por estar correto.
+    // AS SEIS, e não só listAgents: a raiz leva ao inventário, que consulta os
+    // quatro catálogos e os dois resumos de atividade. Configurar só uma deixaria
+    // as outras dependendo do `mockResolvedValue` VAZADO do describe anterior —
+    // vitest não limpa mocks entre describes e vite.config.ts não liga
+    // `clearMocks`, então o caso passaria por ordem de execução, não por estar
+    // correto.
     vi.mocked(listAgents).mockReset();
     vi.mocked(listAgents).mockResolvedValue([]);
     vi.mocked(listMcpServers).mockReset();
@@ -262,6 +283,10 @@ describe('AppRouter', () => {
     vi.mocked(listKnowledgeBases).mockResolvedValue([]);
     vi.mocked(listChannels).mockReset();
     vi.mocked(listChannels).mockResolvedValue([]);
+    vi.mocked(getSessionsSummary).mockReset();
+    vi.mocked(getSessionsSummary).mockResolvedValue({ startedCount: 0 });
+    vi.mocked(getMessagesSummary).mockReset();
+    vi.mocked(getMessagesSummary).mockResolvedValue({ inboundCount: 0 });
     setToken('token-de-teste');
   });
 

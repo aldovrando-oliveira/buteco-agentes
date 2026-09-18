@@ -90,6 +90,14 @@ handoff original não tem essa tela e abre em `/agents` por escolha, então ela
 é divergência registrada, não continuação. Ver "Tela de entrada do painel"
 abaixo.
 
+**A tela de entrada ganhou atividade** em `frontend-inventario-atividade-periodo`
+(2026-09-18): dois itens, sessões iniciadas e mensagens recebidas nos últimos 7
+dias, consumindo as duas rotas agregadas que `apps/inbox` ganhou em #23 e #24.
+Aplicada, sincronizada (`catalog-inventory-ui`, com `Purpose` reescrito) e
+arquivada; nada commitado. `apps/frontend` em **921/921**, contra baseline de
+874/874. Ver "Atividade na tela de entrada"
+abaixo.
+
 ## Changes aplicadas, por linha de trabalho
 
 ### Fundação (backend + frontend básico)
@@ -3332,6 +3340,45 @@ listas — e a recusa de 2026-07-27 que tirou "Dashboard" da navegação tinha
 escrito a própria condição de reabertura: *"reintroduzi-los quando a página
 existir de fato"*.
 
+### Atividade na tela de entrada (`frontend-inventario-atividade-periodo`, 2026-09-18)
+
+Dois itens de atividade em `/inventory`, **Sessões iniciadas** e **Mensagens
+recebidas**, cada um com a contagem dos últimos 7 dias (janela rolante de 168h
+que termina no instante da consulta). Só `apps/frontend`; as rotas são as de
+`inbox-sessoes-por-periodo` e `inbox-mensagens-recebidas-periodo`. Baseline
+**82 arquivos / 874 testes**, fechamento **84 / 921**. Aplicada, sincronizada
+(`Purpose` de `catalog-inventory-ui` reescrito inteiro) e arquivada; nada
+commitado.
+
+**O D10 de `frontend-inventario-catalogos` foi fechado, não contradito.** Ele
+deixava fora "qualquer quadro de atividade" por dois motivos: nenhuma rota
+filtrava por intervalo, e qual "mensagens" contar era trabalho de backend. As
+duas changes de inbox resolveram os dois; esta é a terceira peça.
+
+**A reserva do nome `dashboard-*` NÃO foi usada.** A proposta de
+`frontend-inventario-catalogos` tinha escrito que o nome ficava "livre para o dia
+em que a atividade existir, que é outra capability". Esse dia chegou, e os itens
+de atividade entraram em `catalog-inventory-ui`: o requisito de falha
+independente precisa falar dos seis itens juntos, e partido em duas specs não
+teria onde morar. O nome fica mais estreito que o conteúdo, e o `Purpose`
+reescrito carrega o sentido real. Ver D1 do `design.md` da change.
+
+Coisas a carregar:
+
+- **Chave de cache fixa, janela dentro do `queryFn`.** Com a janela calculada no
+  render e posta na chave, cada render gera consulta nova e o item fica em
+  "Consultando…" para sempre. Prova por mutação: três testes do hook reprovam
+  com a versão errada.
+- **Verde por ambiente não é verde.** `router.test.tsx` passava sem o mock de
+  `sessionsApi` porque `apps/inbox` estava fora do ar: a chamada vazada falhava
+  como erro de rede, sem 401 e sem `/login`. Uma sonda de rede contou **6
+  chamadas escapando com os testes verdes**; com o mock, 0.
+- **Teste de horário de verão precisa de fuso com horário de verão.** O processo
+  roda em `America/Sao_Paulo`, sem DST desde 2019. O teste usa a virada real de
+  Nova York (08/03/2026) lida por `Intl` com fuso explícito.
+- **Os 187/182px de linha com "não sei" eram do protótipo.** No app, 201,4px a
+  389px de largura, medido **igual na `main`**: não é regressão.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -5528,6 +5575,11 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
 
 ## Próximo passo
 
+**Concluído, não commitado**: `frontend-inventario-atividade-periodo` —
+aplicada, sincronizada (`catalog-inventory-ui`, `Purpose` reescrito) e
+arquivada, na branch `feat/frontend-inventario-atividade-periodo`. Falta só o
+commit.
+
 **Concluído nesta sessão**: `frontend-inventario-catalogos` — a tela de entrada
 do painel. Explorada, proposta, aplicada, conferida à mão, sincronizada
 (`catalog-inventory-ui`, capability nova) e arquivada. `apps/frontend` em
@@ -5772,3 +5824,39 @@ candidatos abaixo são independentes entre si, sem ordem imposta.
   retrodatar por `UPDATE` **depois**, mensagem e sessão. Está escrita como
   comentário nos próprios testes, com a medição ao lado, para ninguém "arrumar" a
   ordem mais tarde.
+
+### Abertos por `frontend-inventario-atividade-periodo` (2026-09-18)
+
+- **Rótulo desalinhado entre itens de atividade em estados diferentes — decidido:
+  aceito como está, não corrigido nesta change.** Sem rodapé, o item de
+  atividade centraliza rótulo, contagem e janela juntos
+  (`justifyContent: 'center'`). Na mesma linha, um em
+  zero medido e outro em "não sei" ficam com o rótulo ~32px desalinhado. O
+  **protótipo aprovado faz o mesmo** (medido: 86 × 115px no cenário B). A
+  1056–1327px (3 + 3), Canais divide a linha com os dois, e o desalinhamento
+  aparece ao lado de um item de catálogo, que tem o rótulo ancorado no topo.
+  Saída, se reprovado: ancorar o rótulo e centralizar só contagem + janela. É
+  mudança da D5, não ajuste.
+
+  **Por que foi aceito:** reproduz o protótipo aprovado, então não é regressão
+  da implementação; é cosmético, e não perde nem falseia nenhuma informação; e
+  corrigir direito (ancorar o rótulo no topo, centralizar só contagem + janela) é
+  mudança de composição, que reabre a D5 e merece rodada própria de protótipo, e
+  não ajuste de última hora numa change que já fechou a conferência visual.
+  **Gatilho:** incomodar em uso real, ou outra change já ir mexer na composição
+  do card de atividade por outro motivo. Não há prazo.
+
+- **"Não sei" leva ~7s para aparecer, nos seis itens.** O `QueryClient` do app
+  não tem `defaultOptions`, então vale o `retry: 3` do react-query, com espera
+  crescente. É anterior a esta change, que só herdou. **Gatilho:** o operador
+  estranhar o "Consultando…" longo com `apps/inbox` fora do ar. A decisão é do
+  `QueryClient`, não do item.
+
+- **`useSessions.ts` importa um utilitário de `features/inventory`.** O hook
+  "últimos 7 dias" é decisão do inventário, e a função fica com o único
+  consumidor. **Gatilho:** um segundo consumidor da janela; aí a função sobe
+  para um lugar comum.
+
+- **O aviso de chunk acima de 500 kB no build** vem de um bundle único de
+  ~935 kB. Esta change não o causa (acrescenta poucos KB), mas ele não estava
+  registrado em lugar nenhum. Registrado aqui, sem medição da `main`.

@@ -1,18 +1,4 @@
-# catalog-inventory-ui Specification
-
-## Purpose
-
-A tela de entrada do painel: um item por catálogo que o painel consome e um item
-por contagem de atividade num período, cada um com a sua contagem e o estado da
-consulta que a produziu. O item de catálogo leva à listagem correspondente; o
-item de atividade declara o período a que a contagem se refere e não leva a
-lugar nenhum, porque nenhuma listagem conta o mesmo conjunto. Define a
-proveniência de cada contagem — os quatro estados que não podem ser colapsados
-um no outro —, a apuração única de cada contagem, o comportamento independente
-de falha e de nova tentativa por item, e a recusa de reproduzir a explicação que
-cada listagem já dá.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Inventário dos catálogos como entrada do painel
 
@@ -208,6 +194,8 @@ segunda fonte de verdade daquele texto.
 - **WHEN** o operador visualiza o item de uma contagem de atividade
 - **THEN** o item apresenta apenas o nome da contagem, a sua situação de contagem
   e o período
+
+## ADDED Requirements
 
 ### Requirement: A contagem de atividade declara a sua janela
 

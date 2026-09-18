@@ -292,6 +292,17 @@ o versionamento pretende seguir
   **com a razão** — nunca como zero, que afirmaria uma contagem que ninguém
   fez. O item não repete o texto explicativo da listagem: a explicação de cada
   catálogo continua tendo um lugar só.
+- Atividade na tela de inventário: dois itens novos, **Sessões iniciadas** e
+  **Mensagens recebidas**, cada um com a contagem dos **últimos 7 dias**,
+  consumindo `GET /sessions/summary` e `GET /messages/summary`. A janela é
+  rolante (as 168h que terminam no instante da consulta) e é apresentada **em
+  todos os estados do item**, inclusive carregando e sem resposta: um número de
+  atividade sem período é ambíguo, e um "não sei" sem período não diz sobre o
+  quê. Os dois itens herdam o que os de catálogo já tinham (zero dito por
+  extenso, falha com razão, nova tentativa que refaz só a própria consulta), mas
+  **não têm atalho**, porque nenhuma listagem do painel conta o mesmo conjunto. A
+  contagem é a que a rota agregada devolve, nunca recontada no painel. Sem
+  seletor de período.
 
 **Documentação e governança**
 
@@ -320,6 +331,11 @@ o versionamento pretende seguir
   resposta `401` força aquela tela, então o login é o caminho de entrada
   dominante — sem ela, a maior parte das entradas continuaria caindo na
   listagem de agentes.
+- A grade da tela de inventário passou a ter **no máximo quatro colunas**. Com
+  seis itens, a grade sem teto quebrava em 5 + 1 justamente na faixa de 1600 a
+  1871px de janela; com o teto, fica em 4 + 2 (catálogos em cima, atividade
+  embaixo). A regra vale para os seis itens, inclusive os quatro de catálogo. Os
+  pontos de quebra abaixo disso não mudaram: 1328, 1056 e 784px.
 - Explicação de falha no painel passou a usar `failureReason` em vez da
   mensagem crua da API.
 - Imagens Docker passaram a usar a variante default de
