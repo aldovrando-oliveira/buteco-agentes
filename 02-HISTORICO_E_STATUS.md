@@ -48,8 +48,8 @@ passa a valer só para dev. A data exata do primeiro deploy do piloto não está
 registrada neste arquivo. Os pontos que se apoiavam na premissa estão marcados
 com esta mesma nota, **sem reabrir as decisões** (isso é exploração própria):
 o censo de colisão de `dedupe-global-nome-de-tool`; o checklist "Primeiro
-deploy em produção"; a verificação de autenticidade do webhook do WAHA, que é
-risco não mitigado **agora exposto**, com o WAHA ativo no piloto; o
+deploy em produção"; a verificação de autenticidade do webhook do WAHA, risco
+não mitigado **cuja premissa mudou**, com o WAHA ativo no piloto; o
 "sem consequência hoje" das chaves de Anthropic/Gemini; o `docker compose` não
 testado; e os índices por volume real. Fora deste arquivo, encosta também no
 **risco aceito do placeholder `changeme`** (`docs/deployment.md`, "Risco
@@ -3509,6 +3509,93 @@ Coisas a carregar:
   arquivo do repositório, com uma única troca documentada (`resolver`, porque o
   DNS embutido do Docker não existe numa rede do podman).
 
+### Documentação reconciliada com a produção, e `--env-file` uniforme (`docs-premissa-producao-e-env-file`, 2026-09-19)
+
+Change **só de documentação**: nenhuma linha de código, nenhuma mudança de
+comportamento, **nenhuma decisão de segurança revista**. A premissa "não existe
+ambiente de produção" tinha sido corrigida neste arquivo em 18/09, e fora dele
+não. **Estado: aplicada e arquivada em 19/09/2026, sem sync, porque não há
+delta de spec**, em
+`openspec/changes/archive/2026-09-19-docs-premissa-producao-e-env-file/`. O
+`tasks.md` fechou 38/38, contando os ajustes finais da revisão (seção 7). O
+merge na `main` é do mantenedor.
+
+A varredura foi **enumerada, não lembrada**, em `docs/`, `SECURITY.md`,
+`README.md` e nos comentários do compose e dos `.env*.example`. Ela classificou
+cada ocorrência em (a) afirmação falsa, corrigida; (b) aceite de risco cujo
+argumento mudou, só marcado; (c) verdadeira, não tocada. **A distinção entre
+(a) e (b) é o ponto da change**: corrigir texto é documentação, e rever aceite
+de risco é mudança de comportamento em produção.
+
+- **R1 — `--env-file .env.prod` uniforme em `docs/deployment.md`.** Enumerados,
+  eram 9 comandos contra `docker-compose.prod.yml`, e 6 estavam sem a flag: o
+  exemplo de teste local do cabeçalho, o `ps` do §1 passo 3 e os quatro passos
+  do §2. O item registrado citava só o §2. Hoje são 9, e 0 sem a flag. **Medido
+  com `podman-compose` 1.6.0**, cada passo sem a flag falha na interpolação
+  **antes de agir**, e nenhum container é criado. O único dano real é o de
+  improviso, com a flag num passo e não no seguinte: `stop inbox` feito,
+  migrator falhando, `apps/inbox` parado. **Por isso a correção é uniforme**:
+  um documento misto ensina o improviso. Com a flag, `--dry-run` dos quatro
+  passos passa a interpolação. **`docker compose` não foi medido**, e é a mesma
+  lacuna de paridade já registrada em "Abertos por `fix-stack-servidor-lacunas`".
+  Não afeta a correção, porque a flag é necessária em qualquer runtime.
+- **(a) corrigidas:**
+  - **O guia A2A dizia que a rota A2A não exige credencial**, e é falso desde
+    `auth-login-e-servico`. **O achado maior:** não existe credencial para
+    cliente A2A externo, pela Decision 6 daquela change, e o guia inteiro,
+    escrito para esse cliente, omitia a autenticação. Os três `curl` iam sem
+    `Authorization`.
+    - **Onde entrou a correção:** Bearer no pré-requisito, no endpoint e nos
+      `curl`, mais uma subseção "Autenticação" que declara a limitação.
+    - **O card:** o exemplo ganhou `securitySchemes`/`securityRequirements`
+      **copiados de uma resposta real**, capturada com `apps/api` em dev.
+    - **Achado na aplicação:** a regra "JSON-RPC responde sempre HTTP 200"
+      também era falsa para o `401`, **medido**, com corpo vazio e sem
+      `WWW-Authenticate`. A regra ganhou a exceção.
+    - **O que o guia não faz:** não prescreve o token do operador, que dá acesso
+      a todo o painel.
+  - **`docs/deployment.md` §4 dizia que a correção do `TaskJobConsumer` rodaria
+    antes do deploy.** Não rodou.
+  - **Dois comentários de cabeçalho do `docker-compose.prod.yml`** apontavam para
+    um caminho de change hoje no archive e para `deploy/runbook.md`, que não
+    existe. A saída de `config` é **byte-idêntica** antes e depois.
+- **(b) marcadas, sem decidir:** o `changeme` em `docs/deployment.md` e em
+  `SECURITY.md`; o webhook do WAHA em `SECURITY.md`, `README.md` e
+  `docs/architecture.md`.
+  - **Texto da marca:** "aceite feito antes de haver deploy atendendo tráfego
+    real; em reavaliação". **Sem o domínio do piloto e sem "exposto"**, porque o
+    repositório é público (D3).
+  - **No `SECURITY.md`**, a marca vem na mesma frase **e antes** de "does not
+    need to be reported". Ali ela faz trabalho de verdade: a dispensa é
+    instrução a terceiros, e o efeito dela mudou com a produção.
+- **O D3 vale para este arquivo também.** O parágrafo "Existe ambiente de
+  produção" e a nota de 18/09 mantêm o domínio, que é o que os torna úteis. A
+  adjacência entre o domínio e a linguagem de exposição sobre o webhook foi
+  quebrada, com uma locução trocada na nota, e nenhuma outra correção de 18/09
+  foi alterada. **Este é o único
+  arquivo versionado que pode conter o domínio do piloto**, e a exceção é
+  deliberada, escrita no `design.md`.
+- **Sem delta de spec, de propósito.** `server-deployment` não tem requisito
+  sobre a sequência de redeploy e não deve ganhar um. "Parar o `apps/inbox`
+  antes de migrar" é invariante de procedimento que o sistema não garante, e
+  escrever cenário para ela seria descrever um runbook em spec. O cenário
+  "Ausência de segredo obrigatório falha o processamento do compose" continua
+  certo, e a medição o confirma. `openspec validate --strict` acusa o `specs/`
+  vazio, que é o falso positivo conhecido.
+
+Coisas a carregar:
+
+- **`scripts/check-docs.py` passou e não viu quase nada disto.** Ele lê só `.md`,
+  e só links relativos, sem âncora. Os comandos de shell do R1, o `.yml` do
+  compose, caminho em crase fora de link e as âncoras internas passam por ele
+  sem serem vistos. Foi a verificação por grep que pegou cada um. É a mesma
+  lacuna que interessa à change candidata do guarda de prefixos do nginx: **um
+  guarda que não lê o artefato não pega o defeito do artefato.**
+- **Correção de status separada deste registro.** Os dois itens que diziam que
+  `Anthropic__ApiKey`/`Gemini__ApiKey` "não chegam a processo nenhum" no compose
+  eram falsos desde `268814d`. Estão corrigidos no lugar, com marca de 19/09,
+  antes de a candidata 3 abaixo se apoiar neles.
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -3565,6 +3652,21 @@ Cada um tem gatilho de quando revisitar:
   **`Anthropic__ApiKey` e `Gemini__ApiKey` não chegam a processo nenhum no
   `docker-compose.prod.yml`** (item próprio abaixo). Enquanto aquele não for
   resolvido, este não tem como disparar nem em servidor.
+
+  *(Correção de status em 19/09/2026: falso desde `268814d`
+  (`fix-stack-servidor-lacunas`, 16/09/2026). Lista real das variáveis de
+  provedor de LLM que o `docker-compose.prod.yml` passa, conferida nas linhas
+  atuais: `api` recebe `OpenAI__BaseUrl`/`OpenAI__ApiKey` (88-89) e
+  `Anthropic__ApiKey`/`Gemini__ApiKey` (93-94); `workers` recebe as mesmas
+  quatro (145-146 e 147-148). As de OpenAI estão lá desde o nascimento do compose
+  (`de9bbae`, 05/09/2026), o que o item original já registrava; as de
+  Anthropic/Gemini entraram em `268814d`, e a spec viva `server-deployment` tem o
+  cenário "Provedor de LLM configurado no ambiente chega aos dois processos". O
+  item próprio abaixo foi resolvido e nunca registrado como tal. **A frase "Enquanto aquele não for resolvido, este
+  não tem como disparar nem em servidor" deixou de valer**: este gatilho pode
+  disparar em servidor assim que uma dessas chaves for preenchida no
+  `.env.prod`. Ver a candidata 3 em "Abertos por
+  `docs-premissa-producao-e-env-file`".)*
 
   O que **está** provado sem a medição: guarda de identidade reprovando contra o
   defeito real no componente certo, e decompilação dos três SDKs. O que falta é o
@@ -4777,6 +4879,14 @@ Cada um tem gatilho de quando revisitar:
   cada mensagem já tem `try/catch` próprio). Gatilho: antes de qualquer
   mudança futura em `TaskJobConsumer`, ou se `apps/workers` passar a
   subir em ambiente onde o RabbitMQ pode não estar pronto no boot.
+  *(Correção de status em 19/09/2026, `docs-premissa-producao-e-env-file`: o
+  gatilho tem agora **alvo real**. `apps/workers` sobe no stack de servidor do
+  piloto sem esta correção, e `docs/deployment.md` §4 dizia que ela seria feita
+  antes do deploy. Não foi. O compose atenua o primeiro boot, com
+  `depends_on: rabbitmq: condition: service_healthy` e `restart:
+  unless-stopped`. Não foi medido se essa atenuação cobre reinício do host ou
+  do daemon, e reinício isolado do RabbitMQ com o worker de pé. A decisão não
+  foi reaberta aqui.)*
 - **Linhas antigas de `a2a_tasks` com `pushNotificationConfig` em formato
   divergente** — decisão consciente de não migrar, registrada em
   `push-notification-config-codec-encoder` (design.md D4). Nada quebra
@@ -5572,6 +5682,23 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   descomentar as variáveis em `.env.prod` ganha um worker que continua sem saber
   usar Anthropic nem Gemini, e a documentação diz o contrário.
 
+  *(Correção de status em 19/09/2026: **resolvido, e nunca registrado como
+  tal.** Falso desde `268814d` (`fix-stack-servidor-lacunas`, 16/09/2026).
+  Lista real, nas linhas atuais do `docker-compose.prod.yml`: `api` recebe
+  `OpenAI__BaseUrl`/`OpenAI__ApiKey` (88-89) e `Anthropic__ApiKey`/
+  `Gemini__ApiKey` (93-94); `workers` recebe as mesmas quatro (145-146 e
+  147-148). As de OpenAI já vinham desde `de9bbae` (as "linhas 88-89 e 140-141"
+  que o texto acima cita, hoje deslocadas); as de Anthropic/Gemini, a partir de
+  `ANTHROPIC_API_KEY`/`GEMINI_API_KEY`, entraram em `268814d`, e a spec viva
+  `server-deployment` tem o cenário "Provedor de LLM configurado no ambiente
+  chega aos dois processos". Nenhuma das quatro variáveis do host é obrigatória
+  na interpolação: `OPENAI_BASE_URL`/`OPENAI_API_KEY` sem default,
+  `ANTHROPIC_API_KEY`/`GEMINI_API_KEY` com `:-`. Com isso, o segundo
+  apoio do "sem consequência hoje" abaixo também caiu: os dois provedores **são**
+  configuráveis no compose de servidor. O que sobra deste item é a verificação
+  manual do vazamento, agora candidata 3 em "Abertos por
+  `docs-premissa-producao-e-env-file`".)*
+
   *(Correção de status em 18/09/2026: premissa mudou. Existe produção, com o piloto atendendo. Ver o parágrafo de produção em "Status atual". A decisão abaixo não foi reaberta aqui.)*
   Sem consequência hoje — **não há produção** —, e essa mesma ausência é o que
   confirma o enquadramento: os dois provedores que vazavam sequer são
@@ -6040,10 +6167,127 @@ candidatos abaixo são independentes entre si, sem ordem imposta.
   outra estiver ativa. Não foi medido e exige o painel do Cloudflare. Com
   `no-store` isso deixa de importar para o R2, mas muda o comportamento de
   validador do HTML se alguém mexer nessas opções.
-- **A sequência de redeploy existente em `docs/deployment.md` §2 não passa
+- ~~**A sequência de redeploy existente em `docs/deployment.md` §2 não passa
   `--env-file .env.prod`.** Desde `fix-stack-servidor-lacunas`, catorze
   variáveis são obrigatórias na interpolação, e sem o `--env-file` o Compose
   falha ao processar o arquivo. O §1 do mesmo documento usa o `--env-file`, e o
   caso novo "Redeploy só do frontend" também. Achado ao escrever o caso novo. Não
   foi corrigido, porque a instrução era não reescrever a sequência existente.
-  **Gatilho:** o próximo redeploy completo, ou qualquer change que toque o §2.
+  **Gatilho:** o próximo redeploy completo, ou qualquer change que toque o §2.~~
+  — **resolvido por `docs-premissa-producao-e-env-file` (19/09/2026).** A
+  enumeração achou **seis** comandos sem a flag, não quatro: além do §2, o `ps`
+  do §1 passo 3, que o item dava como certo, e o exemplo de teste local do
+  cabeçalho. Hoje são 9 comandos, todos com a flag. Ver o registro da change.
+
+### Abertos por `docs-premissa-producao-e-env-file` (2026-09-19)
+
+**O argumento que sustentava as três candidatas abaixo caiu.** As três foram
+aceitas, ou adiadas, contra um stack sem tráfego real, e passaram de "risco
+aceito em dev" para **"risco aceito contra um stack real"**. Nenhuma foi
+decidida pela change que as registra. Reabrir qualquer uma é mudança de
+comportamento em produção, com exploração própria. **A ordem é por exposição,
+não por esforço.**
+
+1. **Autenticidade do webhook do WAHA** (`apps/inbox`, mudança de
+   comportamento).
+   - **Superfície:** `POST /webhooks/{channelId:guid}` é anônimo por
+     classificação explícita (`ExternalUnauthenticated`) e está publicado no
+     domínio público do stack, atrás do Cloudflare. **A única barreira é
+     conhecer o GUID do canal.** É a única das três com superfície pública, e
+     o adapter está ativo.
+   - **Gatilho: já cumprido.** O WAHA atende no piloto. É **a próxima
+     exploração de segurança**, não "quando alguém tocar `apps/inbox`".
+   - **Origem:** `inbox-adapter-waha`, Decision 6, nunca implementada. Ver o
+     item em "Itens em aberto".
+   - **Textos a revisitar quando fechar:** `SECURITY.md` (Webhook
+     authenticity), `README.md` (Project status) e `docs/architecture.md`
+     (tabela de adapters). Os três carregam hoje a marca "aceite feito antes de
+     tráfego real; em reavaliação".
+2. **Rejeitar o placeholder `changeme` no boot** (apps .NET — `apps/api`,
+   `apps/inbox` e `apps/workers` recebem chaves com placeholder; mudança de
+   comportamento).
+   - **Exposição:** nula se o `.env.prod` do piloto foi editado, total se não
+     foi. **Este arquivo não registra se o piloto foi conferido.**
+   - **Ação barata que precede a change, e que é operação, não change:**
+     conferir que nenhum valor do `.env.prod` do piloto começa com `changeme`.
+     Registrar aqui o resultado.
+   - **Gatilho:** o próximo deploy completo, ou qualquer change que toque a
+     validação de startup.
+   - **Textos a revisitar quando fechar:** `docs/deployment.md` ("Risco aceito:
+     placeholder `changeme`…") e `SECURITY.md` (Known Operational Risk).
+3. **Vazamento de descritores nos caminhos de provedor de LLM** (`apps/workers`).
+   - **Natureza:** **não é decisão de segurança.** É a verificação manual
+     pendente de `fix-vazamento-httpclient-chat`, a tarefa 8.2 do REABERTO em
+     "Itens em aberto".
+   - **Gatilho: cumprido, registrado em 19/09/2026.** Segundo o mantenedor, o
+     piloto usa **Gemini**, e o compose passa a chave aos dois processos desde
+     `268814d`. Os dois apoios do "sem consequência hoje" caíram: existe
+     produção, e o caminho existe no compose.
+   - **O próximo passo NÃO é exploração.** É **executar a verificação manual já
+     desenhada** em `fix-vazamento-httpclient-chat`: contar descritores com
+     `lsof -p <pid> | wc -l` antes e depois de uma sequência de mensagens. Ela
+     estava parada só por falta de credencial real. Não abrir exploração para
+     uma verificação que já tem método. **Se o vazamento se confirmar** com o
+     stack em produção atendendo, **aí** vira change, com prioridade própria.
+   - **São três alvos, com pesos diferentes, e isto é o ponto do item:**
+     - **Caminho OpenAI: executável agora.** O segundo provedor do piloto é um
+       serviço com camada de compatibilidade com o contrato da OpenAI, e entra
+       pelo **caminho do provedor OpenAI do nosso sistema**: mesmo `HttpClient`,
+       mesmo cliente, mesmo ciclo de vida de descritores. Só o `BaseUrl` aponta
+       para outro host. É o alvo mais fácil e o mais representativo do que o
+       sistema faz hoje, com credencial real e tráfego real.
+     - **Gemini:** o piloto tem a credencial. **Anthropic:** continua
+       dependendo de credencial do provedor oficial, que ninguém tem à mão.
+     - **Recorte obrigatório:** medir pelo caminho OpenAI prova o comportamento
+       **do nosso código** naquele caminho, que é o que interessa para vazamento
+       de descritores. **Não prova nada** sobre o SDK oficial da Anthropic nem
+       sobre o do Gemini, que são implementações diferentes. **Sem esse recorte,
+       alguém fecha a verificação inteira com uma medição que cobre um terço
+       dela.** O item só fecha com os três caminhos medidos, ou com o que faltar
+       registrado como aberto.
+     - **Atenção ao "antes" da medição do caminho OpenAI:** o próprio
+       `fix-vazamento-httpclient-chat` registrou que, com a OpenAI, a medição
+       "não mostra nada nem antes nem depois", porque aquele SDK usa
+       `HttpClient` estático (C4). No caminho OpenAI, a leitura esperada é
+       **estabilidade**, não queda. É a confirmação de que o nosso código não
+       introduziu vazamento ali, não a prova da correção, que era dos outros
+       dois SDKs.
+   - **No compose, conferido nas linhas atuais do `docker-compose.prod.yml`:** o
+     caminho OpenAI recebe `OpenAI__BaseUrl: ${OPENAI_BASE_URL}` e
+     `OpenAI__ApiKey: ${OPENAI_API_KEY}`, em `api` (88-89) e `workers`
+     (145-146), passadas aos dois processos desde `de9bbae`. As duas **não são
+     obrigatórias na interpolação** (sem `:?`). `.env.prod.example:45` traz
+     `OPENAI_BASE_URL=https://api.openai.com/v1` como default de exemplo, que o
+     piloto sobrescreve com o host do serviço compatível. O Gemini entra por
+     `Gemini__ApiKey: ${GEMINI_API_KEY:-}` (94 e 148).
+   - **O provedor OpenAI do piloto não é a OpenAI oficial.** É o detalhe que se
+     perde: qualquer raciocínio futuro sobre rate limit, formato de erro ou
+     comportamento do SDK oficial parte de uma premissa que o piloto não
+     satisfaz. O `BaseUrl` aponta para outro host, e só o contrato é o mesmo.
+
+Fora da lista de candidatas de segurança, e registrados pela mesma change:
+
+- **Credencial para cliente A2A externo: candidata a sequenciar, não mais nota
+  de rodapé.**
+  - **Há um consumidor externo a caminho** (informação do mantenedor, em
+    19/09/2026, sem data). Hoje não há nenhum.
+  - **Origem:** limitação aceita em `auth-login-e-servico`, Decision 6
+    ("não existe emissão de credencial para clientes externos nesta fatia…
+    revisitar quando houver um consumidor A2A externo real"), **nunca registrada
+    aqui** até esta change.
+  - **Estado:** hoje os únicos tokens são o do operador, que dá acesso a todo o
+    painel e vale 30 min, e o de serviço de `apps/inbox`, restrito a duas rotas.
+    O `docs/a2a-integration.md` corrigido por esta change declara, para esse
+    integrador, que não existe credencial para ele. **A correção é verdadeira, e
+    o buraco é real.**
+  - **O desenho não é trivial**, e é o que a Decision 6 recusou **por escopo**,
+    não por desconhecer: token de serviço com escopo por agente, validade
+    distinta dos 30 min do token do painel, e revogação.
+  - **Nada é desenhado aqui.** Fica registrado como candidata a sequenciar
+    **antes** de o consumidor chegar. O gatilho deixou de ser "o primeiro
+    consumidor real", que já está anunciado, e passou a ser **a data de entrada
+    desse consumidor**, que ainda falta registrar.
+- **A verificação de documentação não lê o que esta change corrigiu.** Registrado
+  no fechamento da change. Serve de insumo para a candidata do guarda de
+  prefixos do nginx: shell, `.yml`, caminho em crase e âncoras passam por
+  `scripts/check-docs.py` sem ser vistos.

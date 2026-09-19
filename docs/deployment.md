@@ -17,9 +17,9 @@ de ambiente.
 > recriar os containers do dev (achado real durante a verificação desta
 > change — os volumes de dev não foram perdidos, só os containers foram
 > recriados apontando pro volume errado). Sempre use um nome de projeto
-> isolado ao testar localmente: `docker compose -p buteco-prod-verify -f
-> docker-compose.prod.yml ...`. Numa VM de servidor de verdade, sem o
-> compose de dev rodando ao lado, isso não se aplica.
+> isolado ao testar localmente: `docker compose -p buteco-prod-verify
+> --env-file .env.prod -f docker-compose.prod.yml ...`. Numa VM de servidor
+> de verdade, sem o compose de dev rodando ao lado, isso não se aplica.
 
 > **Testando com `podman`/`podman-compose` em vez de `docker`?**
 > Confirmado empiricamente: `podman build`/`podman-compose build` geram
@@ -40,8 +40,14 @@ de ambiente.
    `.env.prod`.
 2. `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`
 
-   > **`--env-file .env.prod` não é opcional.** O compose interpola `${VAR}` mas
-   > não declara `env_file:` — o Compose, sozinho, lê `.env`, nunca `.env.prod`.
+   > **`--env-file .env.prod` não é opcional, em nenhum comando.** O compose
+   > interpola `${VAR}` mas não declara `env_file:` — o Compose, sozinho, lê
+   > `.env`, nunca `.env.prod`.
+   >
+   > Vale para **todo** subcomando contra `docker-compose.prod.yml` — `build`,
+   > `up`, `ps`, `stop`, `run` —, não só para o `up`: a interpolação avalia o
+   > arquivo inteiro antes de o subcomando começar, então até um `ps` falha
+   > sem a flag. Todos os comandos deste documento a trazem; copie-os inteiros.
    >
    > **Omiti-lo agora falha no processamento do arquivo**, nomeando a variável
    > que falta e como fornecê-la; nenhum serviço é criado. Antes desta proteção,
@@ -62,8 +68,9 @@ de ambiente.
      service_completed_successfully`).
    - `frontend` (nginx do stack) sobe por último, publicando só a porta
      interna do host (`STACK_HTTP_PORT`, nunca 80/443).
-3. Confirme os healthchecks: `docker compose -f docker-compose.prod.yml
-   ps` — todos os serviços de longa duração devem estar `healthy`/`Up`.
+3. Confirme os healthchecks: `docker compose --env-file .env.prod -f
+   docker-compose.prod.yml ps` — todos os serviços de longa duração devem
+   estar `healthy`/`Up`.
 4. Configure o nginx externo (fora deste stack, já existente) pra fazer
    `proxy_pass` pra `127.0.0.1:${STACK_HTTP_PORT}`.
 5. Verificação manual (não automatizada — ver Non-Goals): acesse o
@@ -80,13 +87,18 @@ tráfego enquanto uma migration nova já rodou contra o banco —
 `DbUpdateException` não tratada no caminho mais comum do app (recepção de
 webhook). `depends_on: service_completed_successfully` cobre só o
 primeiro boot do stack a partir do zero — **não** cobre um redeploy, que
-precisa ser feito manualmente nesta ordem:
+precisa ser feito manualmente nesta ordem.
+
+Os quatro passos levam `--env-file .env.prod` (ver a nota do §1). Sem a flag,
+cada passo falha sozinho, antes de agir, e isso é só um erro. O dano real é a
+flag num passo e não no seguinte: com o `stop inbox` feito e o `run --rm
+migrator` falhando, o `apps/inbox` fica parado e a migration não roda.
 
 ```
-1. docker compose -f docker-compose.prod.yml build          # rebuild das imagens alteradas
-2. docker compose -f docker-compose.prod.yml stop inbox      # para apps/inbox ANTES de migrar
-3. docker compose -f docker-compose.prod.yml run --rm migrator
-4. docker compose -f docker-compose.prod.yml up -d inbox api workers frontend
+1. docker compose --env-file .env.prod -f docker-compose.prod.yml build          # rebuild das imagens alteradas
+2. docker compose --env-file .env.prod -f docker-compose.prod.yml stop inbox      # para apps/inbox ANTES de migrar
+3. docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm migrator
+4. docker compose --env-file .env.prod -f docker-compose.prod.yml up -d inbox api workers frontend
 ```
 
 `apps/workers`/`apps/api`/`frontend` não têm essa restrição — só
@@ -186,6 +198,11 @@ mão (`docker-compose.prod.yml`, design.md D7).
 
 ### Risco aceito: placeholder `changeme` não é rejeitado no boot
 
+*(Premissa alterada em 19/09/2026: este aceite foi feito antes de haver
+deploy atendendo tráfego real, e hoje vale contra um piloto em produção. A
+decisão não foi revista aqui; está registrada como candidata em
+[`02-HISTORICO_E_STATUS.md`](../02-HISTORICO_E_STATUS.md).)*
+
 Nenhuma das chaves acima rejeita especificamente o valor `changeme*` do
 `.env.prod.example` — a checagem de startup existente só cobre
 ausência/vazio (`Auth__TokenSigningKey`, `Auth__OperatorUsername`/
@@ -225,6 +242,7 @@ de falha de entrega de push notification atribuível a esse ir-e-volta.
   dependência, não como serviço deste stack.
 - **Correção do setup desprotegido de `TaskJobConsumer`** (RabbitMQ) —
   item em aberto já registrado em
-  [`02-HISTORICO_E_STATUS.md`](../02-HISTORICO_E_STATUS.md); deve virar
-  change própria sequenciada antes desta. Esta change assume que ela já
-  rodou.
+  [`02-HISTORICO_E_STATUS.md`](../02-HISTORICO_E_STATUS.md). Esta change
+  previa que ele virasse change própria, sequenciada antes do deploy. A
+  sequência não se concretizou: o stack de servidor está no ar sem essa
+  correção, e o item continua aberto no `02`.

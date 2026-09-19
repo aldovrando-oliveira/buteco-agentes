@@ -6,7 +6,9 @@ endpoint A2A exposto por `apps/api`.
 
 **Pré-requisito**: você já precisa ter o `id` (GUID) de um agente cadastrado
 e ativo — o cadastro/gestão de agentes (`POST /agents`, `GET /providers`,
-ativar/desativar) não é coberto aqui.
+ativar/desativar) não é coberto aqui. E `SendMessage`/`GetTask` exigem
+`Authorization: Bearer <token>` — ver [Autenticação](#autenticação), que diz
+também por que hoje não há credencial para cliente externo.
 
 ## Índice
 
@@ -29,6 +31,7 @@ ativar/desativar) não é coberto aqui.
 ```
 POST /agents/{id}/a2a
 Content-Type: application/json
+Authorization: Bearer <token>
 ```
 
 - `{id}` é o GUID do agente, atribuído no cadastro (`POST /agents`).
@@ -57,6 +60,24 @@ dedicados de gestão de push notification config — `CreateTaskPushNotification
 e afins —, **`GetExtendedAgentCard`**) não fazem parte do contrato
 suportado — não use. Para descobrir metadados do agente, use o endpoint
 HTTP dedicado abaixo, não `GetExtendedAgentCard` via JSON-RPC.
+
+### Autenticação
+
+A rota `POST /agents/{id}/a2a` exige `Authorization: Bearer <token>`. Sem
+token válido, a resposta é **HTTP `401`, com corpo vazio**, antes de o
+JSON-RPC ser processado — a única exceção à regra de
+[erro não ser HTTP 4xx/5xx](#a-regra-mais-importante-erro-não-é-http-4xx5xx).
+Só três rotas de `apps/api` são anônimas: `/health`, `/auth/login` e o
+[AgentCard](#descoberta-do-agente-via-agentcard), que é público e declara o
+esquema Bearer em `securitySchemes`/`securityRequirements`.
+
+**Hoje não existe emissão de credencial para cliente A2A externo.** Os tokens
+que `apps/api` aceita são o do operador do painel e o de serviço de
+`apps/inbox`, restrito às duas rotas que ele consome. Nenhum dos dois é
+credencial de integração: o do operador dá acesso a todo o painel. É uma
+limitação consciente, registrada em
+[`auth-login-e-servico`, Decision 6](../openspec/changes/archive/2026-08-22-auth-login-e-servico/design.md),
+a ser revista quando houver um consumidor A2A externo real.
 
 ## Descoberta do agente via AgentCard
 
@@ -97,9 +118,36 @@ curl http://localhost:5017/agents/<agentId>/.well-known/agent-card.json
     { "id": "consulta-cep", "name": "Consulta CEP", "description": "Consulta endereço a partir do CEP.", "tags": [] }
   ],
   "defaultInputModes": ["text/plain"],
-  "defaultOutputModes": ["text/plain"]
+  "defaultOutputModes": ["text/plain"],
+  "securitySchemes": {
+    "bearer": {
+      "apiKeySecurityScheme": null,
+      "httpAuthSecurityScheme": {
+        "description": null,
+        "scheme": "Bearer",
+        "bearerFormat": null
+      },
+      "oauth2SecurityScheme": null,
+      "openIdConnectSecurityScheme": null,
+      "mtlsSecurityScheme": null
+    }
+  },
+  "securityRequirements": [
+    {
+      "schemes": {
+        "bearer": {
+          "list": []
+        }
+      }
+    }
+  ]
 }
 ```
+
+O exemplo é resumido: o card real traz também `documentationUrl`, `iconUrl`,
+`provider` e `signatures`. `securitySchemes`/`securityRequirements` estão como o
+card os serializa, `null` inclusive — é a declaração de que `SendMessage`/`GetTask`
+exigem Bearer (ver [Autenticação](#autenticação)).
 
 `capabilities.streaming` é sempre `false` — não suportado por este sistema.
 `capabilities.pushNotifications` é sempre `true` — ver
@@ -114,7 +162,8 @@ numérico para permanecerem distintas.
 
 JSON-RPC responde **sempre HTTP 200**, mesmo quando a chamada falha — inclusive
 para um `id` de agente que não existe. O sucesso ou erro está no corpo da
-resposta, nunca no status HTTP:
+resposta, nunca no status HTTP. A exceção é a falta de token válido, que
+responde `401` antes de chegar ao JSON-RPC (ver [Autenticação](#autenticação)):
 
 ```json
 // sucesso
@@ -155,6 +204,7 @@ responder**.
 ```bash
 curl -X POST http://localhost:5017/agents/<agentId>/a2a \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -215,6 +265,7 @@ dos dois é obrigatório.
 ```bash
 curl -X POST http://localhost:5017/agents/<agentId>/a2a \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -278,6 +329,7 @@ um estado terminal.
 ```bash
 curl -X POST http://localhost:5017/agents/<agentId>/a2a \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"id":"<taskId>"}}'
 ```
 
@@ -456,8 +508,9 @@ polling é o único jeito de saber que uma task terminou. Sugestão:
 
 ## Notas operacionais
 
-- **Sem autenticação**: nem o cadastro de agentes nem a rota A2A de nenhum
-  agente exigem credencial hoje. Trate isso como o estado atual do
-  ambiente, não como algo a contornar no cliente.
+- **Autenticação obrigatória, sem credencial para terceiros**: a rota A2A e o
+  cadastro de agentes exigem Bearer token; só o AgentCard é público. Hoje não
+  há emissão de credencial para cliente A2A externo — ver
+  [Autenticação](#autenticação).
 - **Idioma das mensagens de erro**: `error.message` é sempre pt-BR — não
   internacionalizado.

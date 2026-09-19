@@ -168,8 +168,9 @@ Known gaps, tracked deliberately:
 - **No continuous integration.** There is no `.github/workflows/`; tests and
   the documentation integrity check run locally. See
   [CONTRIBUTING.md](CONTRIBUTING.md).
-- **WAHA webhooks are not authenticated.** An accepted, explicitly classified
-  risk — Telegram webhooks are verified. See [SECURITY.md](SECURITY.md).
+- **WAHA webhooks are not authenticated.** An explicitly classified risk,
+  accepted before any deployment served real traffic and now under
+  reassessment — Telegram webhooks are verified. See [SECURITY.md](SECURITY.md).
 - **Single operator, no RBAC.** Authentication is one operator configured
   through environment variables, with no user table.
 

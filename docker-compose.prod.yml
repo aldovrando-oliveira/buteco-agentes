@@ -1,11 +1,11 @@
 # Compose de SERVIDOR — roda o stack completo numa VM na cloud, atrás de
 # um nginx/Cloudflare já existentes (fora deste stack, ver
-# openspec/changes/containerizacao-stack-servidor/design.md, D2). Não
-# confundir com docker-compose.yml (raiz), que continua sendo só a infra
-# de desenvolvimento local — intocado por esta change (D3).
+# openspec/changes/archive/2026-08-26-containerizacao-stack-servidor/design.md,
+# D2). Não confundir com docker-compose.yml (raiz), que continua sendo só
+# a infra de desenvolvimento local — intocado por esta change (D3).
 #
 # Segredos vêm de .env.prod (copie de .env.prod.example), nunca
-# versionado. Ver deploy/runbook.md pra sequência de deploy e a tabela
+# versionado. Ver docs/deployment.md pra sequência de deploy e a tabela
 # completa de variáveis por processo.
 #
 # Non-Goals explícitos (não sugerir nem alterar aqui): CI/CD, orquestrador

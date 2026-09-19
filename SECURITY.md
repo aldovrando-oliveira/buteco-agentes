@@ -75,9 +75,10 @@ path for user-controlled text to reach the context block are in scope.
 **Webhook authenticity.** The Telegram adapter verifies inbound webhooks
 using a per-channel `secret_token`. The WAHA adapter does **not** verify
 webhook authenticity — this is a known, accepted risk, classified explicitly
-in the anonymous route allowlist, and does not need to be reported as a new
-finding. Reports about the *consequences* of that gap beyond what is already
-documented are welcome.
+in the anonymous route allowlist *(accepted before any deployment served real
+traffic; that acceptance is under reassessment)*, and does not need to be
+reported as a new finding. Reports about the *consequences* of that gap beyond
+what is already documented are welcome.
 
 ## Known Operational Risk
 
@@ -86,7 +87,9 @@ no startup check rejects them — the existing checks cover absence and empty
 values, not content. A stack deployed from an unedited `.env.prod` will start
 normally with public, predictable secrets. **Verify before every deploy that
 no value in `.env.prod` still begins with `changeme`.** This is documented in
-[`docs/deployment.md`](docs/deployment.md) and does not need to be reported.
+[`docs/deployment.md`](docs/deployment.md) *(accepted before any deployment
+served real traffic; that acceptance is under reassessment)* and does not need
+to be reported.
 
 ## Scope
 
