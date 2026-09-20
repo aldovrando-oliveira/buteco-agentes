@@ -44,7 +44,7 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
         await using var dbContext = CreateDbContext();
         var sourceAgent = await dbContext.Agents.AsNoTracking().FirstAsync(a => a.Id == sourceId);
 
-        var tools = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), currentDepth: 0, messageInstant: null, CancellationToken.None);
+        var tools = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N"), currentDepth: 0, messageInstant: null, CancellationToken.None);
 
         // Mudança de dono, não de comportamento: o dedupe por sufixo saiu deste
         // resolvedor e virou global (change dedupe-global-nome-de-tool,
@@ -74,8 +74,8 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
         var sourceAgent = await dbContext.Agents.AsNoTracking().FirstAsync(a => a.Id == sourceId);
         var contextId = Guid.NewGuid().ToString("N");
 
-        var first = await resolver.ResolveAsync(dbContext, sourceAgent, contextId, currentDepth: 0, messageInstant: null, CancellationToken.None);
-        var second = await resolver.ResolveAsync(dbContext, sourceAgent, contextId, currentDepth: 0, messageInstant: null, CancellationToken.None);
+        var first = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), contextId, currentDepth: 0, messageInstant: null, CancellationToken.None);
+        var second = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), contextId, currentDepth: 0, messageInstant: null, CancellationToken.None);
 
         Assert.Equal(first.Select(t => t.Name), second.Select(t => t.Name));
     }
@@ -90,7 +90,7 @@ public class DelegationToolNameSlugifierTests(WorkerInfrastructureFixture fixtur
         await using var dbContext = CreateDbContext();
         var sourceAgent = await dbContext.Agents.AsNoTracking().FirstAsync(a => a.Id == sourceId);
 
-        var tools = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), currentDepth: 0, messageInstant: null, CancellationToken.None);
+        var tools = await resolver.ResolveAsync(dbContext, sourceAgent, Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N"), currentDepth: 0, messageInstant: null, CancellationToken.None);
 
         Assert.Empty(tools);
     }

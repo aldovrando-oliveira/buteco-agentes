@@ -72,6 +72,29 @@ o versionamento pretende seguir
 - Execução real: um agente chama outro como tool interna, no mesmo banco, sem
   HTTP externo.
 - Seção de delegações inline no detalhe do agente.
+- **Diagnóstico de delegação que não conclui.** Quando a tool de delegação
+  desiste — por timeout ou porque o alvo terminou em falha —, o registro passa a
+  identificar a delegação inteira (task e agente de origem, agente e task do
+  alvo) e a carregar o **último estado observado** da task do alvo. É esse
+  estado que separa as duas causas que antes produziam a linha idêntica:
+  `Submitted` significa task publicada e **nunca consumida** — não havia
+  instância livre —, e `Working` significa consumida e ainda em execução. O campo
+  se chama "último observado" porque é o que ele é: entre a última leitura e a
+  desistência cabe um intervalo de poll. Quando não houve leitura nenhuma, o
+  registro diz isso em vez de apresentar um estado.
+- **Varredura periódica de tasks que não alcançaram estado terminal**, em
+  `apps/workers`, reportando a contagem **por estado** de tasks mais velhas que
+  uma janela. A janela não é um valor novo: é o timeout de espera da delegação,
+  lido em tempo de execução, então toda task reportada já sobreviveu a uma espera
+  inteira. O registro descreve o que foi observado — estado, idade e janela — e
+  **não** afirma que a task está travada, porque um turno com várias delegações
+  ultrapassa a janela legitimamente e o sistema não distingue os dois casos.
+  **Como ler a série**, e sem isto ela é lida errado: a leitura é global, então
+  cada instância emite uma linha **idêntica** por ciclo e somá-las superestima
+  pelo número de instâncias; e quem responde "quantas conversas delegavam ao
+  mesmo tempo" é a contagem de `Submitted`, nunca a de `Working` — esta última
+  subestima por construção, porque a janela é exatamente o ponto em que a origem
+  desiste, e mostra perto de zero justamente quando há disputa.
 
 **Caixas de entrada e canais**
 

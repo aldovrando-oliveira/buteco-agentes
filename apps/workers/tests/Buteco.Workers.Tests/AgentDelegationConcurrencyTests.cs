@@ -16,6 +16,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RabbitMQ.Client;
 using TaskStatus = A2A.TaskStatus;
@@ -187,6 +189,234 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         // positivo com uma segunda instância disponível.
     }
 
+    /// <summary>
+    /// G1 — o par de G2. Instância única: a task do Target é publicada e
+    /// <b>nunca consumida</b>, porque a única instância está ocupada esperando
+    /// por ela. É a forma de contenção que o `C ≥ N` produz em produção, e o
+    /// registro da desistência tem que dizer `Submitted`.
+    /// </summary>
+    [Fact]
+    public async Task DelegationTimeout_WithTargetNeverConsumed_LogsLastObservedStateAsSubmitted()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, $"Fonte {sourceId:N}", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, $"Alvo {targetId:N}", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(
+            ExpectedToolName($"Alvo {targetId:N}"), "Uma tarefa qualquer.");
+
+        var clients = new Dictionary<(string, string), IChatClient>
+        {
+            [(SourceProvider, SourceModel)] = sourceChatClient.Object,
+        };
+
+        var logs = new List<CapturedLogEntry>();
+        using var singleInstance = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(3), delegationLogs: logs);
+        await singleInstance.StartAsync();
+
+        CapturedLogEntry giveUp;
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            giveUp = await PollUntilDelegationGiveUpLoggedAsync(logs, sourceTaskId);
+        }
+        finally
+        {
+            await singleInstance.StopAsync();
+        }
+
+        Assert.Equal(nameof(TaskState.Submitted), giveUp.Value(LastObservedStateKey)?.ToString());
+        Assert.Equal(sourceId, giveUp.Value(SourceAgentIdKey));
+        Assert.Equal(targetId, giveUp.Value(TargetAgentIdKey));
+        Assert.NotNull(giveUp.Value(TargetTaskIdKey));
+    }
+
+    /// <summary>
+    /// G2 — o par de G1, e é o par que prova que a distinção existe. Duas
+    /// instâncias: a task do Target <b>é</b> consumida e fica em `Working`
+    /// além do timeout do Source. Os dois guardas diferem pelo <b>valor do
+    /// campo</b>, nunca pela redação da mensagem.
+    /// </summary>
+    [Fact]
+    public async Task DelegationTimeout_WithTargetConsumedAndSlow_LogsLastObservedStateAsWorking()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, $"Fonte {sourceId:N}", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, $"Alvo {targetId:N}", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(
+            ExpectedToolName($"Alvo {targetId:N}"), "Uma tarefa qualquer.");
+
+        // O Target segura a chamada ao LLM até ser liberado — é o que o mantém
+        // em `Working` durante toda a espera do Source, e depois dela.
+        var releaseTarget = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var targetChatClient = new Mock<IChatClient>();
+        targetChatClient
+            .Setup(c => c.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                await releaseTarget.Task;
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, "Resultado tardio do Target."));
+            });
+
+        var clients = new Dictionary<(string, string), IChatClient>
+        {
+            [(SourceProvider, SourceModel)] = sourceChatClient.Object,
+            [(TargetProvider, TargetModel)] = targetChatClient.Object,
+        };
+
+        var logs = new List<CapturedLogEntry>();
+        using var first = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(3), delegationLogs: logs);
+        using var second = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(3), delegationLogs: logs);
+        await first.StartAsync();
+        await second.StartAsync();
+
+        CapturedLogEntry giveUp;
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            giveUp = await PollUntilDelegationGiveUpLoggedAsync(logs, sourceTaskId);
+        }
+        finally
+        {
+            releaseTarget.TrySetResult();
+            await first.StopAsync();
+            await second.StopAsync();
+        }
+
+        Assert.Equal(nameof(TaskState.Working), giveUp.Value(LastObservedStateKey)?.ToString());
+        Assert.Equal(sourceId, giveUp.Value(SourceAgentIdKey));
+        Assert.Equal(targetId, giveUp.Value(TargetAgentIdKey));
+    }
+
+    /// <summary>
+    /// G3 — o ramo de estado terminal de falha, que é o que recebe o `Failed`
+    /// por contenção de lock criado por `lock-de-contexto-falha-terminal`.
+    /// Deste lado, esse `Failed` é <b>indistinguível</b> do `Failed` por erro de
+    /// provedor (os dois passam pelo mesmo `FailTaskAsync`, que grava
+    /// `Status.Message` nulo) — então o que este guarda prende não é
+    /// classificação, é a <b>correlação</b>: os cinco identificadores que
+    /// permitem achar o log que o próprio Target emitiu.
+    /// </summary>
+    [Fact]
+    public async Task DelegationFailure_WithTargetInTerminalFailure_LogsCorrelationIdentifiers()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, $"Fonte {sourceId:N}", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, $"Alvo {targetId:N}", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(
+            ExpectedToolName($"Alvo {targetId:N}"), "Uma tarefa qualquer.");
+
+        var targetChatClient = new Mock<IChatClient>();
+        targetChatClient
+            .Setup(c => c.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Provedor do Target indisponível."));
+
+        var clients = new Dictionary<(string, string), IChatClient>
+        {
+            [(SourceProvider, SourceModel)] = sourceChatClient.Object,
+            [(TargetProvider, TargetModel)] = targetChatClient.Object,
+        };
+
+        var logs = new List<CapturedLogEntry>();
+        using var first = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(30), delegationLogs: logs);
+        using var second = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(30), delegationLogs: logs);
+        await first.StartAsync();
+        await second.StartAsync();
+
+        CapturedLogEntry giveUp;
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            giveUp = await PollUntilDelegationGiveUpLoggedAsync(logs, sourceTaskId);
+        }
+        finally
+        {
+            await first.StopAsync();
+            await second.StopAsync();
+        }
+
+        Assert.Equal(sourceTaskId, giveUp.Value(SourceTaskIdKey));
+        Assert.Equal(sourceId, giveUp.Value(SourceAgentIdKey));
+        Assert.Equal(targetId, giveUp.Value(TargetAgentIdKey));
+        Assert.NotNull(giveUp.Value(TargetTaskIdKey));
+        Assert.Equal(nameof(TaskState.Failed), giveUp.Value(LastObservedStateKey)?.ToString());
+    }
+
+    /// <summary>
+    /// G4 — a negativa de D1, com teste próprio para não sumir dentro de um
+    /// positivo. Quando a espera é cancelada antes de <b>qualquer</b> leitura
+    /// bem-sucedida, o registro NÃO apresenta um estado: ele declara que não
+    /// houve observação. "Não sei" e "sei que não existe" são coisas
+    /// diferentes, e gastar o vocabulário de um no outro apaga a distinção
+    /// onde ela existe (convenção 13).
+    /// </summary>
+    [Fact]
+    public async Task DelegationTimeout_WithNoSuccessfulRead_LogsAbsenceOfObservationInsteadOfState()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, $"Fonte {sourceId:N}", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, $"Alvo {targetId:N}", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(
+            ExpectedToolName($"Alvo {targetId:N}"), "Uma tarefa qualquer.");
+
+        var clients = new Dictionary<(string, string), IChatClient>
+        {
+            [(SourceProvider, SourceModel)] = sourceChatClient.Object,
+        };
+
+        // Timeout zero: o cancelamento da espera é agendado antes da primeira
+        // leitura do store, então nenhuma leitura chega a concluir. É a forma
+        // mais estável disponível — com um timeout pequeno mas positivo a
+        // primeira leitura corre contra o cancelamento e o guarda ficaria
+        // intermitente na própria asserção.
+        var logs = new List<CapturedLogEntry>();
+        using var singleInstance = BuildHost(clients, delegationTimeout: TimeSpan.Zero, delegationLogs: logs);
+        await singleInstance.StartAsync();
+
+        CapturedLogEntry giveUp;
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            giveUp = await PollUntilDelegationGiveUpLoggedAsync(logs, sourceTaskId);
+        }
+        finally
+        {
+            await singleInstance.StopAsync();
+        }
+
+        Assert.Equal(0, Convert.ToInt32(giveUp.Value(SuccessfulReadCountKey)));
+        Assert.False(
+            giveUp.HasKey(LastObservedStateKey),
+            $"A desistência sem nenhuma leitura não deve apresentar um estado; mensagem emitida: '{giveUp.Message}'.");
+    }
+
     private static string ExpectedToolName(string targetAgentName) =>
         ToolNameSanitizer.Sanitize($"delegate_to_{ToolNameSlugifier.Slugify(targetAgentName)}");
 
@@ -228,12 +458,20 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         return mock;
     }
 
-    private IHost BuildHost(IReadOnlyDictionary<(string Provider, string Model), IChatClient> chatClientsByProviderModel, TimeSpan delegationTimeout)
+    private IHost BuildHost(
+        IReadOnlyDictionary<(string Provider, string Model), IChatClient> chatClientsByProviderModel,
+        TimeSpan delegationTimeout,
+        List<CapturedLogEntry>? delegationLogs = null)
     {
         var builder = Host.CreateApplicationBuilder();
 
         builder.Configuration["ConnectionStrings:Postgres"] = fixture.Postgres.GetConnectionString();
         builder.Services.AddInfrastructure(builder.Configuration);
+
+        if (delegationLogs is not null)
+        {
+            builder.Logging.AddProvider(new CapturingLoggerProvider(delegationLogs, DelegationLoggerCategory));
+        }
 
         builder.Services.Configure<RabbitMqOptions>(options =>
         {
@@ -345,6 +583,147 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
 
     private AppDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options);
+
+    /// <summary>
+    /// Devolve o registro de diagnóstico da desistência de uma delegação —
+    /// aquele que carrega <c>SourceTaskId</c> — esperando até ele aparecer.
+    /// </summary>
+    /// <remarks>
+    /// Casa pela <b>presença da chave estruturada</b>, nunca pelo texto da
+    /// mensagem. É deliberado, e é o que separa este guarda dos que já
+    /// enganaram nesta linha de trabalho: as duas changes anteriores
+    /// (`lock-de-contexto-falha-terminal`, `delegacao-ciclo-no-cadastro`)
+    /// mudaram a redação das mensagens desta classe e os estados terminais que
+    /// as produzem, e um guarda escrito sobre "não concluiu dentro do timeout"
+    /// reprovaria por texto — continuando vermelho depois da correção e dando a
+    /// impressão de funcionar (convenção 15, segunda forma).
+    /// </remarks>
+    /// <remarks>
+    /// <paramref name="maxAttempts"/> em 100 (≈20 s), mesmo orçamento de
+    /// <c>PollUntilTerminalAsync</c> no teste de instância única desta classe.
+    /// <b>Não é folga por precaução: os 50 iniciais reprovaram na suíte
+    /// completa.</b> O sintoma foi inequívoco — "Chaves vistas:" saiu
+    /// <b>vazio</b>, isto é, nada havia sido logado na categoria ainda, porque a
+    /// task do Source nem tinha sido consumida. Sob a suíte inteira, com 13
+    /// outras classes subindo e derrubando containers em sequência, start de host
+    /// mais consumo do RabbitMQ não cabe em 10 s. A propriedade sob teste é
+    /// <b>o que o registro diz</b>, nunca em quanto tempo ele aparece.
+    /// </remarks>
+    private static async Task<CapturedLogEntry> PollUntilDelegationGiveUpLoggedAsync(
+        List<CapturedLogEntry> logs, string sourceTaskId, int maxAttempts = 100)
+    {
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            lock (logs)
+            {
+                var entry = logs.Find(candidate => candidate.Value(SourceTaskIdKey) as string == sourceTaskId);
+                if (entry is not null)
+                {
+                    return entry;
+                }
+            }
+
+            await Task.Delay(200);
+        }
+
+        throw new TimeoutException(
+            $"Nenhum registro de desistência de delegação com {SourceTaskIdKey}='{sourceTaskId}' foi emitido a tempo. " +
+            $"Chaves vistas: {string.Join(" | ", logs.Select(e => string.Join(",", e.State.Select(pair => pair.Key))))}");
+    }
+
+    private const string DelegationLoggerCategory = "Buteco.Workers.AgentDelegations";
+    private const string SourceTaskIdKey = "SourceTaskId";
+    private const string SourceAgentIdKey = "SourceAgentId";
+    private const string TargetAgentIdKey = "TargetAgentId";
+    private const string TargetTaskIdKey = "TargetTaskId";
+    private const string LastObservedStateKey = "LastObservedTargetState";
+    private const string SuccessfulReadCountKey = "SuccessfulReadCount";
+
+    /// <summary>
+    /// Captura o <b>estado estruturado</b> de cada registro (pares
+    /// chave/valor), não só o texto formatado — é o estado que os guardas
+    /// afirmam.
+    /// </summary>
+    /// <remarks>
+    /// TERCEIRA cópia deste mecanismo nesta suíte: as outras duas estão em
+    /// <c>TimeZoneStartupValidationTests</c> e
+    /// <c>TemporalContextMessageInstantTests</c>, e capturam só nível e texto.
+    /// Continua aninhada em vez de ir para <c>Support/</c> porque migrar as
+    /// outras duas é mexer em dois arquivos fora do escopo desta change — mas o
+    /// gatilho de extração da convenção 2 está cumprido, e está registrado
+    /// como item aberto no <c>02-HISTORICO_E_STATUS.md</c>.
+    ///
+    /// <para>
+    /// Filtra por categoria, e não é detalhe: sem o filtro, captura também o log
+    /// de comando SQL do EF Core de <b>todo</b> teste desta classe, crescendo
+    /// sem limite durante a vida da fixture e tornando <c>PollUntil</c> de
+    /// outros testes flaky sob carga — medido em
+    /// <c>inbox-sweep-service-resiliencia</c>.
+    /// </para>
+    /// </remarks>
+    private sealed class CapturingLoggerProvider(List<CapturedLogEntry> entries, params string[] categoryPrefixes) : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName) =>
+            Array.Exists(categoryPrefixes, prefix => categoryName.StartsWith(prefix, StringComparison.Ordinal))
+                ? new CapturingLogger(entries)
+                : NullLogger.Instance;
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(List<CapturedLogEntry> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                var pairs = state is IReadOnlyList<KeyValuePair<string, object?>> structured
+                    ? structured.ToList()
+                    : [];
+
+                // Os hosts destes testes logam de threads diferentes (duas
+                // instâncias consumindo a mesma fila) — o lock é o que impede
+                // corrupção da List durante a leitura do PollUntil.
+                lock (entries)
+                {
+                    entries.Add(new CapturedLogEntry(logLevel, formatter(state, exception), pairs));
+                }
+            }
+        }
+    }
+
+    private sealed record CapturedLogEntry(LogLevel Level, string Message, IReadOnlyList<KeyValuePair<string, object?>> State)
+    {
+        public object? Value(string key)
+        {
+            foreach (var pair in State)
+            {
+                if (pair.Key == key)
+                {
+                    return pair.Value;
+                }
+            }
+
+            return null;
+        }
+
+        public bool HasKey(string key)
+        {
+            foreach (var pair in State)
+            {
+                if (pair.Key == key)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
 
     private async Task<A2ATaskRecord> PollUntilTerminalAsync(string taskId, int maxAttempts = 50)
     {
