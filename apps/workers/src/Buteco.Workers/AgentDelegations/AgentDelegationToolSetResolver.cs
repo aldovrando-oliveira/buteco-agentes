@@ -28,6 +28,7 @@ public sealed class AgentDelegationToolSetResolver(
     public async Task<IReadOnlyList<AITool>> ResolveAsync(
         AppDbContext dbContext,
         Agent sourceAgent,
+        string sourceTaskId,
         string contextId,
         int currentDepth,
         DateTimeOffset? messageInstant,
@@ -54,19 +55,19 @@ public sealed class AgentDelegationToolSetResolver(
         foreach (var delegation in delegations)
         {
             var toolName = ToolNameSanitizer.Sanitize($"{ToolNamePrefix}{ToolNameSlugifier.Slugify(delegation.TargetName)}");
-            tools.Add(BuildDelegationTool(toolName, delegation.TargetAgentId, delegation.TargetName, sourceAgent.Id, contextId, currentDepth, messageInstant));
+            tools.Add(BuildDelegationTool(toolName, delegation.TargetAgentId, delegation.TargetName, sourceAgent.Id, sourceTaskId, contextId, currentDepth, messageInstant));
         }
 
         return tools;
     }
 
     private AITool BuildDelegationTool(
-        string toolName, Guid targetAgentId, string targetAgentName, Guid sourceAgentId, string contextId, int currentDepth, DateTimeOffset? messageInstant)
+        string toolName, Guid targetAgentId, string targetAgentName, Guid sourceAgentId, string sourceTaskId, string contextId, int currentDepth, DateTimeOffset? messageInstant)
     {
         async Task<string> DelegateAsync(
             [Description("A tarefa ou pergunta a delegar para o agente Target.")] string message,
             CancellationToken cancellationToken) =>
-            await DelegateToTargetAsync(targetAgentId, sourceAgentId, contextId, currentDepth, messageInstant, message, cancellationToken);
+            await DelegateToTargetAsync(targetAgentId, sourceAgentId, sourceTaskId, contextId, currentDepth, messageInstant, message, cancellationToken);
 
         return AIFunctionFactory.Create(
             (Func<string, CancellationToken, Task<string>>)DelegateAsync,
@@ -77,6 +78,7 @@ public sealed class AgentDelegationToolSetResolver(
     private async Task<string> DelegateToTargetAsync(
         Guid targetAgentId,
         Guid sourceAgentId,
+        string sourceTaskId,
         string contextId,
         int currentDepth,
         DateTimeOffset? messageInstant,
@@ -129,7 +131,7 @@ public sealed class AgentDelegationToolSetResolver(
 
         await taskJobPublisher.PublishAsync(new TaskJobMessage(targetTaskId, targetAgentId, contextId), cancellationToken);
 
-        return await WaitForTerminalStateAsync(targetTaskStore, targetTaskId, cancellationToken);
+        return await WaitForTerminalStateAsync(targetTaskStore, targetTaskId, targetAgentId, sourceAgentId, sourceTaskId, cancellationToken);
     }
 
     /// <summary>
@@ -191,16 +193,82 @@ public sealed class AgentDelegationToolSetResolver(
         return task;
     }
 
-    private async Task<string> WaitForTerminalStateAsync(PostgresTaskStore targetTaskStore, string targetTaskId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Aguarda a task do Target chegar a um estado terminal e, em qualquer dos
+    /// dois caminhos de falha, registra o diagnóstico da desistência.
+    /// </summary>
+    /// <remarks>
+    /// <b>POR QUE O CAMPO SE CHAMA "ÚLTIMO ESTADO OBSERVADO", E NÃO "ESTADO NA
+    /// DESISTÊNCIA".</b> O estado que separa as causas é lido dentro do laço,
+    /// e o ponto que registra é o <c>catch</c> — antes desta change a variável
+    /// do laço estava declarada dentro dele e simplesmente não existia ali.
+    /// Hoistá-la resolve o alcance, mas não torna a leitura simultânea à
+    /// desistência: entre a última leitura bem-sucedida e o cancelamento cabe
+    /// um <c>PollInterval</c> inteiro mais a chamada que foi cancelada. Chamar
+    /// o campo de "estado na desistência" afirmaria mais do que o sistema sabe
+    /// (convenção 13), num registro cujo propósito é ser lido como evidência.
+    /// Uma releitura fresca dentro do <c>catch</c> foi recusada (design.md, D1):
+    /// é ida ao banco num caminho de degradação graciosa, que por convenção 4
+    /// não pode lançar, e compraria ≤ 1 s de precisão sobre uma janela de 120 s
+    /// numa distinção que é <b>estrutural</b>, não temporal — uma task que virou
+    /// `Working` no último segundo passou os outros 119 s sem ser consumida.
+    ///
+    /// <para>
+    /// <b>QUATRO ORIGENS, NÃO DUAS, e é o <c>SuccessfulReadCount</c> que as
+    /// separa.</b> `Submitted` e `Working` são estados <b>lidos</b>. Ausência de
+    /// estado com contagem de leituras <b>zero</b> é "não sei" — a espera foi
+    /// cancelada antes de qualquer leitura concluir. Ausência de estado com
+    /// contagem <b>maior que zero</b> é "sei que a linha não estava lá" — a
+    /// leitura funcionou e o store não tinha a task. Colapsar os dois últimos
+    /// num único texto gastaria o vocabulário de "não sei" num fato conhecido.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>O `Failed` QUE CHEGA AQUI É INDISTINGUÍVEL POR CONSTRUÇÃO, e é por
+    /// isso que o registro carrega identificadores em vez de veredito.</b> Os
+    /// dois caminhos de falha de <c>AgentExecutionService</c> — a aquisição do
+    /// <c>ConversationContextLock</c> que estoura (change
+    /// lock-de-contexto-falha-terminal) e o erro de provedor — chamam o mesmo
+    /// <c>FailTaskAsync</c>, que chama <c>TaskUpdater.FailAsync</c> <b>sem
+    /// mensagem</b> (verificado por decompilação do A2A 1.0.0-preview2: a
+    /// assinatura é <c>FailAsync(Message? message = null, …)</c>). Logo
+    /// <c>Status.Message</c> é nulo nas duas, e nenhum classificador aplicado à
+    /// task do Target consegue separá-las: a diferença não está gravada em lugar
+    /// nenhum. O que as separa é o log que o próprio Target emitiu — "Falha ao
+    /// adquirir o lock de contexto… para a task {TaskId}" contra "Falha ao
+    /// executar o agente {AgentId} para a task {TaskId}" — e a chave para
+    /// chegar até ele é o <c>TargetTaskId</c> daqui. Quem investigar uma
+    /// delegação que falhou parte deste registro e vai ao log do Target; não há
+    /// atalho, e inventar um classificador aqui produziria uma causa que o
+    /// sistema não mediu.
+    /// </para>
+    /// </remarks>
+    private async Task<string> WaitForTerminalStateAsync(
+        PostgresTaskStore targetTaskStore,
+        string targetTaskId,
+        Guid targetAgentId,
+        Guid sourceAgentId,
+        string sourceTaskId,
+        CancellationToken cancellationToken)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(options.Value.Timeout);
+
+        // Hoistadas para fora do try: é o catch que registra, e lá dentro do
+        // laço elas não existiriam (ver o remarks acima).
+        TaskState? lastObservedState = null;
+        DateTimeOffset? lastObservationAt = null;
+        var successfulReadCount = 0;
 
         try
         {
             while (true)
             {
                 var current = await targetTaskStore.GetTaskAsync(targetTaskId, timeoutCts.Token);
+
+                successfulReadCount++;
+                lastObservationAt = DateTimeOffset.UtcNow;
+                lastObservedState = current?.Status.State;
 
                 if (current is not null && IsTerminal(current.Status.State))
                 {
@@ -210,7 +278,17 @@ public sealed class AgentDelegationToolSetResolver(
                         return text ?? string.Empty;
                     }
 
-                    logger.LogWarning("Task delegada {TargetTaskId} terminou em {State}, sem sucesso.", targetTaskId, current.Status.State);
+                    logger.LogWarning(
+                        "Delegação sem sucesso: task {SourceTaskId} do agente {SourceAgentId} delegou para o agente {TargetAgentId} " +
+                        "na task {TargetTaskId}, que terminou em {LastObservedTargetState} " +
+                        "(observado em {LastObservationAt}, leituras bem-sucedidas: {SuccessfulReadCount}).",
+                        sourceTaskId,
+                        sourceAgentId,
+                        targetAgentId,
+                        targetTaskId,
+                        current.Status.State,
+                        lastObservationAt,
+                        successfulReadCount);
                     return $"Delegação não concluída com sucesso (estado final: {current.Status.State}).";
                 }
 
@@ -223,9 +301,53 @@ public sealed class AgentDelegationToolSetResolver(
             // execução como um todo, que propagaria normalmente) —
             // degradação graciosa (Decision 8): resultado de falha para o
             // LLM do Source continuar, task do Source não falha por isso.
-            logger.LogWarning("Task delegada {TargetTaskId} não concluiu dentro do timeout de {Timeout}.", targetTaskId, options.Value.Timeout);
+            LogTimeout(sourceTaskId, sourceAgentId, targetAgentId, targetTaskId, lastObservedState, lastObservationAt, successfulReadCount);
             return "Delegação não concluiu dentro do tempo limite.";
         }
+    }
+
+    /// <summary>
+    /// Duas emissões, e não uma com valor sentinela: a spec desta change proíbe
+    /// apresentar a ausência de observação <b>como</b> um estado, e um sentinela
+    /// dentro do campo de estado é exatamente isso. Quem consome lê a presença
+    /// da chave <c>LastObservedTargetState</c> como "houve leitura com linha".
+    /// </summary>
+    private void LogTimeout(
+        string sourceTaskId,
+        Guid sourceAgentId,
+        Guid targetAgentId,
+        string targetTaskId,
+        TaskState? lastObservedState,
+        DateTimeOffset? lastObservationAt,
+        int successfulReadCount)
+    {
+        if (lastObservedState is not null)
+        {
+            logger.LogWarning(
+                "Delegação expirada: task {SourceTaskId} do agente {SourceAgentId} delegou para o agente {TargetAgentId} " +
+                "na task {TargetTaskId}, que não concluiu dentro do timeout de {Timeout}. " +
+                "Último estado observado: {LastObservedTargetState} (em {LastObservationAt}, leituras bem-sucedidas: {SuccessfulReadCount}).",
+                sourceTaskId,
+                sourceAgentId,
+                targetAgentId,
+                targetTaskId,
+                options.Value.Timeout,
+                lastObservedState,
+                lastObservationAt,
+                successfulReadCount);
+            return;
+        }
+
+        logger.LogWarning(
+            "Delegação expirada: task {SourceTaskId} do agente {SourceAgentId} delegou para o agente {TargetAgentId} " +
+            "na task {TargetTaskId}, que não concluiu dentro do timeout de {Timeout}. " +
+            "Nenhum estado do Target foi observado (leituras bem-sucedidas: {SuccessfulReadCount}).",
+            sourceTaskId,
+            sourceAgentId,
+            targetAgentId,
+            targetTaskId,
+            options.Value.Timeout,
+            successfulReadCount);
     }
 
     private static bool IsTerminal(TaskState state) =>

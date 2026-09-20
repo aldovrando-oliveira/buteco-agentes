@@ -16,6 +16,6 @@ namespace Buteco.Workers.Tests.Support;
 public sealed class NullAgentDelegationToolSetResolver : IAgentDelegationToolSetResolver
 {
     public Task<IReadOnlyList<AITool>> ResolveAsync(
-        AppDbContext dbContext, Agent sourceAgent, string contextId, int currentDepth, DateTimeOffset? messageInstant, CancellationToken cancellationToken) =>
+        AppDbContext dbContext, Agent sourceAgent, string sourceTaskId, string contextId, int currentDepth, DateTimeOffset? messageInstant, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<AITool>>([]);
 }

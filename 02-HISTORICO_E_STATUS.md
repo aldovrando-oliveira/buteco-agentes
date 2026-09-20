@@ -3912,6 +3912,260 @@ minutos para segundos) e quem lesse só o número leria como regressão grave. U
 medição feita enquanto a medição anterior ainda desmonta não é medição.
 
 
+### Instrumentação de delegação e de task envelhecida (`delegacao-diagnostico`, 2026-09-20)
+
+**Terceira change da fila aberta pela exploração `replicas-de-worker`, e a
+única do lote que não podia esperar.** Sem ela o `C` de pico não é observável, e
+`N ≥ C × D + 1` é fórmula sem entrada. Não corrige defeito: produz a entrada que
+decide a `replicas-de-worker`.
+
+**O que existia, e a lacuna era estrutural — não era campo faltando no
+template.** O registro de desistência carregava dois campos (`TargetTaskId`,
+`Timeout`). O estado que separa as causas — `Submitted` contra `Working` — era
+lido dentro do laço, numa variável **declarada dentro do `while`, dentro do
+`try`**, e o ponto que registra é o `catch`. O valor estava em mãos no laço e
+fora de alcance onde importava.
+
+**COMO LER A SÉRIE. Duas regras, e sem as duas ela é lida errado.**
+
+1. **Fator `N`.** A leitura é **global** (a tabela inteira), então com `N`
+   instâncias saem `N` linhas **idênticas** por ciclo. Não são `N` medições: é a
+   mesma medição `N` vezes, e somar as linhas superestima por fator `N`. É
+   também o que impede esta change de fixar a resposta da `replicas-de-worker`
+   por acidente — o **valor** não depende de `N`, só o número de cópias.
+2. **Qual coluna responde o `C`: a de `Submitted`.** Sob contenção as instâncias
+   estão ocupadas pelos **Sources**, e cada um deixa atrás de si um **Target
+   publicado e nunca consumido** — um Target por Source delegando, mesma
+   cardinalidade do `C`. **A coluna de `Working` subestima por construção, e o
+   erro é silencioso:** a janela **é** o timeout de delegação, e é exatamente
+   nesse ponto que o Source desiste, então ele só aparece como envelhecido no
+   intervalo estreito entre desistir e terminar o turno. Quem olhar `Working` vê
+   perto de zero e conclui que não há contenção **precisamente quando há**.
+
+**DOIS ACHADOS DERRUBARAM PREMISSAS DO ENUNCIADO, antes de qualquer código**
+(convenção 6 aplicada ao registro interno):
+
+- **`KnowledgeIndexingFailure.Describe` NÃO ganhou segundo consumidor.** O
+  enunciado previa reusá-lo e registrar isso. Lido no arquivo, ele é
+  classificador de **texto de tela** — o XML doc diz *"A tela de documentos
+  mostra este texto completo, sem truncar"*, e as saídas são *"Reindexe o
+  documento mais tarde"*. E não há exceção a classificar no caminho que decide:
+  o ramo de expiração captura um tipo só (`OperationCanceledException`), e o
+  ramo de estado terminal não tem exceção, tem um `TaskState`. O que se reusou
+  foi o **princípio** — switch por tipo, nunca parse de mensagem — aplicado ao
+  input certo. **Consequência para a convenção 2:** sem segundo consumidor, a
+  pergunta sobre extrair para `libs/` se fecha por não ter nascido.
+- **`apps/workers` não tinha precedente de trabalho periódico.** A fila de
+  indexação é consumidor RabbitMQ orientado a evento; o único componente com
+  timer do monorepo era `DebounceSweepService` (`apps/inbox`), cujo comentário
+  ainda diz *"único componente orientado a timer/scheduling do projeto"*. Este
+  detector é o **primeiro `BackgroundService` periódico de `apps/workers`**.
+
+**O `Failed` POR CONTENÇÃO DE LOCK É INDISTINGUÍVEL DO `Failed` POR ERRO DE
+PROVEDOR, do lado do Source — e é por isso que o registro carrega
+identificadores em vez de veredito.** Os dois caminhos de
+`AgentExecutionService` chamam o mesmo `FailTaskAsync`, que chama
+`TaskUpdater.FailAsync` **sem mensagem** (decompilado, A2A 1.0.0-preview2:
+`FailAsync(Message? message = null, …)`), então `Status.Message` é nulo nas
+duas. A diferença **não está gravada em lugar nenhum**. O que as separa é o log
+que o próprio Target emitiu (`AgentExecutionService.cs:191` contra `:346`), e a
+chave para chegar até ele é o `TargetTaskId`. Um classificador aqui produziria
+uma causa que o sistema não mediu.
+
+**A lista de causas do ramo de timeout ENCOLHEU com `delegacao-ciclo-no-cadastro`,
+e o contrário seria a suposição natural.** Traçado com as duas changes
+aplicadas: num ciclo, a task de profundidade 2 bloqueia no lock, estoura os 30 s
+e termina em `Failed`; quem espera vê `Failed` em ~30 s e sai pelo **ramo de
+estado terminal**, não pelo de timeout; a cadeia inteira resolve em ~30 s e
+**não produz expiração nenhuma**. Com instâncias de menos, a task nem é
+consumida e fica `Submitted` — que é contenção, já na lista. O ciclo não
+acrescenta causa: migrou de ramo ou colapsou em contenção.
+
+**A janela é DERIVADA, não escolhida; o intervalo NÃO tem base medida e isso
+está escrito.** A janela é `AgentDelegationToolOptions.Timeout` (120 s) lido em
+runtime — então quem mudar aquele timeout move a janela junto, e é o único
+desenho desta base em que a referência **não consegue** envelhecer separada do
+estado que a mediu (convenção 22, pelo avesso). O intervalo (30 s, um quarto da
+janela) é escolha de **resolução**, declarada como sem base; **foi recusado
+ancorar em `DebounceOptions.SweepInterval` (2 s)**, que é o único intervalo de
+varredura já escolhido aqui, porque aquele número foi escolhido para debounce de
+mensagem — ocorrência 3 da convenção 22, em que o sistema não muda e muda a
+pergunta feita ao número. Gatilho de recalibração: a primeira leitura da série
+pela `replicas-de-worker`.
+
+**A rodada de guardas, com a causa atribuída em cada estado:**
+
+| Guarda | `HEAD` | depois | causa do vermelho |
+|---|---|---|---|
+| G1 — Target nunca consumido registra `Submitted` | 🔴 | 🟢 | chave `SourceTaskId` ausente |
+| G2 — Target consumido e lento registra `Working` | 🔴 | 🟢 | idem |
+| G3 — Target em falha terminal registra os cinco ids | 🔴 | 🟢 | idem |
+| G4 — desistência sem leitura não apresenta estado | 🔴 | 🟢 | idem |
+| T1..T8 — semântica da varredura | — | 🟢 | não compilam contra `HEAD` |
+
+**Os quatro vermelhos reprovaram pela CHAVE AUSENTE, nunca por texto**, e isso
+foi desenhado: as duas changes anteriores mudaram a redação das mensagens desta
+classe e os estados terminais que as produzem, e um guarda escrito sobre *"não
+concluiu dentro do timeout"* continuaria vermelho depois da correção dando
+impressão de funcionar. A mensagem de diagnóstico do helper imprime as chaves
+que existem, e **em `HEAD` G1 e G2 chegam à forma IDÊNTICA**
+(`TargetTaskId,Timeout`) — é o defeito literalmente demonstrado pelo guarda.
+
+**T1..T8 são marcados `—` e não 🔴, e ler isso como vermelho de convenção 15
+seria o erro.** Componente novo não compila contra `HEAD`. O peso daquela
+convenção é carregado por G1..G4, que compilam (só observam log) e reprovam pela
+propriedade.
+
+**T8 foi verificado reintroduzindo o defeito** (quinta forma da convenção 15):
+com a consulta movida para **fora** do `try`, reprovou **1 de 8 — e só T8**.
+Proteção restaurada, 8/8.
+
+**DOIS ACHADOS DE FORMA DE GUARDA, os dois observados e não previstos:**
+
+- **Guarda de contagem global precisa POSSUIR a tabela.** A primeira rodada de
+  T1..T5 deu 5 vermelhos com `Expected: 1, Actual: 2`: o detector lê a tabela
+  inteira **por desenho**, então os cenários da própria classe se contaminam.
+  Não é higiene genérica — é consequência direta do desenho, e por isso cada
+  cenário esvazia `a2a_tasks` antes de semear. Um componente por agente não teria
+  isso.
+- **Orçamento de poll de 10 s reprova na suíte completa e passa isolado.** G4
+  reprovou na primeira rodada de fechamento com *"Chaves vistas:"* **vazio** —
+  nada havia sido logado, isto é, a task do Source nem tinha sido consumida.
+  Sintoma inequívoco de orçamento, não de asserção errada: start de host mais
+  consumo do RabbitMQ não cabe em 10 s com 13 outras classes subindo containers
+  em sequência. Subiu para 100 tentativas (≈20 s), o mesmo orçamento que o teste
+  de instância única da classe já usava. **A propriedade sob teste é o que o
+  registro diz, nunca em quanto tempo ele aparece.**
+
+**A CONFERÊNCIA DE ESCOPO ACHOU O QUE A SUÍTE VERDE NÃO ACHARIA, nas duas
+direções:**
+
+- **Zero** arquivo tocado em `apps/api`, `apps/inbox`, `apps/frontend`, `libs/`,
+  `deploy/`, `docs/`, `docker-compose*` e qualquer `Migrations/`.
+- **E a lista de caminhos permitidos teve de ganhar um arquivo**, registrado com
+  a razão em vez de estendida em silêncio — ver o achado de blast radius abaixo.
+- **O registro do hosted service no `Program.cs` não é provado por teste nenhum,
+  e isso foi MEDIDO, não suposto:** com a linha comentada, T1..T8 seguem **8/8
+  verde** e a produção fica sem varredura. Os testes de `apps/workers` montam o
+  host à mão (`BuildHost` por classe), diferente de `apps/api`, onde a
+  `WebApplicationFactory` roda a composição real. É a mesma lacuna que a
+  convenção 8 já registra para a forma `IServiceCollection`, e aqui ela não é
+  contornável dentro da forma de teste desta suíte — virou conferência manual
+  declarada, não risco sem contraparte.
+
+**AS TRÊS RODADAS DE FECHAMENTO, E A SEGUNDA É A QUE VALE GUARDAR.** O regime vai
+colado em cada uma (convenção 22):
+
+| rodada | carga na largada | containers de dev | resultado | duração |
+|---|---|---|---|---|
+| baseline (`HEAD`, árvore limpa) | 5,86 | 3 de pé | **256/256** | 8m31s |
+| 1 (change aplicada) | — | 3 de pé | 267/268 — só G4 | 6m55s |
+| 2 (G4 corrigido) | 3,24 | 3 de pé | 266/268 — **duas outras** | **38m07s** |
+| 3 (máquina quieta) | 3,10 | **0** | **268/268** | 6m37s |
+
+**A rodada 2 não é medição, e o que a desqualifica não é o resultado — é a
+duração.** 38m07s contra 8m31s da baseline é 4,5x, e nenhum teste ficou mais
+lento por mérito próprio. As duas reprovadas são de classes que **esta change não
+toca**, com assinatura de infraestrutura: `TaskCanceledException` vindo de
+`RabbitMQ.Client.Connection.CloseAsync` (1m10s num teste), e um mock de LLM
+capturando **duas** invocações onde o teste afirma uma. E o conjunto de falhas
+**mudou por completo** entre as rodadas 1 e 2 — que é o discriminador já
+registrado nesta base: regressão reprova o mesmo teste toda vez.
+
+> **ACHADO DE AMBIENTE, e ele custa caro se ninguém souber: a suíte de
+> `apps/workers` pode derrubar o stack de desenvolvimento.** Entre a rodada 2 e a
+> 3, os **três containers do compose de desenvolvimento** (`postgres`,
+> `rabbitmq`, `waha`), de pé havia 7 dias, **deixaram de existir** — sem nenhum
+> comando de parada ter sido rodado. A leitura mais plausível, e não provada, é
+> pressão de memória na VM do Podman: **6 GiB e 6 CPUs** para 14 pares de
+> containers de teste em sequência mais o stack de dev, com
+> `TESTCONTAINERS_RYUK_DISABLED=true` (obrigatório nesta máquina, ver
+> `docs/development.md`) deixando qualquer resto sem varredor. A rodada 3, com
+> **zero** containers, fechou em 6m37s.
+>
+> **Gatilho:** a próxima rodada que passar de ~10 min ou reprovar com assinatura
+> de infraestrutura — conferir `podman ps` **antes** de investigar teste.
+> **Posição:** a medição que decide (a suíte inteira compete com o stack de dev
+> por memória da VM?) é change própria, e o candidato de correção já está
+> registrado nos itens em aberto: a `ICollectionFixture` compartilhando **um** par
+> de containers entre as classes, que hoje é paliativo por serialização.
+
+**A OITAVA MEDIÇÃO DA CONVENÇÃO 18, e ela separa uma dimensão que acertou de
+outra que errou pelo motivo oposto ao da sétima.**
+
+| | projetado | entregue |
+|---|---|---|
+| produção, lógica | ~105 | **181** (+72%) |
+| produção, comentário | ~205 | **246** (+20%) |
+| produção, total | ~310 | **427** (+38%) |
+| teste, acrescentadas | ~510 | **693** (+36%) |
+| **teste : produção** | ~1,65 : 1 | **1,62 : 1** |
+| comentário : lógica | ~1,95 : 1 | **1,36 : 1** |
+| **testes novos** | **12** | **12** |
+| arquivos criados (prod / teste) | 3 / 1 | **3 / 1** |
+| arquivos modificados (prod / teste) | 4 / 2 | **4 / 3** |
+
+**O que acertou, e os dois valem como método confirmado:**
+
+- **A contagem de testes bateu exata (12), lida dos cenários do delta de spec.**
+  Segunda confirmação seguida da régua da 5a-4 — contar **estados observáveis**
+  nos cenários, nunca uma lista de coisas a testar. Lá foram 6 projetadas contra
+  8 entregues porque a contagem foi por afirmação; aqui a contagem foi por
+  cenário e deu 12 contra 12.
+- **A razão teste:produção bateu (1,62 contra 1,65).** Curioso e instrutivo: as
+  **duas** pontas erraram ~+37% na mesma direção, então a razão sobreviveu. Razão
+  acertar não é o mesmo que projeção acertar.
+
+**O que errou, e a causa é NOVA:** a mistura comentário:lógica saiu em 1,36:1
+contra 1,95:1 projetado — e o desvio está no **denominador**, não no numerador:
+
+- **O comentário por registro de mecanismo se confirmou pela terceira vez.** 246
+  linhas para **oito** registros = ~31 por registro, dentro da faixa já medida
+  (26 na 5a-4, ~37 em `lock-de-contexto-falha-terminal`). A projeção de
+  comentário errou só +20%. **A dimensão projetável continua projetável.**
+- **A lógica errou +72%, e o motivo é de formatação, não de desenho:** esta base
+  escreve **um parâmetro por linha**, então acrescentar UM parâmetro a uma
+  assinatura custa uma linha de lógica **por método atravessado** — e
+  `sourceTaskId` atravessou a interface e quatro métodos, com
+  `WaitForTerminalStateAsync` indo de 3 para 6 parâmetros e um método novo
+  nascendo com 7. São ~15 linhas de puro encanamento de parâmetro, invisíveis a
+  uma projeção que pensa em "statements".
+
+> **Régua para a nona: mudança de assinatura tem DOIS custos que a projeção não
+> vê, e eles ficam em dimensões diferentes.** Em **arquivo**: `grep` pelo nome da
+> interface não enumera quem instancia a classe concreta — a projeção disse
+> quatro arquivos e a **compilação** achou **cinco**, o quinto sendo
+> `DelegationToolNameSlugifierTests.cs`, com quatro sítios num arquivo só. Em
+> **linha**: parâmetro × métodos atravessados, não statements. É a quarta
+> dimensão de blast radius desta convenção, e a primeira em que `grep` e
+> compilação **discordam** — nas três anteriores (fixtures via `tsc`, handlers via
+> compilação, mocks via `grep -rl`) uma ferramenta enumerava de graça. Aqui a
+> ferramenta barata dá o número errado.
+
+**E as duas direções de erro nomeadas de antemão: uma aconteceu, pela primeira
+vez na série.** Foi nomeado que a captura de log estruturado poderia exigir mais
+andaime que os ~35 projetados — e exigiu. A outra (o detector dispensar tipo de
+resultado próprio, ficando em 3 unidades públicas) não aconteceu: foram as **4**
+projetadas. Nas duas medições anteriores nenhuma direção nomeada tinha
+acontecido; esta é a primeira em que nomear serviu. **Continua não substituindo
+contar componentes** — a contagem de componentes acertou 4 de 4 unidades
+públicas e 3/1 arquivos criados, e foi ela que carregou a projeção.
+
+**Sem migration, sem mudança de schema, sem passo de deploy.** A varredura usa o
+índice que já existia em `a2a_tasks(state)`; nada a espelhar em `apps/api`, logo
+`KnowledgeSchemaMirrorTests` intocado. Rollback é reverter o commit.
+
+**O que quem opera vai ver:** linhas de `warn` novas de um componente que não
+existia. **Não indicam defeito novo — indicam que passou a haver quem olhe.** É a
+mesma leitura errada que a change do lock já registrou sobre o primeiro pico de
+`failed`.
+
+**`apps/api` e `apps/frontend` não foram rodadas**, por decisão registrada: a
+change não toca nenhum arquivo desses apps (conferido por `git status`), então o
+binário sob teste lá é byte-a-byte o de `HEAD`. As baselines de referência
+continuam sendo 335/335 e 921/921 do fechamento anterior.
+
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -6173,12 +6427,23 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 ```
 1 lock-de-contexto-falha-terminal   ✔ aplicada e arquivada
 2 delegacao-ciclo-no-cadastro       ✔ aplicada  (arquivar)
-3 delegacao-diagnostico
-4 frontend-mensagem-recusa-ciclo
+3 delegacao-diagnostico             ✔ aplicada em 20/09/2026  (arquivar)
+4 frontend-mensagem-recusa-ciclo    ← a próxima
   → limpeza do banco + deploy das correções → OBSERVAR
 5 replicas-de-worker
 6 metricas-execucao-coleta
 ```
+
+**A posição 3 saiu aplicada em 20/09/2026** — ver "Instrumentação de delegação e
+de task envelhecida" acima. **O que ela entrega à posição 5, e como a 5 tem de
+ler:** a série de leituras periódicas de tasks não-terminais envelhecidas. Duas
+regras de leitura, e sem as duas o número decide errado — (1) a leitura é global,
+então cada instância emite uma linha **idêntica** por ciclo e somá-las
+superestima pelo número de instâncias; (2) quem responde o `C` é a contagem de
+**`Submitted`**, nunca a de `Working`, que subestima por construção e mostra perto
+de zero justamente sob contenção. **A observação tem de ser contra tráfego
+real**, depois do deploy — é por isso que a 5 continua atrás da limpeza do banco
+na fila.
 
 **Os motivos que fixam a ordem** — sem eles ela parece arbitrária, e a tentação
 de antecipar a `replicas-de-worker` é grande, porque ela é a que "resolve o
@@ -6839,6 +7104,54 @@ ocorrências dessa família.
     em `working` mais velhas que o máximo plausível de execução e
     `pending_dispatches` em `Dispatching`. É esse número que diz se o
     destravamento manual vira trabalho próprio ou é caso isolado.
+
+### Abertos por `delegacao-diagnostico` (2026-09-20)
+
+**Gatilho e posição nos dois** — gatilho sem posição é adiamento indefinido com
+outro nome.
+
+- **O provedor de log que captura estado estruturado está na TERCEIRA cópia, e o
+  gatilho de extração da convenção 2 está cumprido.** As cópias:
+  `TimeZoneStartupValidationTests` e `TemporalContextMessageInstantTests`
+  (capturam nível e texto), `AgentDelegationConcurrencyTests` (captura os pares
+  chave/valor, a variante que esta change precisou) e
+  `NonTerminalTaskDetectorTests` (texto formatado) — quatro cópias contando a
+  desta change, três formas distintas.
+
+  Ficou fora **por escopo, não por esquecimento**: migrar as duas primeiras é
+  mexer em dois arquivos que esta change não toca, e uma delas tem história
+  registrada de flake ligado justamente a provider de log capturando categoria
+  demais.
+  - **Gatilho:** a **quarta** classe que precisar capturar log — ou a primeira que
+    precise da variante estruturada, que é a menos trivial de reescrever.
+  - **Posição:** na própria change que precisar dela. Quem cria a condição
+    extrai, e leva as outras três junto para `Support/`.
+
+- **O registro do hosted service no `Program.cs` de `apps/workers` não é coberto
+  por teste nenhum, e a lacuna é da FORMA da suíte, não desta change.** Medido:
+  com `AddHostedService<NonTerminalTaskDetectorService>()` comentado, T1..T8
+  seguem **8/8 verde** e a produção sobe sem varredura. Os testes de
+  `apps/workers` montam o host à mão (`BuildHost` por classe); `apps/api` não tem
+  esse problema porque a `WebApplicationFactory` roda o `Program.cs` real.
+
+  É a mesma família do que a convenção 8 já registra para a forma
+  `IServiceCollection`, e vale para **todos** os hosted services e registros deste
+  app, não só para o desta change — `TaskJobConsumer` e `KnowledgeIndexingConsumer`
+  têm a mesma exposição, e ninguém tinha escrito isso.
+  - **Gatilho:** o primeiro registro de `Program.cs` de `apps/workers` que se
+    descubra ausente ou divergente em produção; ou a change que introduzir um
+    quarto hosted service ali.
+  - **Posição:** change própria, pequena — um teste que capture a
+    `IServiceCollection` real da composição de produção de `apps/workers` e afirme
+    que os hosted services esperados estão registrados, no molde do teste que a
+    convenção 8 já cobra da forma `IServiceCollection` em `apps/api`. **Não** entrou
+    aqui porque seria corrigir uma lacuna de suíte inteira dentro de uma change de
+    instrumentação, e sem guarda vermelho próprio contra o defeito dela.
+
+- **A suíte de `apps/workers` pode derrubar o stack de desenvolvimento** — ver o
+  achado de ambiente na seção desta change, com gatilho (`podman ps` antes de
+  investigar teste; rodada acima de ~10 min) e posição (a `ICollectionFixture`
+  compartilhada, já registrada como candidata).
 
 ### Abertos por `delegacao-ciclo-no-cadastro` (2026-09-20)
 

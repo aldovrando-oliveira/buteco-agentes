@@ -26,6 +26,14 @@ public interface IAgentDelegationToolSetResolver
     /// chamada da tool relê o agente fresco do banco (mesmo padrão do
     /// Target), não reaproveita este snapshot — ver design.md, Decision 5.
     /// </param>
+    /// <param name="sourceTaskId">
+    /// Task do Source que está executando — <b>não</b> é propagado para a task
+    /// do Target, que recebe um id próprio. Serve só ao registro de diagnóstico
+    /// da desistência: é a chave que liga a falha vista aqui ao log que a
+    /// execução do Target emitiu por conta própria, e sem ela o
+    /// <c>contextId</c> não basta, porque uma conversa tem muitas tasks.
+    /// Ver design.md da change delegacao-diagnostico, D7.
+    /// </param>
     /// <param name="contextId">
     /// Propagado para a task delegada, mesmo <c>contextId</c> da conversa em
     /// andamento (Decision 7).
@@ -48,6 +56,7 @@ public interface IAgentDelegationToolSetResolver
     Task<IReadOnlyList<AITool>> ResolveAsync(
         AppDbContext dbContext,
         Agent sourceAgent,
+        string sourceTaskId,
         string contextId,
         int currentDepth,
         DateTimeOffset? messageInstant,

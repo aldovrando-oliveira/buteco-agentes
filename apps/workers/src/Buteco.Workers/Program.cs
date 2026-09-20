@@ -1,5 +1,6 @@
 using Buteco.Workers.Agents;
 using Buteco.Workers.AgentDelegations;
+using Buteco.Workers.Diagnostics;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Mcp.Security;
@@ -25,6 +26,10 @@ builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection(Em
 // Não vinculado a nenhuma seção de configuração de propósito — defaults
 // são, na prática, constantes de produto (ver Options/AgentDelegationToolOptions.cs).
 builder.Services.Configure<AgentDelegationToolOptions>(_ => { });
+
+// Mesmo motivo do de cima, e a janela da varredura NÃO mora aqui: é lida em
+// runtime do Timeout acima (ver Options/TaskDiagnosticsOptions.cs).
+builder.Services.Configure<TaskDiagnosticsOptions>(_ => { });
 
 // Único ponto de acesso a relógio/fuso local em todo apps/workers (design.md
 // da change apps-workers-contexto-temporal, Decisão 6) — nenhum código,
@@ -80,6 +85,19 @@ builder.Services.AddSingleton<PushNotificationSender>();
 builder.Services.AddSingleton<AgentExecutionService>();
 builder.Services.AddHostedService<TaskJobConsumer>();
 builder.Services.AddHostedService<KnowledgeIndexingConsumer>();
+
+// PRIMEIRO hosted service periódico deste app (os dois acima são consumidores
+// RabbitMQ) — ver Diagnostics/NonTerminalTaskDetectorService.cs para o que isso
+// implica na leitura da série com N instâncias. Sem stateful: o detector é
+// singleton e abre escopo por ciclo.
+//
+// NENHUM TESTE DESTA SUÍTE PROVA ESTE REGISTRO: os testes de apps/workers montam
+// o host à mão (BuildHost por classe), não pelo Program.cs — diferente de
+// apps/api, onde a WebApplicationFactory roda a composição real. Remover esta
+// linha deixa NonTerminalTaskDetectorTests verde e a produção sem varredura
+// (design.md, D6). É conferência manual de escopo, não cobertura de teste.
+builder.Services.AddSingleton<NonTerminalTaskDetector>();
+builder.Services.AddHostedService<NonTerminalTaskDetectorService>();
 
 var host = builder.Build();
 

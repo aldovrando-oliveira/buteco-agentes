@@ -238,7 +238,7 @@ public sealed class AgentExecutionService(
             // Sem conexão externa viva por trás (diferente de McpToolSet) —
             // não precisa de await using, ver design.md, Decision 10.
             var delegationTools = await delegationToolSetResolver.ResolveAsync(
-                dbContext, agent, message.ContextId, delegationDepth, messageInstant, cancellationToken);
+                dbContext, agent, message.TaskId, message.ContextId, delegationDepth, messageInstant, cancellationToken);
 
             // Terceiro conjunto, e também SEM await using — pelo mesmo motivo da
             // delegação e não por simetria com ela: não há conexão externa viva
