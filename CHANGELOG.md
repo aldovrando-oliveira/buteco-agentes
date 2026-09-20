@@ -347,6 +347,26 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Uma task podia ficar presa em `working` para sempre, e a mensagem do
+  usuário sumia sem erro nenhum**: `apps/workers` adquiria o lock que serializa
+  a conversa (`pg_advisory_lock`) **fora** do `try` que trata falhas. O
+  `pg_advisory_lock` não tem timeout, mas o `CommandTimeout` do Npgsql (30 s)
+  tem — ao estourar, a exceção escapava do método inteiro, a mensagem do
+  RabbitMQ era descartada e a task nunca alcançava estado terminal. Em cadeia, a
+  `PendingDispatch` de `apps/inbox` ficava em `Dispatching` para sempre e o
+  contato nunca recebia resposta. O caminho é o de um contato que manda a
+  segunda mensagem enquanto o agente ainda responde a primeira, e **só existe a
+  partir de duas instâncias** de `apps/workers` — que é o que a delegação entre
+  agentes exige. A falha na aquisição passa a terminar a task em `failed`, o que
+  dispara a push notification e resolve a `PendingDispatch` pelo caminho que já
+  existia. Falhas que antes eram silenciosas passam a ser visíveis; elas não são
+  novas.
+- **Cada falha ao adquirir esse lock pendurava uma conexão Postgres**: o escopo
+  de serviço criado para o lock não era descartado quando a aquisição falhava, e
+  a conexão já aberta nunca voltava ao pool. Enquanto a falha era exceção não
+  tratada isso era raro; ao virar caminho de operação, passaria a ser um
+  vazamento por ocorrência, e o pool esgotado deixaria o worker sem conseguir
+  nem gravar as próprias falhas.
 - **A contagem de mensagens recebidas da tela de entrada nunca chegava ao
   `apps/inbox`**: o prefixo `messages`, que ganhou rota de nível superior com
   `GET /messages/summary`, não foi acrescentado ao nginx do stack de servidor. A
