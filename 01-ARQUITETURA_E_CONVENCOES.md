@@ -1002,6 +1002,35 @@ de propor algo nesta base:
     futuras; a lição é o momento de contar. Projeção feita durante a verificação
     é rascunho, não estimativa.
 
+    **Projetar produção por "linhas de lógica" subestima por construção em change
+    cujo entregável inclui registro de decisão ou de mecanismo — nessas, o
+    comentário é o produto.** Promovida na terceira ocorrência, e a terceira é de
+    **sinal contrário**: é a que mostra que a regra funciona quando aplicada,
+    como a quinta evidência da convenção 22.
+
+    | # | change | lógica : comentário, em produção | o que a proporção era |
+    |---|---|---|---|
+    | 1 | `dedupe-global-nome-de-tool` | `ToolOrigin`/`RenamedAIFunction` | documentação de decisão |
+    | 2 | `lock-de-contexto-falha-terminal` | **48 : 111** (2,3:1), em `apps/workers/src/Buteco.Workers/Agents/` | três registros de mecanismo |
+    | 3 | `delegacao-ciclo-no-cadastro` | **92 : 121** (1,3:1), em `apps/api/src/Buteco.Api/AgentDelegations/` | um registro de mecanismo, e a proporção foi **projetada em 1,4:1 antes de escrever o código** |
+
+    Na 3 a regra foi aplicada preventivamente e **a dimensão de comentário veio
+    certa** — 1,32:1 entregue contra 1,4:1 projetado. O volume total ainda errou
+    para cima (~136 projetadas contra 213 entregues), mas **por outro motivo**, e
+    é esse contraste que dá a regra:
+
+    - **a mistura comentário:lógica é projetável**, desde que se pergunte quantos
+      registros de mecanismo a change entrega — a 2 entregava três, a 3 entrega
+      um, e as proporções seguem essa contagem;
+    - **a contagem de componentes não é**, e foi ela que errou: uma função pura
+      saiu do handler para poder ser testada isolada, e virou a segunda função
+      pública de um tipo projetado com uma só.
+
+    **E as duas direções de erro nomeadas de antemão no `design.md` da 3 estavam
+    as duas erradas** — nenhuma das duas aconteceu, e o desvio veio de um terceiro
+    lugar que não estava na lista. Nomear direções de erro não substitui contar
+    componentes; é a contagem que carrega a projeção.
+
     **E as duas dimensões erram por motivos diferentes — registrar a direção
     sozinha não serve de nada.** A projeção por componente conta os componentes
     que a etapa parece precisar; a verificação pode tanto **acrescentar** um que
@@ -1334,3 +1363,15 @@ de propor algo nesta base:
     Parente da convenção 18 (*projeção feita antes de a verificação fechar é
     rascunho*) e da 19 (*"pré-existente" exige a baseline*): as três são sobre
     número citado com mais autoridade do que ele tem.
+
+    **A forma curta, para poder ser citada numa linha de revisão: _régua citada
+    sem escopo não é régua._** Ela entrou porque o custo de não a ter já estava
+    contado no `02`: a régua de custo de dependência em `AgentExecutionService`
+    circulou como **12**, **13**, **15** e **16** — quatro valores, em quatro
+    documentos, cada um somando um conjunto diferente e **nenhum com o escopo
+    colado**. Nenhum estava errado; nenhum dizia sobre o quê. A versão com escopo
+    é **13 sítios de instanciação** (12 em `apps/workers/tests/` mais 1 em
+    `tests/InboxOrchestratorRoundTrip.Tests/`) e **13 definições de `BuildHost`
+    em `apps/workers/tests/`** — conjuntos distintos que coincidem por acaso, que
+    é justamente o tipo de coincidência que faz um número migrar de pergunta sem
+    ninguém notar.

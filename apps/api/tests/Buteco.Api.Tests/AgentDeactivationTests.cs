@@ -1,10 +1,30 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Buteco.Api.Messaging;
 using Buteco.Api.Tests.Support;
 
 namespace Buteco.Api.Tests;
 
+// AS ASSERÇÕES SOBRE O PUBLISHER SÃO POR AGENTE, E NÃO POR "NADA FOI
+// PUBLICADO" — ver design.md da change delegacao-ciclo-no-cadastro, D9.
+// `AgentDeactivationFixture.TaskJobPublisher` é `IClassFixture`: uma instância
+// só para a classe inteira, e `FakeTaskJobPublisher.PublishedMessages` acumula
+// sem nunca esvaziar. Três testes afirmavam `Assert.Empty` sobre essa coleção
+// enquanto `SendMessage_AfterReactivation_PublishesNormally` publica de
+// verdade — então quem rodasse DEPOIS dele reprovava, e rodando isolado
+// passava. Medido contra o HEAD 1ba84ec: a suíte inteira dava 317/318, a
+// classe sozinha 2 de 3, e o teste sozinho passava. Era guarda que aprovava ou
+// reprovava por sorte de ordenação, que é o defeito que a convenção 15 nomeia.
+//
+// NÃO TROCAR POR UM `Clear()` NO INÍCIO DE CADA TESTE. Ele também faria a
+// classe passar hoje, e foi recusado: depende de os testes da classe não
+// rodarem em paralelo, que é propriedade do runner e não do teste — mesma
+// família do guarda cujo critério é uma ordem que o banco às vezes já produz
+// sozinho (convenção 15, quinta forma). Cada teste aqui cria o próprio agente,
+// então filtrar por `AgentId` é independente de ordem POR CONSTRUÇÃO: o
+// resultado não muda se a classe rodar em qualquer ordem, em paralelo, ou com
+// testes novos no meio.
 public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFixture<AgentDeactivationFixture>
 {
     private readonly HttpClient _client = fixture.CreateClient();
@@ -22,7 +42,7 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
         var taskId = taskElement.GetProperty("id").GetString()!;
         Assert.Equal("TASK_STATE_REJECTED", taskElement.GetProperty("status").GetProperty("state").GetString());
 
-        Assert.Empty(fixture.TaskJobPublisher.PublishedMessages);
+        AssertNothingPublishedFor(agentId);
 
         var getPayload = new { jsonrpc = "2.0", id = 2, method = "GetTask", @params = new { id = taskId } };
         var getResponse = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", getPayload);
@@ -72,7 +92,7 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
             "TASK_STATE_REJECTED",
             body.GetProperty("result").GetProperty("task").GetProperty("status").GetProperty("state").GetString());
 
-        Assert.Empty(fixture.TaskJobPublisher.PublishedMessages);
+        AssertNothingPublishedFor(agentId);
     }
 
     [Fact]
@@ -85,7 +105,7 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
         Assert.Equal(
             "TASK_STATE_REJECTED",
             rejectedBody.GetProperty("result").GetProperty("task").GetProperty("status").GetProperty("state").GetString());
-        Assert.Empty(fixture.TaskJobPublisher.PublishedMessages);
+        AssertNothingPublishedFor(agentId);
 
         await ActivateAgentAsync(agentId);
 
@@ -94,10 +114,15 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
         var taskId = taskElement.GetProperty("id").GetString()!;
         Assert.Equal("TASK_STATE_SUBMITTED", taskElement.GetProperty("status").GetProperty("state").GetString());
 
-        var published = Assert.Single(fixture.TaskJobPublisher.PublishedMessages);
+        var published = Assert.Single(PublishedFor(agentId));
         Assert.Equal(taskId, published.TaskId);
         Assert.Equal(agentId, published.AgentId);
     }
+
+    private IReadOnlyList<TaskJobMessage> PublishedFor(Guid agentId) =>
+        fixture.TaskJobPublisher.PublishedMessages.Where(message => message.AgentId == agentId).ToList();
+
+    private void AssertNothingPublishedFor(Guid agentId) => Assert.Empty(PublishedFor(agentId));
 
     private async Task<JsonElement> SendMessageAsync(Guid agentId)
     {

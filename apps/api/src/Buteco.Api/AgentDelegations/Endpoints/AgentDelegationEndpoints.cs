@@ -45,6 +45,19 @@ public static class AgentDelegationEndpoints
             });
         }
 
+        if (result.CycleAgentNames.Count > 0)
+        {
+            // O caminho inteiro, e não só o fato: o vínculo a desfazer pode
+            // estar em OUTRO agente — num ciclo A→B→C→A salvo a partir de A, é a
+            // aresta C→A que o operador talvez queira remover. Sem o caminho, a
+            // mensagem manda procurar (design.md, D5).
+            var cyclePath = string.Join(" → ", result.CycleAgentNames);
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["targetAgentIds"] = [$"Esta delegação fecha um ciclo entre agentes: {cyclePath}. Um agente não pode delegar, direta ou indiretamente, para um agente que delega de volta para ele."],
+            });
+        }
+
         if (result.InvalidTargetAgentIds.Count > 0)
         {
             var invalidIds = string.Join(", ", result.InvalidTargetAgentIds);
