@@ -476,8 +476,13 @@ Adapters implementados:
 
 | Adapter | Provisionamento de webhook | Autenticidade do webhook de entrada |
 |---|---|---|
-| **WAHA** (self-hosted, engine GOWS) | manual | não verificada — risco aceito, classificado explicitamente na allowlist de rotas anônimas |
+| **WAHA** (self-hosted, engine GOWS) | manual | não verificada — risco aceito, classificado explicitamente na allowlist de rotas anônimas (premissa alterada, ver nota abaixo) |
 | **Telegram** (Bot API) | automático via `setWebhook`, com `secret_token` gerado por canal | verificação nativa |
+
+*(Premissa alterada em 19/09/2026: o aceite do WAHA foi feito antes de haver
+deploy atendendo tráfego real, e hoje vale contra um piloto em produção. A
+decisão não foi revista aqui; está registrada como candidata em
+[`02-HISTORICO_E_STATUS.md`](../02-HISTORICO_E_STATUS.md).)*
 
 ---
 
