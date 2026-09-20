@@ -3596,6 +3596,143 @@ Coisas a carregar:
   eram falsos desde `268814d`. Estão corrigidos no lugar, com marca de 19/09,
   antes de a candidata 3 abaixo se apoiar neles.
 
+### Task presa em `working` para sempre: o lock de contexto sem estado terminal (`lock-de-contexto-falha-terminal`, 2026-09-20)
+
+**Defeito ativo no piloto, e o piloto o abriu.** Uma task podia ficar em
+`working` indefinidamente, sem erro em lugar nenhum, e a mensagem do usuário
+sumia sem resposta. Achado pela exploração `replicas-de-worker` (20/09/2026),
+por execução real, não por leitura.
+
+**O mecanismo.** `AgentExecutionService.ExecuteAsync` adquiria o
+`ConversationContextLock` **fora** do seu `try` (linha 158, com o `try` na 161).
+`pg_advisory_lock` não tem timeout, mas o `CommandTimeout` do Npgsql (30 s,
+default) tem: ao estourar, a exceção subia de `AcquireAsync` antes do `try`,
+escapava de `ExecuteAsync` e caía no `catch` de `TaskJobConsumer`, que logava e
+fazia `BasicNackAsync(requeue: false)`. A task nunca alcançava estado terminal.
+
+**A cadeia, verificada no ponto:** a tool de delegação que esperasse essa task
+faria polling até o próprio timeout (`IsTerminal` nunca vira verdade); a
+`PendingDispatch` de `apps/inbox` ficaria em `Dispatching` **para sempre**
+(nada varre esse estado, e a push notification nunca vem); a mensagem do usuário
+sumia sem erro nenhum.
+
+**DUAS INSTÂNCIAS RESOLVERAM A DELEGAÇÃO E ABRIRAM ISTO — é a troca que ninguém
+tinha escrito.** Com **uma** instância o caminho era inalcançável:
+`prefetchCount: 1` serializa o consumo dentro do processo, e o lock nunca é
+disputado de dentro. O piloto roda com **duas**, que é pré-requisito da
+delegação entre agentes. O caminho alcançável não tem nada de artificial:
+o índice único de `PendingDispatch` filtra por `Status = 'Pending'`
+(`AppDbContext.cs:126-128`), então uma linha em `Dispatching` **não** impede uma
+nova `Pending` — um contato que manda a segunda mensagem enquanto o agente ainda
+responde a primeira produz duas tasks concorrentes no mesmo `contextId`. E 30 s
+de execução não é caso raro: uma delegação que expira sozinha já consome 120 s.
+
+**Duas correções independentes, aplicadas em ordem e com guarda vermelho para
+cada uma** (convenção 15 aplicada a uma change que corrige duas coisas):
+
+1. **D1** — a aquisição ganhou `try/catch` próprio, que termina a task em
+   `failed`. O `await using` do lock **continua fora** do `try` grande: movê-lo
+   para dentro faria o `catch` cobrir também o `DisposeAsync`, e como
+   `ApplyStepAsync` não tem guarda de estado terminal, uma falha ao soltar o
+   lock **depois** de a task já estar `completed` a regravaria como `failed`,
+   perdendo a resposta do agente. Há guarda dedicado prendendo isso, e ele
+   **passa em `HEAD`** de propósito — é de regressão contra a correção errada.
+2. **D3** — `AcquireAsync` passou a descartar o `IServiceScope` quando a
+   aquisição falha. Sem isso, cada falha pendurava um escopo com conexão
+   Postgres já aberta; D1 transformou essa falha em caminho de operação
+   rotineiro, e portanto o vazamento em **um por ocorrência**. Medido: com o
+   teto do pool baixado a 3, cinco falhas deixavam o worker sem conseguir nem
+   **gravar as próprias falhas** — a task voltava a `working` pela porta oposta.
+
+**A rodada de guardas, com a causa atribuída em cada estado:**
+
+| Guarda | `HEAD` | D1 aplicada | as duas |
+|---|---|---|---|
+| aquisição que estoura termina em `failed` | 🔴 32 s | 🟢 4 s | 🟢 |
+| duas instâncias, mesmo contexto, primeira lenta | 🔴 38 s | 🟢 8 s | 🟢 |
+| `completed` não é sobrescrita se o unlock falha | 🟢 | 🟢 | 🟢 |
+| falhas repetidas não esgotam o pool | 🔴 (por **D1**) | 🔴 (por **D3**) | 🟢 15 s |
+
+O passo do meio é o que dá valor à tabela: em `HEAD` o quarto guarda reprova
+**pelo motivo de D1**, e ler aquele vermelho como prova de D3 seria erro. Só com
+D1 aplicada ele passa a reprovar por esgotamento de pool — a própria exceção
+diz: `The connection pool has been exhausted (currently 3)`.
+
+**O QUE QUEM OPERA VAI VER, E COMO ISSO VAI SER LIDO ERRADO.** Depois desta
+change, **toda** segunda mensagem que espere mais de 30 s pelo lock vira falha
+**visível**. Com uma delegação consumindo até 120 s, não é caso de borda: é o
+caso normal quando a conversa anterior delegou. Vão aparecer falhas de task logo
+após o deploy, e a leitura natural é "a change quebrou alguma coisa".
+**As falhas não são novas — a visibilidade é.** Antes, a mesma conversa morria
+em silêncio, com a task presa em `working` e a `PendingDispatch` em
+`Dispatching`. Quem opera o piloto precisa saber disso **antes** de subir, senão
+o primeiro pico de `failed` vira rollback de uma change que existe para tornar
+esse número visível.
+
+**Mudança de comportamento no RabbitMQ, que não estava escrita em lugar nenhum:**
+com a correção, `ExecuteAsync` retorna normalmente e a mensagem passa a ser
+**acked** (`TaskJobConsumer.cs:55`) em vez de nacked (`:60`). É o correto — a
+task alcançou estado terminal, não há o que reprocessar.
+
+**Os 30 s continuam sendo o default do Npgsql, e não uma escolha.** Não entrou
+constante nem `IOptions<T>` de produção: escolher um valor exigiria saber quanto
+tempo uma conversa legitimamente segura o lock, e essa medição não existe (é o
+item de instrumentação, abaixo). Curto demais falha mensagem que só precisava
+esperar; longo demais não muda nada. O que mudou é o limite passar a estar
+**escrito** e a ter guarda — e está registrado que `Command Timeout=0`
+reintroduz o defeito em outra forma, com a aquisição nunca retornando.
+Os guardas encurtam o limite pela **connection string do próprio host de teste**,
+o que os fez custar segundos em vez de 30 s cada, e custar **zero** dos 13
+sítios que instanciam `AgentExecutionService`.
+
+**Três mecanismos foram para dentro de `ConversationContextLock.cs`, não para
+este arquivo**, porque é lá que quem investiga o sintoma abre primeiro: (1) o
+`pg_advisory_lock` **é distribuído por construção** — já foi afirmado o
+contrário; (2) o **Npgsql não libera advisory lock ao devolver a conexão ao
+pool**, medido, e portanto o desenho depende do `pg_advisory_unlock` explícito —
+fechar a conexão não basta; (3) **`hashtext` pode colidir**, e a colisão
+serializa duas conversas não relacionadas — degradação silenciosa, nunca
+corrupção.
+
+**Estado do piloto antes do deploy: ZERO linhas presas, e o que esse zero NÃO
+diz.** Medido em 20/09/2026 contra o Postgres do piloto: nenhuma `a2a_tasks` em
+`Working` ou `Submitted`, e nenhuma `pending_dispatches` em `Dispatching`.
+
+- **O que afirma:** no instante da medição não havia nada preso, então o
+  destravamento manual **não vira trabalho próprio**.
+- **O que NÃO afirma:** que o defeito nunca ocorreu. É observação pontual de
+  **estado**, não de histórico — `a2a_tasks` não guarda transições, e uma linha
+  que alguém tenha destravado à mão não apareceria aqui.
+- **A leitura mais provável, e também não provada:** o piloto não teve tráfego
+  concorrente suficiente. O defeito exige duas tasks do mesmo
+  `(agentId, contextId)` com a primeira passando de 30 s — mesma classe de
+  coincidência do travamento de delegação, e volume baixo esconde as duas pelo
+  mesmo motivo. **Zero é consistente com "ainda não aconteceu", não com "não
+  acontece".**
+- **NÃO É PROVA DE QUE A CORREÇÃO FUNCIONA**, e a medição é anterior ao deploy.
+  A evidência do defeito e da correção continua sendo a da exploração
+  (`Probe_LockAcquisitionTimeout`, `Probe_SameContextSlowFirst`) e os quatro
+  guardas — nunca esta contagem.
+- **O que o zero melhora, e é o motivo de valer o registro:** o banco será limpo
+  antes do deploy, e com zero acumulado o baseline seguinte fica **inequívoco** —
+  qualquer linha presa observada depois é posterior à correção, sem dano antigo
+  com que confundir.
+
+**O aviso a quem opera (task 5.3) não tem destinatário nesta fase, e isso está
+dito em vez de silenciado.** Operador e desenvolvedor são a mesma pessoa no
+projeto hoje. O propósito da task — impedir que alguém leia o primeiro pico de
+`failed` como regressão — fica coberto pelo registro acima, que é o que vai ser
+lido daqui a semanas, quando a memória já não servir. **A task volta a existir
+no instante em que alguém entrar na operação sem ter acompanhado esta change**;
+é essa a condição de reativação, e ela não é uma data.
+
+**Tamanho, medido no fim e não projetado antes** (convenção 18): produção, 2
+arquivos modificados, 164 linhas acrescentadas — das quais **48 de código** e
+111 de comentário (68%), porque os três registros acima são o entregável e não
+decoração. Teste, 1 arquivo criado, 509 linhas (332 de código). Razão de código
+teste:produção ≈ 7:1.
+
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -5834,6 +5971,37 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
 
 ## Próximo passo
 
+### Sequência de deploy fixada em 20/09/2026 (decisão desta sessão)
+
+```
+1 lock-de-contexto-falha-terminal  (esta)
+2 delegacao-ciclo-no-cadastro
+3 delegacao-diagnostico
+  → limpeza do banco + deploy das três → OBSERVAR
+4 replicas-de-worker
+5 metricas-execucao-coleta
+```
+
+**Os dois motivos que fixam a ordem** — sem eles ela parece arbitrária, e a
+tentação de antecipar a 4 é grande, porque ela é a que "resolve o problema":
+
+- **A 4 depende de observação de produção.** A decisão dela — capacidade
+  (`N ≥ C × D + 1`) ou o redesenho de retomada — exige o **`C` de pico real**,
+  que não é observável hoje e é exatamente o que a instrumentação da 3 existe
+  para produzir, **contra tráfego real**. Antecipar a 4 seria escolher um número
+  de instâncias sem a entrada que decide o número.
+- **A 5 depende da 4**, porque grava tempo de fila e origem, e o **significado**
+  desses dois números muda conforme o regime de instâncias. Coletados antes,
+  seriam medidos sobre um regime que a 4 vai trocar (convenção 22).
+
+**O que a limpeza do banco custa, escrito agora para não ser surpresa na hora:**
+reindexação de todo o conhecimento (tokens, tempo, e o gateway de embedding de
+pé), recadastro das credenciais de canal — **o webhook do WAHA é manual, o do
+Telegram é automático** —, perda da memória das conversas em andamento, e
+recadastro de agentes, servidores MCP e vínculos. Por isso a limpeza é **depois**
+da 2 e da 3: recompõe-se o cadastro **uma vez só**.
+
+
 **Concluído**: `frontend-inventario-atividade-periodo` — aplicada,
 sincronizada (`catalog-inventory-ui`, `Purpose` reescrito), arquivada e
 mergeada na `main` pelo #25 (`e7212e9`). *(Correção de status em 18/09/2026:
@@ -6291,3 +6459,116 @@ Fora da lista de candidatas de segurança, e registrados pela mesma change:
   no fechamento da change. Serve de insumo para a candidata do guarda de
   prefixos do nginx: shell, `.yml`, caminho em crase e âncoras passam por
   `scripts/check-docs.py` sem ser vistos.
+
+### Abertos por `lock-de-contexto-falha-terminal` (2026-09-20)
+
+**Dois achados de MÉTODO antes dos de produto.** Nenhum dos dois é defeito da
+implementação desta change; os dois são de como ela foi especificada e medida, e
+sem isso a próxima leitura culpa quem executou.
+
+- **A sétima medição da convenção 18 não aconteceu, e não dá para recuperar.**
+  A série fica em **seis**.
+  - **O que houve:** o `design.md` desta change não carrega projeção de
+    tamanho. A única menção à convenção 18 é o D4, que trata de outra coisa
+    (por que a régua dos 13 sítios custa zero). O fechamento trouxe o
+    **entregue** — 48 linhas de código e 111 de comentário em produção —, mas
+    sem o par projetado/entregue não há medição.
+  - **A causa é a redação da task de fechamento, não a execução.** A task 5.1
+    diz *"projetar tamanho **agora**, não antes"*. Está certa quanto ao momento
+    — a convenção manda projetar depois que a verificação fecha — e admite a
+    leitura "meça no fim". Foi executada assim, corretamente, contra o que
+    estava escrito. **"Depois da verificação" significa depois de LER o código,
+    antes de ESCREVÊ-LO. Projeção feita com o diff na mão não é projeção.**
+  - **Passou por três rodadas de revisão sem ninguém notar**, inclusive por quem
+    revisou. É o que torna isto achado de método e não descuido.
+  - **A correção para a próxima:** a projeção entra no **`design.md`**, junto
+    com o fechamento da verificação, e a task de fechamento apenas **compara**.
+    Duas tarefas distintas, em artefatos distintos — nunca uma só, no fim.
+  - **Gatilho e posição:** a próxima change que incluir projeção de tamanho, ou
+    seja **`delegacao-ciclo-no-cadastro`**, a seguinte na fila. Não é gatilho
+    aberto: tem dono.
+
+- **Segunda ocorrência da família "produção dobrou em linhas por comentário, não
+  por lógica".** A primeira está registrada em `dedupe-global-nome-de-tool`
+  (causa 2 daquele fechamento), onde `ToolOrigin`/`RenamedAIFunction` eram
+  documentação de decisão. Aqui é **registro de mecanismo** — mesmo mecanismo,
+  contexto diferente.
+  - **O número, com o escopo colado** (convenção 22): **48 linhas de lógica
+    contra 111 de comentário**, em `apps/workers/src/Buteco.Workers/Agents/`,
+    numa change cujo entregável **inclui três registros de mecanismo** (D6). A
+    proporção não é inchaço: os três registros são o produto.
+  - **Regra candidata, escrita agora para não precisar ser reconstruída da
+    terceira vez:** *projetar linhas de produção por "linhas de lógica"
+    subestima por construção em change cujo entregável inclui registro de
+    decisão ou de mecanismo — nessas, o comentário é o produto.*
+  - **Gatilho para promover ao `01`:** a **terceira** ocorrência.
+  - **Posição:** a promoção não é trabalho próprio — entra no fechamento da
+    change que produzir a terceira.
+  - *(Nota de parentesco, porque as duas ocorrências carregam a mesma régua com
+    números diferentes: a causa 1 daquele mesmo fechamento registrou "**12
+    arquivos**" para o custo de injetar dependência em `AgentExecutionService`;
+    esta change recontou **13**, e descobriu que o número já tinha circulado
+    como 15 e como 16 — cada um somando um escopo diferente. A régua vale com o
+    escopo colado: **13 sítios de instanciação** (12 em `apps/workers/tests/`
+    mais 1 em `tests/InboxOrchestratorRoundTrip.Tests/`), e **13 definições de
+    `BuildHost` em `apps/workers/tests/`** — conjuntos distintos que coincidem
+    por acaso.)*
+
+
+Os dois primeiros vêm da exploração `replicas-de-worker` e **não** foram
+resolvidos por esta change. Gatilho **e** posição nos dois — gatilho sem posição
+é adiamento indefinido com outro nome, e este arquivo já registra três
+ocorrências dessa família.
+
+- **Varredura de `PendingDispatch` órfã em `Dispatching` (`apps/inbox`).** Esta
+  change removeu o vazamento que **alimentava** aquele estado: com a task em
+  `failed`, a push notification dispara e `PushNotificationEndpoints` resolve e
+  remove a linha pelo caminho que já existe. O estado residual continua
+  alcançável por **outro** mecanismo — a instância morrer entre o commit do
+  `MarkDispatching` e o `SendMessageAsync` —, e nada varre `Dispatching`.
+  Ficou de fora por três motivos, nesta ordem: é outro app, outra capability e
+  outra fixture; é outro mecanismo, então a rodada da convenção 15 teria de
+  reprovar contra dois defeitos diferentes, e o da varredura não é reproduzido
+  por nada que esta change construa; e a correção certa lá não é óbvia — varrer
+  `Dispatching` por idade precisa de um limiar, com o mesmo problema dos 30 s.
+  - **Gatilho:** a primeira `PendingDispatch` observada em `Dispatching` por mais
+    tempo que o máximo plausível de execução, **depois** desta change estar em
+    produção — só então a observação isola o mecanismo residual em vez de
+    reproduzir este defeito.
+  - **Posição:** depois da change de instrumentação abaixo, que é o que produz a
+    observação do gatilho.
+
+- **Ciclo de delegação `A→B→…→A` autotrava no advisory lock.** `apps/api` recusa
+  só a auto-delegação de um salto (`ReplaceAgentDelegationsCommandHandler.cs:29-36`,
+  com a Decision 3 registrando ciclo geral como fora de escopo). Num ciclo, a
+  task de A no depth 2 pede o lock de `(A, contexto)` que a de depth 0 segura
+  enquanto espera B. **Medido com quatro instâncias: não adianta ter réplica** —
+  a cadeia trava até o timeout, e antes desta change deixava uma task órfã em
+  `working`. Com a change, ela agora termina em `failed`, mas a delegação segue
+  expirando.
+  - **Gatilho:** já cumprido — o ciclo é aceitável pelo cadastro hoje.
+  - **Posição:** **a próxima da fila** depois desta. Corrigir no cadastro
+    (detectar ciclo em `ReplaceAgentDelegations`) é mais barato que no runtime.
+
+- **Instrumentação de delegação e de task presa.** Uma delegação que expira por
+  contenção devolve ao modelo o texto de indisponibilidade, o agente responde
+  alguma coisa, e **a task do Source conclui como `completed`** — uma métrica de
+  erro baseada em estado terminal é cega a ela. O único rastro é um `warn` com
+  dois campos (`TargetTaskId`, `Timeout`), que não distingue contenção de um
+  Target genuinamente lento.
+  - **Gatilho:** a primeira delegação expirada observada em produção, ou a
+    primeira aquisição de lock que falhe — que, depois desta change, é evento
+    visível.
+  - **Posição:** **antes** de qualquer decisão sobre número de instâncias ou
+    sobre o valor dos 30 s. É ela que produz as duas entradas que faltam:
+    quanto tempo uma conversa segura o lock, e qual é o `C` de pico de conversas
+    delegando ao mesmo tempo.
+
+- **Linhas já presas no piloto não são corrigidas por esta change.** São dado,
+  não código: o deploy não destrava task já em `working` nem `PendingDispatch`
+  já em `Dispatching`, e não há migration aqui.
+  - **Gatilho:** o próprio deploy.
+  - **Posição:** inspeção manual **na janela do deploy**, contando `a2a_tasks`
+    em `working` mais velhas que o máximo plausível de execução e
+    `pending_dispatches` em `Dispatching`. É esse número que diz se o
+    destravamento manual vira trabalho próprio ou é caso isolado.

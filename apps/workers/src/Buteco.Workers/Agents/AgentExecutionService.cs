@@ -155,8 +155,51 @@ public sealed class AgentExecutionService(
         // contextId) entre instâncias concorrentes do worker — ver
         // design.md, Decisão 7. Cobre a seção crítica inteira: leitura da
         // sessão anterior → RunAsync → escrita da nova.
-        await using var contextLock = await ConversationContextLock.AcquireAsync(
-            scopeFactory, message.AgentId, message.ContextId, cancellationToken);
+        //
+        // TRATAMENTO PRÓPRIO, SEPARADO DO `catch` GRANDE LÁ EMBAIXO, e não por
+        // gosto de simetria — ver design.md da change
+        // lock-de-contexto-falha-terminal, D1. A aquisição pode falhar: ela
+        // espera pelo lock e essa espera é limitada pelo `CommandTimeout` do
+        // Npgsql (30 s por default), então estourar é caminho de operação, não
+        // curiosidade. Antes desta change a exceção escapava de `ExecuteAsync`
+        // inteiro e o `catch` de TaskJobConsumer descartava a mensagem — a task
+        // ficava em `working` PARA SEMPRE, e com ela a PendingDispatch de
+        // apps/inbox ficava em `Dispatching` e a mensagem do usuário sumia sem
+        // erro nenhum. Medido, não deduzido.
+        //
+        // NÃO MOVER O `await using` PARA DENTRO DO `try` ABAIXO para "unificar"
+        // os dois caminhos. É a correção que parece óbvia e destrói dado:
+        // `await using` dentro de um bloco dispara o DisposeAsync ao sair dele,
+        // e numa exceção o finally implícito roda ANTES do catch externo. O
+        // DisposeAsync solta o lock numa conexão que pode ter morrido, e aí o
+        // catch pegaria essa falha DEPOIS de a task já estar gravada como
+        // `completed` — e ApplyStepAsync não tem guarda de estado terminal,
+        // então regravaria como `failed`, perdendo a resposta do agente junto.
+        // UnlockFailingAfterCompletion_LeavesTaskCompleted_WithArtifactPreserved
+        // é o guarda que prende isto.
+        ConversationContextLock acquiredLock;
+        try
+        {
+            acquiredLock = await ConversationContextLock.AcquireAsync(
+                scopeFactory, message.AgentId, message.ContextId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // ContextId no log não é enfeite: é o único campo que liga esta
+            // falha à conversa que estava segurando o lock, que é a única coisa
+            // acionável aqui.
+            logger.LogError(
+                ex,
+                "Falha ao adquirir o lock de contexto do agente {AgentId} no contexto {ContextId} para a task {TaskId}",
+                message.AgentId,
+                message.ContextId,
+                message.TaskId);
+
+            await FailTaskAsync(taskStore, message, task, cancellationToken);
+            return;
+        }
+
+        await using var contextLock = acquiredLock;
 
         try
         {
@@ -302,19 +345,46 @@ public sealed class AgentExecutionService(
         {
             logger.LogError(ex, "Falha ao executar o agente {AgentId} para a task {TaskId}", message.AgentId, message.TaskId);
 
-            var savedTask = await ApplyStepAsync(
-                taskStore,
-                message.TaskId,
-                message.ContextId,
-                task,
-                updater => updater.FailAsync(cancellationToken: cancellationToken),
-                cancellationToken,
-                message.PushNotificationConfig is not null
-                    ? failedTask => failedTask.Metadata = BuildTerminalMetadata(conversationSessionValue: null, message.PushNotificationConfig)
-                    : null);
-
-            await SendPushNotificationIfConfiguredAsync(message, savedTask, cancellationToken);
+            await FailTaskAsync(taskStore, message, task, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Termina a task em <c>failed</c> e dispara a push notification, se houver
+    /// — a sequência terminal de falha, compartilhada pelos <b>dois</b> caminhos
+    /// que falham: a aquisição do <see cref="ConversationContextLock"/> e a
+    /// execução em si.
+    /// </summary>
+    /// <remarks>
+    /// Extraída porque os dois caminhos precisam gravar o mesmo estado terminal
+    /// e disparar a mesma notificação, e duplicar isso é convidar os dois a
+    /// divergirem. <b>O que NÃO é compartilhado é o log</b>: cada caminho
+    /// nomeia os campos que tornam a sua falha acionável, e o da aquisição
+    /// precisa do <c>ContextId</c>, que o da execução não usa.
+    ///
+    /// <para>
+    /// <c>conversationSessionValue: null</c> nos dois casos, de propósito: uma
+    /// task que falhou não tem sessão válida para publicar, e a última sessão
+    /// persistida (de uma task <c>completed</c> anterior) tem que permanecer
+    /// intacta — ver design.md da change apps-workers-historico-conversa,
+    /// Decisões 1 e 6.
+    /// </para>
+    /// </remarks>
+    private async Task FailTaskAsync(
+        ITaskStore taskStore, TaskJobMessage message, AgentTask task, CancellationToken cancellationToken)
+    {
+        var savedTask = await ApplyStepAsync(
+            taskStore,
+            message.TaskId,
+            message.ContextId,
+            task,
+            updater => updater.FailAsync(cancellationToken: cancellationToken),
+            cancellationToken,
+            message.PushNotificationConfig is not null
+                ? failedTask => failedTask.Metadata = BuildTerminalMetadata(conversationSessionValue: null, message.PushNotificationConfig)
+                : null);
+
+        await SendPushNotificationIfConfiguredAsync(message, savedTask, cancellationToken);
     }
 
     /// <summary>
