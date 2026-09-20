@@ -1,15 +1,4 @@
-# agent-delegation-binding Specification
-
-## Purpose
-
-TBD - defined by change backend-agente-delegacao-catalogo-vinculo. Update
-Purpose after archive. Cobre o cadastro (catálogo) do vínculo unidirecional
-de delegação entre agentes (Agent → Agent): um agente pode ser configurado
-com um conjunto de agentes para os quais delega. Esta capability trata
-apenas do cadastro/persistência do vínculo — não cobre a execução de
-delegações em tempo de execução.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Substituição do conjunto de delegações de saída de um agente
 O sistema SHALL permitir, via `apps/api`, definir o conjunto completo de
@@ -74,6 +63,8 @@ um ciclo de delegação.
   `targetAgentIds` o id de um agente com `isActive: false`
 - **THEN** a API cria a delegação normalmente, sem rejeitar por causa do
   estado inativo do agente Target
+
+## ADDED Requirements
 
 ### Requirement: Recusa de ciclo de delegação no cadastro
 O sistema SHALL rejeitar, em `apps/api`, qualquer operação de substituição do
@@ -140,13 +131,23 @@ múltiplos entre dois agentes sem fechar ciclo.
 - **THEN** a API responde com HTTP 200 e aplica o novo conjunto, em vez de
   rejeitar a operação por causa do ciclo que ela desfaz
 
-### Requirement: Persistência durável do vínculo de delegação entre agentes
-O sistema SHALL persistir o vínculo de delegação entre agentes em
-PostgreSQL, sem uso de armazenamento em memória, garantindo que os dados
-sobrevivam a reinícios da aplicação.
+## REMOVED Requirements
 
-#### Scenario: Vínculo sobrevive a restart da API
-- **WHEN** um agente é vinculado como delegação de saída de outro e o
-  processo de `apps/api` é reiniciado
-- **THEN** uma consulta subsequente que retorne as delegações de saída
-  desse agente continua refletindo o mesmo vínculo
+### Requirement: Nenhuma detecção de ciclo ou de vínculo bidirecional no cadastro
+**Reason**: O mecanismo de dano foi medido e é inerente ao desenho da execução de
+delegação, não à contagem de processos. Um ciclo `A→B→…→A` autotrava no advisory
+lock de contexto: a task do agente Source em profundidade 0 segura
+`pg_advisory_lock(hashtext(agente), hashtext(contexto))` enquanto espera o
+Target, e a task do mesmo agente em profundidade 2 bloqueia no mesmo lock.
+Medido na exploração `replicas-de-worker` com quatro instâncias de worker — o
+travamento não é resolvido por réplica. O `DelegationDepthLimit` (5) não cobre o
+caso, porque a checagem de profundidade roda antes da aquisição do lock e um
+ciclo de dois saltos trava em profundidade 2.
+
+**Migration**: O cadastro de ciclo passa a ser recusado com HTTP 400 pelo
+requisito "Recusa de ciclo de delegação no cadastro". Vínculos de ciclo já
+persistidos não são apagados por esta mudança e continuam sendo lidos
+normalmente pela execução; eles são desfeitos editando qualquer um dos agentes
+do ciclo e removendo a delegação que o fecha, o que continua sendo aceito. Não
+há migration de banco: a detecção é validação de cadastro sobre a tabela
+`agent_delegations` existente.

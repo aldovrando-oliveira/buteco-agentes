@@ -3733,6 +3733,185 @@ decoração. Teste, 1 arquivo criado, 509 linhas (332 de código). Razão de có
 teste:produção ≈ 7:1.
 
 
+### Ciclo de delegação recusado no cadastro (`delegacao-ciclo-no-cadastro`, 2026-09-20)
+
+**Segunda change da fila aberta pela exploração `replicas-de-worker`, e o
+gatilho dela já estava cumprido: o ciclo era aceito pelo cadastro.** Um ciclo
+`A→B→…→A` autotrava no advisory lock de contexto — a task de A em profundidade 0
+segura `pg_advisory_lock(hashtext(A), hashtext(ctx))` enquanto espera B, e a task
+de A em profundidade 2 bloqueia no mesmo lock. Medido com **quatro** instâncias
+de worker: réplica nenhuma resolve, porque o recurso disputado é o lock e não o
+consumidor.
+
+**NÃO ERA LACUNA: ERA REQUISITO.** A spec `agent-delegation-binding` carregava
+*"Nenhuma detecção de ciclo ou de vínculo bidirecional no cadastro"* com dois
+cenários, e `AgentDelegationEndpointsTests` tinha os dois testes **verdes**
+correspondentes. Corrigir passou por **inverter** requisito, cenários e testes —
+o requisito saiu como `REMOVED` com a razão e a migração escritas. É diferente
+de acrescentar validação a um cadastro que não a tinha, e a diferença aparece no
+diff: dois guardas que hoje afirmam a recusa afirmavam o contrário ontem.
+
+**A verificação mudou o enunciado antes de qualquer código ser escrito**, e é o
+que a convenção 6 compra:
+
+- **A task de profundidade 2 não fica mais órfã.** Com
+  `lock-de-contexto-falha-terminal` aplicada, `AgentExecutionService` tem
+  `try/catch` próprio na aquisição e chama `FailTaskAsync` — a task termina em
+  `failed` quando o `CommandTimeout` de 30 s estoura. **O defeito continua**: a
+  delegação não acontece. O que se ganhou foi observabilidade, não correção.
+- **E o texto que o Source vê mudou junto.** `AgentDelegationToolSetResolver`
+  detecta qualquer estado terminal e devolve *"Delegação não concluída com
+  sucesso (estado final: Failed)"* — não mais *"não concluiu dentro do tempo
+  limite"*, que é o ramo de `OperationCanceledException`. **Quem restaurasse a
+  sonda `Probe_CycleAB_A` como estava veria o guarda reprovar por texto e leria
+  isso como regressão.** É o achado que fez o guarda mudar de camada.
+- **O `DelegationDepthLimit` (5) não cobre**, e afirmar que cobre seria falso: a
+  checagem de profundidade roda **antes** da aquisição do lock, então o ciclo de
+  dois saltos passa por ela e trava em profundidade 2.
+
+**O inventário é o argumento inteiro de "o cadastro basta".**
+`ReplaceAgentDelegationsCommandHandler` é o **escritor único** de
+`agent_delegations`: `apps/workers` só lê (`AsNoTracking`, entidade com
+construtor e setters privados) e `apps/inbox` não toca a tabela. Fechado o
+cadastro, o ciclo deixa de ter porta de entrada — defesa em profundidade defende
+contra uma **segunda** porta, e enquanto não houver, ela defende contra nada e
+cobra o preço de existir. **Gatilho de reabertura, observável:** o primeiro
+segundo escritor da tabela (importação de catálogo, seed de ambiente, cópia de
+agente). Quem o acrescentar reabre a decisão.
+
+**O residual está nomeado.** Um ciclo ainda entra por SQL direto — é assim que o
+próprio guarda G5 monta o cenário herdado. Nesse caso a cadeia trava no lock e,
+desde a change anterior, termina visivelmente em `failed` em ~30 s. Tem dono
+(quem escreveu o SQL) e tem sintoma.
+
+**A rodada de guardas, com a causa atribuída em cada estado:**
+
+| Guarda | `HEAD` | depois |
+|---|---|---|
+| par bidirecional `A→B` + `B→A` recusado (a forma de `Probe_CycleAB_A`) | 🔴 | 🟢 |
+| ciclo indireto `A→B→C→A` recusado | 🔴 | 🟢 |
+| ciclo de quatro saltos recusado | 🔴 | 🟢 |
+| a recusa por ciclo é atômica | 🔴 | 🟢 |
+| o 400 nomeia o caminho, por nome de agente | 🔴 | 🟢 |
+| losango `A→B`, `A→C`, `B→D`, `C→D` continua aceito | 🟢 | 🟢 |
+| desfazer um ciclo herdado é aceito | 🟢 | 🟢 |
+| auto-delegação mantém a mensagem própria | 🟢 | 🟢 |
+| o detector acha ciclo de N saltos (12 casos, unitário) | — | 🟢 |
+
+Os cinco vermelhos reprovaram todos com `Expected: BadRequest, Actual: OK` — a
+causa é o defeito, não arranjo. **Os três verdes passam nos dois lados de
+propósito**, e é isso que a convenção 15 avisa que engana: não provam nada sobre
+o defeito, e prendem a **correção errada** — detecção forte demais (o losango),
+travessia contra o grafo pré-replace (o ciclo herdado) e a regra geral engolindo
+a mensagem própria (auto-delegação).
+
+**O guarda do ciclo herdado semeia por SQL direto nas DUAS rodadas, e essa foi
+uma correção de redação feita antes do apply.** A primeira redação dizia que ele
+precisava da semeadura *"depois da correção"*. Montá-lo pela API funciona em
+`HEAD` e passa a devolver 400 depois da correção — o guarda ficaria vermelho na
+segunda rodada **por falha de arranjo**, não pela propriedade que afirma. Mesma
+família do achado do parágrafo da sonda, encontrada duas vezes na mesma change,
+em pontos diferentes.
+
+**A travessia roda contra o grafo PÓS-REPLACE, e não é detalhe.** A operação é
+`replace`: percorrendo o grafo atual, a edição que **desfaz** um ciclo seria
+recusada por causa do ciclo que ela está desfazendo, e quem herdasse um ciclo
+ficaria preso nele. Conferido por execução real contra a API de verdade: com
+`A→B→C→A` semeado por SQL, re-salvar A com `[B]` dá 400 e esvaziar as delegações
+de A dá 200.
+
+**Verificação por execução real** (convenção 6), contra `apps/api` rodando no
+Postgres de desenvolvimento: três agentes, `A→B` e `B→C` aceitos, `C→A`
+recusado com
+
+```
+400  errors.targetAgentIds:
+"Esta delegação fecha um ciclo entre agentes: ZZ Ciclo Charlie → ZZ Ciclo Alfa →
+ ZZ Ciclo Bravo → ZZ Ciclo Charlie. Um agente não pode delegar, direta ou
+ indiretamente, para um agente que delega de volta para ele."
+```
+
+O caminho inteiro está na mensagem, e não só o fato, porque **o vínculo a
+desfazer pode estar em outro agente** — ali é a aresta `C→A`, salva a partir de
+C, mas num ciclo salvo a partir de A seria uma aresta que A não controla. O
+banco de desenvolvimento foi devolvido a **zero linhas** em `agent_delegations`
+depois da verificação.
+
+**Sem migration e sem passo de deploy.** A detecção é validação de cadastro
+sobre a tabela existente; nenhuma linha é criada, alterada ou apagada pela
+change, e o rollback é reverter o commit.
+
+**Três escopos, declarados no `proposal.md` porque misturar sem dizer é o que
+torna um diff ilegível**, e nenhum arquivo é tocado por mais de um: a detecção de
+ciclo em `apps/api/src/…/AgentDelegations/`; o carve de `AgentDeactivationTests`
+(item de fila cuja posição registrada era exatamente esta change); e a forma
+curta da convenção 22 no `01`. A conferência de escopo de arquivo fechou com
+**zero violações** — `apps/workers`, `apps/frontend`, `apps/inbox`, `libs/`,
+compose, `docs/` e migrations intocados.
+
+**Suítes:** `apps/api` **335/335** (baseline de 318/318 depois do escopo 2, +17
+testes), `apps/frontend` **921/921** em 84 arquivos.
+
+**A SÉTIMA MEDIÇÃO DA CONVENÇÃO 18 EXISTE, e a série volta a andar.** Ela tinha
+ficado em seis porque a change anterior trouxe o entregue sem o projetado. A
+forma que funcionou é a estrutural: **a projeção no `design.md`**, junto com o
+fechamento da verificação — depois de ler o código, antes de escrevê-lo — e a
+task de fechamento **apenas comparando**. Duas tarefas, dois artefatos.
+
+| | projetado | entregue |
+|---|---|---|
+| produção, lógica | ~57 | **92** |
+| produção, comentário | ~79 | **121** |
+| produção, total | ~136 | **213** |
+| teste, acrescentadas | ~284 | **365** |
+| teste : produção | 2,1 : 1 | **1,57 : 1** |
+| comentário : lógica | 1,4 : 1 | **1,32 : 1** |
+
+**A mistura acertou e o volume errou, e são causas diferentes.** Isso é o
+resultado que vale guardar:
+
+- **Comentário:lógica é projetável** perguntando *quantos registros de mecanismo
+  a change entrega*. A anterior entregava três e deu 2,3:1; esta entrega um e
+  deu 1,32:1, projetada em 1,4:1. **Terceira ocorrência da família "o comentário
+  é o produto", e de sinal contrário às duas primeiras:** foi a aplicação
+  preventiva da regra candidata, e ela segurou. **Promovida ao `01` (convenção
+  18) com essa evidência junto** — evidência preventiva é mais forte que três
+  falhas, mesmo raciocínio da quinta evidência da convenção 22.
+- **Contagem de componentes não é projetável de cabeça**, e foi ela que errou:
+  +57% em produção, inteiramente no detector, que virou **duas** funções
+  públicas em vez de uma — `BuildGraph` saiu do handler para ser função pura
+  testável isolada, e o handler não encolheu em troca.
+
+**E as duas direções de erro nomeadas de antemão no `design.md` estavam as duas
+erradas.** Nenhuma aconteceu, e o desvio veio de um terceiro lugar que não
+estava na lista. **Nomear direções de erro não substitui contar componentes** —
+é a contagem que carrega a projeção, e é essa a correção para a oitava.
+
+**`apps/workers` reprovou 1 de 256 na primeira rodada de fechamento, e NÃO é
+desta change.** A prova mais forte não é a repetição: **a change não modifica
+nenhum arquivo de `apps/workers`**, então o binário sob teste é byte-a-byte o de
+`HEAD`. Mas "pré-existente" e "ambiental" exigem a baseline (convenção 19),
+então a discriminação foi feita:
+
+| rodada | escopo | load na largada | resultado |
+|---|---|---|---|
+| 1 | suíte inteira | — | **255/256** |
+| 2 | o teste sozinho | — | **passa** |
+| 3 | a classe sozinha | — | **3/3** |
+| 4 | suíte inteira, com a rodada 1 ainda encerrando containers | **3,16** | inutilizável — uma classe inteira reprovando em ~12 s, assinatura de falha de fixture, não de teste |
+| 5 | suíte inteira, máquina quieta | **2,84** | **256/256** |
+
+A reprovada é
+`KnowledgeToolExecutionEndToEndTests.RoundTrip_EmbeddingProviderFails_TaskStillCompletes`,
+e o formato é o da família já registrada duas vezes aqui: **limiar de carga do
+`WorkerHostCollection`, calibrado para 7 classes de host** e hoje citado sobre
+bem mais — exatamente o que o gatilho de recalibração da convenção 22 previa.
+**A rodada 4 é a que vale guardar junto**, porque ela é o custo de medir sob
+contenção: o sintoma muda de forma (de um teste para uma classe inteira, de
+minutos para segundos) e quem lesse só o número leria como regressão grave. Uma
+medição feita enquanto a medição anterior ainda desmonta não é medição.
+
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -4370,6 +4549,20 @@ Cada um tem gatilho de quando revisitar:
   **pior que verificação nenhuma**, porque um campo sem aviso convida a olhar e
   um campo com aviso verde afirma que já foi olhado. `grep TBD` verde diz "o
   `Purpose` foi conferido". Não diz.
+
+- ~~**`AgentDeactivationTests` depende da ordem de execução**~~ — **RESOLVIDO
+  em 20/09/2026, por `delegacao-ciclo-no-cadastro`, na posição que estava
+  registrada aqui** ("antes da próxima change que tocar `apps/api`"). A
+  correção é por-agente e não `Clear()` entre testes: cada teste cria o próprio
+  agente, e filtrar as mensagens publicadas por `AgentId` é independente de
+  ordem **por construção** — `Clear()` também faria a classe passar hoje, mas
+  depende de os testes não rodarem em paralelo, que é propriedade do runner e
+  não do teste. Medido nos dois estados: antes, suíte 317/318, classe 2/3,
+  teste sozinho aprovado; depois, **classe 3/3 e suíte 318/318**. O texto
+  original fica abaixo porque o mecanismo continua valendo como registro, e
+  porque o item é o exemplo mais caro desta base de "gatilho imediato que não
+  dispara": foi aberto como imediato, e só saiu quando alguém lhe deu
+  **posição**.
 
 - **`AgentDeactivationTests` depende da ordem de execução** — achado durante
   `knowledge-base-catalogo-documentos`, pré-existente e não relacionado a ela.
@@ -5973,26 +6166,41 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
 
 ### Sequência de deploy fixada em 20/09/2026 (decisão desta sessão)
 
+**Esta é a única cópia viva da fila.** Qualquer item aberto que precise de
+posição aponta para cá e **nomeia** a change, em vez de dizer "a próxima" (ver a
+correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`").
+
 ```
-1 lock-de-contexto-falha-terminal  (esta)
-2 delegacao-ciclo-no-cadastro
+1 lock-de-contexto-falha-terminal   ✔ aplicada e arquivada
+2 delegacao-ciclo-no-cadastro       ✔ aplicada  (arquivar)
 3 delegacao-diagnostico
-  → limpeza do banco + deploy das três → OBSERVAR
-4 replicas-de-worker
-5 metricas-execucao-coleta
+4 frontend-mensagem-recusa-ciclo
+  → limpeza do banco + deploy das correções → OBSERVAR
+5 replicas-de-worker
+6 metricas-execucao-coleta
 ```
 
-**Os dois motivos que fixam a ordem** — sem eles ela parece arbitrária, e a
-tentação de antecipar a 4 é grande, porque ela é a que "resolve o problema":
+**Os motivos que fixam a ordem** — sem eles ela parece arbitrária, e a tentação
+de antecipar a `replicas-de-worker` é grande, porque ela é a que "resolve o
+problema":
 
-- **A 4 depende de observação de produção.** A decisão dela — capacidade
-  (`N ≥ C × D + 1`) ou o redesenho de retomada — exige o **`C` de pico real**,
-  que não é observável hoje e é exatamente o que a instrumentação da 3 existe
-  para produzir, **contra tráfego real**. Antecipar a 4 seria escolher um número
-  de instâncias sem a entrada que decide o número.
-- **A 5 depende da 4**, porque grava tempo de fila e origem, e o **significado**
-  desses dois números muda conforme o regime de instâncias. Coletados antes,
-  seriam medidos sobre um regime que a 4 vai trocar (convenção 22).
+- **A `replicas-de-worker` depende de observação de produção.** A decisão dela —
+  capacidade (`N ≥ C × D + 1`) ou o redesenho de retomada — exige o **`C` de pico
+  real**, que não é observável hoje e é exatamente o que a instrumentação da
+  `delegacao-diagnostico` existe para produzir, **contra tráfego real**.
+  Antecipar seria escolher um número de instâncias sem a entrada que decide o
+  número.
+- **A `metricas-execucao-coleta` depende da `replicas-de-worker`**, porque grava
+  tempo de fila e origem, e o **significado** desses dois números muda conforme o
+  regime de instâncias. Coletados antes, seriam medidos sobre um regime que a
+  troca de regime vai invalidar (convenção 22).
+- **A `frontend-mensagem-recusa-ciclo` entra na 4, e não antes nem depois do
+  deploy** (acrescentada em 20/09/2026, no fechamento da 2). Não antes da 3
+  porque a instrumentação é a única do lote que não pode esperar, e a mensagem da
+  tela não bloqueia nada. Não depois do deploy porque o defeito dela **nasceu na
+  2**: o 400 por ciclo é recusa permanente e a tela manda tentar de novo, então
+  deployar a detecção sem a mensagem entrega ao operador uma recusa que ele não
+  consegue interpretar. A change é pequena — o backend já manda o texto pronto.
 
 **O que a limpeza do banco custa, escrito agora para não ser surpresa na hora:**
 reindexação de todo o conhecimento (tokens, tempo, e o gateway de embedding de
@@ -6466,6 +6674,38 @@ Fora da lista de candidatas de segurança, e registrados pela mesma change:
 implementação desta change; os dois são de como ela foi especificada e medida, e
 sem isso a próxima leitura culpa quem executou.
 
+- ~~**A sétima medição da convenção 18 não aconteceu, e não dá para
+  recuperar.**~~ — **CUMPRIDA em 20/09/2026, por `delegacao-ciclo-no-cadastro`,
+  exatamente na posição registrada abaixo. A série está em SETE.** Foi a
+  **primeira medição com o par completo** desde que a estrutura foi corrigida:
+  projeção no `design.md` junto com o fechamento da verificação, comparação na
+  task de fechamento — duas tarefas, dois artefatos. O texto original fica
+  abaixo porque a causa continua valendo como registro de método.
+
+  **O resultado, colado aqui porque é o que a oitava medição vai querer ler, e
+  reconstruí-lo depois custa mais do que escrevê-lo agora:**
+
+  | | projetado | entregue |
+  |---|---|---|
+  | produção, total | ~136 | **213** (+57%) |
+  | comentário : lógica | 1,4 : 1 | **1,32 : 1** |
+  | teste : produção | 2,1 : 1 | **1,57 : 1** |
+
+  - **A mistura acertou.** 1,32:1 contra 1,4:1 projetado — a proporção
+    comentário/lógica é projetável, desde que se pergunte quantos registros de
+    mecanismo a change entrega.
+  - **O volume errou para cima, e as DUAS direções de erro nomeadas de antemão
+    no `design.md` estavam as duas erradas.** Nenhuma das duas aconteceu; o
+    desvio veio de um terceiro lugar que não estava na lista.
+  - **A causa foi a contagem de componentes:** o detector de ciclo virou **duas**
+    funções públicas em vez de uma — `BuildGraph` saiu do handler para ser função
+    pura testável isolada, e o handler não encolheu em troca.
+  - **O achado, e é a dimensão que falta no modelo:** a proporção
+    comentário/lógica já é previsível; o **tamanho absoluto não é**, porque
+    nenhuma régua desta base cobre *"quantas unidades públicas o desenho vai
+    produzir"*. Nomear direções de erro não substitui contar componentes — é a
+    contagem que carrega a projeção, e é por aí que a oitava começa.
+
 - **A sétima medição da convenção 18 não aconteceu, e não dá para recuperar.**
   A série fica em **seis**.
   - **O que houve:** o `design.md` desta change não carrega projeção de
@@ -6538,6 +6778,33 @@ ocorrências dessa família.
   - **Posição:** depois da change de instrumentação abaixo, que é o que produz a
     observação do gatilho.
 
+- ~~**Ciclo de delegação `A→B→…→A` autotrava no advisory lock.**~~ —
+  **RESOLVIDO NO CADASTRO em 20/09/2026, por `delegacao-ciclo-no-cadastro`, na
+  posição que estava registrada abaixo. E a fronteira está nesta mesma frase
+  porque sem ela "resolvido" é lido como proteção total:**
+
+  - **Resolvido no cadastro, em `apps/api`:** `PUT /agents/{id}/delegations`
+    recusa com **400** qualquer conjunto que feche ciclo de **qualquer
+    comprimento**, com o caminho nomeado na mensagem. O requisito de spec que
+    autorizava ciclo saiu como `REMOVED`.
+  - **NÃO resolvido no runtime, e isso é decisão registrada** (D3 do `design.md`
+    da change): **nenhuma** defesa em profundidade foi acrescentada em
+    `apps/workers`. O que sustenta a suficiência é o inventário do **escritor
+    único** — `ReplaceAgentDelegationsCommandHandler` é o único que escreve em
+    `agent_delegations`; `apps/workers` só lê e `apps/inbox` não toca a tabela.
+  - **O residual continua nomeado:** escrita direta em `agent_delegations` por
+    fora do cadastro contorna a detecção inteira, e é assim que o próprio guarda
+    do ciclo herdado monta o cenário. Nesse caso a cadeia trava no lock e termina
+    em `failed` em ~30 s, visível. **Gatilho de reabertura de D3 registrado como
+    item próprio** em "Abertos por `delegacao-ciclo-no-cadastro`": o primeiro
+    **segundo** escritor da tabela.
+  - **O `DelegationDepthLimit` (5) não é a rede de segurança do residual**, e
+    dizê-lo seria falso: a checagem de profundidade roda **antes** da aquisição
+    do lock, então um grafo semeado por fora com ciclo de dois saltos trava em
+    profundidade 2, bem abaixo do teto.
+
+  O texto original fica abaixo porque o mecanismo continua valendo como registro.
+
 - **Ciclo de delegação `A→B→…→A` autotrava no advisory lock.** `apps/api` recusa
   só a auto-delegação de um salto (`ReplaceAgentDelegationsCommandHandler.cs:29-36`,
   com a Decision 3 registrando ciclo geral como fora de escopo). Num ciclo, a
@@ -6572,3 +6839,90 @@ ocorrências dessa família.
     em `working` mais velhas que o máximo plausível de execução e
     `pending_dispatches` em `Dispatching`. É esse número que diz se o
     destravamento manual vira trabalho próprio ou é caso isolado.
+
+### Abertos por `delegacao-ciclo-no-cadastro` (2026-09-20)
+
+**Gatilho e posição nos três** — gatilho sem posição é adiamento indefinido com
+outro nome, e o item de `AgentDeactivationTests` que esta change acabou de
+fechar é a prova mais cara disso nesta base: nasceu "gatilho imediato" e ficou
+duas changes parado até alguém lhe dar posição.
+
+- **A tela de vínculos reporta a recusa por ciclo como *"Tente novamente"*.**
+  `AgentDelegationsTab.tsx:68-74` responde a qualquer erro com *"Não foi
+  possível atualizar as delegações do agente. Tente novamente."* — e o
+  `onError: () => {...}` **descarta o argumento de erro inteiro**, então
+  `problem.errors.targetAgentIds`, que agora carrega o caminho do ciclo, é
+  jogado fora. Para uma recusa permanente isso afirma mais do que o sistema sabe
+  (convenção 13): tentar de novo nunca vai funcionar. Ficou fora desta change
+  por convenção 1 (backend antes de UI), não por esquecimento — e a correção lá
+  é de apresentação pura, porque o backend já manda o texto pronto.
+  - **Gatilho:** cumprido no instante em que esta change subir.
+  - **Posição:** change própria de `apps/frontend`, chamada
+    **`frontend-mensagem-recusa-ciclo`**, **depois de `delegacao-diagnostico` e
+    antes da limpeza do banco e do deploy**. Ver a sequência em
+    `## Próximo passo`, que é a única cópia viva da fila.
+  - **Por que não antes da `delegacao-diagnostico`:** a instrumentação é a única
+    do lote que **não pode esperar**. Sem ela o `C` de pico não é observável, e a
+    `replicas-de-worker` fica sem a entrada que decide entre capacidade
+    (`N ≥ C × D + 1`) e o redesenho de retomada. Tudo que vem depois depende
+    disso; a mensagem da tela não bloqueia nada.
+  - **Por que antes do deploy, e não depois:** o defeito da mensagem **nasceu
+    nesta change**. O 400 por ciclo é recusa permanente e a tela manda tentar de
+    novo — afirma mais do que o sistema sabe (convenção 13). Deployar a detecção
+    sem a mensagem entrega ao operador uma recusa que ele não consegue
+    interpretar, e a change do frontend é pequena (o backend já manda o texto
+    pronto). **Subir metade da funcionalidade porque a fila calhou nessa ordem
+    seria escolher por inércia.**
+  - *(Pergunta de produto que pertence àquela change, não a esta: a tela deve
+    impedir a seleção que fecha ciclo, ou só reportar bem a recusa do servidor?
+    Detectar no cliente exige que a tela conheça o grafo inteiro, que é dado que
+    ela não busca hoje.)*
+  - **Correção de posição em 20/09/2026, e o princípio que ela deixa.** Este item
+    nasceu com a posição escrita como *"imediatamente depois desta"*. A frase foi
+    escrita antes de a fila seguinte estar fixada, e lida contra a sequência de
+    `## Próximo passo` ela colocava o frontend **antes** da
+    `delegacao-diagnostico` — o que ninguém decidiu. Era posição **herdada**, não
+    reafirmada. **É a segunda vez que isto aparece aqui, então vale a linha:
+    posição expressa em termos relativos — "depois desta", "na próxima" —
+    envelhece no instante em que a fila muda.** Posição que sobrevive é a que
+    **nomeia a change seguinte**, ou o **evento** que a libera. Não é convenção
+    nova: é a forma prática do que este arquivo já registra sobre gatilho sem
+    posição.
+
+- **`SendMessageProviderRejectionTests` tem o mesmo formato latente que
+  `AgentDeactivationTests` tinha, e hoje é inerte.**
+  `AgentProviderRejectionFixture` também é `IClassFixture` com um
+  `FakeTaskJobPublisher` que acumula, mas os seus **dois** testes só afirmam
+  `Assert.Empty` e **nenhum publica** — medido nesta change. Não foi corrigido
+  junto de propósito: seria correção sem guarda vermelho, que é o oposto da
+  convenção 15.
+  - **Gatilho:** o primeiro teste que publique de verdade naquela classe.
+  - **Posição:** na própria change que acrescentar esse teste — quem cria a
+    condição corrige, mesmo raciocínio de "recalibrar é tarefa da change que
+    muda o estado" (convenção 22).
+
+- **A inspeção de `agent_delegations` na janela do deploy não foi feita, e não
+  podia ser.** É a única task da change que ficou aberta (6.8 de 31), e ela não é
+  trabalho pendente: é uma **leitura agendada** que só existe quando o deploy
+  acontecer, duas posições à frente na fila. Transferida para cá em 20/09/2026
+  para não depender de alguém abrir o `tasks.md` arquivado.
+  - **O que medir:** contar linhas de `agent_delegations` **antes** da limpeza do
+    banco, e quantas delas formam ciclo.
+  - **Por que importa:** a decisão D2 (sem varredura, sem migration, sem
+    checagem de startup) se apoia em *"zero linhas no banco de desenvolvimento,
+    e o banco do piloto será limpo antes do deploy"* — medido em 20/09/2026, com
+    o escopo colado (convenção 22). **Se vier diferente de zero, D2 reabre com
+    dado em vez de suposição**, e a pergunta da varredura volta a ser legítima.
+  - **Gatilho:** a própria janela do deploy das correções.
+  - **Posição:** na janela do deploy, antes da limpeza do banco — depois dela o
+    número não existe mais para ser medido.
+
+- **A decisão de não ter defesa de ciclo no runtime reabre no primeiro segundo
+  escritor de `agent_delegations`.** Hoje o escritor é único
+  (`ReplaceAgentDelegationsCommandHandler`), e é esse inventário — não uma
+  opinião sobre probabilidade — que sustenta "o cadastro basta". Uma importação
+  de catálogo, um seed de ambiente ou um endpoint de cópia de agente que escreva
+  na tabela derruba o argumento inteiro.
+  - **Gatilho:** o segundo escritor, qualquer que seja.
+  - **Posição:** na própria change que o introduzir. Ela herda a decisão D3 e
+    precisa reavaliá-la, não descobri-la depois.

@@ -347,6 +347,22 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Um ciclo de delegação `A→B→…→A` travava a conversa, e o cadastro o
+  aceitava**: a task do agente de origem segura o lock que serializa a conversa
+  (`pg_advisory_lock`) enquanto espera o alvo, e a task do **mesmo** agente mais
+  adiante na cadeia bloqueia nesse mesmo lock. Medido com quatro instâncias de
+  `apps/workers`: **acrescentar réplica não resolve**, porque o recurso disputado
+  é o lock e não o consumidor — e o teto de profundidade da cadeia não cobre,
+  porque a checagem roda antes da aquisição do lock e um ciclo de dois saltos
+  trava bem abaixo do teto. `apps/api` recusava só a auto-delegação de um salto;
+  o resto era requisito explícito de que ciclo era permitido.
+  `PUT /agents/{id}/delegations` passa a responder **400** para qualquer conjunto
+  que feche ciclo de qualquer comprimento, com o **caminho nomeado** na mensagem
+  — porque o vínculo a desfazer pode estar em outro agente. A avaliação considera
+  o grafo **como ele ficaria depois da substituição**, então desfazer um ciclo já
+  cadastrado continua sendo aceito, e caminhos múltiplos sem ciclo continuam
+  permitidos. A correção é só de cadastro: `apps/workers` não mudou, porque o
+  cadastro é o único ponto que escreve os vínculos.
 - **Uma task podia ficar presa em `working` para sempre, e a mensagem do
   usuário sumia sem erro nenhum**: `apps/workers` adquiria o lock que serializa
   a conversa (`pg_advisory_lock`) **fora** do `try` que trata falhas. O

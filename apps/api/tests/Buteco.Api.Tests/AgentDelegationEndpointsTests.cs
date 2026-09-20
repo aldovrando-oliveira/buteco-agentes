@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Buteco.Api.AgentDelegations.Requests;
 using Buteco.Api.Agents.Requests;
 using Buteco.Api.Agents.Responses;
@@ -132,38 +133,179 @@ public class AgentDelegationEndpointsTests(ApiFactoryFixture factory) : IClassFi
         Assert.Single(updated!.DelegatesTo);
     }
 
+    // --- Recusa de ciclo de delegação -------------------------------------
+    //
+    // ESTES DOIS TESTES AFIRMAVAM O CONTRÁRIO ATÉ A CHANGE
+    // delegacao-ciclo-no-cadastro, e eram verdes. O cadastro não tinha uma
+    // lacuna: tinha requisito escrito ("Nenhuma detecção de ciclo ou de vínculo
+    // bidirecional no cadastro", removido da spec por esta change). O motivo da
+    // inversão está no design.md: um ciclo A→B→…→A autotrava no advisory lock de
+    // contexto — a task do Source em profundidade 0 segura
+    // pg_advisory_lock(hashtext(agente), hashtext(contexto)) enquanto espera o
+    // Target, e a task do MESMO agente em profundidade 2 bloqueia no mesmo lock.
+    // Medido com quatro instâncias de worker: réplica nenhuma resolve, porque o
+    // recurso disputado é o lock e não o consumidor. O DelegationDepthLimit (5)
+    // também não cobre — a checagem de profundidade roda ANTES da aquisição do
+    // lock, e o ciclo de dois saltos trava em profundidade 2.
+
+    // G1 — a forma exata da sonda Probe_CycleAB_A da exploração
+    // replicas-de-worker, que semeava precisamente estas duas arestas.
     [Fact]
-    public async Task ReplaceAgentDelegations_IndirectCycle_IsPermitted()
-    {
-        var agentA = await CreateAgentAsync("Agente I-A");
-        var agentB = await CreateAgentAsync("Agente I-B");
-        var agentC = await CreateAgentAsync("Agente I-C");
-
-        var responseAtoB = await PutDelegationsAsync(agentA.Id, [agentB.Id]);
-        var responseBtoC = await PutDelegationsAsync(agentB.Id, [agentC.Id]);
-        var responseCtoA = await PutDelegationsAsync(agentC.Id, [agentA.Id]);
-
-        Assert.Equal(HttpStatusCode.OK, responseAtoB.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, responseBtoC.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, responseCtoA.StatusCode);
-    }
-
-    [Fact]
-    public async Task ReplaceAgentDelegations_BidirectionalPair_IsPermitted()
+    public async Task ReplaceAgentDelegations_BidirectionalPair_IsRejected()
     {
         var agentA = await CreateAgentAsync("Agente J-A");
         var agentB = await CreateAgentAsync("Agente J-B");
 
         var responseAtoB = await PutDelegationsAsync(agentA.Id, [agentB.Id]);
-        var responseBtoA = await PutDelegationsAsync(agentB.Id, [agentA.Id]);
-
         Assert.Equal(HttpStatusCode.OK, responseAtoB.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, responseBtoA.StatusCode);
 
-        var getAResponse = await _client.GetAsync($"/agents/{agentA.Id}");
-        var agentAUpdated = await getAResponse.Content.ReadFromJsonAsync<AgentResponse>();
-        Assert.Single(agentAUpdated!.DelegatesTo);
-        Assert.Equal(agentB.Id, agentAUpdated.DelegatesTo[0].Id);
+        var responseBtoA = await PutDelegationsAsync(agentB.Id, [agentA.Id]);
+        Assert.Equal(HttpStatusCode.BadRequest, responseBtoA.StatusCode);
+
+        var agentBCurrent = await GetAgentAsync(agentB.Id);
+        Assert.Empty(agentBCurrent.DelegatesTo);
+    }
+
+    // G2 — ciclo indireto de três agentes.
+    [Fact]
+    public async Task ReplaceAgentDelegations_IndirectCycle_IsRejected()
+    {
+        var agentA = await CreateAgentAsync("Agente I-A");
+        var agentB = await CreateAgentAsync("Agente I-B");
+        var agentC = await CreateAgentAsync("Agente I-C");
+
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentA.Id, [agentB.Id])).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentB.Id, [agentC.Id])).StatusCode);
+
+        var responseCtoA = await PutDelegationsAsync(agentC.Id, [agentA.Id]);
+        Assert.Equal(HttpStatusCode.BadRequest, responseCtoA.StatusCode);
+
+        var agentCCurrent = await GetAgentAsync(agentC.Id);
+        Assert.Empty(agentCCurrent.DelegatesTo);
+    }
+
+    // G3 — quatro saltos. Não é redundante com G2: uma regra de "N saltos fixo"
+    // (a alternativa recusada em D1) passaria em G2 e reprovaria aqui, e é
+    // exatamente essa a meia-correção que o guarda tem de pegar.
+    [Fact]
+    public async Task ReplaceAgentDelegations_FourHopCycle_IsRejected()
+    {
+        var agentA = await CreateAgentAsync("Agente Q-A");
+        var agentB = await CreateAgentAsync("Agente Q-B");
+        var agentC = await CreateAgentAsync("Agente Q-C");
+        var agentD = await CreateAgentAsync("Agente Q-D");
+
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentA.Id, [agentB.Id])).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentB.Id, [agentC.Id])).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentC.Id, [agentD.Id])).StatusCode);
+
+        var responseDtoA = await PutDelegationsAsync(agentD.Id, [agentA.Id]);
+        Assert.Equal(HttpStatusCode.BadRequest, responseDtoA.StatusCode);
+
+        var agentDCurrent = await GetAgentAsync(agentD.Id);
+        Assert.Empty(agentDCurrent.DelegatesTo);
+    }
+
+    // G6 — a recusa por ciclo é atômica. O Source já tem vínculo de saída
+    // legítimo antes da chamada, e ele precisa sobreviver intacto: rejeitar
+    // aplicando metade do payload é pior que não rejeitar.
+    [Fact]
+    public async Task ReplaceAgentDelegations_CycleRejection_KeepsExistingLinks()
+    {
+        var agentA = await CreateAgentAsync("Agente R-A");
+        var agentB = await CreateAgentAsync("Agente R-B");
+        var innocent = await CreateAgentAsync("Agente R-Inocente");
+
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentA.Id, [innocent.Id])).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentB.Id, [agentA.Id])).StatusCode);
+
+        // A→B fecha o ciclo A→B→A.
+        var response = await PutDelegationsAsync(agentA.Id, [agentB.Id]);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var current = await GetAgentAsync(agentA.Id);
+        Assert.Single(current.DelegatesTo);
+        Assert.Equal(innocent.Id, current.DelegatesTo[0].Id);
+    }
+
+    // G7 — a mensagem nomeia o caminho, pelos NOMES dos agentes. Sem isso a
+    // recusa manda o operador procurar qual vínculo desfazer, e o vínculo a
+    // desfazer pode estar em outro agente (design.md, D5).
+    //
+    // A asserção é sobre o JSON da resposta real, não sobre round-trip pelo
+    // mesmo tipo (convenção 11).
+    [Fact]
+    public async Task ReplaceAgentDelegations_CycleRejection_NamesThePath()
+    {
+        var agentA = await CreateAgentAsync("Agente S-Alfa");
+        var agentB = await CreateAgentAsync("Agente S-Bravo");
+        var agentC = await CreateAgentAsync("Agente S-Charlie");
+
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentA.Id, [agentB.Id])).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentB.Id, [agentC.Id])).StatusCode);
+
+        var response = await PutDelegationsAsync(agentC.Id, [agentA.Id]);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var message = Assert.Single(
+            problem.GetProperty("errors").GetProperty("targetAgentIds").EnumerateArray()).GetString()!;
+
+        // O caminho sai do Source da chamada e volta a ele: C → A → B → C.
+        Assert.Contains($"{agentC.Name} → {agentA.Name} → {agentB.Name} → {agentC.Name}", message);
+    }
+
+    // G4 — GUARDA DE REGRESSÃO CONTRA A CORREÇÃO ERRADA, e ele PASSA EM `HEAD`
+    // de propósito. Não prova nada sobre o defeito: prende a detecção forte
+    // demais, que é a alternativa recusada em D1 ("recusar qualquer vínculo que
+    // crie caminho entre dois agentes já conectados"). O losango A→B, A→C, B→D,
+    // C→D não tem ciclo nenhum e não disputa lock com ninguém — recusá-lo seria
+    // proibir composição legítima por uma regra mais fácil de implementar.
+    [Fact]
+    public async Task ReplaceAgentDelegations_DiamondWithoutCycle_IsPermitted()
+    {
+        var agentA = await CreateAgentAsync("Agente T-A");
+        var agentB = await CreateAgentAsync("Agente T-B");
+        var agentC = await CreateAgentAsync("Agente T-C");
+        var agentD = await CreateAgentAsync("Agente T-D");
+
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentA.Id, [agentB.Id, agentC.Id])).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PutDelegationsAsync(agentB.Id, [agentD.Id])).StatusCode);
+
+        // Segundo caminho A→C→D para o mesmo D: caminho múltiplo, não ciclo.
+        var response = await PutDelegationsAsync(agentC.Id, [agentD.Id]);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var agentCCurrent = await GetAgentAsync(agentC.Id);
+        Assert.Equal(agentD.Id, Assert.Single(agentCCurrent.DelegatesTo).Id);
+    }
+
+    // G5 — TAMBÉM PASSA EM `HEAD` de propósito, e prende outra correção errada:
+    // percorrer o grafo ATUAL em vez do grafo pós-replace (design.md, D7). A
+    // operação é `replace`; percorrendo o grafo atual, a edição que DESFAZ o
+    // ciclo seria recusada por causa do ciclo que ela está desfazendo, e o
+    // operador ficaria preso.
+    //
+    // O ciclo herdado é semeado POR SQL DIRETO nas duas rodadas
+    // (AgentDelegationSeed). Montá-lo pela API funciona em `HEAD` e passa a
+    // devolver 400 depois da correção — o guarda ficaria vermelho por falha de
+    // arranjo, não pela propriedade que afirma.
+    [Fact]
+    public async Task ReplaceAgentDelegations_UndoingInheritedCycle_IsPermitted()
+    {
+        var agentA = await CreateAgentAsync("Agente U-A");
+        var agentB = await CreateAgentAsync("Agente U-B");
+        var innocent = await CreateAgentAsync("Agente U-Inocente");
+
+        await AgentDelegationSeed.InsertAsync(factory.Services, agentA.Id, agentB.Id);
+        await AgentDelegationSeed.InsertAsync(factory.Services, agentB.Id, agentA.Id);
+
+        // A troca as suas arestas de saída por uma que não fecha ciclo nenhum.
+        var response = await PutDelegationsAsync(agentA.Id, [innocent.Id]);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var current = await GetAgentAsync(agentA.Id);
+        Assert.Equal(innocent.Id, Assert.Single(current.DelegatesTo).Id);
     }
 
     [Fact]
