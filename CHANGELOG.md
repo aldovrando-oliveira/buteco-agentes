@@ -72,6 +72,18 @@ o versionamento pretende seguir
 - Execução real: um agente chama outro como tool interna, no mesmo banco, sem
   HTTP externo.
 - Seção de delegações inline no detalhe do agente.
+- **A aba de delegações distingue recusa permanente de falha transitória.**
+  Quando o servidor recusa o conjunto de agentes-alvo — por fechar ciclo, por
+  auto-delegação, por id que não corresponde a agente, ou por conjunto ausente
+  —, a tela passa a exibir **a mensagem que o servidor enviou**, num aviso que
+  permanece, em vez do texto genérico *"Tente novamente"*. Para a recusa por
+  ciclo isso significa mostrar o **caminho** que fecha o ciclo, pelos nomes dos
+  agentes, que é a única informação que resolve o problema e que a tela
+  descartava. Mandar repetir uma recusa permanente afirmava mais do que o
+  sistema sabe: tentar de novo nunca ia funcionar. Falha de rede e erro de
+  servidor continuam no aviso genérico, onde a instrução de tentar de novo está
+  correta. A tela **não** detecta ciclo por conta própria e **não** sugere qual
+  vínculo desfazer — ela conhece o caminho, não a preferência do operador.
 - **Diagnóstico de delegação que não conclui.** Quando a tool de delegação
   desiste — por timeout ou porque o alvo terminou em falha —, o registro passa a
   identificar a delegação inteira (task e agente de origem, agente e task do

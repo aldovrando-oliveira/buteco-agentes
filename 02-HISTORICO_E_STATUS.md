@@ -4072,23 +4072,60 @@ capturando **duas** invocações onde o teste afirma uma. E o conjunto de falhas
 **mudou por completo** entre as rodadas 1 e 2 — que é o discriminador já
 registrado nesta base: regressão reprova o mesmo teste toda vez.
 
-> **ACHADO DE AMBIENTE, e ele custa caro se ninguém souber: a suíte de
-> `apps/workers` pode derrubar o stack de desenvolvimento.** Entre a rodada 2 e a
-> 3, os **três containers do compose de desenvolvimento** (`postgres`,
-> `rabbitmq`, `waha`), de pé havia 7 dias, **deixaram de existir** — sem nenhum
-> comando de parada ter sido rodado. A leitura mais plausível, e não provada, é
-> pressão de memória na VM do Podman: **6 GiB e 6 CPUs** para 14 pares de
+> **O QUE ACONTECEU COM O STACK DE DESENVOLVIMENTO, e a correção de causa é o
+> que vale guardar.** Entre a rodada 2 e a 3, os **três containers do compose de
+> desenvolvimento** (`postgres`, `rabbitmq`, `waha`), de pé havia 7 dias,
+> **deixaram de existir**.
+>
+> **CAUSA REAL, confirmada pelo dono em 20/09/2026: ele encerrou os containers à
+> mão, por engano.** Não teve relação com a suíte.
+>
+> **A hipótese que foi escrita antes fica registrada, porque o valor está em como
+> ela caiu.** O registro original dizia: *"a leitura mais plausível, e não
+> provada, é pressão de memória na VM do Podman — 6 GiB e 6 CPUs para 14 pares de
 > containers de teste em sequência mais o stack de dev, com
-> `TESTCONTAINERS_RYUK_DISABLED=true` (obrigatório nesta máquina, ver
-> `docs/development.md`) deixando qualquer resto sem varredor. A rodada 3, com
-> **zero** containers, fechou em 6m37s.
+> `TESTCONTAINERS_RYUK_DISABLED=true` deixando qualquer resto sem varredor"*. Ela
+> era plausível e estava escrita como causa.
+>
+> **Três observações do ambiente, levantadas na conferência manual da change
+> seguinte, já eram incompatíveis com ela — e nenhuma exigiu ferramenta nova:**
+>
+> | evidência | o que ela exclui |
+> |---|---|
+> | os três **não aparecem nem como `Exited`** em `podman ps -a` — foram *removidos* | OOM deixa `Exited` com código não-zero |
+> | os três declaram `restart: unless-stopped` | morte por recurso teria **reiniciado** sozinha |
+> | o volume `buteco-postgres-data` sobreviveu **intacto** (schema, 244 `a2a_tasks`, os 5 agentes) | é exatamente o que `compose down` **sem `-v`** faz |
+>
+> **E o mecanismo de detecção é o que se leva desta correção:** a contradição foi
+> encontrada por quem varria o ambiente **para outra tarefa** (subir o stack para
+> a conferência manual) e **levantou a divergência em vez de aceitar o registro
+> existente**. É a convenção 6 aplicada ao registro interno, funcionando —
+> "toda change que consome um item aberto reconfere as afirmações dele contra a
+> árvore antes de decidir qualquer coisa".
+>
+> **É a mesma forma da 5a-1 e da nona medição: hipótese plausível escrita como
+> causa, sem a evidência que a distinguiria das alternativas.** O conserto não é
+> "pensar melhor" — a hipótese de OOM era razoável. O conserto é **checar o
+> estado observável antes de escrever a causa**: aqui, três comandos que já
+> estavam disponíveis no instante em que o parágrafo foi escrito.
+>
+> **O que sobra de verdadeiro, e agora como OBSERVAÇÃO e não como causa:** o
+> stack de desenvolvimento e a suíte competem pela mesma VM de 6 GiB, e a suíte
+> com 14 pares de containers em sequência é o consumidor pesado. A rodada 3, com
+> **zero** containers, fechou em 6m37s contra 38m07s da rodada 2. Isso continua
+> valendo para planejar a janela do deploy — **só não explica o que aconteceu**.
 >
 > **Gatilho:** a próxima rodada que passar de ~10 min ou reprovar com assinatura
 > de infraestrutura — conferir `podman ps` **antes** de investigar teste.
-> **Posição:** a medição que decide (a suíte inteira compete com o stack de dev
-> por memória da VM?) é change própria, e o candidato de correção já está
-> registrado nos itens em aberto: a `ICollectionFixture` compartilhando **um** par
-> de containers entre as classes, que hoje é paliativo por serialização.
+> **Posição:** o candidato de correção já está registrado nos itens em aberto: a
+> `ICollectionFixture` compartilhando **um** par de containers entre as classes,
+> que hoje é paliativo por serialização.
+>
+> **A mitigação "subir a memória da VM do Podman antes do deploy" SAI, com
+> gatilho e posição junto.** Ela era consequência direta da hipótese de OOM; sem
+> a hipótese, não há motivo para a ação. **Mitigação órfã de causa é pior que
+> ausência**, porque consome a janela do deploy sem resolver nada e dá a
+> impressão de que o risco foi tratado.
 
 **A OITAVA MEDIÇÃO DA CONVENÇÃO 18, e ela separa uma dimensão que acertou de
 outra que errou pelo motivo oposto ao da sétima.**
@@ -4165,6 +4202,209 @@ change não toca nenhum arquivo desses apps (conferido por `git status`), então
 binário sob teste lá é byte-a-byte o de `HEAD`. As baselines de referência
 continuam sendo 335/335 e 921/921 do fechamento anterior.
 
+
+### Recusa permanente separada de falha transitória na aba de delegações (`frontend-mensagem-recusa-ciclo`, 2026-09-20)
+
+**Posição 4 da fila, e a última change antes da limpeza do banco e do deploy.**
+O defeito nasceu na change anterior de `apps/api`: o 400 por ciclo é recusa
+permanente e a tela mandava tentar de novo.
+
+**O defeito era o genérico engolir o específico, e o `onError` nem recebia o
+erro.** `AgentDelegationsTab.tsx:68` era `onError: () => {…}` — sem parâmetro.
+Não é que a tela escolhesse ignorar a resposta: **ela não tinha acesso a ela**, e
+o caminho do ciclo que a API mandava morria na assinatura.
+
+**A VERIFICAÇÃO MUDOU O ENUNCIADO: não é um ramo para ciclo, é um ramo para
+recusa permanente.** Lido em `AgentDelegationEndpoints.cs`, os **quatro** 400
+dessa rota saem como `ValidationProblem` sob a **mesma chave** `targetAgentIds`
+— conjunto nulo (`:26`), auto-delegação (`:42`), ciclo (`:55`) e ids
+inexistentes (`:64`) —, e os quatro já vêm com texto de operador pronto. Um ramo
+pela chave cobre os quatro e o quinto de graça.
+
+**Por que casar texto seria pior em produção do que já foi em teste.**
+`delegacao-ciclo-no-cadastro` registrou que restaurar a sonda `Probe_CycleAB_A`
+como estava faria o guarda reprovar **por texto**, porque as mensagens tinham
+mudado. Um ramo de produção casando *"fecha um ciclo"* tem o mesmo defeito com
+consequência pior: **para de funcionar em silêncio** no dia em que alguém
+melhorar a redação da API, e a tela volta ao genérico sem nada reprovar.
+
+**O NÚMERO QUE DECIDIU O CANAL, medido no pacote instalado e não suposto:**
+`@mantine/notifications` 9.4.2, `esm/Notifications.mjs:14-16` —
+`defaultProps = { …, autoClose: 4e3, … }`, e `main.tsx:21` monta
+`<Notifications />` **sem sobrescrever**. Toda notificação deste painel se fecha
+em **4 segundos**. O caminho do ciclo é a informação que o operador precisa ler
+para agir, e um canal que a mostra e a tira nesse prazo é pior que não mostrar,
+porque dá a impressão de que a informação foi dada. Daí `Alert` persistente.
+
+**O idioma foi reusado, não inventado.** `AgentToolsTab` — aba irmã da mesma
+feature, e a aba em que esta foi modelada (Decision 8 de
+`frontend-agente-detalhe-abas`) — já tinha a forma exata: ramo específico grava
+estado persistente e faz `return` cedo, genérico para o resto, renderizado como
+`<Alert color="red" …>`.
+
+**A tela não parseia o caminho, e a razão é mais forte que robustez.** O caminho
+é `string.Join(" → ", nomes)` sobre nomes de agente, que são texto livre — um
+agente chamado `Vendas → Suporte` produz caminho que parser nenhum distingue do
+separador. Mas o motivo que decide é outro: parsear seria reimplementar no
+cliente o conhecimento de uma regra do servidor, o mesmo que recusa detecção de
+ciclo no cliente, aplicado à apresentação.
+
+**DOIS REQUISITOS DE SPEC MUDARAM, E O SEGUNDO NÃO É SOBRE ESTA MUDANÇA.**
+
+- *"Erro de submit exibido via notificação **genérica**"* — **invertido**. O
+  genérico não era lacuna: era requisito escrito, com cenário verde
+  correspondente. Mesma forma de `delegacao-ciclo-no-cadastro`, e vale repetir
+  por quê — corrigir uma tela contra um requisito que manda o contrário exige
+  mexer no requisito, senão spec e código divergem com a spec parecendo certa.
+- *"Nenhuma detecção de ciclo de delegação na interface"* — **esclarecido**. O
+  texto dizia *"sem detectar, **avisar** ou bloquear esse caso na interface"*, e
+  depois desta change a interface **avisa** — depois da recusa do servidor. Sem o
+  esclarecimento o requisito ficaria **falso sem ninguém o tocar**: é a forma da
+  convenção 13 que nenhuma revisão de tela pega, porque a tela não muda naquele
+  aspecto. A proibição que sobrevive é a de detecção **antes do submit**.
+- *(E uma correção de fato aproveitada no mesmo bloco, declarada em vez de
+  silenciosa: o requisito dizia "no controle de seleção múltipla", e esse
+  controle não existe mais — `frontend-agente-detalhe-abas` o trocou por lista de
+  checkboxes. Como o bloco era reescrito de todo jeito, a frase foi corrigida.
+  Frases defasadas em requisitos que esta change **não** reescreveu ficam como
+  estão, e viram item aberto.)*
+
+**A rodada de guardas, com a causa atribuída em cada estado:**
+
+| Guarda | `HEAD` | depois |
+|---|---|---|
+| G1 — a mensagem da API, com o caminho, aparece | 🔴 | 🟢 |
+| G2 — **"Tente novamente" NÃO aparece** nesse caminho | 🔴 | 🟢 |
+| G3 — outra recusa 400 sob a mesma chave também aparece | 🔴 | 🟢 |
+| G4 — falha transitória mantém o genérico | 🟢 | 🟢 |
+| G5 — sucesso seguinte remove o aviso | 🔴 | 🟢 |
+| G6 — descartar remove o aviso | 🔴 | 🟢 |
+
+**Os cinco vermelhos reprovaram pela mesma causa — `Unable to find an element by:
+[data-testid="delegations-refusal"]` —, que é propriedade ausente e não texto.**
+**G2 é o que prende o defeito:** sem ela, acrescentar a mensagem nova **sem
+remover a velha** passa verde. **G4 passa nos dois lados de propósito** e está
+escrito ao lado dele: não prova nada sobre o defeito, prende a correção errada
+(trocar o genérico em vez de acrescentar um ramo). **G3 é o que impede o retorno
+do casamento de texto.**
+
+**DOIS ITENS DE FILA FORAM CONSUMIDOS PELA VERIFICAÇÃO E NENHUM VIROU ESCOPO.**
+
+1. **O terceiro comparador de ordem, e a premissa dele não se sustenta.** Ver a
+   correção do item abaixo — é convenção 6 aplicada ao registro interno.
+2. **`fieldErrorsFrom` tem OITO cópias** e mesmo assim não foi extraído; ver o
+   item aberto próprio.
+
+**Conferência de escopo: dois arquivos, e zero fora deles.** Zero em `apps/api`,
+`apps/workers`, `apps/inbox`, `libs/`, `deploy/`, `docs/`, compose — e **zero em
+`knowledgeBaseRows.ts`**, o item que a verificação deliberadamente não puxou.
+`tsc --noEmit` limpo, e ele entrou como **conferência**, não como enumerador:
+esta change não muda assinatura nenhuma, e era isso que ele tinha de confirmar.
+
+**Suíte: `apps/frontend` 927/927 em 84 arquivos, 73,6 s, carga 5,63 na largada**
+— contra baseline de **921/921 em 81,9 s com carga 2,46**, medida nesta sessão
+sobre a árvore limpa, não herdada. Sem Testcontainers, então a contenção que
+desqualificou duas rodadas da change anterior não se aplica.
+
+**A NONA MEDIÇÃO DA CONVENÇÃO 18, e ela corrige a forma de usar a âncora da
+5a-4.**
+
+| | projetado | entregue |
+|---|---|---|
+| **testes novos** | **6** | **6** |
+| **unidades públicas novas** | **0** | **0** |
+| **arquivos (criados / modificados)** | **0 / 2** | **0 / 2** |
+| teste : produção | 1,4 : 1 | **1,31 : 1** |
+| produção, lógica | ~20 | **25** |
+| produção, comentário | ~85 | **42** |
+| produção, total | ~105 | **67** |
+| teste, acrescentadas | ~150 | **88** |
+| comentário : lógica | 4,2 : 1 | **1,68 : 1** |
+
+**O que acertou — e são as dimensões que a convenção vinha construindo:**
+
+- **Testes: 6 contra 6**, lidos dos cenários do delta. **Terceira rodada seguida**
+  em que essa régua acerta (12×12 na oitava, depois de 6×8 na 5a-4 por contar
+  afirmações em vez de estados).
+- **Unidades públicas: 0 contra 0**, e **contagem de arquivo exata**. A dimensão
+  que a oitava confirmou seguiu firme, inclusive no caso degenerado em que a
+  resposta é zero — **projetar zero é projetar**.
+- **A razão teste:produção** ficou a 6% do projetado.
+
+**O QUE ERROU, E A CAUSA É NOVA: o custo de um registro de mecanismo NÃO é
+constante, e eu usei a âncora da 5a-4 sem perguntar se os registros eram do mesmo
+tipo.** Projetei 3 registros × ~28 linhas = ~85; saíram **42**, ou **~14 por
+registro** — metade.
+
+Decomposto, a regra aparece:
+
+| registro | o que ele precisa reconstruir | custo |
+|---|---|---|
+| o ramo é pela **chave**, não pelo texto | três razões, mais um precedente e uma premissa declarada | **longo** |
+| os **4 s** do `autoClose` | um número, com arquivo e linha | **curto** |
+| a tela **não parseia** o caminho | um exemplo (`Vendas → Suporte`) | **curto** |
+
+> **Régua para a décima: o custo de um registro de mecanismo escala com o quanto
+> ele precisa RECONSTRUIR, não com a contagem de registros.** Um registro cuja
+> evidência é **um número medido com arquivo e linha** é barato — o número
+> argumenta sozinho. Um registro que reconstrói uma **ausência** (por que a tela
+> se recusa a dizer algo) ou um **contrafactual** (o que aconteceria se alguém
+> fizesse X) é caro. A 5a-4 mediu ~26 linhas por registro porque **os dela eram
+> todos do tipo caro**; citar aquele número sobre registros baratos é a ocorrência
+> 3 da convenção 22 — o número certo respondendo a outra pergunta.
+
+**E a direção de erro nomeada de antemão aconteceu, pela segunda vez seguida.**
+Estava escrito que os testes podiam sair mais baratos porque o arranjo
+(`mockRejectedValue` com um `ApiError`) sairia para um helper local — e saiu:
+`refusal()`, `saveWith()` e um `cycleMessage` compartilhado colapsaram o arranjo
+de quatro guardas em ~15 linhas, e os testes fecharam em 88 contra ~150
+projetadas. **Duas rodadas seguidas em que nomear a direção serviu**, depois de
+duas em que nenhuma das nomeadas aconteceu. Continua não substituindo contar
+componentes — foi a contagem que acertou as três dimensões exatas.
+
+**A régua candidata da oitava não foi testada aqui, e isso está dito em vez de
+herdado.** *Custo de mudança de assinatura = sítios × linhas de parâmetro* não se
+aplica: esta change não muda assinatura nenhuma. Herdá-la teria inflado a
+projeção de lógica.
+
+**A CONFERÊNCIA MANUAL (convenção 14) FOI FEITA em 20/09/2026, e o risco nomeado
+não se materializou.** Stack de desenvolvimento de pé — só `postgres`, porque o
+publisher RabbitMQ de `apps/api` é lazy e o PUT de delegações nunca publica —,
+com a detecção de ciclo confirmada **por requisição real** antes de qualquer
+captura (`C→A` devolvendo 400 com o caminho no corpo), porque a detecção estava
+na árvore e não commitada.
+
+| estado | resultado (veredito do dono) |
+|---|---|
+| nomes normais, claro e escuro | legível nos dois esquemas |
+| **nomes longos (caminho de 234 caracteres)** | sai **inteiro**, em 4 linhas, quebrando **por palavra** — sem reticências, sem corte no meio de nome, sem rolagem horizontal |
+| falha transitória, API desligada | notificação genérica presente, **nenhum `Alert`** na página |
+
+**E a conferência manual produziu um estado FORA DO PEDIDO, que foi o que
+revelou uma omissão da spec — este é o argumento concreto da convenção 14 nesta
+base.** Ao preparar a captura seguinte, a tela ficou num estado que ninguém
+tinha pedido: o operador **já havia corrigido a seleção** (desmarcado o agente
+que fechava o ciclo) e o `Alert` continuava exibindo o caminho da recusa
+anterior.
+
+- **O comportamento está certo e não mudou.** O caminho do ciclo é a única
+  informação que diz **qual aresta remover**; um aviso que sumisse ao primeiro
+  clique desapareceria exatamente quando passa a ser útil. `refusal` é limpo
+  **antes de cada submit**, não na edição.
+- **O que faltava era a spec dizer isso.** Ela listava sucesso e descarte como
+  condições de limpeza e ficava **muda sobre a edição** — o que deixa a escolha
+  parecendo omissão e convida a próxima pessoa a "consertar". A frase entrou no
+  requisito, **sem cenário novo**: não há guarda a escrever, o comportamento já
+  é o entregue, e cenário sem guarda é afirmação sem prova.
+- **jsdom não teria produzido aquele enquadramento, e nenhum guarda o pediria.**
+  A convenção 14 costuma ser defendida por "cor e contraste"; aqui ela pagou por
+  outro motivo — **o estado intermediário que só aparece quando alguém opera a
+  tela de verdade**.
+
+**O que ficou sem guarda, e está registrado como item aberto:** a sequência
+**recusa → falha transitória** foi exercitada de fato (a captura da falha é do
+mesmo agente que exibia a recusa), mas **conferência manual não substitui
+guarda** — ela prova que aconteceu uma vez, não que continua acontecendo.
 
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
@@ -5655,10 +5895,31 @@ Cada um tem gatilho de quando revisitar:
   API devolve"*. Reproduzir e recalcular com um terceiro comparador não são a
   mesma coisa, e a spec descreve a primeira. Depois de
   `ordenacao-desempate-listas-vinculo` a API passou a ter **uma ordem só** (a da
-  collation do banco, nas duas rotas), o que torna a reordenação no cliente
-  desnecessária **e** o único ponto restante onde a ordem pode divergir do que a
-  spec promete. Gatilho: imediato — e é change de `apps/frontend`, nunca de
-  `apps/api` (convenção 12 na direção inversa).
+  collation do banco, nas duas rotas). Gatilho: imediato — e é change de
+  `apps/frontend`, nunca de `apps/api` (convenção 12 na direção inversa).
+
+  > **CORREÇÃO DE PREMISSA, 20/09/2026, feita pela `frontend-mensagem-recusa-ciclo`
+  > ao consumir este item.** Este item dizia que a ordem única da API *"torna a
+  > reordenação no cliente **desnecessária**"*. **Não torna**, e o comentário do
+  > próprio arquivo (`knowledgeBaseRows.ts:21-24`) carrega a razão que este item
+  > omitia: o sort serve o **rascunho** — *"reproduzir a ordem do servidor é o que
+  > faz a lista NÃO se remontar quando o PUT volta. Uma base recém-escolhida ocupa,
+  > no rascunho, a mesma posição que vai ocupar depois de gravada (design.md,
+  > D4)."* Uma base marcada agora **não existe no servidor**, então ordem de API
+  > nenhuma a ordena.
+  >
+  > **O que sobra do item, que continua verdadeiro:** é o último ponto onde a ordem
+  > exibida pode divergir do que `agent-knowledge-binding-ui:62-66` promete
+  > (*"reproduz a ordem que a API devolve"*) — mas resolver isso é **reconciliar
+  > spec e desenho**, não remover código. Quem pegar decide entre corrigir a frase
+  > da spec (a tela reproduz a ordem do servidor **e** ordena o rascunho pelo mesmo
+  > critério) ou mudar o comportamento do rascunho, que reabre a D4 daquela change.
+  >
+  > **É a forma da convenção 6 que este arquivo nomeia como a mais perigosa:** item
+  > aberto que descreve comportamento de código, lido depois por quem não tem o
+  > contexto de quem o escreveu, e que vira instrução. A `frontend-mensagem-recusa-ciclo`
+  > tinha gatilho e posição para puxá-lo e **não puxou**, porque reconferiu a
+  > afirmação contra a árvore antes de decidir.
 
 - **A causa dos 39 `Purpose` placeholder está na instrução do skill de
   sincronização, não em esquecimento de quem sincroniza** — achado em 09/09/2026,
@@ -6428,11 +6689,19 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 1 lock-de-contexto-falha-terminal   ✔ aplicada e arquivada
 2 delegacao-ciclo-no-cadastro       ✔ aplicada  (arquivar)
 3 delegacao-diagnostico             ✔ aplicada em 20/09/2026  (arquivar)
-4 frontend-mensagem-recusa-ciclo    ← a próxima
-  → limpeza do banco + deploy das correções → OBSERVAR
+4 frontend-mensagem-recusa-ciclo    ✔ aplicada em 20/09/2026  (arquivar)
+  → limpeza do banco + deploy das correções → OBSERVAR   ← A PRÓXIMA ETAPA
 5 replicas-de-worker
 6 metricas-execucao-coleta
 ```
+
+**A posição 4 saiu aplicada em 20/09/2026**, e com ela **acaba a fila de código
+antes do deploy**. O que vem agora não é change: é a limpeza do banco e o deploy
+das quatro correções, seguidos de observação contra tráfego real. **Uma tarefa de
+código ficou em aberto e ela bloqueia o deploy desta tela, não a change:** a
+conferência manual do aviso de recusa, nos dois esquemas de cor e com nomes
+longos — convenção 14, e está registrada em "Abertos por
+`frontend-mensagem-recusa-ciclo`".
 
 **A posição 3 saiu aplicada em 20/09/2026** — ver "Instrumentação de delegação e
 de task envelhecida" acima. **O que ela entrega à posição 5, e como a 5 tem de
@@ -7104,6 +7373,66 @@ ocorrências dessa família.
     em `working` mais velhas que o máximo plausível de execução e
     `pending_dispatches` em `Dispatching`. É esse número que diz se o
     destravamento manual vira trabalho próprio ou é caso isolado.
+
+### Abertos por `frontend-mensagem-recusa-ciclo` (2026-09-20)
+
+**Gatilho e posição nos três.**
+
+- **`fieldErrorsFrom` tem OITO cópias em `apps/frontend`, e a extração NÃO é
+  decidida pela contagem — é decidida pela convenção 7.** Contadas antes de
+  decidir: `agents` (2), `knowledge-bases` (2), `mcp-servers` (2) — as **seis
+  byte-a-byte idênticas** — e `channels` (2), que divergem por razão de
+  **domínio** (separam `credential` do resto). O gatilho da convenção 2 está
+  cumprido oito vezes.
+
+  **O que impede extrair, e é decisão de arquitetura e não preguiça:** cada
+  feature tem o **seu próprio** `ApiError` (6 classes: `auth`, `agents`,
+  `knowledge-bases`, `sessions`, `mcp-servers`, `channels`), por convenção 7. Um
+  helper compartilhado não pode usar `instanceof ApiError` — precisaria de uma
+  classe base comum (que a convenção 7 recusa) ou de tipagem **estrutural** sobre
+  `status`/`problem`. Essa escolha governa a extração; a contagem de cópias, não.
+
+  *(E a `frontend-mensagem-recusa-ciclo` não o consumiu: aquele helper mapeia
+  erros para **campos de formulário**, e a aba de delegações não tem campo
+  nenhum — `targetAgentIds` nomeia o conjunto, não um widget.)*
+  - **Gatilho:** a primeira feature que precise de `fieldErrorsFrom` **e** não
+    tenha `ApiError` próprio; ou a primeira mudança na forma do
+    `ValidationProblem` que obrigue a editar as oito de uma vez.
+  - **Posição:** change própria, que decide **primeiro** a questão de convenção 7
+    (base comum × tipagem estrutural) e só então extrai.
+
+- **`agent-delegation-binding-ui` tem frases defasadas em requisitos que esta
+  change não reescreveu.** A que esta change corrigiu — *"no controle de seleção
+  múltipla"* — estava num bloco que ela reescrevia de todo jeito; o controle não
+  existe desde `frontend-agente-detalhe-abas`, que o trocou por lista de
+  checkboxes. Corrigir as outras é varredura própria, e fazê-la de carona seria
+  misturar escopo sem dizer.
+  - **Gatilho:** a próxima change que reescrever qualquer requisito daquela spec
+    — corrige as frases dos blocos que tocar; ou uma varredura deliberada da
+    spec inteira.
+  - **Posição:** na própria change que tocar a spec. Não vale change só para isso
+    enquanto ninguém for lê-la para decidir algo.
+
+- ~~**A conferência manual da recusa não foi feita**~~ — **FEITA em 20/09/2026,
+  e o risco nomeado não se materializou.** O caminho de **234 caracteres** do
+  cenário de nomes longos sai **inteiro**, em quatro linhas, quebrando **por
+  palavra** — sem reticências, sem corte no meio de nome, sem rolagem
+  horizontal. Legível nos dois esquemas de cor. A falha transitória mostra a
+  notificação genérica e **nenhum `Alert`**. Ver a seção da change.
+
+- **A sequência recusa → falha transitória não tem guarda na suíte.** Ela foi
+  exercitada de fato na conferência manual — a captura da falha transitória é do
+  **mesmo agente** que acabara de exibir a recusa por ciclo, então o aviso foi
+  limpo corretamente no submit seguinte. **Conferência manual não substitui
+  guarda:** ela prova que aconteceu uma vez, não que continua acontecendo. Os
+  guardas atuais cobrem recusa → sucesso (G5) e recusa → descarte (G6); falta
+  recusa → **falha transitória**.
+  - **Gatilho:** a próxima change que tocar o `onError` de
+    `AgentDelegationsTab`, ou a primeira regressão observada nessa sequência.
+  - **Posição:** na própria change que tocar aquele `onError` — quem mexe no
+    ramo escreve o guarda que falta. Não vale change só para isso: o
+    comportamento está verificado e o custo de um `it()` a mais é trivial dentro
+    de qualquer edição futura ali.
 
 ### Abertos por `delegacao-diagnostico` (2026-09-20)
 
