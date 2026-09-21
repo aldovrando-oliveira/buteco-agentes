@@ -7,7 +7,7 @@ import { RouterProvider, createMemoryRouter } from 'react-router';
 import { notifications } from '@mantine/notifications';
 import { theme } from '../../../theme';
 import { AgentDelegationsTab } from './AgentDelegationsTab';
-import { replaceAgentDelegations } from '../api/agentsApi';
+import { ApiError, replaceAgentDelegations } from '../api/agentsApi';
 import type { Agent } from '../types/agent';
 
 vi.mock('../api/agentsApi', async (importOriginal) => {
@@ -251,5 +251,111 @@ describe('AgentDelegationsTab', () => {
       expect(notifications.show).toHaveBeenCalledWith(expect.objectContaining({ color: 'red' })),
     );
     expect(checkboxFor('Cobrança')).toBeChecked();
+  });
+  // --- Recusa permanente x falha transitória --------------------------------
+  //
+  // Até esta change, QUALQUER erro produzia a mesma notificação com "Tente
+  // novamente". A API recusa ciclo (e mais três casos) com 400 sob
+  // `targetAgentIds` desde `delegacao-ciclo-no-cadastro`, carregando o caminho
+  // pelos nomes dos agentes — e o `onError: () => {}` descartava o argumento
+  // inteiro.
+
+  // Todos os guardas de recusa usam ESTE arranjo: um ApiError de verdade (o
+  // módulo é mockado com importOriginal, então a classe real está disponível).
+  // Construir um objeto qualquer com `status: 400` passaria com o
+  // `instanceof` errado e não provaria nada.
+  const refusal = (message: string) =>
+    new ApiError(400, 'Validation failed', {
+      title: 'Validation failed',
+      status: 400,
+      errors: { targetAgentIds: [message] },
+    });
+
+  const cyclePath = 'Atendente → Cobrança → Suporte → Atendente';
+  const cycleMessage =
+    `Esta delegação fecha um ciclo entre agentes: ${cyclePath}. ` +
+    'Um agente não pode delegar, direta ou indiretamente, para um agente que delega de volta para ele.';
+
+  async function saveWith(rejection: unknown) {
+    vi.mocked(replaceAgentDelegations).mockRejectedValue(rejection);
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(checkboxFor('Cobrança'));
+    await user.click(screen.getByRole('button', { name: /salvar delegações/i }));
+
+    return user;
+  }
+
+  // G1 — o caminho do ciclo chega à tela. É a informação que resolve o
+  // problema, e ela já vinha na resposta; o que faltava era exibi-la.
+  it('recusa por ciclo exibe a mensagem da API, com o caminho', async () => {
+    await saveWith(refusal(cycleMessage));
+
+    const alert = await screen.findByTestId('delegations-refusal');
+    expect(alert).toHaveTextContent(cyclePath);
+  });
+
+  // G2 — A NEGATIVA QUE PRENDE O DEFEITO. Sem ela, acrescentar a mensagem nova
+  // sem remover a velha passa verde, e o operador continua sendo mandado
+  // repetir uma operação que nunca vai funcionar (convenção 13).
+  it('recusa por ciclo não instrui a tentar de novo', async () => {
+    await saveWith(refusal(cycleMessage));
+
+    await screen.findByTestId('delegations-refusal');
+    expect(notifications.show).not.toHaveBeenCalled();
+    expect(screen.queryByText(/tente novamente/i)).not.toBeInTheDocument();
+  });
+
+  // G3 — o ramo é pela CHAVE do ValidationProblem, não pelo texto. Este guarda
+  // é o que impede alguém de reintroduzir casamento de texto ("fecha um
+  // ciclo"): a rota tem QUATRO 400 sob a mesma chave, e os outros três não
+  // podem cair no genérico.
+  it('outra recusa de validação da mesma rota também é exibida', async () => {
+    await saveWith(refusal('Um agente não pode delegar para si mesmo.'));
+
+    const alert = await screen.findByTestId('delegations-refusal');
+    expect(alert).toHaveTextContent('Um agente não pode delegar para si mesmo.');
+    expect(notifications.show).not.toHaveBeenCalled();
+  });
+
+  // G4 — PASSA EM `HEAD` DE PROPÓSITO, e não prova nada sobre o defeito: é
+  // regressão contra a correção errada, que seria trocar o genérico em vez de
+  // acrescentar um ramo. Para rede e 5xx, "Tente novamente" está correto.
+  it('falha transitória mantém a notificação genérica e não exibe recusa', async () => {
+    await saveWith(new Error('network down'));
+
+    await waitFor(() =>
+      expect(notifications.show).toHaveBeenCalledWith(expect.objectContaining({ color: 'red' })),
+    );
+    expect(screen.queryByTestId('delegations-refusal')).not.toBeInTheDocument();
+  });
+
+  // G5 e G6 — um aviso de recusa que sobrevive afirma uma recusa que já não
+  // vale. É a forma da convenção 13 que nenhuma revisão de tela pega, porque a
+  // tela não muda: a afirmação era verdadeira quando apareceu.
+  it('salvar com sucesso depois de uma recusa remove o aviso', async () => {
+    const user = await saveWith(refusal(cycleMessage));
+    await screen.findByTestId('delegations-refusal');
+
+    vi.mocked(replaceAgentDelegations).mockResolvedValue({
+      ...agent,
+      delegatesTo: [{ id: delegateB.id, name: delegateB.name }],
+      a2a: null,
+    });
+    await user.click(screen.getByRole('button', { name: /salvar delegações/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('delegations-refusal')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('descartar depois de uma recusa remove o aviso', async () => {
+    const user = await saveWith(refusal(cycleMessage));
+    await screen.findByTestId('delegations-refusal');
+
+    await user.click(await screen.findByRole('button', { name: 'Descartar' }));
+
+    expect(screen.queryByTestId('delegations-refusal')).not.toBeInTheDocument();
   });
 });
