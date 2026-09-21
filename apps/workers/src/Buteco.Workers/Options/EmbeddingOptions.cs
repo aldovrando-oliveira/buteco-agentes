@@ -35,4 +35,47 @@ public sealed class EmbeddingOptions
     /// incompatíveis sem erro nenhum, e o índice ficaria corrompido em silêncio.
     /// </summary>
     public int Dimensions { get; set; }
+
+    /// <summary>
+    /// Quantos fragmentos vão em <b>cada chamada</b> ao gerador de embedding.
+    ///
+    /// <para>
+    /// <b>250 porque 267 passou e 442 falhou, com margem; não há teto medido.</b>
+    /// Medido no piloto de 20/09/2026, contra o gateway de embedding do
+    /// <c>.env.prod</c>, com o modelo de 4.096 dimensões: o documento
+    /// <c>02 HISTORICO E STATUS</c> (~442 fragmentos) falhou com
+    /// <c>502 upstream_error</c> nas três tentativas, e as duas metades dele
+    /// (267 e 175 fragmentos) indexaram. Este número é a única coisa que a
+    /// medição sustenta.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>NÃO é "o limite seguro do gateway".</b> O formato do teto — por número
+    /// de entradas, por bytes do corpo, ou por tempo de resposta do upstream —
+    /// não foi estabelecido, e nenhuma das três hipóteses foi descartada.
+    /// Chamar 250 de limite seria afirmar um mecanismo que ninguém mediu.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>É configurável por isso</b>, e não por simetria com as outras
+    /// propriedades: o valor é provisório por construção, e variá-lo é como o
+    /// teto vai ser descoberto. Diferente dos parâmetros de fragmentação
+    /// (<c>KnowledgeChunker</c>), que saíram de uma medição e ninguém precisa
+    /// ajustar em produção — a convenção 2 separa os dois casos pelo cenário
+    /// real de alguém precisar de outro valor, e aqui ele existe.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Gatilho de recalibração</b> (convenção 22): qualquer medição contra o
+    /// gateway que estabeleça o formato do teto, ou a primeira falha de
+    /// indexação com o lote em vigor. Quem remedir escreve o regime ao lado do
+    /// número novo.
+    /// </para>
+    ///
+    /// <para>
+    /// Valor menor ou igual a zero <b>reprova o boot</b> — ver
+    /// <c>EmbeddingBatchSizeValidation</c>. Não é corrigido em silêncio.
+    /// </para>
+    /// </summary>
+    public int BatchSize { get; set; } = 250;
 }

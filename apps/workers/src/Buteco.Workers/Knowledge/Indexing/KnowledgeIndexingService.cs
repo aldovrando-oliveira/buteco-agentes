@@ -4,6 +4,7 @@ using Buteco.Workers.Knowledge.Embedding;
 using Buteco.Workers.Knowledge.Entities;
 using Buteco.Workers.Options;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -70,13 +71,7 @@ public sealed class KnowledgeIndexingService(
 
             var options = embeddingOptions.Value;
             var generator = embeddingResolver.Resolve();
-            var embeddings = await generator.GenerateAsync(fragments.Select(f => f.Text), cancellationToken: cancellationToken);
-
-            if (embeddings.Count != fragments.Count)
-            {
-                throw new InvalidOperationException(
-                    $"O provedor devolveu {embeddings.Count} vetores para {fragments.Count} fragmentos.");
-            }
+            var embeddings = await GenerateInBatchesAsync(generator, fragments, options.BatchSize, cancellationToken);
 
             var rows = new List<KnowledgeFragment>(fragments.Count);
             for (var i = 0; i < fragments.Count; i++)
@@ -120,6 +115,92 @@ public sealed class KnowledgeIndexingService(
 
             return await FailAsync(dbContext, message, KnowledgeIndexingFailure.Describe(exception), cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Gera o embedding dos fragmentos em <b>lotes sequenciais</b>, devolvendo os
+    /// vetores na ordem dos fragmentos.
+    ///
+    /// <para>
+    /// <b>POR QUE EXISTE.</b> Até 20/09/2026 esta chamada era uma só, com todos
+    /// os fragmentos do documento, e nada impunha teto. Medido no piloto de
+    /// 20/09/2026 (gateway de embedding do <c>.env.prod</c>, modelo de 4.096
+    /// dimensões): o documento <c>02 HISTORICO E STATUS</c>, com ~442
+    /// fragmentos, falhou com <c>502 upstream_error</c> nas <b>três</b>
+    /// tentativas — inclusive <b>isolado</b>, sem outra indexação concorrendo —,
+    /// enquanto as duas metades dele (267 e 175 fragmentos) indexaram, e o
+    /// documento <c>01</c> (78 fragmentos) indexou sempre.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>O formato do teto do gateway NÃO foi estabelecido</b> — por número de
+    /// entradas, por bytes do corpo, ou por tempo de resposta do upstream. O que
+    /// se sabe é o par: 442 falha, 267 passa. Por isso o tamanho do lote é
+    /// configuração, e não constante: variá-lo é como o teto vai ser descoberto
+    /// (ver <c>EmbeddingOptions.BatchSize</c>).
+    /// </para>
+    ///
+    /// <para>
+    /// <b>SEQUENCIAL, e a medida é que decide.</b> O mesmo documento <c>01</c>,
+    /// trabalho idêntico, variou <b>4,4×</b> em duração entre duas indexações
+    /// (0,83 s contra 3,62 s) com uma chamada só: o upstream é instável, e a
+    /// variação não vem daqui. Disparar lotes concorrentes contra um upstream
+    /// assim aumenta a chance de uma das chamadas estar perto do limite na hora
+    /// errada — e não há medição nenhuma que diga que o gateway aguenta N
+    /// chamadas simultâneas. A medida 1 aponta para o outro lado: o documento
+    /// falhou <b>isolado</b>. Concorrência aqui precisa de motivo medido.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>SÓ a chamada ao gateway é loteada.</b> Os vetores de todos os lotes são
+    /// acumulados e gravados <b>uma vez</b>, na transação única de
+    /// <see cref="CommitAsync"/> — a substituição integral dos fragmentos
+    /// continua sendo tudo ou nada (garantia 2 de D9 da etapa 1). Fracionar a
+    /// gravação abriria uma janela em que o documento tem parte dos fragmentos
+    /// novos e parte dos antigos, e a busca devolveria conteúdo de duas revisões
+    /// misturado, sem erro nenhum.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>E A RETENTATIVA CONTINUA SENDO DO DOCUMENTO INTEIRO.</b> Uma falha no
+    /// segundo lote reprocessa o primeiro — custo real, aceito. Retentar por
+    /// lote é exatamente a alternativa que D3 de <c>knowledge-base-indexacao</c>
+    /// recusou (*"Não há retry da chamada ao provedor dentro da execução. Uma
+    /// camada só, um contador só, um significado só."*), e ela quebraria o que
+    /// <c>KnowledgeIndexingQueues.MaxAttempts</c> afirma — *"uma execução é uma
+    /// tentativa, não uma chamada HTTP"* —, que é o que faz a tela de documentos
+    /// poder dizer "três tentativas, a última às 03:14" sem mentir. Lote menor
+    /// reduz o desperdício por ser menos trabalho a repetir, e sobretudo por
+    /// falhar menos.
+    /// </para>
+    /// </summary>
+    private static async Task<List<Embedding<float>>> GenerateInBatchesAsync(
+        IEmbeddingGenerator<string, Embedding<float>> generator,
+        IReadOnlyList<ChunkedFragment> fragments,
+        int batchSize,
+        CancellationToken cancellationToken)
+    {
+        var vectors = new List<Embedding<float>>(fragments.Count);
+
+        foreach (var batch in fragments.Chunk(batchSize))
+        {
+            var texts = batch.Select(f => f.Text).ToList();
+            var generated = await generator.GenerateAsync(texts, cancellationToken: cancellationToken);
+
+            // Conferência POR LOTE, e não só no total: aqui a informação é
+            // local, e a mensagem pode dizer qual lote divergiu. O total fica
+            // implicado — se todo lote casa, a soma casa.
+            if (generated.Count != texts.Count)
+            {
+                throw new InvalidOperationException(
+                    $"O provedor devolveu {generated.Count} vetores para {texts.Count} fragmentos "
+                  + $"no lote começando no fragmento {vectors.Count}.");
+            }
+
+            vectors.AddRange(generated);
+        }
+
+        return vectors;
     }
 
     /// <summary>
