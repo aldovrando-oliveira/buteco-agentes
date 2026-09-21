@@ -154,6 +154,12 @@ services:
       Embedding__Provider: ${EMBEDDING_PROVIDER:-openai}
       Embedding__Model: ${EMBEDDING_MODEL:?defina EMBEDDING_MODEL — sem default seguro, foi escolhido por medição}
       Embedding__Dimensions: ${EMBEDDING_DIMENSIONS:?defina EMBEDDING_DIMENSIONS — a coluna do índice é vector(4096), fixa na migration}
+      # COM default, ao contrário das duas acima: 250 vale se ninguém definir,
+      # e um valor <= 0 reprova o boot em vez de falhar por documento. Abaixe
+      # este número se a indexação de documento grande falhar com 502 —
+      # variá-lo é como o teto do gateway é descoberto, porque ele não foi
+      # medido (só se sabe que 442 fragmentos falharam e 267 passaram).
+      Embedding__BatchSize: ${EMBEDDING_BATCH_SIZE:-250}
       Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY}
     # Sem porta — apps/workers nunca serviu HTTP.
 

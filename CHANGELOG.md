@@ -382,6 +382,28 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Documento grande não indexava: a chamada de embedding ia inteira, sem
+  teto**. `apps/workers` mandava **todos** os fragmentos do documento numa
+  chamada só ao gerador de embedding. Medido no piloto de 20/09/2026 (gateway
+  do `.env.prod`, modelo de 4.096 dimensões): um documento de ~442 fragmentos
+  falhou com `502 upstream_error` nas **três** tentativas — inclusive isolado,
+  sem outra indexação concorrendo —, enquanto as duas metades dele (267 e 175
+  fragmentos) indexaram normalmente. A chamada passa a ser **loteada, em lotes
+  sequenciais**, com o tamanho em `Embedding__BatchSize` (nova variável de
+  ambiente `EMBEDDING_BATCH_SIZE`, **opcional**, padrão **250**). A persistência
+  não mudou: os fragmentos continuam sendo substituídos integralmente numa
+  transação única, e a retentativa continua sendo do documento inteiro, três
+  execuções — uma execução continua sendo uma tentativa, que é o que faz a tela
+  de documentos poder dizer "três tentativas" sem mentir.
+  **O padrão 250 é provisório e está escrito como tal**: 267 fragmentos passaram
+  e 442 falharam, e o *formato* do teto do gateway (por número de entradas, por
+  bytes do corpo, ou por tempo de resposta) **não foi estabelecido**. Se a
+  indexação de um documento grande falhar com `502`, baixe
+  `EMBEDDING_BATCH_SIZE` e reindexe — variá-lo é como o teto é descoberto.
+  Valor menor ou igual a zero **reprova o boot** de `apps/workers`, com o valor
+  encontrado na mensagem, e **não** é corrigido em silêncio: um valor trocado
+  automaticamente invalidaria a medição que o parâmetro existe para permitir.
+
 - **Um ciclo de delegação `A→B→…→A` travava a conversa, e o cadastro o
   aceitava**: a task do agente de origem segura o lock que serializa a conversa
   (`pg_advisory_lock`) enquanto espera o alvo, e a task do **mesmo** agente mais

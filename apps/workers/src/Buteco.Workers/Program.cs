@@ -103,6 +103,16 @@ var host = builder.Build();
 
 host.ValidateTimeZoneConfiguration();
 
+// Convenção 8, e a razão de ser no boot está no XML doc: Embedding:BatchSize é
+// o primeiro parâmetro desta base feito para ser VARIADO À MÃO em produção, e um
+// valor inválido só apareceria na primeira indexação — por documento, queimando
+// as três tentativas de cada um.
+//
+// NENHUM TESTE DESTA SUÍTE PROVA ESTE REGISTRO, pelo mesmo motivo do
+// NonTerminalTaskDetector abaixo: os testes montam o host à mão. Remover esta
+// linha deixa EmbeddingBatchSizeValidationTests verde e a produção sem checagem.
+host.ValidateEmbeddingBatchSize();
+
 // Quinto caso da convenção 8, e o PRIMEIRO desta base que faz I/O no boot —
 // ver o XML doc do método para o que sustenta o custo (o compose garante
 // Postgres saudável e migrado antes deste processo subir) e para a mudança de

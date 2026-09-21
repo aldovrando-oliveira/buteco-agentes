@@ -149,6 +149,7 @@ qual a própria API é **alcançada** de fora, do ponto de vista do AgentCard.
 | `Embedding__Provider` | condicional | Provedor do modelo de embedding das bases de conhecimento. Hoje só `openai` é suportado — `anthropic` e `gemini` não expõem tipo de embedding no SDK referenciado |
 | `Embedding__Model` | condicional | Modelo de embedding. **Não tem default**: foi escolhido por medição, e o modelo que um ambiente serve por padrão pode empatar com busca lexical |
 | `Embedding__Dimensions` | condicional | Dimensão declarada, **conferida contra a que o provedor devolve no momento da gravação**. O gateway pode aceitar o parâmetro `dimensions` e ignorá-lo, e sem a conferência o índice seria gravado com vetores incompatíveis sem erro nenhum |
+| `Embedding__BatchSize` | não | Quantos fragmentos vão em **cada chamada** ao gerador de embedding. **A única das quatro com default** (250), e ele é **provisório**: medido no piloto de 20/09/2026, um documento de ~442 fragmentos falhou com `502 upstream_error` nas três tentativas e as duas metades dele (267 e 175) indexaram — o **formato** do teto do gateway (entradas, bytes ou tempo de resposta) não foi estabelecido. Baixe o valor se a indexação de documento grande falhar; variá-lo é como o teto vai ser descoberto. Valor `<= 0` **reprova o boot**, e não é corrigido em silêncio |
 
 ### Rotação de chave de provedor exige reiniciar o processo
 
@@ -245,6 +246,7 @@ de configuração que o processo enxerga.
 | `OPENAI_BASE_URL` / `OPENAI_API_KEY` | `OpenAI__BaseUrl` / `OpenAI__ApiKey` nos dois processos |
 | `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | `Anthropic__ApiKey` / `Gemini__ApiKey`, em `apps/api` **e** `apps/workers`. Opcionais: vazias, os provedores não aparecem em `GET /providers` |
 | `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS` | `Embedding__Provider` / `__Model` / `__Dimensions` de `apps/workers`. **`MODEL` e `DIMENSIONS` são obrigatórias** — o compose falha ao processar o arquivo sem elas, porque a ausência não impede o boot e só aparece na primeira indexação |
+| `EMBEDDING_BATCH_SIZE` | `Embedding__BatchSize` de `apps/workers`. **Opcional, default 250** — diferente das duas acima, a ausência não quebra nada. É o parâmetro a ajustar quando a indexação de documento grande falhar no gateway |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` — byte-idêntica entre `apps/api` e `apps/workers` |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` — só `apps/inbox` |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` — byte-idêntica entre `apps/api` e `apps/inbox` |

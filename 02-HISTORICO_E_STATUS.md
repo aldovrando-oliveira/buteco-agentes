@@ -4205,7 +4205,11 @@ continuam sendo 335/335 e 921/921 do fechamento anterior.
 
 ### Recusa permanente separada de falha transitória na aba de delegações (`frontend-mensagem-recusa-ciclo`, 2026-09-20)
 
-**Posição 4 da fila, e a última change antes da limpeza do banco e do deploy.**
+**Posição 4 da fila.** *(Dizia "e a última change antes da limpeza do banco e do
+deploy". As duas metades ficaram falsas depois: a posição 5
+(`indexacao-lote-de-fragmentos`) entrou em 20/09/2026, e a limpeza foi descartada
+em 21/09/2026. Corrigido em 21/09/2026 — convenção 13, afirmação verdadeira
+quando escrita e tornada falsa por outra etapa.)*
 O defeito nasceu na change anterior de `apps/api`: o 400 por ciclo é recusa
 permanente e a tela mandava tentar de novo.
 
@@ -4405,6 +4409,173 @@ anterior.
 **recusa → falha transitória** foi exercitada de fato (a captura da falha é do
 mesmo agente que exibia a recusa), mas **conferência manual não substitui
 guarda** — ela prova que aconteceu uma vez, não que continua acontecendo.
+
+### Lote na chamada de embedding (`indexacao-lote-de-fragmentos`, 2026-09-20)
+
+**Estado, e as duas frases precisam ser lidas separadas:**
+
+- **A change está aplicada.** O loteamento existe, `Embedding:BatchSize` existe
+  com padrão 250, o boot reprova valor inválido, e os guardas passam —
+  `apps/workers` em **280/280**, contra baseline de 268/268.
+- **O defeito NÃO está verificado como resolvido** contra o gateway real. O que
+  se sabe é que **267 fragmentos passaram uma vez**; 250 tem margem sobre isso e
+  **nenhuma medição o otimizou**. O formato do teto do gateway continua sem ser
+  estabelecido.
+
+Sem essa separação escrita, quem ler isto daqui a um mês conclui que o
+`502 upstream_error` foi resolvido em 20/09 — e a **primeira falha nova pareceria
+regressão em vez de continuação**. A verificação de campo é item aberto próprio,
+com gatilho no primeiro deploy.
+
+#### As cinco medidas do gateway
+
+**Regime colado** (convenção 22): piloto, **20/09/2026,
+`America/Sao_Paulo`**, gateway de embedding do `.env.prod`, modelo de **4.096
+dimensões**, uma chamada por documento (o comportamento anterior a esta change).
+
+> **Os carimbos do banco estão em UTC e marcam 21/09.** `2026-09-21 01:40:24+00`
+> é **20/09 às 22:40** em `America/Sao_Paulo`, e as cinco medidas caem todas em
+> 20/09, hora local. A frase está aqui porque quem cruzar este registro com uma
+> consulta vai ver 21 — sem ela, a data parece erro de digitação e alguém
+> "corrige" de volta.
+>
+> **E a divergência é o defeito, não uma nota de rodapé.** O primeiro registro
+> desta change saiu datado "20–21/09" por ler carimbo UTC como data — é o mesmo
+> mecanismo que a exploração `metricas-de-operacao` mediu no banco de
+> desenvolvimento, onde **29,5% das tasks caem em outro dia** quando o balde sai
+> em UTC. Aconteceu **dentro do registro da própria change**, escrito por quem
+> conhecia o achado.
+
+| documento | bytes | fragmentos | resultado | duração |
+|---|---|---|---|---|
+| `02` inteiro | 473.492 | ~442 | **falha, 3 de 3 tentativas** | — |
+| `02` parte 1 | 268.181 | 267 | indexado | 8,9 s |
+| `02` parte 2 | 205.310 | 175 | indexado | 14,1 s |
+| `01` | 89.518 | 78 | indexado | **0,83 s** |
+| `01` (reindexado) | 89.518 | 78 | indexado | **3,62 s** |
+
+São a **linha de base de qualquer ajuste futuro do parâmetro**. Cinco leituras
+que qualquer número escolhido tem de respeitar:
+
+1. **442 falha isolado.** Duas das três tentativas foram com o `02` sozinho, sem
+   o `01` concorrendo — **não é disputa entre instâncias no gateway**.
+2. **O `02` inteiro nunca indexou com sucesso** (`ContentRevision = 1`).
+3. **`FragmentCount = 0`** no documento falhado: a falha é na chamada de
+   embedding, **antes de qualquer persistência**.
+4. **O par 4,4× do `01` é o que caracteriza o upstream como instável** — mesmo
+   documento, trabalho idêntico, 0,83 s contra 3,62 s. A variação não vem daqui,
+   e é o que recusa lotes concorrentes por falta de medição a favor.
+5. **As durações de 267 e 175 não são limpas.** As duas partes começaram no mesmo
+   instante (`01:40:24,17` e `01:40:24,58`), em instâncias diferentes, e medem
+   contenção junto com custo. **A única duração isolada é a do `01`.** Citá-las
+   como custo de lote seria a ocorrência 3 da convenção 22 — número certo,
+   pergunta errada.
+
+**O que continua desconhecido:** o **formato** do teto — por número de entradas,
+por bytes do corpo, ou por tempo de resposta do upstream. Nenhuma das três foi
+descartada. O que se sabe é o par: **442 falha, 267 passa.**
+
+#### Décima medição da convenção 18
+
+Projeção feita no `design.md` depois de fechar a verificação e antes de escrever
+código. O fechamento compara — sem inventar fator de correção.
+
+**Contagem de arquivo: 12 projetados, 12 entregues — e a decomposição bate uma a
+uma.** É o **terceiro acerto seguido** do método de contar criados e modificados
+separadamente a partir do blast radius lido no código.
+
+| | projetado | entregue |
+|---|---|---|
+| criados (produção) | 1 | **1** |
+| criados (teste) | 1 | **1** |
+| modificados (produção) | 3 | **3** |
+| modificados (teste) | 2 | **2** |
+| config/docs | 3 | **3** |
+| **total ex-`openspec`, ex-registro** | **12** | **12** |
+
+**Blast radius de assinatura: zero, como projetado**, e medido por **compilação**,
+não por `grep`. `EmbeddingOptions` ganhou propriedade com inicializador,
+`FakeEmbeddingGenerator` ganhou membros, `LastBatchSize` foi mantido de
+propósito — nenhum sítio existente precisou mudar.
+
+**Linhas: erraram, e as três causas são separáveis. Somadas, mentiriam.**
+
+- **O CÓDIGO de produção acertou quase exato: 48 entregues contra ~45
+  projetados.** A dimensão que a projeção sabe medir continua medindo.
+- **O COMENTÁRIO de produção errou para baixo: 151 contra ~104** — proporção
+  **3,15:1** contra 2,3:1 projetada. A causa não é a régua da nona medição, é a
+  **classificação**: dois registros entraram como "baratos" (~14) e eram
+  contrafactuais. O do boot reconstrói **três** recusas (não clampar, não validar
+  no primeiro uso, e o custo de o `Program.cs` não ter cobertura) e custou ~45.
+  **E apareceu um tipo que a classificação não tinha: registro que carrega
+  MEDIÇÃO COM REGIME COLADO** — a tabela das cinco medidas dentro do XML doc —,
+  que é mais caro que reconstruir uma ausência, porque carrega os números e o
+  regime de cada um.
+- **O desvio grande está em TESTE MODIFICADO: 318 contra ~125**, e a causa é
+  **reusável e é a mais importante desta medição**:
+
+  > **A régua "quando o entregável é uma decisão registrada, o comentário é o
+  > produto" foi aplicada só à produção. Ela vale igual no teste.**
+
+  A projeção custeou teste por **cenário** (~19-21 linhas), que é custo de
+  *código* de teste e é cego ao comentário. Medido: **164 linhas de comentário
+  contra 183 de código** nos arquivos de teste (0,90:1). E não é gordura — é
+  onde o registro **tem de estar**: um guarda cuja razão de existir não é óbvia
+  (o de alinhamento, que cobre o único caminho de corrupção **silenciosa** do
+  loteamento) carrega essa razão no arquivo de teste, não no `design.md`, senão
+  a primeira refatoração que "limpar" o teste não sabe o que está apagando.
+  **Régua: projetar comentário de teste como item próprio, com custo por guarda
+  cuja razão de existir não é auto-evidente.**
+
+**Contagem da suíte: 274 projetados, 280 entregues.** Causa única e
+mecânica — **a unidade de entrega do xUnit é o CASO, não o método**: duas
+`[Theory]` renderam 6 casos onde a projeção contou 2 cenários. 13 testes novos
+menos 1 renomeado = +12, contra +6 projetados. É um degrau adiante do achado da
+5a-4 (*contar afirmações subestima; contar estados acerta*): **contar estados
+acerta o número de asserções, e ainda erra o número de testes se alguma delas
+virar `[Theory]`.**
+
+**Comparação por nome, não por número:** a única saída da lista foi
+`Embeddings_AreGeneratedInASingleBatch`, renomeado para
+`DocumentSmallerThanTheBatch_IsGeneratedInExactlyOneCall` — é a task 1.5, não
+uma perda. Nenhum outro teste sumiu.
+
+**Baseline e regime da medição de suíte**, colados: **268/268 em 6m16s** antes de
+tocar em qualquer arquivo, **280/280 em 5m41s** no fechamento, as duas com
+`podman ps` devolvendo **zero** e **14 classes** no `WorkerHostCollection` — a
+15ª foi evitada de propósito, pondo a checagem de boot num teste unitário puro.
+
+#### Régua contada por busca textual mede TEXTO, não ESTRUTURA — segunda ocorrência
+
+O arquivo de teste novo explicava, em comentário, que ficava **fora** da coleção
+de hosts — e escrevia o nome do atributo por extenso. O `grep` que conta as
+classes da coleção passou a devolver **15** onde havia **14**. Ninguém tinha
+errado nada: a régua é textual, e uma menção em prosa entra nela como se fosse
+registro. A redação foi mudada para não citar o atributo.
+
+**É a segunda ocorrência da mesma lição, e as duas erram em direções OPOSTAS** —
+é isso que dá a régua, porque uma só pareceria descuido:
+
+| # | medição | a régua textual | a realidade | direção |
+|---|---|---|---|---|
+| 1 | oitava | `grep` pela interface contou **4** sítios de chamada | a **compilação** achou **5** — um teste instanciava a classe concreta | **para baixo** |
+| 2 | décima | `grep` pelo atributo contou **15** classes na coleção | havia **14** — um comentário citava o nome que ele procurava | **para cima** |
+
+**A forma:** busca textual erra **para baixo** quando a estrutura não repete o
+texto procurado (a classe concreta no lugar da interface), e **para cima** quando
+o texto aparece sem a estrutura (o nome do atributo dentro de um comentário).
+Nos dois casos o comando roda, devolve um número, e o número parece medição.
+
+**Na prática:** régua que conta *estrutura* — sítios de chamada, implementações,
+classes de uma coleção — é conferida por **compilação** ou por uma busca que
+exclua comentário; `grep` cru serve para **localizar**, não para **contar**. Vale
+para todas as réguas que a convenção 18 lista como "enumera de graça": ali o
+`tsc` e a compilação são estruturais, e o `grep -rl "vi.mock(..."` é textual e
+tem esta fragilidade.
+
+**Posição:** duas ocorrências. **Na terceira, a forma curta vai para o `01`**,
+junto da régua de blast radius da convenção 18 — que já mudou de ferramenta por
+este exato motivo na oitava medição, sem que a causa geral tivesse sido nomeada.
 
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
@@ -6690,14 +6861,46 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 2 delegacao-ciclo-no-cadastro       ✔ aplicada  (arquivar)
 3 delegacao-diagnostico             ✔ aplicada em 20/09/2026  (arquivar)
 4 frontend-mensagem-recusa-ciclo    ✔ aplicada em 20/09/2026  (arquivar)
-  → limpeza do banco + deploy das correções → OBSERVAR   ← A PRÓXIMA ETAPA
-5 replicas-de-worker
-6 metricas-execucao-coleta
+5 indexacao-lote-de-fragmentos      ✔ aplicada em 20/09/2026  (arquivar)
+  → deploy das correções SEM limpar o banco → OBSERVAR   ← A PRÓXIMA ETAPA
+6 replicas-de-worker
+7 metricas-execucao-coleta
 ```
 
-**A posição 4 saiu aplicada em 20/09/2026**, e com ela **acaba a fila de código
-antes do deploy**. O que vem agora não é change: é a limpeza do banco e o deploy
-das quatro correções, seguidos de observação contra tráfego real. **Uma tarefa de
+**A LIMPEZA DO BANCO FOI DESCARTADA** (decisão do dono, 21/09/2026). O deploy
+sai **sem limpar**: as tasks presas foram medidas em **zero**, o que tirou o
+motivo que a limpeza tinha, e ela custaria recompor cadastro de agentes,
+servidores MCP e vínculos, recadastrar as credenciais de canal — **o webhook do
+WAHA é manual** — e reindexar o conhecimento inteiro. O parágrafo "o que a
+limpeza do banco custa", mais abaixo nesta seção, passa a ser o registro de **por
+que ela foi descartada**, não uma lista de tarefas a fazer.
+
+**A `indexacao-lote-de-fragmentos` entrou na posição 5, ANTES do deploy**
+(acrescentada em 20/09/2026), empurrando `replicas-de-worker` para 6 e
+`metricas-execucao-coleta` para 7.
+
+**O motivo original envelheceu, e a posição não mudou** — convenção 9, a premissa
+corrigida com a causa real em vez de apagada. Ela entrou porque **a limpeza
+obrigaria a reindexar todo o conhecimento**, e era aí que o defeito medido
+voltaria a aparecer em todos os documentos grandes de uma vez, sem conteúdo
+anterior para preservar. Com a limpeza descartada, esse argumento caiu.
+
+**O que sustenta a posição agora é mais forte, porque não depende de plano
+nenhum: o `02` inteiro não indexa HOJE.** Três tentativas, `ContentRevision = 1`,
+nenhum fragmento gravado — medido, e aberto. Deployar as outras quatro correções
+deixando esta de fora entregaria uma produção em que um documento grande da base
+continua sem poder ser indexado, e o custo de incluí-la no mesmo deploy é uma
+variável de ambiente **opcional**.
+
+**E ela NÃO fecha o assunto:** a change torna o lote ajustável e o defeito
+mensurável; quem prova que 250 resolve é o gateway real, na janela deste mesmo
+deploy. Está registrado como item aberto em "Abertos por
+`indexacao-lote-de-fragmentos`", com gatilho.
+
+**A posição 4 saiu aplicada em 20/09/2026.** A fila de código antes do deploy
+fechou com a **posição 5**, acrescentada depois. O que vem agora não é change: é
+o deploy das **cinco** correções, **sem limpar o banco**, seguido de observação
+contra tráfego real. **Uma tarefa de
 código ficou em aberto e ela bloqueia o deploy desta tela, não a change:** a
 conferência manual do aviso de recusa, nos dois esquemas de cor e com nomes
 longos — convenção 14, e está registrada em "Abertos por
@@ -6711,8 +6914,9 @@ então cada instância emite uma linha **idêntica** por ciclo e somá-las
 superestima pelo número de instâncias; (2) quem responde o `C` é a contagem de
 **`Submitted`**, nunca a de `Working`, que subestima por construção e mostra perto
 de zero justamente sob contenção. **A observação tem de ser contra tráfego
-real**, depois do deploy — é por isso que a 5 continua atrás da limpeza do banco
-na fila.
+real**, depois do deploy — é por isso que a `replicas-de-worker` continua atrás
+do deploy na fila. *(Dizia "atrás da limpeza do banco"; a limpeza foi descartada
+em 21/09/2026 e o que a segura é o deploy.)*
 
 **Os motivos que fixam a ordem** — sem eles ela parece arbitrária, e a tentação
 de antecipar a `replicas-de-worker` é grande, porque ela é a que "resolve o
@@ -6736,12 +6940,19 @@ problema":
   deployar a detecção sem a mensagem entrega ao operador uma recusa que ele não
   consegue interpretar. A change é pequena — o backend já manda o texto pronto.
 
-**O que a limpeza do banco custa, escrito agora para não ser surpresa na hora:**
-reindexação de todo o conhecimento (tokens, tempo, e o gateway de embedding de
-pé), recadastro das credenciais de canal — **o webhook do WAHA é manual, o do
-Telegram é automático** —, perda da memória das conversas em andamento, e
-recadastro de agentes, servidores MCP e vínculos. Por isso a limpeza é **depois**
-da 2 e da 3: recompõe-se o cadastro **uma vez só**.
+**O QUE A LIMPEZA DO BANCO CUSTARIA — e este parágrafo agora registra POR QUE ELA
+FOI DESCARTADA (21/09/2026), não uma tarefa a fazer:** reindexação de todo o
+conhecimento (tokens, tempo, e o gateway de embedding de pé), recadastro das
+credenciais de canal — **o webhook do WAHA é manual, o do Telegram é
+automático** —, perda da memória das conversas em andamento, e recadastro de
+agentes, servidores MCP e vínculos.
+
+**O que a decisão trocou:** o motivo da limpeza era o estado presumido de tasks
+presas; medidas, elas deram **zero**. Sem esse motivo, sobrou só o custo acima —
+e o deploy sai sem limpar. *(A frase "por isso a limpeza é depois da 2 e da 3:
+recompõe-se o cadastro uma vez só" valia enquanto a limpeza estava no plano;
+ficou aqui porque ela explica a ordem que a fila tem, não porque ainda haja
+limpeza a sequenciar.)*
 
 
 **Concluído**: `frontend-inventario-atividade-periodo` — aplicada,
@@ -7501,8 +7712,9 @@ duas changes parado até alguém lhe dar posição.
   - **Gatilho:** cumprido no instante em que esta change subir.
   - **Posição:** change própria de `apps/frontend`, chamada
     **`frontend-mensagem-recusa-ciclo`**, **depois de `delegacao-diagnostico` e
-    antes da limpeza do banco e do deploy**. Ver a sequência em
-    `## Próximo passo`, que é a única cópia viva da fila.
+    antes do deploy**. *(Dizia "antes da limpeza do banco e do deploy"; a limpeza
+    foi descartada em 21/09/2026.)* Ver a sequência em `## Próximo passo`, que é
+    a única cópia viva da fila.
   - **Por que não antes da `delegacao-diagnostico`:** a instrumentação é a única
     do lote que **não pode esperar**. Sem ela o `C` de pico não é observável, e a
     `replicas-de-worker` fica sem a entrada que decide entre capacidade
@@ -7556,8 +7768,11 @@ duas changes parado até alguém lhe dar posição.
     o escopo colado (convenção 22). **Se vier diferente de zero, D2 reabre com
     dado em vez de suposição**, e a pergunta da varredura volta a ser legítima.
   - **Gatilho:** a própria janela do deploy das correções.
-  - **Posição:** na janela do deploy, antes da limpeza do banco — depois dela o
-    número não existe mais para ser medido.
+  - **Posição:** na janela do deploy. *(Dizia "antes da limpeza do banco — depois
+    dela o número não existe mais para ser medido". A limpeza foi **descartada**
+    em 21/09/2026, então o número não vai ser apagado e a janela deixou de ser
+    estreita. E a medição já aconteceu: **zero**, em 20/09/2026 — foi ela que
+    tirou o motivo da limpeza.)*
 
 - **A decisão de não ter defesa de ciclo no runtime reabre no primeiro segundo
   escritor de `agent_delegations`.** Hoje o escritor é único
@@ -7568,3 +7783,64 @@ duas changes parado até alguém lhe dar posição.
   - **Gatilho:** o segundo escritor, qualquer que seja.
   - **Posição:** na própria change que o introduzir. Ela herda a decisão D3 e
     precisa reavaliá-la, não descobri-la depois.
+
+### Abertos por `indexacao-lote-de-fragmentos` (2026-09-20)
+
+- **Verificação de campo do tamanho do lote — a change NÃO prova que 250
+  resolve.** Ela torna o número ajustável e o defeito mensurável; quem prova é o
+  gateway real. O que fazer: reindexar o `02` com o lote em vigor; se falhar,
+  **baixar** `EMBEDDING_BATCH_SIZE` e repetir, **registrando cada passo aqui com
+  o regime colado** (convenção 22) — é assim que o formato do teto vai ser
+  estabelecido. É a única coisa que separa "a change está aplicada" de "o
+  `502 upstream_error` acabou", e as duas não são a mesma frase.
+  - **Gatilho:** o primeiro deploy com esta change aplicada.
+  - **Posição:** a janela do deploy da posição 5. *(Dizia "junto da reindexação
+    que a limpeza do banco obriga"; a limpeza foi descartada em 21/09/2026 e não
+    haverá reindexação em massa — a verificação passa a ser uma **reindexação
+    deliberada do `02`**, pedida pela tela, e não um efeito colateral da
+    limpeza.)* Não é tarefa da change, e por isso não está no `tasks.md` dela —
+    marcada lá, faria a leitura futura virar "resolvido em 20/09".
+
+- **Limite de documentos indexados simultaneamente.** Não há hoje cenário de
+  muitos arquivos de uma vez, então não é trabalho agora. O que precisa ficar
+  escrito, porque a análise já foi feita e se perde:
+  - **`prefetchCount` não serve como ponto de controle em k8s.** O paralelismo
+    vira consequência do autoscaler, que decide por **profundidade de fila** — e
+    a fila de indexação alimenta essa decisão.
+  - **Separar workers de embedding de workers de conversa AGRAVA.** Com pods
+    próprios, o autoscaler vê 100 mensagens de indexação como sinal puro e escala
+    para atendê-las — mais pods, mais chamadas simultâneas ao mesmo gateway
+    instável. Hoje, misturado, a pressão de indexação é **diluída** na métrica de
+    conversas.
+  - **O caminho viável é limitar o que ENTRA na fila**, mantendo o pendente no
+    banco. Isso muda o significado da fila de *trabalho pendente* para *trabalho
+    liberado*, e exige decidir **quem libera o próximo**: o worker ao concluir
+    (barato, mas a cadeia para em silêncio se o pod morre no meio — mesma forma
+    do `PendingDispatch` órfão em `Dispatching`, já registrado) ou uma varredura
+    periódica (recuperável por construção; molde do `DebounceSweepService` e do
+    `NonTerminalTaskDetector`).
+  - **O teto é global, então a contagem é global** — `count(*)` sobre documentos
+    em indexação no Postgres compartilhado —, com a disputa entre pods resolvida
+    como o inbox resolve, por `xmin`.
+  - **Efeito de segunda ordem, e é SEPARADO deste item:** hoje indexação e
+    conversa compartilham pods, então um lote grande de documentos rouba
+    capacidade de atendimento. É problema real, e não é o que esta linha resolve.
+  - **Gatilho:** o primeiro caso real de muitos documentos submetidos de uma vez,
+    ou qualquer evidência de indexação degradando atendimento.
+  - **Posição:** change própria, **depois da `metricas-execucao-coleta`** — sem
+    medição de embedding, o teto seria escolhido por palpite, que é exatamente o
+    defeito que `indexacao-lote-de-fragmentos` evitou no tamanho do lote.
+
+- **O texto de falha da tela de documentos manda repetir sem dizer o que já foi
+  repetido.** O texto atual
+  (`apps/workers/src/Buteco.Workers/Knowledge/Indexing/KnowledgeIndexingFailure.cs:52-53`,
+  lido em 20/09/2026) é *"A indexação falhou por um erro interno e as tentativas
+  se esgotaram. Reindexe o documento; se persistir, é caso de suporte técnico."*
+  Para a causa medida, **reindexar é a quarta tentativa** — as três automáticas
+  já aconteceram, e o texto não diz isso. É a **segunda ocorrência** da família
+  que a `frontend-mensagem-recusa-ciclo` corrigiu na tela de delegações: mensagem
+  que instrui a repetir sem dizer o que já foi repetido.
+  - **Gatilho:** cumprido — é esta medição.
+  - **Posição:** change de `apps/frontend`, **depois de
+    `indexacao-lote-de-fragmentos`**. Se o lote resolver o caso em produção, a
+    urgência cai mas o texto continua impreciso.
