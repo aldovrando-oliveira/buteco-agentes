@@ -3,6 +3,7 @@ using global::A2A;
 using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
+using Buteco.Workers.ExecutionMetrics;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
@@ -164,6 +165,151 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
         targetChatClient.Verify(
             c => c.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    // ── Métricas (change metricas-execucao-coleta) ───────────────────────
+
+    /// <summary>
+    /// A rejeição por profundidade termina a task do alvo antes do lock e de
+    /// qualquer chamada ao provedor — a linha pai tem de existir mesmo assim, e
+    /// dizer em que fase parou.
+    /// </summary>
+    [Fact]
+    public async Task DelegationDepthExceeded_TargetGetsRejectedExecutionRow_WithDepthPhase_AndNoCalls()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue mais uma vez, por favor.", delegationDepth: 5);
+
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(ExpectedToolName("Financeiro"), "Uma tarefa qualquer.");
+        var clients = ClientsByProviderModel(sourceChatClient.Object, new Mock<IChatClient>().Object);
+
+        using var instanceA = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(20));
+        using var instanceB = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(20));
+        await instanceA.StartAsync();
+        await instanceB.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, sourceTaskId);
+        }
+        finally
+        {
+            await instanceA.StopAsync();
+            await instanceB.StopAsync();
+        }
+
+        var targetRecord = await GetLatestTaskRecordForAgentAsync(targetId);
+        Assert.NotNull(targetRecord);
+
+        var targetExecution = await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, targetRecord!.TaskId);
+        Assert.Equal(nameof(TaskState.Rejected), targetExecution.TerminalState);
+        Assert.Equal(ExecutionMetricsValues.FailurePhase.DelegationDepthExceeded, targetExecution.FailurePhase);
+        Assert.Equal(6, targetExecution.DelegationDepth);
+        Assert.Null(targetExecution.LockAcquiredAt);
+        Assert.Empty(await ExecutionMetricsReader.ProviderCallsAsync(ConnectionString, targetRecord.TaskId));
+    }
+
+    /// <summary>
+    /// As duas chaves de origem nascem no <c>Metadata</c> da task do alvo, junto
+    /// de <c>delegationDepth</c> (delta de <c>agent-delegation-execution</c>).
+    /// </summary>
+    /// <remarks>
+    /// <b>Por que o alvo não pode chegar a <c>Completed</c> aqui.</b> Na
+    /// conclusão, <c>AgentExecutionService</c> SUBSTITUI o <c>Metadata</c>
+    /// inteiro da task pelo metadata terminal — as chaves de origem, e o próprio
+    /// <c>delegationDepth</c>, somem da task concluída. (Quem precisa delas é o
+    /// worker do alvo, que as lê ANTES de qualquer escrita.) Por isso: uma
+    /// instância só, prazo curto, e nenhum client para o provedor do alvo. O
+    /// alvo fica em <c>Submitted</c> ou, se a mesma instância o consumir depois
+    /// que o Source terminar, em <c>Failed</c> na resolução do client — e o
+    /// caminho de falha sem push notification preserva o <c>Metadata</c>. Os
+    /// dois estados servem; <c>Completed</c> não. A primeira versão deste guarda
+    /// ancorava em <c>Submitted</c> e reprovou pelo arranjo, não pela
+    /// propriedade: a instância consumiu o alvo antes da leitura.
+    /// </remarks>
+    [Fact]
+    public async Task DelegatedTask_CarriesSourceAgentAndSourceTask_InItsMetadata()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(ExpectedToolName("Financeiro"), "Uma tarefa qualquer.");
+
+        using var singleInstance = BuildHost(ClientsByProviderModel(sourceChatClient.Object, null), delegationTimeout: TimeSpan.FromSeconds(2));
+        await singleInstance.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            await PollUntilTerminalAsync(sourceTaskId);
+        }
+        finally
+        {
+            await singleInstance.StopAsync();
+        }
+
+        var targetRecord = await GetLatestTaskRecordForAgentAsync(targetId);
+        Assert.NotNull(targetRecord);
+        Assert.NotEqual(nameof(TaskState.Completed), targetRecord!.State);
+
+        var targetTask = JsonSerializer.Deserialize<AgentTask>(targetRecord.Payload, A2AJsonUtilities.DefaultOptions)!;
+        var origin = DelegationOrigin.Read(targetTask);
+        Assert.NotNull(origin);
+        Assert.Equal(sourceId, origin!.Value.SourceAgentId);
+        Assert.Equal(sourceTaskId, origin.Value.SourceTaskId);
+        Assert.Equal(1, DelegationDepth.Read(targetTask));
+    }
+
+    [Fact]
+    public async Task TargetInactive_RecordsNotStartedOutcome_WithoutTargetTask()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, TargetModel, isActive: false);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(ExpectedToolName("Financeiro"), "Uma tarefa qualquer.");
+
+        using var host = BuildHost(ClientsByProviderModel(sourceChatClient.Object, null));
+        await host.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, sourceTaskId);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+
+        var outcome = Assert.Single(await ExecutionMetricsReader.DelegationOutcomesAsync(ConnectionString, sourceTaskId));
+        Assert.Equal(ExecutionMetricsValues.DelegationOutcome.NotStarted, outcome.Outcome);
+        Assert.Equal(sourceId, outcome.SourceAgentId);
+        Assert.Equal(targetId, outcome.TargetAgentId);
+        Assert.Null(outcome.TargetTaskId);
+        Assert.Null(outcome.LastObservedTargetState);
+        Assert.Equal(0, outcome.SuccessfulReadCount);
     }
 
     [Fact]
@@ -818,6 +964,8 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
             basicProperties: new BasicProperties { Persistent = true },
             body: body);
     }
+
+    private string ConnectionString => fixture.Postgres.GetConnectionString();
 
     private AppDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options);

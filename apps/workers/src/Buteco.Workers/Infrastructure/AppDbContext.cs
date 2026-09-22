@@ -2,6 +2,7 @@ using System.Text.Json;
 using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations.Entities;
 using Buteco.Workers.Agents.Entities;
+using Buteco.Workers.ExecutionMetrics.Entities;
 using Buteco.Workers.Knowledge.Entities;
 using Buteco.Workers.Mcp.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +37,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AgentKnowledgeBase> AgentKnowledgeBases => Set<AgentKnowledgeBase>();
 
     public DbSet<KnowledgeFragment> KnowledgeFragments => Set<KnowledgeFragment>();
+
+    public DbSet<TaskExecution> TaskExecutions => Set<TaskExecution>();
+
+    public DbSet<ProviderCall> ProviderCalls => Set<ProviderCall>();
+
+    public DbSet<DelegationOutcome> DelegationOutcomes => Set<DelegationOutcome>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -223,6 +230,51 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // afirma.
             entity.HasOne<Agent>().WithMany().HasForeignKey(binding => binding.AgentId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<KnowledgeBase>().WithMany().HasForeignKey(binding => binding.KnowledgeBaseId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Espelho EXATO do mapeamento de apps/api (design.md da change
+        // metricas-execucao-coleta, D1) — ExecutionMetricsSchemaMirrorTests e
+        // ExecutionMetricsMigrationTests afirmam o mesmo schema dos dois lados.
+        // Sem FK para `agents` em nenhuma das três (D13): provedor e modelo são
+        // snapshot na linha.
+        modelBuilder.Entity<TaskExecution>(entity =>
+        {
+            entity.ToTable("task_executions");
+            entity.HasKey(execution => execution.TaskId);
+            entity.Property(execution => execution.ContextId).IsRequired();
+            entity.Property(execution => execution.Provider).IsRequired(false);
+            entity.Property(execution => execution.Model).IsRequired(false);
+            entity.Property(execution => execution.Origin).IsRequired();
+            entity.Property(execution => execution.SourceTaskId).IsRequired(false);
+            entity.Property(execution => execution.TerminalState).IsRequired(false);
+            entity.Property(execution => execution.FailurePhase).IsRequired(false);
+            entity.HasIndex(execution => execution.AgentId);
+            entity.HasIndex(execution => execution.StartedAt);
+        });
+
+        modelBuilder.Entity<ProviderCall>(entity =>
+        {
+            entity.ToTable("provider_calls");
+            entity.HasKey(call => call.Id);
+            entity.Property(call => call.TaskId).IsRequired();
+            entity.Property(call => call.Provider).IsRequired();
+            entity.Property(call => call.Model).IsRequired();
+            entity.Property(call => call.Purpose).IsRequired();
+            entity.HasIndex(call => call.TaskId);
+            entity.HasOne<TaskExecution>().WithMany().HasForeignKey(call => call.TaskId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DelegationOutcome>(entity =>
+        {
+            entity.ToTable("delegation_outcomes");
+            entity.HasKey(outcome => outcome.Id);
+            entity.Property(outcome => outcome.SourceTaskId).IsRequired();
+            entity.Property(outcome => outcome.TargetTaskId).IsRequired(false);
+            entity.Property(outcome => outcome.Outcome).IsRequired();
+            entity.Property(outcome => outcome.LastObservedTargetState).IsRequired(false);
+            entity.HasIndex(outcome => outcome.SourceAgentId);
+            entity.HasIndex(outcome => outcome.TargetAgentId);
+            entity.HasOne<TaskExecution>().WithMany().HasForeignKey(outcome => outcome.SourceTaskId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

@@ -115,6 +115,157 @@ namespace Buteco.Workers.Infrastructure.Migrations
                     b.ToTable("agents", (string)null);
                 });
 
+            modelBuilder.Entity("Buteco.Workers.ExecutionMetrics.Entities.DelegationOutcome", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<double>("DurationMs")
+                        .HasColumnType("double precision");
+
+                    b.Property<DateTimeOffset?>("LastObservedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastObservedTargetState")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SourceAgentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceTaskId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SuccessfulReadCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TargetAgentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetTaskId")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceAgentId");
+
+                    b.HasIndex("SourceTaskId");
+
+                    b.HasIndex("TargetAgentId");
+
+                    b.ToTable("delegation_outcomes", (string)null);
+                });
+
+            modelBuilder.Entity("Buteco.Workers.ExecutionMetrics.Entities.ProviderCall", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("CachedInputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<double>("DurationMs")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool>("Failed")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("HttpStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("InputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long?>("OutputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("provider_calls", (string)null);
+                });
+
+            modelBuilder.Entity("Buteco.Workers.ExecutionMetrics.Entities.TaskExecution", b =>
+                {
+                    b.Property<string>("TaskId")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("AgentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContextId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("DelegationDepth")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailurePhase")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LockAcquiredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Model")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Provider")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("SourceAgentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceTaskId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TerminalState")
+                        .HasColumnType("text");
+
+                    b.HasKey("TaskId");
+
+                    b.HasIndex("AgentId");
+
+                    b.HasIndex("StartedAt");
+
+                    b.ToTable("task_executions", (string)null);
+                });
+
             modelBuilder.Entity("Buteco.Workers.Knowledge.Entities.AgentKnowledgeBase", b =>
                 {
                     b.Property<Guid>("AgentId")
@@ -358,6 +509,24 @@ namespace Buteco.Workers.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("TargetAgentId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Workers.ExecutionMetrics.Entities.DelegationOutcome", b =>
+                {
+                    b.HasOne("Buteco.Workers.ExecutionMetrics.Entities.TaskExecution", null)
+                        .WithMany()
+                        .HasForeignKey("SourceTaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Workers.ExecutionMetrics.Entities.ProviderCall", b =>
+                {
+                    b.HasOne("Buteco.Workers.ExecutionMetrics.Entities.TaskExecution", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

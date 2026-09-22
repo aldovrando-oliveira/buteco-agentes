@@ -4,6 +4,7 @@ using global::A2A;
 using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
+using Buteco.Workers.ExecutionMetrics;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
@@ -77,10 +78,13 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "Resultado do Target.")));
             });
 
+        // Compostos com o LlmCallDurationChatClient real, como o
+        // ChatClientResolver faz em produção — é ele quem registra as linhas
+        // filhas que o guarda de contaminação lê.
         var clients = new Dictionary<(string, string), IChatClient>
         {
-            [(SourceProvider, SourceModel)] = sourceChatClient.Object,
-            [(TargetProvider, TargetModel)] = targetChatClient.Object,
+            [(SourceProvider, SourceModel)] = Measured(sourceChatClient.Object, SourceProvider, SourceModel),
+            [(TargetProvider, TargetModel)] = Measured(targetChatClient.Object, TargetProvider, TargetModel),
         };
 
         // Instância A e instância B, configuradas de forma idêntica — cada
@@ -114,12 +118,44 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
             var finalText = ExtractArtifactText(sourceRecord);
             Assert.NotNull(finalText);
             Assert.Contains("Resultado do Target.", finalText);
+
+            await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, sourceTaskId);
         }
         finally
         {
             await instanceA.StopAsync();
             await instanceB.StopAsync();
         }
+
+        // ── Métricas (change metricas-execucao-coleta) ──────────────────
+        // Origem na mesma linha do tempo de fila (V5 da exploração): é o que
+        // deixa a tela separar a fila de task delegada — que mede topologia
+        // de deploy — da fila de task externa.
+        var sourceExecution = (await ExecutionMetricsReader.FindExecutionAsync(ConnectionString, sourceTaskId))!;
+        Assert.Equal(ExecutionMetricsValues.Origin.External, sourceExecution.Origin);
+
+        var outcome = Assert.Single(await ExecutionMetricsReader.DelegationOutcomesAsync(ConnectionString, sourceTaskId));
+        Assert.Equal(ExecutionMetricsValues.DelegationOutcome.Completed, outcome.Outcome);
+        Assert.Equal(nameof(TaskState.Completed), outcome.LastObservedTargetState);
+        Assert.NotNull(outcome.TargetTaskId);
+
+        var targetExecution = await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, outcome.TargetTaskId!);
+        Assert.Equal(targetId, targetExecution.AgentId);
+        Assert.Equal(ExecutionMetricsValues.Origin.Delegation, targetExecution.Origin);
+        Assert.Equal(sourceId, targetExecution.SourceAgentId);
+        Assert.Equal(sourceTaskId, targetExecution.SourceTaskId);
+        Assert.Equal(1, targetExecution.DelegationDepth);
+
+        // Contaminação (o risco do AsyncLocal com duas execuções no mesmo
+        // processo): cada task só tem as chamadas do SEU client, e o alvo não
+        // aparece como origem de delegação nenhuma.
+        var sourceCalls = await ExecutionMetricsReader.ProviderCallsAsync(ConnectionString, sourceTaskId);
+        var targetCalls = await ExecutionMetricsReader.ProviderCallsAsync(ConnectionString, outcome.TargetTaskId!);
+        Assert.NotEmpty(sourceCalls);
+        Assert.All(sourceCalls, call => Assert.Equal(SourceProvider, call.Provider));
+        Assert.NotEmpty(targetCalls);
+        Assert.All(targetCalls, call => Assert.Equal(TargetProvider, call.Provider));
+        Assert.Empty(await ExecutionMetricsReader.DelegationOutcomesAsync(ConnectionString, outcome.TargetTaskId!));
     }
 
     [Fact]
@@ -225,6 +261,7 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         {
             await PublishJobAsync(sourceTaskId, sourceId, contextId);
             giveUp = await PollUntilDelegationGiveUpLoggedAsync(logs, sourceTaskId);
+            await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, sourceTaskId);
         }
         finally
         {
@@ -235,6 +272,14 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         Assert.Equal(sourceId, giveUp.Value(SourceAgentIdKey));
         Assert.Equal(targetId, giveUp.Value(TargetAgentIdKey));
         Assert.NotNull(giveUp.Value(TargetTaskIdKey));
+
+        // Linha gêmea do registro (change metricas-execucao-coleta, D5): é esta
+        // combinação — Expired com o alvo em Submitted — que torna o C da
+        // replicas-de-worker consultável sem grep em log.
+        var outcome = Assert.Single(await ExecutionMetricsReader.DelegationOutcomesAsync(ConnectionString, sourceTaskId));
+        Assert.Equal(ExecutionMetricsValues.DelegationOutcome.Expired, outcome.Outcome);
+        Assert.Equal(nameof(TaskState.Submitted), outcome.LastObservedTargetState);
+        Assert.Equal(targetId, outcome.TargetAgentId);
     }
 
     /// <summary>
@@ -288,6 +333,7 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         {
             await PublishJobAsync(sourceTaskId, sourceId, contextId);
             giveUp = await PollUntilDelegationGiveUpLoggedAsync(logs, sourceTaskId);
+            await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, sourceTaskId);
         }
         finally
         {
@@ -299,6 +345,10 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         Assert.Equal(nameof(TaskState.Working), giveUp.Value(LastObservedStateKey)?.ToString());
         Assert.Equal(sourceId, giveUp.Value(SourceAgentIdKey));
         Assert.Equal(targetId, giveUp.Value(TargetAgentIdKey));
+
+        var outcome = Assert.Single(await ExecutionMetricsReader.DelegationOutcomesAsync(ConnectionString, sourceTaskId));
+        Assert.Equal(ExecutionMetricsValues.DelegationOutcome.Expired, outcome.Outcome);
+        Assert.Equal(nameof(TaskState.Working), outcome.LastObservedTargetState);
     }
 
     /// <summary>
@@ -348,6 +398,7 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         {
             await PublishJobAsync(sourceTaskId, sourceId, contextId);
             giveUp = await PollUntilDelegationGiveUpLoggedAsync(logs, sourceTaskId);
+            await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, sourceTaskId);
         }
         finally
         {
@@ -360,6 +411,11 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         Assert.Equal(targetId, giveUp.Value(TargetAgentIdKey));
         Assert.NotNull(giveUp.Value(TargetTaskIdKey));
         Assert.Equal(nameof(TaskState.Failed), giveUp.Value(LastObservedStateKey)?.ToString());
+
+        var outcome = Assert.Single(await ExecutionMetricsReader.DelegationOutcomesAsync(ConnectionString, sourceTaskId));
+        Assert.Equal(ExecutionMetricsValues.DelegationOutcome.TargetUnsuccessful, outcome.Outcome);
+        Assert.Equal(nameof(TaskState.Failed), outcome.LastObservedTargetState);
+        Assert.Equal(giveUp.Value(TargetTaskIdKey) as string, outcome.TargetTaskId);
     }
 
     /// <summary>
@@ -405,6 +461,7 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         {
             await PublishJobAsync(sourceTaskId, sourceId, contextId);
             giveUp = await PollUntilDelegationGiveUpLoggedAsync(logs, sourceTaskId);
+            await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, sourceTaskId);
         }
         finally
         {
@@ -415,6 +472,12 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         Assert.False(
             giveUp.HasKey(LastObservedStateKey),
             $"A desistência sem nenhuma leitura não deve apresentar um estado; mensagem emitida: '{giveUp.Message}'.");
+
+        // A negativa também vale na linha: sem leitura, nenhum estado.
+        var outcome = Assert.Single(await ExecutionMetricsReader.DelegationOutcomesAsync(ConnectionString, sourceTaskId));
+        Assert.Equal(ExecutionMetricsValues.DelegationOutcome.Expired, outcome.Outcome);
+        Assert.Null(outcome.LastObservedTargetState);
+        Assert.Equal(0, outcome.SuccessfulReadCount);
     }
 
     private static string ExpectedToolName(string targetAgentName) =>
@@ -580,6 +643,11 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
             basicProperties: new BasicProperties { Persistent = true },
             body: body);
     }
+
+    private string ConnectionString => fixture.Postgres.GetConnectionString();
+
+    private static IChatClient Measured(IChatClient inner, string provider, string model) =>
+        new LlmCallDurationChatClient(inner, provider, model, NullLogger<LlmCallDurationChatClient>.Instance);
 
     private AppDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options);

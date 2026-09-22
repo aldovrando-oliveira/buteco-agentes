@@ -4202,6 +4202,51 @@ change não toca nenhum arquivo desses apps (conferido por `git status`), então
 binário sob teste lá é byte-a-byte o de `HEAD`. As baselines de referência
 continuam sendo 335/335 e 921/921 do fechamento anterior.
 
+> **Correção em 21/09/2026 (convenção 9 — o texto acima fica):** o raciocínio
+> vale para `apps/api` e `apps/frontend`, e **não** para
+> `tests/InboxOrchestratorRoundTrip.Tests`, que referencia `apps/workers` e
+> **implementa `IAgentDelegationToolSetResolver`** num duplo próprio. Esta change
+> mudou a assinatura da interface (`0f8dede`) e deixou aquele projeto **sem
+> compilar** — o fechamento não o rodou, e não o nomeou. Ver "Regressão de
+> compilação em `tests/InboxOrchestratorRoundTrip.Tests`" abaixo.
+
+
+### Regressão de compilação em `tests/InboxOrchestratorRoundTrip.Tests` (achada e corrigida em 21/09/2026, dentro da `metricas-execucao-coleta`)
+
+**Entrada própria de propósito:** o registro da regressão não depende de qual
+change carrega o conserto. Quem a carregou foi a `metricas-execucao-coleta`
+(escopo 3 dela), porque rodar esse projeto era pré-requisito da verificação dela.
+
+**O defeito:** `tests/InboxOrchestratorRoundTrip.Tests/Support/NullAgentDelegationToolSetResolver.cs`
+implementava `IAgentDelegationToolSetResolver.ResolveAsync` **sem** o parâmetro
+`sourceTaskId`, acrescentado pela `delegacao-diagnostico` (`0f8dede`, 20/09). O
+projeto **não compilava** (`CS0535`). Confirmado em worktree limpa sobre
+`2ee34d3`, compilando os **10** `.csproj` do repositório: **1 erro, nesse projeto
+e em nenhum outro**. Com o duplo corrigido: 10/10 compilam e o projeto roda
+**4/4** (a baseline de antes da quebra).
+
+**Por que escapou, e por três changes.** A `delegacao-diagnostico` mandava
+*"conferir na compilação que não há outro sítio"*, e achou o quinto sítio em
+`apps/workers` — mas **compilou o app, não o repositório**. Depois dela fecharam
+`frontend-mensagem-recusa-ciclo`, `delegacao-ciclo-no-cadastro` (arquivamento) e
+`indexacao-lote-de-fragmentos` sem rodar esse projeto. E há uma causa
+**estrutural** que torna o erro fácil: **não existe solução na raiz.** Os três
+`.sln` (`apps/api/Api.sln`, `apps/inbox/Inbox.sln`, `apps/workers/Workers.sln`)
+cobrem cada um o app e os testes dele; **`tests/` e `libs/` não estão em
+nenhum**. "Compilar a solução" de `apps/workers`, feito com cuidado, não alcança
+o round-trip.
+
+**A régua — terceira forma da mesma lição:** *blast radius de mudança de
+assinatura se mede compilando TODOS os `.csproj` do repositório, nunca o projeto
+nem a solução do app.* As duas primeiras formas estão registradas na décima
+medição da convenção 18: o `grep` que contou 4 sítios onde a compilação achou 5,
+e o que contou 15 classes onde havia 14. Nas três, a ferramenta devolveu um
+número que parecia medição e era menor (ou maior) que o conjunto real. Comando que
+cobre o repositório hoje:
+`find . -name "*.csproj" -not -path "*/node_modules/*" -not -path "*/bin/*" -not -path "*/obj/*"`
+e `dotnet build` em cada um. **Posição:** a forma curta vai para o `01` junto da
+régua de blast radius da convenção 18, na próxima change que tocar o `01` — a
+mesma posição do item dos "13 sítios".
 
 ### Recusa permanente separada de falha transitória na aba de delegações (`frontend-mensagem-recusa-ciclo`, 2026-09-20)
 
@@ -4576,6 +4621,312 @@ tem esta fragilidade.
 **Posição:** duas ocorrências. **Na terceira, a forma curta vai para o `01`**,
 junto da régua de blast radius da convenção 18 — que já mudou de ferramenta por
 este exato motivo na oitava medição, sem que a causa geral tivesse sido nomeada.
+
+#### Convenção 22 — memória de sessão é uma fonte de referência que a convenção não previa (21/09/2026)
+
+**Régua:** *memória de sessão é referência medida sem estado colado e sem
+gatilho de recalibração, e chega sem ser pedida.* **Número vindo dela se trata
+como citação a conferir, nunca como medição.**
+
+**A ocorrência que a mostrou:** a projeção da `metricas-execucao-coleta` saiu
+com `apps/api` em **317/318 → 325/326**. O número veio da memória persistente do
+assistente, escrita em 20/09/2026 antes da `delegacao-ciclo-no-cadastro` — que
+corrigiu o `AgentDeactivationTests` e acrescentou 17 testes — e carregada
+automaticamente em toda sessão, com a mesma autoridade do `02`. Remedido na
+proposta (21/09/2026 01:24 -03, `2ee34d3`): **335/335**.
+
+**Por que ela é pior que as fontes que a convenção 22 já cobre:** o `02` é
+lido quando alguém vai atrás dele, e o número ali tem data e escopo ao lado. A
+memória **chega sem ser pedida**, no começo de toda sessão, sem data de medição
+no texto que se lê e sem ninguém encarregado de recalibrá-la quando o estado
+muda — a change que muda o estado não sabe que ela existe. A régua "recalibrar é
+tarefa da change que muda o estado" não a alcança.
+
+**Na prática:** número de suíte, contagem de sítios ou qualquer régua usada em
+projeção ou baseline sai de **medição do dia** ou do **fechamento mais recente
+no `02`**. Se veio de memória ou de transcript recuperado, é citação — confere-se
+antes de usar. A memória que originou esta ocorrência foi reescrita com o número
+medido e esta régua.
+
+### Coleta de execução — etapa 1 de `metricas-de-operacao` (`metricas-execucao-coleta`, 2026-09-21)
+
+**Estado (atualizado em 22/09/2026): aplicada e verificada por execução real
+(7.1 e 7.3), com a 7.2 em aberto só para produção; não arquivada, não
+commitada.** *(O parágrafo abaixo registra o bloqueio como estava em 21/09.)*
+
+**Execução real, 22/09/2026, 00:05–00:34 (`America/Sao_Paulo`)** — stack de dev
+subido à mão pelo dono: 1 `api`, 1 `frontend`, 1 `inbox`, **3** `workers`;
+provedor Gemini. Leitura direta do banco de dev:
+
+- **13 linhas de execução, 0 abertas, 0 delegadas sem origem, 0 tokens gravados
+  como zero.**
+- **7.1:** seis tasks `Completed`, entrada 2.488–18.347 e saída 21–96 tokens por
+  task; `CachedInputTokens` **nulo em todas e zero em nenhuma** (o Gemini não
+  reportou cache).
+- **Uso de ferramenta:** a task do Triagem que delegou tem **duas** chamadas
+  `Turn` — a que pede a ferramenta e a que responde com o resultado.
+- **7.3:** Triagem → Gestor de Reservas; linha do alvo com `Origin = Delegation`,
+  `SourceTaskId` da task do Triagem, profundidade 1; resultado `Completed`,
+  último estado observado `Completed`, 11 leituras, 10,1 s; **fila da delegada
+  388 ms com 3 instâncias**. O caso de instância única (`Expired`/`Submitted`)
+  não foi exercido à mão — coberto pelo guarda automático.
+- **Snapshot de modelo, com dado real:** a primeira task do Triagem (00:05) rodou
+  como `openai/llama3.2:3b` e falhou em `ChatClientResolution` (sem OpenAI
+  configurado); o agente passou a `gemini/gemini-3.6-flash`, e **a linha antiga
+  continua com o modelo antigo**.
+- **Falhas classificadas por fase:** duas `AgentRun` (chamada ao Gemini presa 100
+  s — ver o IPv6 abaixo) e três `ContextLock` (mensagens do mesmo contexto
+  esperando o lock enquanto a anterior estava presa no LLM).
+- **Uma task externa com 44,6 s de fila, com 3 instâncias** — conferido pelos
+  carimbos em 22/09: **nenhuma outra execução estava em curso** durante a espera,
+  então não foram instâncias ocupadas; o reinício dos workers nunca foi
+  confirmado. **Causa desconhecida** (item do timeout de conexão). As duas falhas
+  `ContextLock` longas (00:07 e 00:09:50) **não** são o mesmo fenômeno: a fila
+  delas foi de 0,1 s, e a espera toda está dentro da aquisição do lock — ver o
+  item do timeout de conexão. É o exemplo do
+  porquê a série precisa do regime colado (convenção 22).
+- **Três tasks ficaram em `Submitted` sem linha de execução** (00:34:30,
+  00:34:38, 00:35:00) — a população que a D11 diz existir só em `a2a_tasks`, vista
+  ao vivo. Na fila `agent-tasks` ficaram **4 mensagens prontas e nenhum
+  consumidor** (lido em 22/09 com o ambiente derrubado): serão processadas no
+  próximo boot de worker, com horas de atraso. Esvaziar ou não é decisão do dono.
+- **7.2 — FECHADA com registro (22/09/2026):** o `openai/llama3.2:3b` do Triagem
+  era um **Ollama local de teste pontual, descartado pelo dono em 20/09/2026**. Não
+  está em uso em produção; no piloto, o Triagem usa **Gemini**. **Não existe
+  `llama3.2:3b` — nem Ollama — em ambiente nenhum** (confirmado pelo dono em
+  22/09/2026). A pergunta sobre aquele endpoint reportar tokens **cai** porque o
+  modelo não existe em lugar nenhum, não só em produção — não há o que medir. Por que ela sobreviveu até aqui: ver "Decisão tomada fora do
+  repositório" em "Abertos por `metricas-execucao-coleta`".
+
+**O primeiro teste do dono (00:21) não voltou resposta, e a causa era a rede da
+máquina, não o código:** IPv6 com endereço global e rota padrão em `en0`, mas
+**sem conectividade** — `curl -6` para o Gemini e para o túnel do inbox não
+conecta (15 s), `curl -4` conecta em ~20–30 ms. O .NET tenta o endereço IPv6 do
+DNS e fica preso até o timeout total do `HttpClient` (100 s no LLM, 5 s no push
+notification). O push para o inbox falhou, então o inbox nunca soube que a task
+terminou. **Contorno aplicado pelo dono antes do segundo teste:** a variável de
+ambiente **`DOTNET_SYSTEM_NET_DISABLEIPV6=1`**, passada **na linha de comando de
+cada execução** (`dotnet run`), para o runtime do .NET não usar IPv6. O nome foi
+conferido no histórico do shell do dono (seis execuções com ele), não suposto.
+**A configuração não vive em arquivo nenhum** — não está em `appsettings`, compose
+nem `.env` —, então **o próximo ambiente de desenvolvimento reencontra o defeito do
+zero**: sintoma, chamada ao LLM presa 100 s e push notification preso 5 s, com a
+pilha parando em `HttpConnectionPool.SendWithVersionDetectionAndRetryAsync`.
+Diagnóstico em um comando: `curl -6` contra o host trava, `curl -4` responde.
+**Aplicado só em dev.** Não se sabe se o piloto precisa dele: o piloto não
+reportou o problema, e nada foi medido lá.
+
+**A execução real usou configuração local com segredo, e ela foi restaurada.** O
+dono pôs `BaseUrl` e `ApiKey` de provedor, e a chave de criptografia do MCP, em
+texto puro nos `appsettings.Development.json` **versionados** de `apps/workers` e
+`apps/inbox`. Restaurados com `git restore` em 22/09/2026 (diff vazio, nenhuma das
+chaves de provedor presente em `appsettings` algum). A conferência do histórico
+que isso disparou achou um vazamento anterior — ver "Chave de API OpenAI
+publicada no histórico" em "Abertos por `metricas-execucao-coleta`". **Para a
+próxima execução real: `dotnet user-secrets` ou variável de ambiente, nunca o
+arquivo versionado** — adicionar por caminho protege o commit da vez, mas o arquivo
+continua modificado e o próximo `git add -A` leva as chaves.
+
+**Filas do RabbitMQ de dev esvaziadas em 22/09/2026**, depois da consulta dos
+carimbos: `agent-tasks` tinha 4 mensagens prontas e nenhum consumidor (restos da
+sessão); as de indexação e de espera estavam vazias. Todas em zero. Só o broker
+de dev.
+
+**Estado de 21/09:** aplicada, NÃO verificada por execução real, não arquivada,
+não commitada. O grupo 7 do `tasks.md` (execução real, convenção 6) está
+**bloqueado por falta de provedor de LLM** neste ambiente de desenvolvimento: os
+user-secrets de `apps/workers` estão vazios, o `.env` não tem chave de provedor, o
+`BaseUrl` versionado é `changeme`. A change não fecha sem ele.
+
+**E uma premissa da exploração caiu no apply:** o relatório de 20/09 leu o modelo
+`openai/llama3.2:3b` (188 de 244 tasks do dev) como *"ou seja, Ollama pelo
+endpoint compatível"* — **dedução a partir do nome, nunca medida**, e ela passou
+para uma tarefa e um risco desta change como fato. **Não há modelo local
+rodando**, confirmado pelo dono em 21/09/2026. Qual endpoint servia esse modelo é
+desconhecido; a 7.2 foi reformulada para começar por identificá-lo. É a mesma
+família da régua da memória de sessão: **inferência registrada sem marca de
+inferência é lida depois como medição.**
+
+**O que entrega — três escopos, declarados na proposta:**
+
+1. **A coleta.** Três tabelas migradas por `apps/api` e escritas por
+   `apps/workers`: `task_executions` (uma linha por execução, aberta antes de
+   qualquer caminho terminal e fechada depois do estado terminal),
+   `provider_calls` (uma por requisição ao provedor, tokens anuláveis, finalidade
+   `Turn` × `Compaction`) e `delegation_outcomes` (uma por delegação, com o último
+   estado observado do alvo — **a condição da reordenação da fila, cumprida**).
+   Captura por `AsyncLocal`, **nenhum construtor mudou**.
+2. **Guarda de estado terminal** (D17): task lida já terminal não executa. Defeito
+   pré-existente que a coleta alargou, **isolado por experimento** antes de virar
+   causa — toda falha de gravação de métrica foi `23505` na abertura e coincidiu
+   com reentrega do RabbitMQ; toda falha de teste teve reentrega na janela. A
+   premissa que a torna segura (o `A2AServer` recusa mensagem para task terminal)
+   virou guarda em `apps/api`.
+3. **O duplo do round-trip** — ver "Regressão de compilação em
+   `tests/InboxOrchestratorRoundTrip.Tests`".
+
+**Suítes, com o regime colado** (`podman ps` = 0 nas duas pontas):
+
+| suíte | baseline (21/09, antes de tocar arquivo) | fechamento (21/09, 02:43) |
+|---|---|---|
+| `apps/workers` | **280/280**, 6m14s, load ~4,1 | **324/324**, 6m31s, load ~3,5–4,3; **14 classes** na coleção, contadas por `^\[Collection(` |
+| `apps/api` | **335/335**, 1m09s, load ~3,0 | **346/346**, 1m16s |
+| `tests/CrossAppTaskStoreCompatibility.Tests` | — | 2/2 |
+| `tests/InboxOrchestratorRoundTrip.Tests` | **não compilava** (pré-existente) | **4/4** |
+
+Comparação **por nome**: nenhum teste da baseline sumiu, nos dois apps
+(`apps/workers` +44, `apps/api` +11).
+
+**As duas classes de delegação, antes e depois da guarda** — o dado que decidiu o
+escopo 2: `HEAD` 17/17 ×3; coleta sem guarda 15/20, 17/20, 19/20 (conjunto de
+falhas mudando); com a guarda **20/20 ×3**.
+
+#### Décima primeira medição da convenção 18
+
+Projeção feita no `design.md` depois da verificação e antes do código. **O
+fechamento compara só o escopo 1**; os escopos 2 e 3 nasceram no apply e ficam em
+linhas à parte, nunca somados ao projetado.
+
+| escopo 1 | projetado | entregue |
+|---|---|---|
+| criados (produção, à mão) | 11 / ~875 | **11 / 854** |
+| modificados (produção, à mão) | 6 / ~410 | **6 / 345** (`git diff -w`) |
+| criados (teste) | 4 / ~550 | **4 / 436** |
+| modificados (teste) | 6 / ~780 | **6 / 831** |
+| registro (`02`, `CHANGELOG`) | 2 / ~165 | 2 / ver o diff do commit |
+| **arquivos, ex-`openspec/`** | **29** | **29** |
+| casos xUnit `apps/workers` | +39 | **+39** |
+| casos xUnit `apps/api` | +8 | **+10** |
+| unidades públicas (8 tipos workers, 3 api, 4 aninhados, 6 `DbSet`, 0 assinatura alterada) | 21 | **21** |
+
+| fora da projeção | arquivos | linhas | casos |
+|---|---|---|---|
+| escopo 2 — guarda terminal | 3 (2 já contados no escopo 1) | produção +28, teste +190 | workers +5, api +1 |
+| escopo 3 — duplo do round-trip | 1 | +6 −1 | — |
+
+**Contagem de arquivo: quarto acerto seguido** (29 contra 29), e **unidades
+públicas: quarto acerto seguido.** Casos de `apps/workers` exatos.
+
+**Os dois desvios, com a causa:**
+
+- **`apps/api` +10 contra +8.** A `[Theory]` de nulidade do teste de migração saiu
+  com **8** casos onde a projeção contou **6** — mas a própria tarefa 2.4 já
+  listava as oito colunas. **A projeção contou menos que a tarefa que ela
+  projetava**, no mesmo documento. Régua: conferir a contagem de casos da
+  projeção contra a lista de colunas/estados que a tarefa enumera.
+- **O comentário de produção veio ~40% abaixo:** ~382 linhas de comentário contra
+  ~635 projetadas (lógica, incluindo chaves e `using`, ~786). **A causa é o custo
+  unitário do contrafactual nesta change: ~12 linhas, não ~31.** Amostra medida:
+  `CompactionCallChatClient` carrega três registros (não derivar de
+  `DelegatingChatClient`, `Dispose` no-op, recusa de `options is null`) em **35**
+  linhas de comentário. Os ~31 das medições anteriores vinham de registros que
+  reconstruíam medição ou recusa com vários passos; aqui cada contrafactual tinha
+  **um** passo. **Régua: o custo do contrafactual se projeta pelo número de passos
+  que ele reconstrói, não pelo tipo.** O comentário de **teste** acertou perto:
+  191 contra ~155 (+23%), aplicando a régua da décima medição.
+
+**As duas direções de erro nomeadas de antemão: nenhuma aconteceu** — os testes de
+log da `delegacao-diagnostico` expunham o banco (as cinco asserções entraram nos
+testes existentes, zero testes novos ali) e o fechamento coube no EF sem SQL cru.
+Pela terceira vez na série, nomear direções não substituiu contar.
+
+**Achado de método da medição:** `git diff` sem `-w` inflou
+`AgentExecutionService.cs` para **514** linhas modificadas, contra **86** com
+`-w` — o `try` externo da D3 reindentou o método inteiro. **Modificado se mede com
+`-w`**, senão reindentação conta como trabalho.
+
+#### Achados desta change que não são dela
+
+- **Não existe `.sln` na raiz**, e os três por app não cobrem `tests/` nem
+  `libs/` — ver "Regressão de compilação em `tests/InboxOrchestratorRoundTrip.Tests`".
+- **`delegationDepth` e a origem não sobrevivem à conclusão da task** — consulta
+  sobre `a2a_tasks.payload` subestima delegação sem dar erro. Em "Abertos por
+  `metricas-execucao-coleta`".
+- **`TaskJobConsumer.StopAsync` fecha o canal antes de cancelar a execução** —
+  shutdown preso até ~60 s. Idem.
+- **A régua "13 sítios" do `01` são 14.** Idem.
+- **A primeira projeção de `apps/api` citou 317/318 da memória de sessão** — ver
+  "Convenção 22 — memória de sessão é uma fonte de referência que a convenção não
+  previa".
+
+### Linha de trabalho `metricas-de-operacao` — catálogo de métricas (REFERÊNCIA VIVA)
+
+**Esta é a numeração que as etapas da linha citam.** Fechada com o dono antes da
+exploração de 20/09/2026 e registrada aqui em 21/09/2026, na proposta da
+`metricas-execucao-coleta`. Até então o catálogo **só existia em conversa** — e
+foi por isso que a primeira redação do mapa métrica → coluna daquela change não
+achou fonte para reconciliar os números. O mapa do `design.md` de cada etapa
+cita os M-números **contra esta lista**; o `design.md` vai arquivado com a
+change, esta lista fica. Mudança no catálogo se registra **aqui**, datada.
+
+**Etapas da linha:** (1) coleta de execução → (2) coleta de embedding → (3)
+rotas de agregação → (4) página Insights → (5) aba Insights do agente.
+**Superfícies:** página Insights do sistema e aba Insights no detalhe do agente
+(protótipos aprovados, nos três cenários de delegação: só delega, só é delegado,
+os dois).
+
+**Fechadas — 27 entradas:**
+
+| grupo | métrica | definição |
+|---|---|---|
+| Volume | **M1** | tasks de origem externa — **vive como legenda de M2**, sem card próprio |
+| | **M2** | tasks executadas |
+| Temporal | **M6** | mapa de calor por dia da semana, **sem** recorte por hora |
+| | **M7** | calendário do período |
+| | **M9** | dia da semana de pico — derivada de M6 |
+| | **M10** | série diária de tasks e tokens |
+| Tokens | **M11** | tokens de **conversa** |
+| | **M12** | entrada × saída |
+| | **M13** | por agente |
+| | **M14** | por provedor — com total conversa + embedding **só neste nível** |
+| | **M15** | por modelo |
+| | **M16a** | ranking de modelos por tokens |
+| | **M16b** | ranking de modelos por número de chamadas |
+| | **M17** | tokens por task, média e p95 |
+| | **M19** | tokens de **embedding**, separado de M11 |
+| Desempenho | **M21** | duração da task, `submitted` → terminal |
+| | **M22** | tempo de fila, `submitted` → `working` |
+| | **M23** | duração da chamada ao provedor |
+| | **M24** | chamadas ao provedor por task |
+| | **M25** | tempo em tools (derivado) |
+| | **M26** | profundidade de delegação observada |
+| Erros | **M27** | `failed` e `rejected` separados |
+| | **M28** | falhas por agente e por provedor/modelo |
+| | **M29** | motivo da falha |
+| | **M30** | falhas de indexação |
+| | **M32** | tasks sem estado terminal |
+| Delegação | **M34** | delegações, par origem → destino — estava adiada e foi **puxada para dentro** pelo card de delegação aprovado na aba do agente |
+
+**O catálogo tem 27 entradas.** M1 **conta** — é gravada e tem fórmula, só não
+tem card —, e **M16a e M16b são duas**. O número "25" que circulou (inclusive no
+prompt que abriu a `metricas-execucao-coleta`) é o da lista fechada **original**:
+o catálogo cresceu depois que o número foi fixado, e o número não acompanhou.
+Confirmado pelo dono em 21/09/2026:
+
+| passo | entradas |
+|---|---|
+| lista fechada original | 25 |
+| M18 entra | 26 |
+| M19 entra, separada de M11 | 27 |
+| M18 recusada por verificação de dado | 26 |
+| M34 puxada pelo card de delegação aprovado | **27** |
+
+É ocorrência da **convenção 22**: número fixado num estado, citado depois de o
+estado mudar. *(Uma primeira redação desta nota registrou como hipótese "M1 não
+conta, M16a/M16b contam como uma" para chegar a 25 — errada nas duas partes, e
+substituída pela causa acima. Quem citar o total cita **27**, e quem mudar o
+catálogo atualiza a tabela de passos.)*
+
+**Cache lido:** coluna da tabela de modelos, **sem número nem card próprio**.
+
+**Fora:** M3, M4, M5, M8, M20.
+**Recusada por verificação de dado:** **M18** (cache escrito) — o
+`UsageDetails` do SDK só tem campo para o cache **lido**; escrita existe em um
+provedor só (Anthropic), e lá zero colapsa com não-reportado antes de o nosso
+código ver o dado (exploração de 20/09, V2).
+**Adiadas:** M33 (uso de servidores MCP), M35 (acessos a base de conhecimento).
+**Na fila com posição própria:** M31, e M36–M39 (bloco do inbox), depois da
+correlação da mensagem de saída.
 
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
@@ -6863,9 +7214,48 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 4 frontend-mensagem-recusa-ciclo    ✔ aplicada em 20/09/2026  (arquivar)
 5 indexacao-lote-de-fragmentos      ✔ aplicada em 20/09/2026  (arquivar)
   → deploy das correções SEM limpar o banco → OBSERVAR   ← A PRÓXIMA ETAPA
-6 replicas-de-worker
-7 metricas-execucao-coleta
+6 metricas-execucao-coleta          aplicada em 21/09/2026, verificada em execução real em 22/09  (subiu da 7)
+  → revogação da chave OpenAI (dono) ANTES de qualquer push
+6a <varredura de segredos>           acrescentada em 22/09/2026 — nome provisório; ver o item
+7 <timeout de conexão HTTP>         acrescentada em 22/09/2026 — nome provisório
+8 <PendingDispatch órfã / push>     acrescentada em 22/09/2026 — nome provisório; posição revista
+9 replicas-de-worker                (desceu da 6)
 ```
+
+**ACRÉSCIMO DE 22/09/2026: duas changes entram antes da `replicas-de-worker`**,
+as duas nascidas da execução real da `metricas-execucao-coleta`, com os motivos
+nos itens delas em "Abertos por `metricas-execucao-coleta`" e no item da
+`PendingDispatch` órfã: o **timeout de conexão** (uma fila longa por espera de
+rede se lê igual a uma por falta de instância, e é isso que a `replicas-de-worker`
+vai ler) e a **segunda fonte da `PendingDispatch` órfã** (push notification que
+falha deixa a conversa sem resposta nem aviso — observado em 7 de 7 falhas no
+dev). Os nomes são provisórios; quem abrir cada uma nomeia.
+
+**REORDENAÇÃO DE 21/09/2026: a `metricas-execucao-coleta` subiu da posição 7
+para a 6, à frente da `replicas-de-worker`.** A posição relativa ao deploy **não
+mudou**: ela continua depois do deploy das cinco correções, e não entra nele. Dois
+motivos, e o segundo tem condição:
+
+1. **A dependência original tinha mitigação desenhada.** O argumento abaixo
+   ("depende da `replicas-de-worker`") vale para o **tempo de fila de task
+   delegada**, que mede topologia de deploy e não carga. A exploração
+   `metricas-de-operacao` (V5, 20/09/2026) já tinha resolvido isso com a
+   **origem gravada na mesma linha** do tempo de fila, e a tela aprovada separa
+   as duas populações. Se a `replicas-de-worker` mudar o regime, a série se
+   divide **pela data da mudança**, registrada aqui quando ela acontecer
+   (convenção 22) — não é invalidada.
+2. **A coleta melhora a observação de que a `replicas-de-worker` depende.** Hoje
+   o `C` sai de `grep` em log, com retenção limitada; com esta change ele sai de
+   **consulta sobre dado durável** — a contagem de delegações expiradas cujo
+   último estado observado do alvo é `Submitted`.
+
+**A condição do motivo 2, e o que aconteceu com ela:** o motivo só vale se a
+etapa 1 gravar o **resultado de cada delegação**, com o **último estado
+observado do alvo**. O `design.md` da change concluiu que **cabe** — terceira
+tabela, uma linha por delegação disparada (D5 daquele `design.md`). **A
+reordenação ficou.** Se a implementação derrubar a D5, a reordenação cai com
+ela e a fila volta a `6 replicas-de-worker / 7 metricas-execucao-coleta`; quem
+derrubar registra aqui.
 
 **A LIMPEZA DO BANCO FOI DESCARTADA** (decisão do dono, 21/09/2026). O deploy
 sai **sem limpar**: as tasks presas foram medidas em **zero**, o que tirou o
@@ -6928,7 +7318,9 @@ problema":
   `delegacao-diagnostico` existe para produzir, **contra tráfego real**.
   Antecipar seria escolher um número de instâncias sem a entrada que decide o
   número.
-- **A `metricas-execucao-coleta` depende da `replicas-de-worker`**, porque grava
+- *(Premissa superada em 21/09/2026 pela reordenação registrada acima — mantida
+  aqui porque explica a ordem que a fila teve; convenção 9.)*
+  **A `metricas-execucao-coleta` depende da `replicas-de-worker`**, porque grava
   tempo de fila e origem, e o **significado** desses dois números muda conforme o
   regime de instâncias. Coletados antes, seriam medidos sobre um regime que a
   troca de regime vai invalidar (convenção 22).
@@ -7522,6 +7914,38 @@ ocorrências dessa família.
     reproduzir este defeito.
   - **Posição:** depois da change de instrumentação abaixo, que é o que produz a
     observação do gatilho.
+  - **SEGUNDA FONTE, acrescentada em 22/09/2026 (`metricas-execucao-coleta`,
+    execução real): push notification que falha.** A task chega ao estado
+    terminal em `a2a_tasks`, o worker chama o webhook do inbox
+    (`PushNotificationSender`, timeout de **5 s**, **sem retentativa**), a chamada
+    falha — e o inbox nunca fica sabendo. A `PendingDispatch` fica em
+    `Dispatching` e a conversa fica **sem resposta e sem aviso de falha**. Mesmo
+    sintoma da fonte que a `lock-de-contexto-falha-terminal` removeu, mecanismo
+    diferente: lá a task nunca terminava; aqui ela termina e a notícia não chega.
+    **Observado, não deduzido:** na execução real de 22/09/2026 (dev, com o IPv6
+    da máquina sem conectividade — ver a seção da change), **as 7 tasks que
+    terminaram em `Failed` deixaram, todas, a `PendingDispatch` em
+    `Dispatching`**, e as `Completed` posteriores ao contorno do IPv6 foram
+    resolvidas e removidas normalmente. O `pending_dispatches` do dev tem hoje
+    **13** linhas em `Dispatching`: essas 7, 2 de tasks que nunca foram consumidas,
+    e 4 antigas (22/08 e 11/09).
+  - **Estado do gatilho (22/09/2026): disparado no dev, não em produção.** A
+    observação do dev isola um mecanismo — task terminal, push falho —, mas não é
+    a de produção que o gatilho pede. **Com duas fontes conhecidas, a chance de a
+    primeira linha aparecer em produção subiu**: a segunda fonte não depende de
+    instância morrer, só de uma falha transitória entre worker e inbox.
+  - **POSIÇÃO REVISTA em 22/09/2026, com o motivo:** a posição original pensava
+    numa fonte só, rara (instância morrendo numa janela estreita), e esperava a
+    instrumentação para observá-la. A segunda fonte é **frequente por
+    construção** — qualquer falha de rede de 5 s entre worker e inbox — e já foi
+    observada. Passa para **change própria antes da `replicas-de-worker`**, depois
+    da change do timeout de conexão (item abaixo): as duas são alimentadas pela
+    mesma família de falha de rede, e a `replicas-de-worker` vai observar
+    conversas sobre um sistema que hoje as engole em silêncio quando o push falha.
+    **A correção tem duas metades, e escolher entre elas é da change:** entrega
+    confiável do push (retentativa no worker) ou reconciliação do lado do inbox
+    (varredura de `Dispatching` consultando o estado da task pelo `TaskId`, que a
+    linha já guarda).
 
 - ~~**Ciclo de delegação `A→B→…→A` autotrava no advisory lock.**~~ —
   **RESOLVIDO NO CADASTRO em 20/09/2026, por `delegacao-ciclo-no-cadastro`, na
@@ -7830,6 +8254,11 @@ duas changes parado até alguém lhe dar posição.
   - **Posição:** change própria, **depois da `metricas-execucao-coleta`** — sem
     medição de embedding, o teto seria escolhido por palpite, que é exatamente o
     defeito que `indexacao-lote-de-fragmentos` evitou no tamanho do lote.
+    *(Correção de posição em 21/09/2026: a `metricas-execucao-coleta` **não
+    coleta embedding** — é Non-Goal dela, e a coleta de embedding é a **etapa 2**
+    da linha `metricas-de-operacao`. A dependência verdadeira deste item é essa
+    etapa 2, que ainda não tem nome de change; a frase acima nomeava a etapa 1
+    por engano.)*
 
 - **O texto de falha da tela de documentos manda repetir sem dizer o que já foi
   repetido.** O texto atual
@@ -7844,3 +8273,246 @@ duas changes parado até alguém lhe dar posição.
   - **Posição:** change de `apps/frontend`, **depois de
     `indexacao-lote-de-fragmentos`**. Se o lote resolver o caso em produção, a
     urgência cai mas o texto continua impreciso.
+
+### Abertos por `metricas-execucao-coleta` (2026-09-21)
+
+- **O `01` diz "13 sítios" para a régua de DI de `AgentExecutionService`, e são
+  14.** O texto da convenção 22 (`01-ARQUITETURA_E_CONVENCOES.md`, forma curta
+  "_régua citada sem escopo não é régua_") cita **13 sítios de instanciação (12
+  em `apps/workers/tests/` mais 1 em `tests/InboxOrchestratorRoundTrip.Tests/`)**.
+  Contado em 21/09/2026 sobre `2ee34d3`, por busca que exclui comentário: **14
+  arquivos de teste com 15 registros** — 13 em `apps/workers/tests/`
+  (`TaskJobConsumerTests` tem dois) mais `RoundTripFixture.cs`.
+  - **Causa:** a `lock-de-contexto-falha-terminal` (`ff882ce`, 20/09) criou
+    `ConversationContextLockFailureTests`, que registra `AgentExecutionService`,
+    e não recalibrou a régua. **Recalibrar é tarefa da change que muda o
+    estado** — é a própria convenção 22 falhando sobre o exemplo que a ilustra.
+  - **Por que não foi corrigido na `metricas-execucao-coleta`:** o `01` está
+    fora da lista fechada de arquivos dela. O `design.md` dela usa o número
+    certo (D2).
+  - **Gatilho:** cumprido.
+  - **Posição:** a próxima change que tocar o `01`.
+
+- **`delegationDepth` — e a origem da delegação — NÃO sobrevivem à conclusão da
+  task, e toda consulta sobre `a2a_tasks.payload` para esses campos lê errado sem
+  dar erro.** Achado em 21/09/2026, na `metricas-execucao-coleta`.
+  - **O mecanismo:** na conclusão, `AgentExecutionService` **substitui o
+    `Metadata` inteiro** da task pelo metadata terminal
+    (`completedTask.Metadata = BuildTerminalMetadata(...)`), que só carrega
+    `conversationSession` e, se houver, `pushNotificationConfig`. As chaves
+    `delegationDepth`, `delegationSourceAgentId` e `delegationSourceTaskId`, gravadas
+    na criação da task delegada, **somem** de toda task `Completed`. (No caminho de
+    falha o metadata só é substituído quando há push notification; sem ela, as
+    chaves ficam.)
+  - **O efeito numa consulta:** `payload->'metadata'->>'delegationDepth'` numa task
+    delegada **concluída** devolve nulo — lido como profundidade zero —, e a task
+    some da contagem de tasks delegadas. Não há erro; o número só sai menor.
+  - **Já aconteceu:** houve consulta assim fornecida ao dono para medir o `D` da
+    `replicas-de-worker`. **Ela é inválida para tasks concluídas** — que são a
+    maioria. Qualquer `D` ou contagem de delegação tirado dela está subestimado.
+  - **A coleta nova não é afetada:** o worker do alvo lê origem e profundidade
+    **antes** de qualquer escrita e grava em `task_executions` (`Origin`,
+    `SourceAgentId`, `SourceTaskId`, `DelegationDepth`).
+  - **Régua:** depois do deploy da `metricas-execucao-coleta`, **origem e
+    profundidade saem de `task_executions`, nunca de `a2a_tasks.payload`**. Para o
+    período anterior ao deploy, não há fonte confiável de profundidade de task
+    concluída — declarar, não estimar.
+  - **Não corrigido:** mudar o que `BuildTerminalMetadata` preserva é mudança de
+    comportamento do store A2A, fora do escopo. **Gatilho:** qualquer consumidor
+    novo de `a2a_tasks.payload` que precise de origem ou profundidade. **Posição:**
+    nenhuma change enquanto `task_executions` responder; se um consumidor desses
+    aparecer, change própria antes dele.
+
+- **`TaskJobConsumer.StopAsync` fecha o canal ANTES de cancelar a execução em voo,
+  e o shutdown fica preso até ~60 s.** Achado em 21/09/2026, no experimento da
+  guarda de estado terminal da `metricas-execucao-coleta` (D17 do `design.md`
+  dela), com sequência medida: `StopAsync` às 07.481, a execução em voo só
+  terminou às 30:07.492 — **60 s** —, e a escrita final já encontrou o host
+  descartado.
+  - **O mecanismo:** `StopAsync` faz `_channel.CloseAsync` e
+    `_connection.CloseAsync` e **só depois** `base.StopAsync`, que é quem cancela
+    o `stoppingToken` passado a `ExecuteAsync`. O fechamento do canal espera o
+    callback do consumidor terminar; o callback espera um cancelamento que só
+    viria depois. Enquanto nada em voo demora, não se vê; com uma execução longa
+    (uma delegação esperando alvo, prazo de 120 s), o shutdown trava até algum
+    timeout estourar.
+  - **Provavelmente é o mesmo "1m10s em `Connection.CloseAsync`"** que a
+    `delegacao-diagnostico` registrou e atribuiu à contenção da máquina (ver a
+    rodada 2 da tabela de suítes dela). Não confirmado para aquela rodada — os
+    dados dela não existem mais —, então fica como hipótese nomeada, não como
+    correção daquele registro.
+  - **Em produção:** deploy ou restart do worker com uma delegação em espera leva
+    até o timeout de parada do orquestrador, e aí o processo é morto no meio — a
+    mensagem volta à fila (e, com a guarda de estado terminal, não é reexecutada
+    se já tinha terminado).
+  - **Não corrigido na `metricas-execucao-coleta`:** fora do escopo, e com a
+    guarda terminal o gatilho de teste que o expunha some.
+  - **Gatilho:** qualquer lentidão de shutdown observada em deploy, ou a
+    `replicas-de-worker` — que vai parar e subir instâncias.
+  - **Posição:** dentro da `replicas-de-worker`, como pré-requisito dela: ela
+    mexe exatamente no ciclo de vida das instâncias.
+
+- **O regime da série de métricas de execução — dois marcos a registrar, com data
+  e fuso.** A métrica não é retroativa: o `submitted` é destruído na transição
+  para `working`, e o payload não guarda histórico de status.
+  - **Marco 1 — início da série.** **Gatilho:** o deploy da
+    `metricas-execucao-coleta` em produção. **Ação:** registrar aqui, no dia,
+    *"medindo desde DD/MM/AAAA, `America/Sao_Paulo`"* — é o texto que a tela
+    aprovada exibe. Conferir contra o dado: `min("StartedAt")` de
+    `task_executions` convertido para o fuso.
+  - **Marco 2 — troca de regime.** **Gatilho:** o deploy da `replicas-de-worker`.
+    O tempo de fila de task delegada muda de significado ali, e a série se divide
+    pela data. **Posição:** tarefa da própria `replicas-de-worker` (convenção 22 —
+    recalibrar é da change que muda o estado).
+
+- **Falta timeout de CONEXÃO nas chamadas HTTP de saída de `apps/workers` — e ele
+  é causa de falha que o usuário vê.** Achado em 22/09/2026, na execução real da
+  `metricas-execucao-coleta`.
+  - **O mecanismo:** sem timeout de conexão, uma chamada presa num caminho de
+    rede quebrado (ali: IPv6 com rota e sem conectividade) espera o timeout
+    **total** do `HttpClient` — **100 s** no LLM, 5 s no push notification. O
+    .NET não cai sozinho para IPv4 enquanto espera.
+  - **A cadeia, e o quanto dela foi confirmado pelos carimbos de
+    `task_executions`:**
+    - **Confirmada em 1 das 3 falhas `ContextLock`:** a de 00:13:50 esperou o
+      lock enquanto a execução anterior do mesmo contexto estava presa 100 s no
+      Gemini (00:12:52–00:14:38), e morreu em ~30 s de lock + 5 s de push. É
+      exatamente a cadeia: a chamada que o `HttpClient` segurava segurou o lock, e
+      a mensagem seguinte da conversa falhou.
+    - **NÃO confirmada nas outras duas** (00:07:00 e 00:09:50): **nenhuma
+      execução do mesmo contexto estava em curso em `task_executions`** enquanto
+      elas esperavam — quem segurava o lock não aparece na coleta. E elas
+      esperaram ~83 s e ~104 s, **mais que os 30 s** de `CommandTimeout` que
+      limitam a espera pelo lock. Não há explicação medida para nenhuma das duas
+      coisas; o ambiente foi derrubado antes de `pg_locks` poder ser lido.
+      Registrado como **lacuna**, não como parte da cadeia. *(Leitura de 22/09
+      antes da consulta abaixo — mantida, convenção 9.)*
+    - **Consulta sobre os carimbos, 22/09/2026 (lidos em `America/Sao_Paulo`):
+      a lacuna persiste, e ficou MAIS estreita — mas não é nenhum dos dois casos
+      esperados.**
+
+      | task | fase | fila | início → falha no A2A | execução |
+      |---|---|---|---|---|
+      | `22db8b31` (00:07) | `ContextLock` | **0,1 s** | **83,6 s** | 88,6 s |
+      | `550943b4` (00:09:50) | `ContextLock` | **0,1 s** | **103,6 s** | 108,6 s |
+      | `84da927c` (00:13:50) | `ContextLock` | 0,2 s | **30,3 s** | 35,3 s |
+
+      O carimbo terminal do A2A é posto por `FailAsync` no instante da chamada,
+      logo depois de a aquisição lançar; os ~5 s até `EndedAt` são o push
+      notification preso no IPv6. Então **a própria aquisição do lock durou 83,6 s
+      e 103,6 s**.
+      - **Descartado — o excesso ser fila:** a fila das duas foi de 0,1 s. As três
+        esperas longas **não** são um fenômeno só.
+      - **Descartado — `Command Timeout` diferente em dev:** a connection string
+        (a mesma no `HEAD` e na árvore do teste) não o define, e o log da
+        execução real mostra `CommandTimeout='30'`. E o limite **valeu** na
+        terceira falha, 30,3 s.
+      - **Descartado — `localhost` resolvendo para `::1` pendurado:** `localhost`
+        resolve `::1` e `127.0.0.1`, e as duas conectam na porta 15532 em ~0 ms.
+      - **Descartado — retentativa do EF multiplicando os 30 s:** o `AppDbContext`
+        de `apps/workers` é registrado com `UseNpgsql` simples, sem estratégia de
+        execução.
+      - **Descartado — uma execução segurando o lock:** o último dono do lock do
+        contexto foi a `18396e49`, até **00:06:02**; entre 00:07 e 00:11:34,
+        `a2a_tasks` não tem task nenhuma do contexto além das duas que
+        esperavam. **E as duas esperas são anteriores ao primeiro travamento de
+        100 s no Gemini** (00:12:52) — a cadeia do timeout de conexão não se
+        aplica a elas.
+      - **O que sobra, NÃO medido:** o lock foi segurado por algo que **não era
+        uma execução**, e a aquisição passou do limite de 30 s do comando — as duas
+        coisas juntas. O candidato é um advisory lock de **sessão** que sobreviveu
+        à execução que o tomou (o último dono conhecido é a `18396e49`), mas nada
+        mediu isso, e `pg_locks` já não existia quando se olhou. **Pertence à área
+        da `lock-de-contexto-falha-terminal`**, e é lá que a pergunta aponta.
+      - **Para a próxima ocorrência:** ler `pg_locks` (`locktype = 'advisory'`)
+        com `pg_stat_activity` **enquanto** a espera acontece — é a única leitura
+        que separa as hipóteses restantes.
+      - **Pista 1 — o lock que sobrevive à task tem mecanismo já MEDIDO:** o
+        Npgsql **não libera advisory lock ao devolver a conexão ao pool**
+        (documentado como medido no XML doc de `ConversationContextLock`: depois
+        de `Close()`, com o backend vivo no pool, o lock continua em posse e
+        nenhuma outra conexão o consegue). O desenho depende do
+        `pg_advisory_unlock` explícito de `DisposeAsync`; qualquer caminho em que
+        ele não roda, ou roda e falha, deixa o lock vivo até o backend morrer.
+        Não se mediu se foi o que aconteceu com a `18396e49` — é o candidato
+        com mecanismo conhecido, não a causa.
+      - **Pista 2 — a espera excede os 30 s de `CommandTimeout`
+        independentemente de quem segura o lock:** 83,6 s e 103,6 s, e as duas
+        **antes do contorno do IPv6**. Quando o `CommandTimeout` estoura, o
+        Npgsql abre uma **conexão separada** para mandar o cancelamento ao
+        servidor — **próximo caminho a medir.** (O `localhost:15532` conectou em
+        ~0 ms por `::1` e por `127.0.0.1` quando medido em 22/09, já depois do
+        contorno e com o ambiente em outro estado; isso não descarta o caminho
+        do cancelamento na hora das falhas.)
+    - **A fila de 44,6 s continua caracterizada e não explicada:** nenhuma
+      execução em curso durante a espera, com **três** instâncias de pé. É
+      exatamente o tipo de espera que a `replicas-de-worker` vai querer entender.
+    - **A fila de 44,6 s NÃO é explicada por instâncias ocupadas:** durante a
+      espera dela (00:33:12,7 → 00:33:57,4), **nenhuma outra execução estava em
+      curso**. A hipótese das três instâncias presas cai para essa fila, e a do
+      reinício dos workers nunca foi confirmada. **Causa desconhecida.**
+  - **Gatilho:** cumprido — a cadeia foi observada em execução real, ao menos uma
+    vez.
+  - **Posição:** **change própria, antes da `replicas-de-worker`.** A série que
+    ela vai ler para decidir o `C` pode estar contaminada por esperas de rede, e
+    uma fila longa causada por timeout ausente se lê igual a uma causada por falta
+    de instância. As duas lacunas acima (lock segurado por ninguém visível, espera
+    acima de 30 s) entram como pergunta de abertura dela.
+
+- **Decisão tomada fora do repositório é decisão que a próxima sessão
+  desconhece.** Forma curta, com três ocorrências nesta linha de trabalho:
+  1. **o catálogo de métricas** só existia em conversa — a primeira redação do
+     mapa da `metricas-execucao-coleta` não achou fonte para reconciliar a
+     numeração (registrado no `02` nesta change);
+  2. **a memória de sessão** carregou um número de suíte defasado, com a
+     autoridade do `02` (a régua da convenção 22 registrada nesta change);
+  3. **o Ollama do Triagem**: o dono o descartou em 20/09/2026, mas a decisão
+     ficou em conversa. A exploração daquele dia deduziu "Ollama" do nome do
+     modelo, e a `metricas-execucao-coleta` herdou a dedução como tarefa (7.2) e
+     como risco, sem saber que a pergunta já estava encerrada — ela sobreviveu
+     dois dias e uma reformulação.
+  - **Na prática:** decisão que muda o que uma change mede ou pergunta vai para o
+    `02` no dia, com data — mesmo quando parece óbvia para quem decidiu.
+  - **Gatilho para o `01`:** a próxima change que tocar o `01` leva a forma curta,
+    junto dos itens já posicionados ali ("13 sítios", blast radius por `.csproj`).
+
+- **Chave de API OpenAI publicada no histórico de um repositório PÚBLICO.**
+  Achado em 22/09/2026, na conferência que a restauração dos
+  `appsettings.Development.json` exigiu. **Nenhum valor neste registro.**
+  - **O que:** o valor de `OpenAI:ApiKey` foi **acrescentado** a
+    `apps/workers/src/Buteco.Workers/appsettings.Development.json` em `19a5bec`
+    (12/09/2026) e **removido** em `268814d` (16/09/2026). Os dois commits estão no
+    `origin/main`, e o repositório no GitHub é **público** (conferido por
+    `gh repo view`). É a mesma chave que a execução real de 22/09 usou — estava
+    ativa.
+  - **Remover do arquivo em 16/09 foi tratado como correção, e não era.** Tirar o
+    valor do arquivo não o tira do histórico; a chave continuou válida por mais
+    cinco dias, publicada. O que corrige vazamento é **revogar**; reescrever o
+    histórico é opcional depois disso, e destrutivo para quem tem clone.
+  - **Produção não usa esta chave:** o valor não está no `.env.prod` (conferido por
+    presença, sem imprimir).
+  - **Ação, do dono:** revogar e trocar a chave no provedor. **Nenhum push até a
+    revogação estar confirmada.**
+  - **`Mcp:CredentialEncryptionKey` NÃO é vazamento, e o motivo:** o valor local
+    que apareceu em commits é a **chave de desenvolvimento que o repositório
+    versiona de propósito** — no `appsettings.Development.json` de `apps/api` no
+    `HEAD` e em 13 fixtures de teste, desde `da31b27` (02/08/2026). É chave de
+    dev por desenho, para os testes cifrarem e decifrarem credencial MCP;
+    produção usa outra (o valor não está no `.env.prod`). Ela só vira problema no
+    dia em que algum ambiente real passar a usá-la.
+
+- **Varredura de segredos no histórico inteiro, e a mesma checagem antes de todo
+  commit.** Aberto em 22/09/2026 pelo item acima.
+  - **O que:** rodar `gitleaks` (ou equivalente) sobre **todo** o histórico — o
+    vazamento de 12/09 só foi achado porque uma restauração pediu conferência, e
+    nada garante que seja o único —, e pôr a mesma checagem no CI **e** em hook de
+    commit, para o próximo não depender de alguém conferir.
+  - **Lista de exceções, com o motivo escrito ao lado:** a chave de dev do MCP
+    (`Mcp:CredentialEncryptionKey` de desenvolvimento, versionada de propósito em
+    `apps/api` e nas fixtures — ver o item acima). Exceção sem motivo escrito vira,
+    na primeira revisão, "falso positivo" genérico, e a lista cresce sem dono.
+  - **Gatilho:** cumprido — vazamento real achado num repositório público.
+  - **Posição:** **logo depois da `metricas-execucao-coleta`, antes do timeout de
+    conexão** (posição `6a` da fila). O repositório é público, e cada commit sem a
+    checagem repete o risco; as outras changes da fila não ficam mais caras por
+    esperar uma change pequena.

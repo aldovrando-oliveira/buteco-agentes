@@ -1,8 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using global::A2A;
+using Buteco.Api.Infrastructure;
 using Buteco.Api.Messaging;
 using Buteco.Api.Tests.Support;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
 
 namespace Buteco.Api.Tests;
@@ -137,6 +141,85 @@ public class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IClassFixt
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.TryGetProperty("error", out var error));
         Assert.Contains(unknownAgentId.ToString(), error.GetProperty("message").GetString());
+    }
+
+    /// <summary>
+    /// A PREMISSA da guarda de estado terminal de <c>apps/workers</c> (change
+    /// <c>metricas-execucao-coleta</c>, D17), transformada em guarda: mensagem
+    /// para uma task JÁ TERMINAL é recusada pelo protocolo e NÃO publica job.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// O worker passou a não executar task que lê em estado terminal. Isso só é
+    /// seguro se nenhum caminho legítimo entregar a ele uma task terminal para
+    /// executar — e o caminho que parecia poder fazê-lo é o de "continuação" de
+    /// uma task concluída. Ele não existe: o <c>A2AServer</c> recusa a mensagem
+    /// (<c>GuardTerminalState</c>, decompilado do A2A 1.0.0-preview2: "Task is in
+    /// a terminal state and cannot accept messages") antes de o
+    /// <c>EnqueueingAgentHandler</c> rodar. A conversa continua em task NOVA, no
+    /// mesmo contexto — o par disso está em <c>TaskJobConsumerTests</c> do worker.
+    /// </para>
+    /// <para>
+    /// Passa antes e depois da guarda, de propósito. Se uma versão nova do pacote
+    /// deixar de recusar, ESTE teste reprova — e é o aviso de que a guarda do
+    /// worker passou a poder engolir mensagem legítima em silêncio.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task SendMessage_ToATaskAlreadyTerminal_IsRefused_AndPublishesNoJob()
+    {
+        var agentId = await CreateAgentAsync();
+
+        var first = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", new
+        {
+            jsonrpc = "2.0",
+            id = 1,
+            method = "SendMessage",
+            @params = new { message = new { role = "ROLE_USER", parts = new[] { new { text = "primeira" } }, messageId = Guid.NewGuid().ToString("N") } },
+        });
+        var task = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("result").GetProperty("task");
+        var taskId = task.GetProperty("id").GetString()!;
+        var contextId = task.GetProperty("contextId").GetString()!;
+        Assert.NotNull(await ReadJobMessageFromQueueAsync());
+
+        await MarkTaskCompletedAsync(taskId);
+
+        var continuation = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", new
+        {
+            jsonrpc = "2.0",
+            id = 2,
+            method = "SendMessage",
+            @params = new
+            {
+                message = new
+                {
+                    role = "ROLE_USER",
+                    parts = new[] { new { text = "continuação" } },
+                    messageId = Guid.NewGuid().ToString("N"),
+                    taskId,
+                    contextId,
+                },
+            },
+        });
+
+        var body = await continuation.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("error", out var error), $"Esperava recusa; resposta: {body}");
+        Assert.Contains("terminal", error.GetProperty("message").GetString());
+        Assert.Null(await ReadJobMessageFromQueueAsync());
+    }
+
+    private async Task MarkTaskCompletedAsync(string taskId)
+    {
+        using var scope = fixture.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var record = await dbContext.A2ATasks.SingleAsync(t => t.TaskId == taskId);
+        var agentTask = JsonSerializer.Deserialize<AgentTask>(record.Payload, A2AJsonUtilities.DefaultOptions)!;
+        agentTask.Status = new global::A2A.TaskStatus { State = TaskState.Completed, Timestamp = DateTimeOffset.UtcNow };
+
+        record.Update(record.ContextId, TaskState.Completed.ToString(), agentTask.Status.Timestamp,
+            JsonSerializer.Serialize(agentTask, A2AJsonUtilities.DefaultOptions));
+        await dbContext.SaveChangesAsync();
     }
 
     private async Task<Guid> CreateAgentAsync()
