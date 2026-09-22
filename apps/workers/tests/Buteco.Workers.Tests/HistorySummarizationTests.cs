@@ -3,6 +3,7 @@ using global::A2A;
 using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
+using Buteco.Workers.ExecutionMetrics;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
@@ -14,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RabbitMQ.Client;
 using TaskStatus = A2A.TaskStatus;
@@ -116,6 +118,59 @@ public class HistorySummarizationTests(WorkerInfrastructureFixture fixture) : IC
         Assert.Contains(lastMainCallMessages!, m => m.Text != null && m.Text.StartsWith("[Summary]"));
         Assert.DoesNotContain(lastMainCallMessages!, m => m.Text == "pergunta 1");
         Assert.Contains(lastMainCallMessages!, m => m.Text == $"pergunta {turns}");
+    }
+
+    /// <summary>
+    /// A chamada de resumo é uma requisição HTTP real, paga, e não é um turno do
+    /// usuário (Q3 da exploração <c>metricas-de-operacao</c>). Sem a marca de
+    /// finalidade, ela entraria nas métricas como turno e inflaria "chamadas por
+    /// task". Change <c>metricas-execucao-coleta</c>, D8.
+    /// </summary>
+    [Fact]
+    public async Task CrossingThreshold_RecordsCompactionCall_SeparateFromTurnCalls_InTheSameTask()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(agentId);
+
+        var chatClient = BuildSummarizingChatClientMock([], out _);
+
+        // Composto com o LlmCallDurationChatClient real, como o
+        // ChatClientResolver faz em produção — sem ele ninguém registra as
+        // linhas filhas.
+        using var host = BuildHost(new LlmCallDurationChatClient(
+            chatClient.Object, "openai", "gpt-5.6-sol", NullLogger<LlmCallDurationChatClient>.Instance));
+        await host.StartAsync();
+
+        var taskIds = new List<string>();
+        try
+        {
+            for (var turn = 1; turn <= SummarizationTurnThreshold + 1; turn++)
+            {
+                var record = await RunTurnAsync(agentId, contextId, $"pergunta {turn}");
+                taskIds.Add(record.TaskId);
+                await ExecutionMetricsReader.WaitForClosedExecutionAsync(fixture.Postgres.GetConnectionString(), record.TaskId);
+            }
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+
+        var callsByTask = new List<IReadOnlyList<Buteco.Workers.ExecutionMetrics.Entities.ProviderCall>>();
+        foreach (var taskId in taskIds)
+        {
+            callsByTask.Add(await ExecutionMetricsReader.ProviderCallsAsync(fixture.Postgres.GetConnectionString(), taskId));
+        }
+
+        // Quantas vezes o gatilho dispara em N turnos é do pacote, não desta
+        // change — o guarda afirma só que a compactação aparece separada, e que
+        // ela convive com o turno DENTRO da mesma task (é inline no RunAsync).
+        var compactingTasks = callsByTask.Where(calls => calls.Any(call => call.Purpose == ExecutionMetricsValues.Purpose.Compaction)).ToList();
+        Assert.NotEmpty(compactingTasks);
+        Assert.All(compactingTasks, calls => Assert.Contains(calls, call => call.Purpose == ExecutionMetricsValues.Purpose.Turn));
+        Assert.All(callsByTask[0], call => Assert.Equal(ExecutionMetricsValues.Purpose.Turn, call.Purpose));
     }
 
     [Fact]

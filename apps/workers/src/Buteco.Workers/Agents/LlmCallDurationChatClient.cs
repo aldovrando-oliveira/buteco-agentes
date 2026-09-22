@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Buteco.Workers.ExecutionMetrics;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -35,6 +36,17 @@ namespace Buteco.Workers.Agents;
 /// chamada que estoura por espera de pool é justamente o caso que não pode ficar
 /// sem medida.
 /// </para>
+///
+/// <para>
+/// <b>É também o assento da linha filha das métricas de execução</b> (change
+/// <c>metricas-execucao-coleta</c>): pela mesma posição — a camada mais interna —
+/// é o único ponto que vê cada requisição separada do tempo das tools, inclusive
+/// a de compactação, que <c>AgentResponse.Usage</c> não inclui. Quem é a task
+/// ele descobre pelo <see cref="ExecutionMetricsScope"/> ambiente, não por
+/// parâmetro: este client é compartilhado por <c>(provider, model)</c> durante a
+/// vida do processo. Fora de execução, o registro é no-op. Os tokens vão como o
+/// provedor os reportou — nulo continua nulo.
+/// </para>
 /// </summary>
 public sealed class LlmCallDurationChatClient(
     IChatClient innerClient,
@@ -61,13 +73,22 @@ public sealed class LlmCallDurationChatClient(
         CancellationToken cancellationToken = default)
     {
         var started = Stopwatch.GetTimestamp();
+        ChatResponse? response = null;
+        Exception? failure = null;
         try
         {
-            return await base.GetResponseAsync(messages, options, cancellationToken);
+            response = await base.GetResponseAsync(messages, options, cancellationToken);
+            return response;
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+            throw;
         }
         finally
         {
-            LogDuration(started, streaming: false);
+            var elapsed = LogDuration(started, streaming: false);
+            RecordCall(elapsed, response?.Usage, failure);
         }
     }
 
@@ -78,21 +99,47 @@ public sealed class LlmCallDurationChatClient(
     {
         // A medida cobre a enumeração inteira, não só a obtenção do enumerador:
         // no caminho de streaming é a leitura dos updates que ocupa a conexão.
+        //
+        // No streaming o uso chega como UsageContent dentro dos updates, e é
+        // somado com a mesma semântica de nulo de UsageDetails.Add. Sem bloco
+        // `catch` aqui (C# não permite `yield` dentro de try com catch): uma
+        // enumeração que não chegou ao fim — por exceção ou por abandono de quem
+        // consumia — é registrada como falha.
         var started = Stopwatch.GetTimestamp();
+        UsageDetails? usage = null;
+        var completed = false;
         try
         {
             await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken))
             {
+                foreach (var usageContent in update.Contents.OfType<UsageContent>())
+                {
+                    (usage ??= new UsageDetails()).Add(usageContent.Details);
+                }
+
                 yield return update;
             }
+
+            completed = true;
         }
         finally
         {
-            LogDuration(started, streaming: true);
+            var elapsed = LogDuration(started, streaming: true);
+            ExecutionMetricsScope.RecordProviderCall(
+                provider, model, elapsed.TotalMilliseconds, usage, failed: !completed, httpStatus: null);
         }
     }
 
-    private void LogDuration(long startedTimestamp, bool streaming)
+    private void RecordCall(TimeSpan elapsed, UsageDetails? usage, Exception? failure) =>
+        ExecutionMetricsScope.RecordProviderCall(
+            provider,
+            model,
+            elapsed.TotalMilliseconds,
+            usage,
+            failed: failure is not null,
+            httpStatus: failure is null ? null : ExecutionMetricsScope.HttpStatusOf(failure));
+
+    private TimeSpan LogDuration(long startedTimestamp, bool streaming)
     {
         var elapsed = Stopwatch.GetElapsedTime(startedTimestamp);
 
@@ -102,5 +149,7 @@ public sealed class LlmCallDurationChatClient(
             model,
             streaming,
             elapsed.TotalMilliseconds);
+
+        return elapsed;
     }
 }

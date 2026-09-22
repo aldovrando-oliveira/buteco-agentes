@@ -339,6 +339,27 @@ o versionamento pretende seguir
   contagem é a que a rota agregada devolve, nunca recontada no painel. Sem
   seletor de período.
 
+**Métricas de operação — coleta de execução (etapa 1)**
+
+- `apps/workers` passa a gravar, a cada task executada, uma linha em
+  `task_executions` (agente, provedor e modelo **no momento da execução**,
+  origem — externa ou por delegação, com agente e task de origem —,
+  profundidade, instante do `submitted`, de início, de lock e de término, estado
+  terminal e a **fase** em que uma falha aconteceu), uma linha por requisição ao
+  provedor de LLM em `provider_calls` (duração, tokens de entrada, saída e cache
+  lido, finalidade `Turn` ou `Compaction`, falha e status HTTP quando tipado) e
+  uma linha por delegação disparada em `delegation_outcomes` (desfecho e último
+  estado observado do alvo). As tabelas nascem na migração de `apps/api`.
+- **Token que o provedor não reportou é gravado nulo, nunca zero.** Provedor e
+  modelo são gravados na linha, sem chave estrangeira para `agents`: trocar o
+  modelo de um agente não reescreve o consumo anterior.
+- **Falha ao gravar métrica nunca muda o estado final da task** — é registrada em
+  log de aviso e a execução segue.
+- A task criada por delegação passa a carregar `delegationSourceAgentId` e
+  `delegationSourceTaskId` no `Metadata`, ao lado de `delegationDepth`.
+- **Sem rota nem tela ainda**: isto é só a coleta. A série começa no deploy e não
+  é retroativa.
+
 **Documentação e governança**
 
 - Licenciamento sob Apache-2.0, com `LICENSE` e `NOTICE`.
@@ -381,6 +402,19 @@ o versionamento pretende seguir
   "manter a atual".
 
 ### Fixed
+
+- **Mensagem reentregue pelo RabbitMQ reexecutava uma task já concluída.** Se o
+  worker parasse entre gravar o estado final da task e confirmar a mensagem, a
+  mensagem voltava à fila e a task era executada de novo a partir de
+  `completed` — o LLM era chamado outra vez e o estado reescrito. Task lida em
+  estado final (`completed`, `failed`, `rejected`, `canceled`) passa a ser
+  ignorada, com log de aviso, e a mensagem é confirmada. Task em `working`
+  continua sendo retomada. A continuação de uma conversa não é afetada: ela
+  sempre chega como task nova, porque o protocolo A2A recusa mensagem para task
+  em estado final.
+- **`tests/InboxOrchestratorRoundTrip.Tests` não compilava** desde a mudança de
+  assinatura do resolvedor de delegação (`sourceTaskId`), por um duplo de teste
+  que não acompanhou a interface.
 
 - **Documento grande não indexava: a chamada de embedding ia inteira, sem
   teto**. `apps/workers` mandava **todos** os fragmentos do documento numa

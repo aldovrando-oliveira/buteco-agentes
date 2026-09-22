@@ -61,11 +61,31 @@ namespace Buteco.Workers.Diagnostics;
 /// </para>
 ///
 /// <para>
-/// <b>ESTE COMPONENTE É TEMPORÁRIO, E TEM SUCESSOR NOMEADO.</b> A change
-/// <c>metricas-execucao-coleta</c> vai gravar tempo de fila e origem como
-/// métrica de verdade e <b>substitui</b> esta varredura. A duplicação até lá é
-/// consciente; quem for fazer aquela change herda esta decisão e precisa
-/// reavaliá-la, não descobri-la depois.
+/// <b>ESTE COMPONENTE É TEMPORÁRIO, E A CONDIÇÃO DE REMOÇÃO ESTÁ ESCRITA</b>
+/// (reavaliada em 21/09/2026 pela <c>metricas-execucao-coleta</c>, D11 do
+/// design.md dela). Aquela change passou a gravar execução, tempo de fila,
+/// origem e resultado de delegação em tabelas próprias — e <b>não</b> removeu
+/// esta varredura, porque ela ainda não tem substituta:
+/// </para>
+///
+/// <list type="bullet">
+/// <item><b>Sai quando</b> a rota da etapa de agregação que serve M32 (tasks sem
+/// estado terminal) cobrir as DUAS populações que esta varredura cobre: a
+/// execução aberta (<c>task_executions.EndedAt</c> nulo) e a task
+/// <c>Submitted</c> nunca consumida — que não tem linha em
+/// <c>task_executions</c>, porque a linha nasce no consumo. A segunda
+/// população, que é justamente a que responde o <c>C</c>, só existe em
+/// <c>a2a_tasks</c>; a rota M32 tem de lê-la.</item>
+/// <item><b>E não antes de</b> a <c>replicas-de-worker</c> fechar a decisão de
+/// capacidade: o <c>C</c> dela vai ser lido das duas fontes em paralelo, e é a
+/// coexistência que prova que as duas medem o mesmo número. Remover antes
+/// seria trocar o instrumento no meio da medição.</item>
+/// </list>
+///
+/// <para>
+/// O log de desistência de <c>AgentDelegationToolSetResolver</c> segue a mesma
+/// condição: sua linha gêmea (<c>delegation_outcomes</c>) já carrega todo campo
+/// dele, e o que falta é a consulta que o substitua.
 /// </para>
 /// </remarks>
 public sealed class NonTerminalTaskDetectorService(

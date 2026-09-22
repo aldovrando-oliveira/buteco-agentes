@@ -3,6 +3,8 @@ using System.Text.Json;
 using global::A2A;
 using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
+using Buteco.Workers.ExecutionMetrics;
+using Buteco.Workers.ExecutionMetrics.Entities;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
@@ -111,241 +113,351 @@ public sealed class AgentExecutionService(
             return;
         }
 
-        // Controle de profundidade da cadeia de delegação (design.md,
-        // Decisão 6): checado antes de StartWorkAsync/do lock consultivo —
-        // uma task além do teto nunca chega a rodar o LLM. Rejeitada (não
-        // failed) para não passar pelo tratamento de erro genérico do catch
-        // abaixo — mesmo estado terminal já usado para "agente inativo"/
-        // "sem provider" em EnqueueingAgentHandler, que a tool de delegação
-        // que está esperando (Decisão 8) já trata como qualquer outra
-        // falha graciosa, sem código especial para profundidade.
-        var delegationDepth = DelegationDepth.Read(task);
-        if (delegationDepth > DelegationDepthLimit)
+        // Task JÁ TERMINAL não é executada de novo (design.md da change
+        // metricas-execucao-coleta, D17). Chega aqui quando o RabbitMQ REENTREGA a
+        // mensagem: o worker parou entre gravar o estado terminal e confirmá-la. Sem
+        // esta guarda a task era reexecutada a partir de `completed` — LLM chamado
+        // outra vez, estado reescrito, e (medido na suíte) uma delegação inteira
+        // refeita com timeout de 120 s. O `return` faz o consumidor confirmar a
+        // mensagem, e ela não volta.
+        //
+        // É SEGURO porque nenhum caminho legítimo entrega task terminal para
+        // executar: o A2AServer recusa mensagem para task terminal
+        // (GuardTerminalState) e a conversa continua em task NOVA, em `submitted`;
+        // a delegação sempre cria task nova. Os dois lados têm guarda. O
+        // predicado é o MESMO do protocolo (TaskStateExtensions.IsTerminal), para
+        // as duas pontas não divergirem sobre o que é terminal.
+        //
+        // `working` NÃO entra: reentrega de task em `working` é recuperação de
+        // worker que morreu no meio, e continua executando (com SubmittedAt nulo,
+        // D4).
+        //
+        // Antes da linha de métrica de propósito: a execução que já tem a sua
+        // linha não ganha uma segunda.
+        if (task.Status.State.IsTerminal())
         {
             logger.LogWarning(
-                "Task {TaskId} excede a profundidade máxima de delegação ({Limit}) — rejeitada.",
+                "Task {TaskId} já está em estado terminal ({State}) — mensagem reentregue, não executada de novo.",
                 message.TaskId,
-                DelegationDepthLimit);
-
-            await ApplyStepAsync(
-                taskStore,
-                message.TaskId,
-                message.ContextId,
-                task,
-                updater => updater.RejectAsync(cancellationToken: cancellationToken),
-                cancellationToken);
+                task.Status.State);
             return;
         }
 
-        task = await ApplyStepAsync(
-            taskStore,
+        // Métricas de execução (change metricas-execucao-coleta, D3/D4). A linha
+        // pai é aberta AQUI, e não depois: é o primeiro ponto em que a task foi
+        // lida, e é anterior a TODOS os caminhos que a terminam — a rejeição por
+        // profundidade logo abaixo, a falha do lock e o `catch` grande. Uma task
+        // que termina sem nenhuma chamada ao provedor tem de aparecer na tela de
+        // erros, e só aparece se a linha já existir quando ela terminar.
+        //
+        // SubmittedAt: é AQUI que o instante do `submitted` ainda existe. A
+        // transição para `working` (StartWorkAsync, logo abaixo) o sobrescreve em
+        // a2a_tasks, e o payload não guarda histórico de status. Só vale se a task
+        // lida estiver em `Submitted`: numa reentrega ela já está em `Working`, e
+        // o carimbo seria o do início da tentativa anterior — gravar esse valor
+        // afirmaria um tempo de fila que não foi medido (convenção 13), então
+        // fica nulo.
+        var delegationOrigin = DelegationOrigin.Read(task);
+        var execution = new TaskExecution(
             message.TaskId,
+            agent.Id,
             message.ContextId,
-            task,
-            updater => updater.StartWorkAsync(cancellationToken: cancellationToken),
-            cancellationToken);
+            agent.Provider,
+            agent.Model,
+            delegationOrigin is null ? ExecutionMetricsValues.Origin.External : ExecutionMetricsValues.Origin.Delegation,
+            delegationOrigin?.SourceAgentId,
+            delegationOrigin?.SourceTaskId,
+            DelegationDepth.Read(task),
+            task.Status.State == TaskState.Submitted ? task.Status.Timestamp : null,
+            timeProvider.GetUtcNow());
 
-        if (task is null)
+        using var metrics = ExecutionMetricsScope.Begin(message.TaskId);
+        var metricsWriter = new ExecutionMetricsWriter(scopeFactory, logger);
+        await metricsWriter.OpenAsync(execution, cancellationToken);
+
+        DateTimeOffset? lockAcquiredAt = null;
+        DateTimeOffset? endedAt = null;
+        string? terminalState = null;
+        string? failurePhase = null;
+
+        // Chamado só DEPOIS de o estado terminal estar gravado — se a gravação
+        // lançar, nada é marcado e a linha fica aberta, que é o que ela é.
+        void MarkTerminal(TaskState state, string? phase)
         {
-            logger.LogError("Task {TaskId} ficou nula após transição para working", message.TaskId);
-            return;
+            endedAt = timeProvider.GetUtcNow();
+            terminalState = state.ToString();
+            failurePhase = phase;
         }
 
-        // Serializa o processamento de mensagens do mesmo (agentId,
-        // contextId) entre instâncias concorrentes do worker — ver
-        // design.md, Decisão 7. Cobre a seção crítica inteira: leitura da
-        // sessão anterior → RunAsync → escrita da nova.
-        //
-        // TRATAMENTO PRÓPRIO, SEPARADO DO `catch` GRANDE LÁ EMBAIXO, e não por
-        // gosto de simetria — ver design.md da change
-        // lock-de-contexto-falha-terminal, D1. A aquisição pode falhar: ela
-        // espera pelo lock e essa espera é limitada pelo `CommandTimeout` do
-        // Npgsql (30 s por default), então estourar é caminho de operação, não
-        // curiosidade. Antes desta change a exceção escapava de `ExecuteAsync`
-        // inteiro e o `catch` de TaskJobConsumer descartava a mensagem — a task
-        // ficava em `working` PARA SEMPRE, e com ela a PendingDispatch de
-        // apps/inbox ficava em `Dispatching` e a mensagem do usuário sumia sem
-        // erro nenhum. Medido, não deduzido.
-        //
-        // NÃO MOVER O `await using` PARA DENTRO DO `try` ABAIXO para "unificar"
-        // os dois caminhos. É a correção que parece óbvia e destrói dado:
-        // `await using` dentro de um bloco dispara o DisposeAsync ao sair dele,
-        // e numa exceção o finally implícito roda ANTES do catch externo. O
-        // DisposeAsync solta o lock numa conexão que pode ter morrido, e aí o
-        // catch pegaria essa falha DEPOIS de a task já estar gravada como
-        // `completed` — e ApplyStepAsync não tem guarda de estado terminal,
-        // então regravaria como `failed`, perdendo a resposta do agente junto.
-        // UnlockFailingAfterCompletion_LeavesTaskCompleted_WithArtifactPreserved
-        // é o guarda que prende isto.
-        ConversationContextLock acquiredLock;
+        // O fechamento vai num `finally` EXTERNO a tudo, e roda depois do estado
+        // terminal e do push notification: não há ordem de execução em que uma
+        // falha de métrica mude o que a task terminou sendo (o escritor também
+        // não lança). O `await using` do lock continua dentro deste bloco, no
+        // MESMO lugar relativo ao `try/catch` da execução — ver o comentário
+        // "NÃO MOVER" mais abaixo.
         try
         {
-            acquiredLock = await ConversationContextLock.AcquireAsync(
-                scopeFactory, message.AgentId, message.ContextId, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // ContextId no log não é enfeite: é o único campo que liga esta
-            // falha à conversa que estava segurando o lock, que é a única coisa
-            // acionável aqui.
-            logger.LogError(
-                ex,
-                "Falha ao adquirir o lock de contexto do agente {AgentId} no contexto {ContextId} para a task {TaskId}",
-                message.AgentId,
-                message.ContextId,
-                message.TaskId);
-
-            await FailTaskAsync(taskStore, message, task, cancellationToken);
-            return;
-        }
-
-        await using var contextLock = acquiredLock;
-
-        try
-        {
-            var userText = ExtractLatestUserText(task);
-            var messageInstant = ExtractMessageInstant(task, message.TaskId);
-            var (channelType, contactExternalId) = ExtractChannelContext(task, message.TaskId);
-
-            // agent.Provider/agent.Model só ficam nulos para um agente "precisa de
-            // reconfiguração" — apps/api já rejeita SendMessage nesse caso antes de
-            // publicar o job (EnqueueingAgentHandler), então nunca deveriam chegar
-            // aqui; o operador nulo-tolerante (!) documenta essa garantia, não a
-            // ignora — se ela falhar, o resolver/aiAgent lançará e cairá no catch
-            // abaixo, terminando a task como failed (Decision 5).
-            // COMPARTILHADO E NÃO DESCARTÁVEL: o resolver devolve a MESMA
-            // instância para o mesmo (provider, model) durante toda a vida do
-            // processo (change fix-vazamento-httpclient-chat). Não acrescentar
-            // `using`/`await using` aqui nem no aiAgent montado abaixo — o
-            // contraste com o `await using` do toolSet logo adiante é
-            // deliberado, e é justamente a assimetria que engana:
-            // DelegatingChatClient.Dispose() descarta o InnerClient em cascata,
-            // e ChatClientAgent empilha middleware delegante sobre este client,
-            // então um `using` aqui quebraria TODA mensagem seguinte daquele par
-            // com ObjectDisposedException. Hoje nada descarta (ChatClientAgent
-            // não é IDisposable), e é essa garantia que
-            // TaskJobConsumerTests.Consumer_ProcessesTwoTasksInSequence_SharedChatClientIsNeverDisposed
-            // prende.
-            var chatClient = chatClientResolver.Resolve(agent.Provider!, agent.Model!);
-
-            // Precisa ficar vivo durante todo o RunAsync abaixo, não só
-            // durante a resolução — cada AITool devolvido encapsula uma
-            // conexão MCP viva (design.md da change apps-workers-execucao-mcp,
-            // Decision 4). await using cobre tanto o caminho de sucesso
-            // quanto uma exceção propagando para o catch abaixo.
-            await using var toolSet = await mcpToolSetResolver.ResolveAsync(dbContext, message.AgentId, cancellationToken);
-
-            // Sem conexão externa viva por trás (diferente de McpToolSet) —
-            // não precisa de await using, ver design.md, Decision 10.
-            var delegationTools = await delegationToolSetResolver.ResolveAsync(
-                dbContext, agent, message.TaskId, message.ContextId, delegationDepth, messageInstant, cancellationToken);
-
-            // Terceiro conjunto, e também SEM await using — pelo mesmo motivo da
-            // delegação e não por simetria com ela: não há conexão externa viva
-            // por trás. A busca usa um escopo próprio aberto dentro da invocação
-            // (FunctionInvokingChatClient pode chamar duas tools do mesmo turno
-            // em paralelo, e DbContext não é thread-safe), e o gerador de
-            // embedding é resolvido lá dentro, não aqui (design.md da change
-            // knowledge-tool-resolver, D7/D9).
-            //
-            // Depois desta change são DOIS resolvedores sem `using` contra UM
-            // com — a assimetria virou maioria, e o único `await using` do
-            // método é o do toolSet MCP, que tem conexão viva de verdade.
-            var knowledgeTools = await knowledgeToolSetResolver.ResolveAsync(
-                dbContext, message.AgentId, cancellationToken);
-
-            // Bloco de contexto temporal concatenado às Instructions do
-            // operador — sem tocar Agent.Instructions no banco, sem entrar
-            // no histórico de conversa (design.md da change
-            // apps-workers-contexto-temporal, Decisões 1 e 2). Instructions
-            // vazia (Non-Goal: sem validação de não-vazio em apps/api) não
-            // pode deixar separador órfão — usa só o bloco nesse caso.
-            var temporalContextBlock = TemporalContextBlockBuilder.Build(timeProvider, messageInstant);
-            var instructionsWithTemporalContext = TemporalContextBlockBuilder.Concatenate(agent.Instructions, temporalContextBlock);
-
-            // Bloco de contexto de canal, concatenado depois do bloco
-            // temporal — reaproveita TemporalContextBlockBuilder.Concatenate
-            // uma segunda vez em vez de estender sua assinatura (design.md,
-            // D5). Omitido inteiramente quando os dois campos estão
-            // ausentes (Build retorna null) — Concatenate não é chamado
-            // nesse caso, preservando as Instructions com só o bloco
-            // temporal.
-            var channelContextBlock = ChannelContextBlockBuilder.Build(channelType, contactExternalId);
-            var instructionsWithContext = channelContextBlock is null
-                ? instructionsWithTemporalContext
-                : TemporalContextBlockBuilder.Concatenate(instructionsWithTemporalContext, channelContextBlock);
-
-            var aiAgent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
+            // Controle de profundidade da cadeia de delegação (design.md,
+            // Decisão 6): checado antes de StartWorkAsync/do lock consultivo —
+            // uma task além do teto nunca chega a rodar o LLM. Rejeitada (não
+            // failed) para não passar pelo tratamento de erro genérico do catch
+            // abaixo — mesmo estado terminal já usado para "agente inativo"/
+            // "sem provider" em EnqueueingAgentHandler, que a tool de delegação
+            // que está esperando (Decisão 8) já trata como qualquer outra
+            // falha graciosa, sem código especial para profundidade.
+            var delegationDepth = execution.DelegationDepth;
+            if (delegationDepth > DelegationDepthLimit)
             {
-                Name = agent.Name,
-                // Dedupe global no ponto de concatenação (design.md da change
-                // dedupe-global-nome-de-tool, Decisão 1): é o único ponto que
-                // sabe que os dois conjuntos dividem espaço de nome. Antes era
-                // `toolSet.Tools.Concat(delegationTools)` cru, e um nome
-                // duplicado era sombreado em silêncio por
-                // FunctionInvokingChatClient.FindTool. A ordem dos argumentos é
-                // a precedência declarada (Decisão 5, estendida em
-                // knowledge-tool-resolver D8): MCP mantém o nome, a tool de
-                // delegação é renomeada contra MCP, e a de conhecimento é
-                // renomeada contra as duas.
-                ChatOptions = new ChatOptions
-                {
-                    Instructions = instructionsWithContext,
-                    Tools = [.. toolNameDeduplicator.Deduplicate(message.AgentId, toolSet.Tools, delegationTools, knowledgeTools)],
-                },
-                ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
-                {
-                    ChatReducer = new RecentMessageChatReducer(MaxHistoryMessages),
-                }),
-                // Compaction (Microsoft.Agents.AI.Compaction) é
-                // [Experimental("MAAI001")] — risco aceito, ver design.md da
-                // change apps-workers-resumo-historico-conversa, Decisão 1/8.
-                // Reaproveita o mesmo chatClient resolvido acima para a
-                // chamada de resumo — sem client dedicado (Decisão 4).
-#pragma warning disable MAAI001
-                AIContextProviders = new AIContextProvider[]
-                {
-                    new CompactionProvider(new SummarizationCompactionStrategy(
-                        chatClient,
-                        CompactionTriggers.TurnsExceed(SummarizationTurnThreshold))),
-                },
-#pragma warning restore MAAI001
-            });
+                logger.LogWarning(
+                    "Task {TaskId} excede a profundidade máxima de delegação ({Limit}) — rejeitada.",
+                    message.TaskId,
+                    DelegationDepthLimit);
 
-            var session = await LoadSessionAsync(aiAgent, taskStore, message.ContextId, cancellationToken);
+                await ApplyStepAsync(
+                    taskStore,
+                    message.TaskId,
+                    message.ContextId,
+                    task,
+                    updater => updater.RejectAsync(cancellationToken: cancellationToken),
+                    cancellationToken);
+                MarkTerminal(TaskState.Rejected, ExecutionMetricsValues.FailurePhase.DelegationDepthExceeded);
+                return;
+            }
 
-            var response = await aiAgent.RunAsync(userText, session, options: null, cancellationToken);
-
-            // Serializado antes do SaveTaskAsync final (não no catch — ver
-            // design.md, Decisões 1 e 6): se DeserializeSessionAsync tivesse
-            // falhado antes, ou se RunAsync lançar, cai no catch abaixo sem
-            // nunca chegar aqui, e a última sessão persistida (de uma task
-            // completed anterior) permanece intacta.
-            var serializedSession = await aiAgent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
-            var conversationSessionValue = ConversationSessionCodec.Encode(serializedSession);
-
-            var parts = new List<Part> { Part.FromText(response.Text) };
-
-            var savedTask = await ApplyStepAsync(
+            task = await ApplyStepAsync(
                 taskStore,
                 message.TaskId,
                 message.ContextId,
                 task,
-                async updater =>
+                updater => updater.StartWorkAsync(cancellationToken: cancellationToken),
+                cancellationToken);
+
+            if (task is null)
+            {
+                logger.LogError("Task {TaskId} ficou nula após transição para working", message.TaskId);
+                return;
+            }
+
+            // Serializa o processamento de mensagens do mesmo (agentId,
+            // contextId) entre instâncias concorrentes do worker — ver
+            // design.md, Decisão 7. Cobre a seção crítica inteira: leitura da
+            // sessão anterior → RunAsync → escrita da nova.
+            //
+            // TRATAMENTO PRÓPRIO, SEPARADO DO `catch` GRANDE LÁ EMBAIXO, e não por
+            // gosto de simetria — ver design.md da change
+            // lock-de-contexto-falha-terminal, D1. A aquisição pode falhar: ela
+            // espera pelo lock e essa espera é limitada pelo `CommandTimeout` do
+            // Npgsql (30 s por default), então estourar é caminho de operação, não
+            // curiosidade. Antes desta change a exceção escapava de `ExecuteAsync`
+            // inteiro e o `catch` de TaskJobConsumer descartava a mensagem — a task
+            // ficava em `working` PARA SEMPRE, e com ela a PendingDispatch de
+            // apps/inbox ficava em `Dispatching` e a mensagem do usuário sumia sem
+            // erro nenhum. Medido, não deduzido.
+            //
+            // NÃO MOVER O `await using` PARA DENTRO DO `try` ABAIXO para "unificar"
+            // os dois caminhos. É a correção que parece óbvia e destrói dado:
+            // `await using` dentro de um bloco dispara o DisposeAsync ao sair dele,
+            // e numa exceção o finally implícito roda ANTES do catch externo. O
+            // DisposeAsync solta o lock numa conexão que pode ter morrido, e aí o
+            // catch pegaria essa falha DEPOIS de a task já estar gravada como
+            // `completed` — e ApplyStepAsync não tem guarda de estado terminal,
+            // então regravaria como `failed`, perdendo a resposta do agente junto.
+            // UnlockFailingAfterCompletion_LeavesTaskCompleted_WithArtifactPreserved
+            // é o guarda que prende isto.
+            ConversationContextLock acquiredLock;
+            try
+            {
+                acquiredLock = await ConversationContextLock.AcquireAsync(
+                    scopeFactory, message.AgentId, message.ContextId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // ContextId no log não é enfeite: é o único campo que liga esta
+                // falha à conversa que estava segurando o lock, que é a única coisa
+                // acionável aqui.
+                logger.LogError(
+                    ex,
+                    "Falha ao adquirir o lock de contexto do agente {AgentId} no contexto {ContextId} para a task {TaskId}",
+                    message.AgentId,
+                    message.ContextId,
+                    message.TaskId);
+
+                await FailTaskAsync(taskStore, message, task, cancellationToken);
+                MarkTerminal(TaskState.Failed, ExecutionMetricsValues.FailurePhase.ContextLock);
+                return;
+            }
+
+            lockAcquiredAt = timeProvider.GetUtcNow();
+            await using var contextLock = acquiredLock;
+
+            // Fase corrente, para o motivo da falha (D12): atualizada ANTES de cada
+            // passo, lida no `catch`. Estável por construção — não depende do texto
+            // de exceção nenhuma, que é de quem a lança e muda sem aviso.
+            var phase = ExecutionMetricsValues.FailurePhase.ChatClientResolution;
+
+            try
+            {
+                var userText = ExtractLatestUserText(task);
+                var messageInstant = ExtractMessageInstant(task, message.TaskId);
+                var (channelType, contactExternalId) = ExtractChannelContext(task, message.TaskId);
+
+                // agent.Provider/agent.Model só ficam nulos para um agente "precisa de
+                // reconfiguração" — apps/api já rejeita SendMessage nesse caso antes de
+                // publicar o job (EnqueueingAgentHandler), então nunca deveriam chegar
+                // aqui; o operador nulo-tolerante (!) documenta essa garantia, não a
+                // ignora — se ela falhar, o resolver/aiAgent lançará e cairá no catch
+                // abaixo, terminando a task como failed (Decision 5).
+                // COMPARTILHADO E NÃO DESCARTÁVEL: o resolver devolve a MESMA
+                // instância para o mesmo (provider, model) durante toda a vida do
+                // processo (change fix-vazamento-httpclient-chat). Não acrescentar
+                // `using`/`await using` aqui nem no aiAgent montado abaixo — o
+                // contraste com o `await using` do toolSet logo adiante é
+                // deliberado, e é justamente a assimetria que engana:
+                // DelegatingChatClient.Dispose() descarta o InnerClient em cascata,
+                // e ChatClientAgent empilha middleware delegante sobre este client,
+                // então um `using` aqui quebraria TODA mensagem seguinte daquele par
+                // com ObjectDisposedException. Hoje nada descarta (ChatClientAgent
+                // não é IDisposable), e é essa garantia que
+                // TaskJobConsumerTests.Consumer_ProcessesTwoTasksInSequence_SharedChatClientIsNeverDisposed
+                // prende.
+                var chatClient = chatClientResolver.Resolve(agent.Provider!, agent.Model!);
+
+                phase = ExecutionMetricsValues.FailurePhase.ToolResolution;
+
+                // Precisa ficar vivo durante todo o RunAsync abaixo, não só
+                // durante a resolução — cada AITool devolvido encapsula uma
+                // conexão MCP viva (design.md da change apps-workers-execucao-mcp,
+                // Decision 4). await using cobre tanto o caminho de sucesso
+                // quanto uma exceção propagando para o catch abaixo.
+                await using var toolSet = await mcpToolSetResolver.ResolveAsync(dbContext, message.AgentId, cancellationToken);
+
+                // Sem conexão externa viva por trás (diferente de McpToolSet) —
+                // não precisa de await using, ver design.md, Decision 10.
+                var delegationTools = await delegationToolSetResolver.ResolveAsync(
+                    dbContext, agent, message.TaskId, message.ContextId, delegationDepth, messageInstant, cancellationToken);
+
+                // Terceiro conjunto, e também SEM await using — pelo mesmo motivo da
+                // delegação e não por simetria com ela: não há conexão externa viva
+                // por trás. A busca usa um escopo próprio aberto dentro da invocação
+                // (FunctionInvokingChatClient pode chamar duas tools do mesmo turno
+                // em paralelo, e DbContext não é thread-safe), e o gerador de
+                // embedding é resolvido lá dentro, não aqui (design.md da change
+                // knowledge-tool-resolver, D7/D9).
+                //
+                // Depois desta change são DOIS resolvedores sem `using` contra UM
+                // com — a assimetria virou maioria, e o único `await using` do
+                // método é o do toolSet MCP, que tem conexão viva de verdade.
+                var knowledgeTools = await knowledgeToolSetResolver.ResolveAsync(
+                    dbContext, message.AgentId, cancellationToken);
+
+                // Bloco de contexto temporal concatenado às Instructions do
+                // operador — sem tocar Agent.Instructions no banco, sem entrar
+                // no histórico de conversa (design.md da change
+                // apps-workers-contexto-temporal, Decisões 1 e 2). Instructions
+                // vazia (Non-Goal: sem validação de não-vazio em apps/api) não
+                // pode deixar separador órfão — usa só o bloco nesse caso.
+                var temporalContextBlock = TemporalContextBlockBuilder.Build(timeProvider, messageInstant);
+                var instructionsWithTemporalContext = TemporalContextBlockBuilder.Concatenate(agent.Instructions, temporalContextBlock);
+
+                // Bloco de contexto de canal, concatenado depois do bloco
+                // temporal — reaproveita TemporalContextBlockBuilder.Concatenate
+                // uma segunda vez em vez de estender sua assinatura (design.md,
+                // D5). Omitido inteiramente quando os dois campos estão
+                // ausentes (Build retorna null) — Concatenate não é chamado
+                // nesse caso, preservando as Instructions com só o bloco
+                // temporal.
+                var channelContextBlock = ChannelContextBlockBuilder.Build(channelType, contactExternalId);
+                var instructionsWithContext = channelContextBlock is null
+                    ? instructionsWithTemporalContext
+                    : TemporalContextBlockBuilder.Concatenate(instructionsWithTemporalContext, channelContextBlock);
+
+                var aiAgent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
                 {
-                    await updater.AddArtifactAsync(parts, cancellationToken: cancellationToken);
-                    await updater.CompleteAsync(cancellationToken: cancellationToken);
-                },
-                cancellationToken,
-                completedTask => completedTask.Metadata = BuildTerminalMetadata(conversationSessionValue, message.PushNotificationConfig));
+                    Name = agent.Name,
+                    // Dedupe global no ponto de concatenação (design.md da change
+                    // dedupe-global-nome-de-tool, Decisão 1): é o único ponto que
+                    // sabe que os dois conjuntos dividem espaço de nome. Antes era
+                    // `toolSet.Tools.Concat(delegationTools)` cru, e um nome
+                    // duplicado era sombreado em silêncio por
+                    // FunctionInvokingChatClient.FindTool. A ordem dos argumentos é
+                    // a precedência declarada (Decisão 5, estendida em
+                    // knowledge-tool-resolver D8): MCP mantém o nome, a tool de
+                    // delegação é renomeada contra MCP, e a de conhecimento é
+                    // renomeada contra as duas.
+                    ChatOptions = new ChatOptions
+                    {
+                        Instructions = instructionsWithContext,
+                        Tools = [.. toolNameDeduplicator.Deduplicate(message.AgentId, toolSet.Tools, delegationTools, knowledgeTools)],
+                    },
+                    ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions
+                    {
+                        ChatReducer = new RecentMessageChatReducer(MaxHistoryMessages),
+                    }),
+                    // Compaction (Microsoft.Agents.AI.Compaction) é
+                    // [Experimental("MAAI001")] — risco aceito, ver design.md da
+                    // change apps-workers-resumo-historico-conversa, Decisão 1/8.
+                    // Reaproveita o mesmo chatClient resolvido acima para a
+                    // chamada de resumo — sem client dedicado (Decisão 4).
+    #pragma warning disable MAAI001
+                    AIContextProviders = new AIContextProvider[]
+                    {
+                        // CompactionCallChatClient marca a chamada de resumo como
+                        // `Compaction` nas métricas (change
+                        // metricas-execucao-coleta, D8) — o client por baixo é o
+                        // MESMO compartilhado, e o marcador não é dono dele.
+                        new CompactionProvider(new SummarizationCompactionStrategy(
+                            new CompactionCallChatClient(chatClient),
+                            CompactionTriggers.TurnsExceed(SummarizationTurnThreshold))),
+                    },
+    #pragma warning restore MAAI001
+                });
 
-            await SendPushNotificationIfConfiguredAsync(message, savedTask, cancellationToken);
+                phase = ExecutionMetricsValues.FailurePhase.SessionLoad;
+                var session = await LoadSessionAsync(aiAgent, taskStore, message.ContextId, cancellationToken);
+
+                phase = ExecutionMetricsValues.FailurePhase.AgentRun;
+                var response = await aiAgent.RunAsync(userText, session, options: null, cancellationToken);
+
+                phase = ExecutionMetricsValues.FailurePhase.Persistence;
+
+                // Serializado antes do SaveTaskAsync final (não no catch — ver
+                // design.md, Decisões 1 e 6): se DeserializeSessionAsync tivesse
+                // falhado antes, ou se RunAsync lançar, cai no catch abaixo sem
+                // nunca chegar aqui, e a última sessão persistida (de uma task
+                // completed anterior) permanece intacta.
+                var serializedSession = await aiAgent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
+                var conversationSessionValue = ConversationSessionCodec.Encode(serializedSession);
+
+                var parts = new List<Part> { Part.FromText(response.Text) };
+
+                var savedTask = await ApplyStepAsync(
+                    taskStore,
+                    message.TaskId,
+                    message.ContextId,
+                    task,
+                    async updater =>
+                    {
+                        await updater.AddArtifactAsync(parts, cancellationToken: cancellationToken);
+                        await updater.CompleteAsync(cancellationToken: cancellationToken);
+                    },
+                    cancellationToken,
+                    completedTask => completedTask.Metadata = BuildTerminalMetadata(conversationSessionValue, message.PushNotificationConfig));
+                MarkTerminal(TaskState.Completed, phase: null);
+
+                await SendPushNotificationIfConfiguredAsync(message, savedTask, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Falha ao executar o agente {AgentId} para a task {TaskId}", message.AgentId, message.TaskId);
+
+                await FailTaskAsync(taskStore, message, task, cancellationToken);
+                MarkTerminal(TaskState.Failed, phase);
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            logger.LogError(ex, "Falha ao executar o agente {AgentId} para a task {TaskId}", message.AgentId, message.TaskId);
-
-            await FailTaskAsync(taskStore, message, task, cancellationToken);
+            execution.Close(lockAcquiredAt, endedAt, terminalState, failurePhase);
+            await metricsWriter.CloseAsync(execution, metrics);
         }
     }
 

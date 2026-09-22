@@ -3,6 +3,7 @@ using global::A2A;
 using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations;
 using Buteco.Workers.Agents;
+using Buteco.Workers.ExecutionMetrics;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Knowledge.Execution;
 using Buteco.Workers.Mcp;
@@ -87,6 +88,44 @@ public class ConversationContextLockFailureTests(WorkerInfrastructureFixture fix
 
             var record = await PollUntilTerminalAsync(taskId);
             Assert.Equal(nameof(TaskState.Failed), record.State);
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+    }
+
+    // ── Métricas (change metricas-execucao-coleta): falha sem chamada ────
+    // A falha do lock termina a task ANTES de qualquer requisição ao provedor.
+    // Com métrica só no grão de chamada, ela sumiria da tela de erros — é por
+    // isso que existe a linha pai, e é aberta antes do lock (D3).
+    [Fact]
+    public async Task AcquisitionTimingOut_ProducesFailedExecutionRow_WithContextLockPhase_AndNoCalls()
+    {
+        await PurgeQueueAsync();
+
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var taskId = Guid.NewGuid().ToString("N");
+        await SeedAgentAsync(agentId, "Bloqueado para métrica");
+        await SeedTaskAsync(taskId, agentId, contextId, "oi");
+
+        await using var holder = await HoldLockAsync(agentId, contextId);
+
+        using var host = BuildHost(SimpleChatClient(), ShortCommandTimeout);
+        await host.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(taskId, agentId, contextId);
+
+            var connectionString = fixture.Postgres.GetConnectionString();
+            var execution = await ExecutionMetricsReader.WaitForClosedExecutionAsync(connectionString, taskId);
+
+            Assert.Equal(nameof(TaskState.Failed), execution.TerminalState);
+            Assert.Equal(ExecutionMetricsValues.FailurePhase.ContextLock, execution.FailurePhase);
+            Assert.Null(execution.LockAcquiredAt);
+            Assert.Empty(await ExecutionMetricsReader.ProviderCallsAsync(connectionString, taskId));
         }
         finally
         {

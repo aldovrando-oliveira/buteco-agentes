@@ -1,9 +1,12 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Text.Json;
 using A2A;
 using Buteco.Workers.A2A;
 using Buteco.Workers.Agents;
 using Buteco.Workers.Agents.Entities;
+using Buteco.Workers.ExecutionMetrics;
+using Buteco.Workers.ExecutionMetrics.Entities;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Naming;
@@ -85,6 +88,12 @@ public sealed class AgentDelegationToolSetResolver(
         string message,
         CancellationToken cancellationToken)
     {
+        // Cada saída deste método registra um resultado de delegação (change
+        // metricas-execucao-coleta, D5) — as três de "não iniciada" aqui, as
+        // três com task criada em WaitForTerminalStateAsync. O texto devolvido
+        // ao LLM e os logs NÃO mudam: a linha é o gêmeo durável deles.
+        var started = Stopwatch.GetTimestamp();
+
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -104,6 +113,7 @@ public sealed class AgentDelegationToolSetResolver(
                 "Delegação do agente {SourceAgentId} para {TargetAgentId} recusada: Source não está mais ativo/configurado.",
                 sourceAgentId,
                 targetAgentId);
+            RecordNotStarted(sourceTaskId, sourceAgentId, targetAgentId, started);
             return "Delegação não realizada: o agente que está delegando não está mais ativo ou configurado.";
         }
 
@@ -116,23 +126,59 @@ public sealed class AgentDelegationToolSetResolver(
                 "Delegação do agente {SourceAgentId} para {TargetAgentId} recusada: Target inativo, ausente ou sem Provider/Model configurados.",
                 sourceAgentId,
                 targetAgentId);
+            RecordNotStarted(sourceTaskId, sourceAgentId, targetAgentId, started);
             return "Delegação não realizada: o agente Target não está disponível no momento.";
         }
 
         var targetTaskId = Guid.NewGuid().ToString("N");
         var targetTaskStore = new PostgresTaskStore(scopeFactory, targetAgentId);
 
-        var targetTask = await CreateDelegatedTaskAsync(targetTaskStore, targetTaskId, contextId, currentDepth + 1, messageInstant, message, cancellationToken);
+        var targetTask = await CreateDelegatedTaskAsync(
+            targetTaskStore, targetTaskId, contextId, currentDepth + 1, sourceAgentId, sourceTaskId, messageInstant, message, cancellationToken);
         if (targetTask is null)
         {
             logger.LogError("Falha ao criar a task delegada {TargetTaskId} para o agente {TargetAgentId}.", targetTaskId, targetAgentId);
+            RecordNotStarted(sourceTaskId, sourceAgentId, targetAgentId, started);
             return "Delegação não realizada: falha interna ao criar a task do agente Target.";
         }
 
         await taskJobPublisher.PublishAsync(new TaskJobMessage(targetTaskId, targetAgentId, contextId), cancellationToken);
 
-        return await WaitForTerminalStateAsync(targetTaskStore, targetTaskId, targetAgentId, sourceAgentId, sourceTaskId, cancellationToken);
+        return await WaitForTerminalStateAsync(targetTaskStore, targetTaskId, targetAgentId, sourceAgentId, sourceTaskId, started, cancellationToken);
     }
+
+    private static void RecordNotStarted(string sourceTaskId, Guid sourceAgentId, Guid targetAgentId, long started) =>
+        ExecutionMetricsScope.RecordDelegation(new DelegationOutcome(
+            sourceTaskId,
+            sourceAgentId,
+            targetAgentId,
+            targetTaskId: null,
+            ExecutionMetricsValues.DelegationOutcome.NotStarted,
+            lastObservedTargetState: null,
+            lastObservedAt: null,
+            successfulReadCount: 0,
+            Stopwatch.GetElapsedTime(started).TotalMilliseconds));
+
+    private static void RecordWithTargetTask(
+        string sourceTaskId,
+        Guid sourceAgentId,
+        Guid targetAgentId,
+        string targetTaskId,
+        string outcome,
+        TaskState? lastObservedState,
+        DateTimeOffset? lastObservationAt,
+        int successfulReadCount,
+        long started) =>
+        ExecutionMetricsScope.RecordDelegation(new DelegationOutcome(
+            sourceTaskId,
+            sourceAgentId,
+            targetAgentId,
+            targetTaskId,
+            outcome,
+            lastObservedState?.ToString(),
+            lastObservationAt,
+            successfulReadCount,
+            Stopwatch.GetElapsedTime(started).TotalMilliseconds));
 
     /// <summary>
     /// Cria a task `submitted` do Target com a mensagem delegada em
@@ -153,7 +199,15 @@ public sealed class AgentDelegationToolSetResolver(
     /// design.md da change inbox-instante-mensagem, Decisão D3).
     /// </remarks>
     private static async Task<AgentTask?> CreateDelegatedTaskAsync(
-        PostgresTaskStore targetTaskStore, string targetTaskId, string contextId, int childDepth, DateTimeOffset? messageInstant, string message, CancellationToken cancellationToken)
+        PostgresTaskStore targetTaskStore,
+        string targetTaskId,
+        string contextId,
+        int childDepth,
+        Guid sourceAgentId,
+        string sourceTaskId,
+        DateTimeOffset? messageInstant,
+        string message,
+        CancellationToken cancellationToken)
     {
         var queue = new AgentEventQueue();
         var updater = new TaskUpdater(queue, targetTaskId, contextId);
@@ -188,6 +242,11 @@ public sealed class AgentDelegationToolSetResolver(
         {
             [DelegationDepth.MetadataKey] = DelegationDepth.Encode(childDepth),
         };
+
+        // A origem nasce junto da profundidade e pelo mesmo motivo: é o worker
+        // do alvo que precisa dela, na mesma linha do tempo de fila (ver
+        // DelegationOrigin).
+        DelegationOrigin.Write(task.Metadata, sourceAgentId, sourceTaskId);
 
         await targetTaskStore.SaveTaskAsync(targetTaskId, task, cancellationToken);
         return task;
@@ -249,6 +308,7 @@ public sealed class AgentDelegationToolSetResolver(
         Guid targetAgentId,
         Guid sourceAgentId,
         string sourceTaskId,
+        long started,
         CancellationToken cancellationToken)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -274,9 +334,17 @@ public sealed class AgentDelegationToolSetResolver(
                 {
                     if (current.Status.State == TaskState.Completed)
                     {
+                        RecordWithTargetTask(
+                            sourceTaskId, sourceAgentId, targetAgentId, targetTaskId, ExecutionMetricsValues.DelegationOutcome.Completed,
+                            lastObservedState, lastObservationAt, successfulReadCount, started);
+
                         var text = current.Artifacts?.LastOrDefault()?.Parts.FirstOrDefault(part => part.Text is not null)?.Text;
                         return text ?? string.Empty;
                     }
+
+                    RecordWithTargetTask(
+                        sourceTaskId, sourceAgentId, targetAgentId, targetTaskId, ExecutionMetricsValues.DelegationOutcome.TargetUnsuccessful,
+                        lastObservedState, lastObservationAt, successfulReadCount, started);
 
                     logger.LogWarning(
                         "Delegação sem sucesso: task {SourceTaskId} do agente {SourceAgentId} delegou para o agente {TargetAgentId} " +
@@ -302,6 +370,9 @@ public sealed class AgentDelegationToolSetResolver(
             // degradação graciosa (Decision 8): resultado de falha para o
             // LLM do Source continuar, task do Source não falha por isso.
             LogTimeout(sourceTaskId, sourceAgentId, targetAgentId, targetTaskId, lastObservedState, lastObservationAt, successfulReadCount);
+            RecordWithTargetTask(
+                sourceTaskId, sourceAgentId, targetAgentId, targetTaskId, ExecutionMetricsValues.DelegationOutcome.Expired,
+                lastObservedState, lastObservationAt, successfulReadCount, started);
             return "Delegação não concluiu dentro do tempo limite.";
         }
     }

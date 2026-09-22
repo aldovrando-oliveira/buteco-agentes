@@ -4,6 +4,7 @@ using Buteco.Api.AgentDelegations.Entities;
 using Buteco.Api.AgentKnowledgeBindings.Entities;
 using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Entities;
+using Buteco.Api.ExecutionMetrics.Entities;
 using Buteco.Api.KnowledgeBases.Entities;
 using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeFragments.Entities;
@@ -32,6 +33,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AgentKnowledgeBase> AgentKnowledgeBases => Set<AgentKnowledgeBase>();
 
     public DbSet<KnowledgeFragment> KnowledgeFragments => Set<KnowledgeFragment>();
+
+    public DbSet<TaskExecution> TaskExecutions => Set<TaskExecution>();
+
+    public DbSet<ProviderCall> ProviderCalls => Set<ProviderCall>();
+
+    public DbSet<DelegationOutcome> DelegationOutcomes => Set<DelegationOutcome>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -296,6 +303,54 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // exclusão.
             entity.HasOne<Agent>().WithMany().HasForeignKey(binding => binding.AgentId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<KnowledgeBase>().WithMany().HasForeignKey(binding => binding.KnowledgeBaseId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Métricas de execução (design.md da change metricas-execucao-coleta,
+        // D1). apps/api só migra; quem escreve é apps/workers, que espelha este
+        // mapeamento — ExecutionMetricsSchemaMirrorTests confere os dois lados.
+        //
+        // NENHUMA das três tem FK para `agents` (D13), e isso não é descuido de
+        // mapeamento: provedor e modelo são snapshot gravado na linha, e uma FK
+        // convidaria a consulta a fazer join e ler o modelo de HOJE para o
+        // consumo de ontem. ExecutionMetricsMigrationTests afirma a ausência.
+        modelBuilder.Entity<TaskExecution>(entity =>
+        {
+            entity.ToTable("task_executions");
+            entity.HasKey(execution => execution.TaskId);
+            entity.Property(execution => execution.ContextId).IsRequired();
+            entity.Property(execution => execution.Provider).IsRequired(false);
+            entity.Property(execution => execution.Model).IsRequired(false);
+            entity.Property(execution => execution.Origin).IsRequired();
+            entity.Property(execution => execution.SourceTaskId).IsRequired(false);
+            entity.Property(execution => execution.TerminalState).IsRequired(false);
+            entity.Property(execution => execution.FailurePhase).IsRequired(false);
+            entity.HasIndex(execution => execution.AgentId);
+            entity.HasIndex(execution => execution.StartedAt);
+        });
+
+        modelBuilder.Entity<ProviderCall>(entity =>
+        {
+            entity.ToTable("provider_calls");
+            entity.HasKey(call => call.Id);
+            entity.Property(call => call.TaskId).IsRequired();
+            entity.Property(call => call.Provider).IsRequired();
+            entity.Property(call => call.Model).IsRequired();
+            entity.Property(call => call.Purpose).IsRequired();
+            entity.HasIndex(call => call.TaskId);
+            entity.HasOne<TaskExecution>().WithMany().HasForeignKey(call => call.TaskId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DelegationOutcome>(entity =>
+        {
+            entity.ToTable("delegation_outcomes");
+            entity.HasKey(outcome => outcome.Id);
+            entity.Property(outcome => outcome.SourceTaskId).IsRequired();
+            entity.Property(outcome => outcome.TargetTaskId).IsRequired(false);
+            entity.Property(outcome => outcome.Outcome).IsRequired();
+            entity.Property(outcome => outcome.LastObservedTargetState).IsRequired(false);
+            entity.HasIndex(outcome => outcome.SourceAgentId);
+            entity.HasIndex(outcome => outcome.TargetAgentId);
+            entity.HasOne<TaskExecution>().WithMany().HasForeignKey(outcome => outcome.SourceTaskId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
