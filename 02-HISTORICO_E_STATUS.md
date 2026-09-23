@@ -4494,7 +4494,9 @@ dimensões**, uma chamada por documento (o comportamento anterior a esta change)
 > mecanismo que a exploração `metricas-de-operacao` mediu no banco de
 > desenvolvimento, onde **29,5% das tasks caem em outro dia** quando o balde sai
 > em UTC. Aconteceu **dentro do registro da própria change**, escrito por quem
-> conhecia o achado.
+> conhecia o achado. *(O 29,5% é do estado de 20/09. **Remedido em 23/09: 27,7%**
+> — ver "Etapa 3 da linha — exploração `rotas-de-agregacao`", adiante. O
+> mecanismo é o mesmo; o número que se cita é o de lá.)*
 
 | documento | bytes | fragmentos | resultado | duração |
 |---|---|---|---|---|
@@ -5217,6 +5219,388 @@ classes de coleção continuam 14); `apps/api` **351/351** (baseline 346/346, +5
   `--no-restore --no-build`), e o Ryuk do Testcontainers tenta montar o socket
   do Podman como volume e o Podman recusa (`TESTCONTAINERS_RYUK_DISABLED=true`
   junto do `DOCKER_HOST`).
+
+### Etapa 3 da linha — exploração `rotas-de-agregacao` (2026-09-23)
+
+**A divergência de fuso foi REMEDIDA, e o número mudou.** O 29,5% citado na
+exploração de 20/09 (e reusado no registro da `indexacao-lote-de-fragmentos`,
+acima) é de **antes de cinco changes**. Remedido hoje, contra o banco de
+desenvolvimento:
+
+```
+total | dia_difere | pct
+  260 |         72 | 27,7
+```
+
+> **27,7% das tasks de `a2a_tasks` caem em outro dia — e em outro dia da semana —
+> se o balde sair em UTC.** Regime colado (convenção 22): banco de
+> desenvolvimento, **23/09/2026**, **260 linhas** de `a2a_tasks`, carimbos de
+> **01/08 a 22/09/2026**, comparando `status_timestamp AT TIME ZONE
+> 'America/Sao_Paulo'` contra `AT TIME ZONE 'UTC'`.
+
+**Quem citar o número cita 27,7%.** A conclusão não mudou — a operação é noturna
+o bastante para que mais de um quarto da série troque de barra —, mas o valor
+sim. É a sexta ocorrência da convenção 22 nesta base.
+
+**E a nota que impede a leitura errada do par:** em `task_executions` a
+divergência foi **0 de 13**. **A tabela é pequena demais para dizer qualquer
+coisa**, e esse zero **não é contraevidência** do 27,7% — é ausência de
+população, não ausência de efeito. Quem repetir a medição repete sobre
+`a2a_tasks`, que é onde há linhas.
+
+**O estado de `apps/api` quanto a fuso, lido do código (convenção 6), não de
+memória:**
+
+| fato | evidência |
+|---|---|
+| `AT TIME ZONE` no repositório | **0 ocorrências** |
+| `TimeProvider` em `apps/api` | **0 ocorrências**, em `src` **e** em `tests` |
+| `TimeZoneInfo` / `America/Sao_Paulo` em `apps/api/src` | **0 ocorrências** |
+| `TZ` em produção | `docker-compose.prod.yml:139` — **só no serviço `workers`**; o serviço `api` (`:72-82`) não recebe |
+| o "agora" de `apps/api` hoje | `DateTimeOffset.UtcNow` estático nas entidades — `Agent.cs:54,66,72,78`, `TokenService.cs:16,61`, e mais 11 sítios |
+
+**Os dois processos JÁ divergem, e a divergência é latente — não inofensiva.**
+`apps/api` roda sem `TZ`, logo o fuso do processo é UTC; o worker renderiza dia
+da semana em pt-BR sobre `America/Sao_Paulo`
+(`TemporalContextBlockBuilder.cs:97`). Hoje nada em `apps/api` renderiza data
+local, e por isso não há defeito visível: as rotas de período do `apps/inbox`
+normalizam tudo para UTC e comparam instantes — **não existe balde** em lugar
+nenhum (zero `date_trunc`, zero `GroupBy` por data em `apps/api/src` e
+`apps/inbox/src`). **A etapa 3 é exatamente o que ativa a divergência.**
+
+**Dois fatos de plano de consulta, estabelecidos contra o banco real e
+independentes de volume:**
+
+- **`timezone(text, timestamp with time zone)` é `IMMUTABLE` no pg18**
+  (`pg_proc.provolatile = 'i'`, medido) — índice de expressão sobre
+  `(status_timestamp AT TIME ZONE '<nome>')::date` **é criável**. Criado e
+  removido na verificação. **Não usar é escolha, não limitação.**
+- **O índice não precisa saber o fuso.** O filtro de janela é range sobre o
+  instante (`Bitmap Index Scan`), e o `AT TIME ZONE` agrupa o que já foi
+  filtrado. Índice de expressão congelaria o nome do fuso no schema.
+
+**Três das cinco tabelas de métrica não têm coluna temporal própria** —
+`provider_calls` e `embedding_calls` não têm nenhuma; `delegation_outcomes` tem
+só `LastObservedAt`, anulável, que é a última leitura e não o instante do
+evento. Toda janela sobre elas é **join ao pai**, e todos caem em PK ou índice
+existente. É a razão de a rota de agregação não poder ser "uma consulta por
+tabela".
+
+**O que NÃO é defeito, e está aqui para não ser "descoberto" de novo:** `dotnet
+ef database update` reprova com `PendingModelChangesWarning` quando rodado com
+`--no-build` sobre build velho. Com build fresco,
+`dotnet ef migrations has-pending-model-changes` responde *"No changes have been
+made to the model since the last migration"* e o snapshot não diverge — migração
+sonda gerada sai **vazia**. Convenção 19: a baseline desmentiu a conclusão.
+
+### Etapa 3 da linha — `rotas-de-agregacao-sistema` (2026-09-23)
+
+**O que a change entrega.** `GET /insights/system`, com `from`/`to`, devolvendo o
+agregado inteiro da página de Insights do sistema; `apps/api` passa a ter fuso,
+`TimeProvider` e checagem de boot. **Somente leitura — nenhuma migração, nenhum
+índice, nenhuma coluna.** Change **A** de duas; a rota do agente é a **B**, e ela
+**não** é esta filtrada por agente (a D16 da `metricas-execucao-coleta` fixou que
+os dois lados leem tabelas diferentes).
+
+#### O mapa das 27, e as CINCO parcialidades
+
+**Vinte e duas têm fonte.** As cinco que não têm, nomeadas aqui e **não** na
+etapa 4, porque foi assim que o card de delegação expirada quase ficou sem fonte:
+
+1. **M29 — o motivo das recusas de `apps/api` não tem fonte NENHUMA.** Três causas
+   distintas — agente inativo (`EnqueueingAgentHandler.cs:29`), `Provider`/`Model`
+   nulos (`:38`), provedor não configurado (`:46`) — colapsam num único
+   `Rejected`, e **não há coluna de motivo em lugar algum**. Conferido na linha
+   real: o payload traz `{"state": "TASK_STATE_REJECTED", "timestamp": ...}` e
+   mais nada. **M29 está aprovada no protótipo.**
+   - **Não é corrigido aqui** — é change de **coleta**, não de agregação.
+   - **Gatilho:** cumprido. **Posição: antes da etapa 4**, porque a tela mostra o
+     motivo.
+2. **M27 e M28 — parciais pelo mesmo motivo.** Recusa de `apps/api` não gera linha
+   em `task_executions`; `rejected` contado de lá **subconta**, e o que falta está
+   em `a2a_tasks`, que tem `agent_id` mas **não** tem provedor nem modelo.
+3. **M21 e M22 — parciais por anulabilidade.** `SubmittedAt` é nulo em reentrega;
+   essas execuções ficam **fora da amostra**, nunca entram como zero. A rota
+   devolve `sampleCount` ao lado de cada estatística para que o desconto seja
+   visível em vez de escondido numa média que parece completa.
+4. **M25 — o rótulo mudou.** O resíduo contém ferramentas **mais** espera de lock,
+   MCP e busca vetorial. A métrica **deixou de se chamar "tempo em tools"** e a
+   resposta declara o que o número inclui. A etapa 4 recebe isto como restrição.
+
+A rota entrega as parcialidades ao cliente como **códigos estáveis**, não como
+prosa: `rejections-missing-from-executions`, `rejection-reason-not-collected`,
+`submitted-at-missing-on-redelivery`, `residual-is-not-only-tools`,
+`point-in-time-only`.
+
+#### A condição de remoção do detector foi REESCRITA (convenção 9)
+
+A cláusula registrada — *"sai quando a rota M32 cobrir as duas populações"* —
+**testava a coisa errada**. A rota M32 existe agora e cobre as duas, e o detector
+**fica**. Cobrir a mesma população não é cobrir o mesmo uso:
+
+| | detector | M32 |
+|---|---|---|
+| o que é | **série**, amostrada a cada 30 s | **consulta sob demanda** |
+| responde | quantas estavam não-terminais **ao longo do tempo** | quantas estão **agora** |
+| reconstrói pico passado? | sim, é a razão de existir | **não** |
+
+`a2a_tasks` **não guarda histórico de status** — o carimbo é sobrescrito a cada
+transição. M32 não reconstrói o pico das 03:14 de terça, e o pico é justamente o
+`C` de que a `replicas-de-worker` depende.
+
+> **Condição vigente:** o detector sai quando o `C` de pico tiver sido **medido e
+> a decisão tomada** — o instrumento sai com a decisão que ele existe para tomar.
+> Ou, se a série precisar sobreviver à decisão, quando for **persistida em
+> tabela**, que não é esta etapa e não está na fila.
+
+**E um acordo que M32 mantém de propósito:** ela varre `{Submitted, Working}`, o
+**mesmo** conjunto do detector, embora o protocolo tenha **cinco** não-terminais
+(`Unspecified`, `InputRequired` e `AuthRequired` também — nenhum observado nesta
+base). Conjuntos diferentes fariam as duas fontes medir números diferentes
+justamente durante a comparação paralela que as valida.
+- **Gatilho:** a `replicas-de-worker` fechar. **Posição:** dentro dela, junto da
+  remoção do detector — as duas passam aos cinco juntas.
+
+#### O defeito que o guarda pegou, e ele não estava previsto
+
+O guarda do `AdjustToUniversal` reprovou por um caminho que o `design.md` não
+antecipou: **não foi o `from`/`to` do cliente**, que o parse normaliza. Foi o
+**instante de regime**, que vem da **configuração** — o binder liga
+`"2026-09-01T00:00:00-03:00"` a um `DateTimeOffset` com deslocamento `-03:00`
+intacto, e quando o regime é mais tarde que o pedido é ele que vira parâmetro da
+consulta. O Npgsql recusa (`ArgumentException` → 500).
+
+**A lição é de alcance, e vale além desta change:** a disciplina do
+`AdjustToUniversal` vale para **todo `DateTimeOffset` que chega ao driver**, não
+só para o que veio de query string. **Valor de configuração entra por um caminho
+que nenhum parse cobre.**
+
+#### Itens com gatilho, abertos por esta change
+
+- **Índice composto `a2a_tasks(state, status_timestamp)`.** A D4 da exploração
+  original pediu `status_timestamp` sozinho e **não se aplica como escrita**: o
+  preditor seletivo de M32 é `state` (`Submitted` são 4 de 260), e o planejador
+  escolheu `IX_a2a_tasks_state` mesmo com o composto disponível e depois de
+  `ANALYZE`. **Gatilho:** remedir o plano de M32 contra o piloto depois do
+  primeiro mês da rota em produção; muda quando `Submitted` deixar de ser
+  seletivo. **Posição:** item próprio.
+- **Índices sugeridos pela FORMA e não por medição:** `embedding_calls(Purpose)`
+  e `(KnowledgeBaseId)`, `task_executions(TerminalState)` e `(EndedAt)`. Mesmo
+  gatilho e mesma posição. **Nenhum entrou:** criá-los agora seria projetar
+  tamanho (convenção 18).
+- **Teto de janela.** Nasce ausente, herdado do precedente de `apps/inbox` — mas
+  com o gatilho **renomeado**, porque lá a rota devolve um escalar e aqui o
+  agregado de 27 métricas. **Gatilho:** a primeira requisição de período acima de
+  **2 s** contra o piloto.
+- **Os instantes de regime são valor de UM ambiente num arquivo que vale para
+  todos**, e a falha é silenciosa. Ambiente cujo início real seja **posterior** ao
+  declarado recebe `0` onde deveria receber ausência — afirmando medido onde não
+  houve medição, com número plausível, sem nada reprovar nem logar. A conferência
+  contra `min(StartedAt)` **não cobre**: é conferência única, desta change, numa
+  máquina. A saída natural é checagem de boot comparando declarado com menor
+  carimbo (molde: a checagem de fuso), e **não saiu aqui** porque é escopo não
+  previsto — decidi-lo no apply seria desenhar no meio da implementação.
+  **Gatilho:** o primeiro ambiente novo a subir a rota, **dev incluído**.
+  **Posição:** item próprio, entre checagem de boot, valor por ambiente, ou
+  derivar com salvaguarda. Mitigação parcial em vigor: comentário ao lado dos dois
+  valores no `appsettings.json`, que **não reprova nada**.
+- **Os protótipos NÃO foram abertos nesta change.** O MCP do Claude Design recusou
+  a autenticação (`FIRST_PARTY_AUTH_REJECTED`; `DesignSync` pediu
+  `/design-login`, que só o dono roda). Todo o contrato de tela veio do registro —
+  o `02` e os `design.md` arquivados —, que é fonte de segunda mão. **Se o
+  protótipo contrariar o que está escrito, o protótipo vence**, e a divergência
+  vira registro pela convenção 9. **Gatilho:** `/design-login` rodado pelo dono.
+  **Posição:** antes de a etapa 4 começar.
+
+#### A checagem de fuso compara IDENTIFICADOR, não fuso — falso negativo latente nas DUAS cópias
+
+**Achado de 23/09/2026, levantado por pergunta do dono no apply**, e medido antes
+de ser afirmado. Vale para `apps/api` **e** para `apps/workers`, porque a
+checagem é a mesma cópia.
+
+**A pergunta que o produziu:** *"por que não colocar `"TZ": "America/Sao_Paulo"`
+no `appsettings.json`? Garantiria o pré-requisito mesmo se o container não usasse
+a variável `TZ`."*
+
+**A resposta é não, e o motivo é que a checagem tem dois lados e o
+`appsettings.json` só move um:**
+
+```
+declarado  = configuration["TZ"]         ← appsettings.json OU variável de ambiente
+resolvido  = TimeProvider.LocalTimeZone  ← SÓ o sistema operacional
+```
+
+**Medido**, com `TZ` no `appsettings.json` e ausente do ambiente:
+
+| cenário | `env TZ` | `config["TZ"]` | `TimeZoneInfo.Local.Id` |
+|---|---|---|---|
+| A — como o compose entrega | `America/Sao_Paulo` | `America/Sao_Paulo` | `America/Sao_Paulo` |
+| B — **sem `TZ`, só appsettings** | *(ausente)* | `America/Sao_Paulo` | **`Brazil/East`** |
+| C — ambiente diverge do appsettings | `Europe/Lisbon` | `Europe/Lisbon` | `Europe/Lisbon` |
+
+**O lado resolvido não lê o `appsettings.json`.** Sem `TZ` no ambiente o .NET cai
+para o `/etc/localtime`: num container Linux isso dá `UTC`, e na máquina medida
+deu `Brazil/East`. Nos dois casos a comparação reprova. **O fallback nunca
+resgata a situação que existiria para resgatar — só troca a mensagem de erro** —
+e custaria gravar o fuso do piloto num arquivo versionado que vai para todo
+ambiente, a mesma classe de defeito já registrada para os instantes de regime.
+
+**O defeito que o cenário B expõe, e que é o achado de verdade.** Aquela máquina
+**está** no fuso de São Paulo: `Brazil/East` é alias legado da mesma zona, mesmo
+offset, mesmas regras. **A checagem reprovaria uma configuração correta**, porque
+compara *strings de identificador* e não *fusos*.
+
+- **Por que não morde hoje:** quando `TZ` está definida, o .NET adota o próprio
+  valor de `TZ` como identificador — conferido nos cenários A e C. A divergência
+  só aparece quando `TZ` some, e `${TZ:?...}` no compose faz o **compose recusar
+  a criar o container** antes de o processo nascer. É garantia mais forte que
+  qualquer default em arquivo.
+- **Gatilho:** qualquer mudança que afrouxe o `:?` do compose, ou um deploy que
+  não passe por ele (execução direta, outro orquestrador, CI que suba a imagem à
+  mão). Aí o falso negativo passa de inalcançável a **a primeira coisa que
+  acontece**.
+- **Posição:** item próprio. A correção é a checagem comparar **offset** em vez de
+  identificador, e mexe nas duas cópias — `apps/workers` inclusive, que está em
+  produção. **Não cabia nesta change**, e remendar só o lado de `apps/api`
+  deixaria as duas cópias divergentes, que é pior que o defeito.
+
+**E uma leitura de método:** o `:?` do compose e a checagem de boot pareciam
+redundantes — duas defesas para a mesma coisa. Não são. O `:?` garante que a
+variável **existe**; a checagem garante que o processo **concorda** com ela. Foi
+por tratá-las como redundantes que a proposta de mover uma para `appsettings.json`
+pareceu equivalente, e não é: mover o declarado para um arquivo deixa o resolvido
+sem nenhuma garantia.
+
+#### Escopo 2 — a instrução de ferramenta em `openspec/config.yaml`
+
+Duas alterações no mesmo arquivo, de origens diferentes, declaradas porque
+carregá-las em silêncio num diff cujo assunto é outro é o que as torna ilegíveis.
+
+**(a) A instrução, acrescentada ao bloco `context:`:**
+
+> **"Sempre utilize a ferramenta codegraph"**
+
+**Entrou em 23/09/2026, à mão, por decisão do dono.** Vive no bloco `context:` de
+`openspec/config.yaml`, que o `openspec instructions` injeta nas instruções de
+**todos** os artefatos — proposta, design, specs e tasks — de **toda** change.
+**Vale a partir daqui para toda change seguinte**, não só para esta. Nenhum efeito
+em runtime, build, teste ou deploy.
+
+**E ela tem um pré-requisito que não estava declarado — agora está.**
+`.codegraph/` é ignorado por git **inteiro** (`*`, exceto o próprio `.gitignore`)
+e a CLI vive fora do repositório. **Nem o índice nem a ferramenta acompanham um
+clone**: em máquina nova, ou em CI, a instrução é **inexecutável** até alguém
+instalar e indexar. *Verificado nesta change:* CLI `codegraph` **1.5.0**, índice
+`.codegraph/codegraph.db` presente, `codegraph explore` respondendo.
+- **Gatilho:** o primeiro clone novo, ou o primeiro colaborador.
+- **Posição:** item próprio — versionar índice de 50 MB ou acrescentar passo de
+  bootstrap é decisão que não cabia nesta change.
+
+**(b) A remoção da prosa solta da primeira linha do arquivo** — `Crie (ou edite,
+se já existir) o arquivo openspec/config.yaml com o seguinte conteúdo:`. Defeito
+**pré-existente**, anterior à edição do dono. É resto de instrução de criação que
+sobreviveu porque o formato tolera: a mesma família de texto que parece dado e
+não é.
+
+**Conferido antes de remover, porque muda o que o registro afirma:** a linha
+**não** estava sendo injetada em lugar nenhum — não aparece em campo algum do que
+`openspec instructions` devolve para os quatro artefatos, e `openspec validate
+--all` passava com ela. **Logo a remoção é higiene, sem efeito observável no
+prompt de artefato nenhum.**
+
+#### Suítes, com o regime colado
+
+`apps/api` **372/372** (baseline 351/351, **+21 casos**); `apps/workers`
+**386/386**, intocada; `apps/inbox` **202/203** em suíte cheia e **10/10
+isolado** — o flake conhecido (`DebounceSweepServiceTests
+.InfrastructureFailure_ProcessingOneCandidate_...`), reproduzido sob contenção.
+**Alvos que rodaram antes dele: `apps/api` e `apps/workers`**, nesta ordem.
+`apps/inbox` não foi tocada por esta change.
+
+**Regime:** Darwin 24.6.0, Podman, `TESTCONTAINERS_RYUK_DISABLED=true`. **`podman
+ps` NÃO estava em zero** — os três contêineres de desenvolvimento (`postgres`,
+`rabbitmq`, `waha`) ficaram no ar, e é provavelmente a contenção que explica o
+flake. Nenhum contêiner de teste vazou. **Os 10 `.csproj` compilam** (não há
+`.sln` na raiz, então a conferência de assinatura é por projeto).
+
+#### Guardas verificados por mutação (convenção 15, quinta forma)
+
+Três mutações, três reprovas do tamanho certo — e é isso que separa guarda de
+decoração:
+
+| mutação | reprovou | quais |
+|---|---|---|
+| chamada de `ValidateTimeZoneConfiguration` removida do `Program.cs` | **1 de 6** | só `RealComposition_WithDivergentTimeZone_FailsToStart` |
+| balde trocado para `UTC` | **2 de 15** | só os dois guardas de dia local e dia da semana |
+| `coalesce(sum(...), 0)` nos tokens | **1 de 15** | só o guarda **negativo** do nulo |
+
+**A primeira é a que `apps/workers` não consegue ter.** Lá o registro do
+`Program.cs` não é provado por teste nenhum, porque a suíte monta o host à mão;
+aqui a `WebApplicationFactory` roda a composição real.
+
+**E o guarda do `AdjustToUniversal` só foi exercitado depois de `apps/api`
+receber `TZ`** — antes disso o processo é UTC, o deslocamento local já é zero e o
+defeito não se manifesta. Um verde obtido antes da tarefa do compose seria verde
+vazio.
+
+#### Décima quarta medição da convenção 18 — o item novo ERROU PARA O OUTRO LADO
+
+**Arquivos criados: 9 projetados, 9 reais — exato, nos dois sentidos.**
+**Gerado: 0 projetado, 0 real** — e é a diferença de regime que mais separa esta
+medição da etapa 2, onde gerado foi 45% do diff.
+
+| régua | projetado | real | erro |
+|---|---|---|---|
+| arquivos criados | 9 | **9** | **0%** |
+| arquivos modificados (Escopo 1) | 11 | **12** | +9% |
+| linhas à mão, `src` | 980 | **1.084** | +11% |
+| linhas à mão, teste + duplo | 740 | **655** | −11% |
+| linhas geradas | 0 | **0** | **0%** |
+| documentação e configuração | 240 | **389** | +62% |
+| **casos de teste** | **34** | **21** | **−38%** |
+
+**A pergunta desta medição era se "projetar guarda mais par" derrubaria o erro à
+mão dos +34% da anterior. Derrubou, e passou do ponto: o erro trocou de sinal.**
+A décima terceira subprojetou casos em +34% por contar guarda e não par; esta
+**superprojetou em 62%** (34 previstos para 21 reais) por contar o par em todo
+requisito, inclusive onde um guarda basta. As duas réguas de linha à mão ficaram
+em ±11%, que é a faixa boa — **o erro está concentrado em casos, e a causa é a
+correção aplicada sem discriminar.**
+
+**Item da décima quinta:** o par não é universal. Requisito cujo oposto é
+**inobservável** — "a rota devolve o agregado", "os dois regimes chegam
+separados" — não tem guarda negativo a escrever, e projetá-lo infla a conta. A
+décima quinta projeta par **só onde o comportamento errado é exprimível**, e a
+série confere se o erro em casos cai para a faixa das linhas.
+
+**Uma segunda leitura, sobre a régua de documentação:** os +62% vêm quase todos
+do próprio `02` (233 linhas), inflado por esta change ter carregado **dois
+escopos** e **cinco itens de fila com gatilho**. Não é erro de projeção de
+trabalho — é registro, e registro cresce com quantos achados a change produz,
+que é justamente o que não se projeta.
+
+#### Conferência de escopo de arquivo — três desvios da lista fechada
+
+**Dois arquivos tocados FORA da lista**, os dois pelo mesmo motivo, e nenhum
+absorvido em silêncio:
+
+- `apps/api/tests/Buteco.Api.Tests/Support/TestAuthentication.cs`
+- `apps/api/tests/Buteco.Api.Tests/Knowledge/KnowledgeProductionRegistrationTests.cs`
+
+**A causa:** `TZ` virou **pré-requisito de boot**, e as fixtures de `apps/api`
+sobem o host real pela `WebApplicationFactory`. A variável não está definida no
+ambiente de quem roda a suíte, então **sem esses dois toques nenhum teste de
+`apps/api` subia** — seis fixtures pelo ponto único de `TestAuthentication`, e a
+sétima, que não usa aquele bloco, por conta própria. O valor declarado é o fuso
+**da máquina**, para que a precondição valha em qualquer máquina e em CI.
+
+**Este é o custo real da D1 que a projeção não viu:** dar fuso a `apps/api` não é
+só configuração de produção — é precondição de toda a suíte.
+
+**E um arquivo da lista que NÃO foi tocado:** `docker-compose.yml`. O compose de
+desenvolvimento só sobe infraestrutura (`postgres`, `rabbitmq`, `waha`) — **não
+roda `api` nem `workers`**, então não há `TZ` a entregar ali. A lista fechada o
+incluiu por simetria com o de produção, e a simetria não existia.
 
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
@@ -9040,3 +9424,51 @@ duas changes parado até alguém lhe dar posição.
   - **Gatilho:** a **primeira falha real do gateway em produção**. Não é tarefa
     a agendar — é consulta a rodar quando a falha acontecer.
   - **Posição:** nenhuma change. A coleta já grava; só falta o evento.
+
+### Abertos por `rotas-de-agregacao-sistema` (2026-09-23)
+
+O detalhe de cada item está na seção da etapa 3, acima; aqui fica o índice, que é
+onde se procura.
+
+- **A checagem de fuso compara IDENTIFICADOR, não fuso — e reprovaria uma
+  configuração correta.** Vale para as **duas** cópias (`apps/api` e
+  `apps/workers`, esta em produção). `Brazil/East` e `America/Sao_Paulo` são a
+  mesma zona e a comparação de strings as separa. **Inalcançável hoje**, porque
+  com `TZ` definida o .NET adota o próprio valor como identificador, e o
+  `${TZ:?...}` do compose recusa criar o container sem ela.
+  - **Gatilho:** qualquer coisa que afrouxe o `:?` ou um deploy que não passe por
+    ele — execução direta, outro orquestrador, CI que suba a imagem à mão.
+  - **Posição:** change própria. A correção é comparar **offset**, e mexe nas duas
+    cópias; remendar só `apps/api` deixaria as duas divergentes, que é pior.
+
+- **Os instantes de regime são valor de UM ambiente num arquivo que vale para
+  todos**, e a falha é silenciosa: ambiente cujo início real seja posterior ao
+  declarado recebe `0` onde deveria receber ausência.
+  - **Gatilho:** o primeiro ambiente novo a subir a rota, **dev incluído**.
+  - **Posição:** item próprio — entre checagem de boot, valor por ambiente, ou
+    derivar com salvaguarda.
+
+- **O motivo das recusas de `apps/api` não tem fonte nenhuma** (M29), e M27/M28
+  ficam parciais pelo mesmo motivo.
+  - **Gatilho:** cumprido. **Posição: antes da etapa 4**, change de **coleta**.
+
+- **Índice composto `a2a_tasks(state, status_timestamp)`** e os quatro sugeridos
+  pela forma (`embedding_calls(Purpose)` e `(KnowledgeBaseId)`,
+  `task_executions(TerminalState)` e `(EndedAt)`). **Nenhum entrou.**
+  - **Gatilho:** remedir o plano de M32 contra o piloto depois do primeiro mês da
+    rota em produção. **Posição:** item próprio.
+
+- **Teto de janela**, ausente com gatilho renomeado do precedente de `apps/inbox`.
+  - **Gatilho:** a primeira requisição de período acima de **2 s** contra o
+    piloto.
+
+- **Os protótipos não foram abertos nesta change** — o MCP do Claude Design
+  recusou a autenticação. O contrato de tela veio do registro, que é fonte de
+  segunda mão; **se o protótipo divergir, o protótipo vence** (convenção 9).
+  - **Gatilho:** `/design-login` rodado pelo dono.
+  - **Posição:** antes de a etapa 4 começar.
+
+- **`codegraph` é exigido por `openspec/config.yaml` e não acompanha um clone.**
+  `.codegraph/` é ignorado por git inteiro e a CLI vive fora do repositório.
+  - **Gatilho:** o primeiro clone novo, ou o primeiro colaborador.
+  - **Posição:** item próprio — versionar índice ou acrescentar bootstrap.

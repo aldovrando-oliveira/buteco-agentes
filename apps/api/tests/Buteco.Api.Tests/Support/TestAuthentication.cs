@@ -28,6 +28,18 @@ public static class TestAuthentication
         ["Auth:TokenSigningKey"] = TokenSigningKey,
         ["Auth:OperatorUsername"] = KnownOperatorUsername,
         ["Auth:OperatorPasswordHash"] = ComputeKnownOperatorPasswordHash(),
+
+        // TZ é PRÉ-REQUISITO DE BOOT desde a change rotas-de-agregacao-sistema:
+        // ValidateTimeZoneConfiguration compara o valor declarado com o fuso que
+        // o processo resolve, e reprova a subida se divergirem. Sem esta linha,
+        // as SEIS fixtures que sobem o host real deixariam de subir — a variável
+        // TZ não está definida no ambiente de quem roda a suíte.
+        //
+        // O valor é o fuso DA MÁQUINA, não uma constante: assim a precondição
+        // vale em qualquer máquina e em CI, sem tornar a suíte dependente de o
+        // desenvolvedor estar em America/Sao_Paulo. A checagem em si é
+        // exercitada por TimeZoneStartupValidationTests, que fixa os dois lados.
+        ["TZ"] = TimeZoneInfo.Local.Id,
     };
 
     // Anexado por padrão em ConfigureClient de cada fixture — os testes

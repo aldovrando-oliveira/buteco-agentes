@@ -426,7 +426,42 @@ isolados sem introduzir store compartilhado.
 Rotas anônimas são decisão de segurança, não detalhe de implementação:
 adicionar uma passa por revisão.
 
-## Fuso horário do sistema (`apps/workers`)
+## Fuso horário do sistema (`apps/workers` e `apps/api`)
+
+**Uma variável, `TZ`, entregue aos DOIS serviços com `:?` no compose de
+produção** — e é isso que faz os dois processos concordarem sobre que dia é hoje,
+por construção e não por disciplina. Cada um a usa de um jeito, e a distinção
+importa:
+
+| | como lê | para quê |
+|---|---|---|
+| `apps/workers` | fuso do SO, pelo runtime (`TimeProvider.System.LocalTimeZone`) | renderizar instante e dia da semana (pt-BR fixo) no bloco de contexto temporal |
+| `apps/api` | o MESMO valor, via `IConfiguration` — **nunca** `TimeZoneInfo.Local` | o balde diário da agregação de métricas, em SQL com `AT TIME ZONE` |
+
+**Os dois falham a inicialização** se o fuso resolvido não corresponder ao valor
+declarado — a mesma checagem, copiada, porque os apps não se referenciam.
+
+**Por que `apps/api` lê de `TZ` e não de uma variável própria da agregação, e por
+que isso contraria uma decisão registrada.** A decisão anterior dizia *"o nome vem
+de configuração explícita da agregação, nunca do `TZ` do processo de
+`apps/api`"*. O motivo escrito dela era que o balde não dependesse de qual
+container respondeu — e o `:?` entrega **o mesmo valor a toda réplica**, então
+esse motivo fica preservado. O que a decisão anterior deixava aberto é que **nada
+fazia o fuso do balde e o do worker concordarem**, e divergir desloca **27,7%** da
+série em um dia inteiro, sem erro, sem log e sem sintoma (medido em 23/09/2026
+sobre 260 linhas de `a2a_tasks`). Convenção 9, registrada em
+`rotas-de-agregacao-sistema`.
+
+**Antes dessa change, `apps/api` não recebia `TZ` e rodava em UTC.** A divergência
+era latente porque nada ali renderizava data local; a etapa de agregação é o que
+a ativou. Consequência a notar no deploy: **o serviço `api` agora não sobe sem
+`TZ`**, onde antes subia.
+
+**E o balde nunca vira índice.** A conversão de fuso sai no `GROUP BY`, sobre as
+linhas já restritas pela janela — o filtro de período é um range sobre o instante
+e usa índice comum. `timezone(text, timestamptz)` é `IMMUTABLE` no pg18, então um
+índice de expressão **seria** possível; não usá-lo é escolha, porque congelaria o
+nome do fuso no schema, que é o oposto de mantê-lo em configuração.
 
 Fuso e idioma usados pelo worker para renderizar data/hora são decisão de
 sistema, não de agente: `TZ` do SO, único para o processo inteiro,
