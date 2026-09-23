@@ -1,4 +1,6 @@
 using System.ClientModel;
+using Buteco.Workers.EmbeddingMetrics;
+using Buteco.Workers.EmbeddingMetrics.Entities;
 using Buteco.Workers.ExecutionMetrics.Entities;
 using Google.GenAI;
 using Microsoft.Extensions.AI;
@@ -55,6 +57,12 @@ public sealed class ExecutionMetricsScope : IDisposable
     private readonly object _gate = new();
     private readonly List<ProviderCall> _providerCalls = [];
     private readonly List<DelegationOutcome> _delegationOutcomes = [];
+
+    // A busca em base de conhecimento roda DENTRO do turno do agente, e é o
+    // único ponto em que embedding e execução de task se encontram (change
+    // metricas-embedding-coleta, D2). Ela reusa este escopo — aquela change NÃO
+    // cria AsyncLocal nenhum.
+    private readonly List<EmbeddingCall> _embeddingCalls = [];
     private readonly ExecutionMetricsScope? _previous;
 
     private ExecutionMetricsScope(string taskId, ExecutionMetricsScope? previous)
@@ -139,6 +147,35 @@ public sealed class ExecutionMetricsScope : IDisposable
         }
     }
 
+    /// <summary>
+    /// Registra no escopo corrente uma chamada ao gateway de <b>embedding</b>
+    /// feita pela busca em base de conhecimento. Tokens copiados da medida
+    /// <b>sem normalizar nulo</b> — nulo é "o provedor não reportou", e zero só
+    /// entra quando o provedor reportou zero (convenção 13).
+    ///
+    /// <para>
+    /// <b>Fora de escopo é no-op</b>, e não erro — mesma regra de
+    /// <see cref="RecordProviderCall"/>: a busca é usada fora de execução nos
+    /// testes do resolvedor, e métrica nunca derruba quem mede.
+    /// </para>
+    /// </summary>
+    public static void RecordEmbeddingCall(
+        Guid knowledgeBaseId, string provider, string model, int dimensions, EmbeddingCallMeasurement measurement)
+    {
+        var scope = CurrentScope.Value;
+        if (scope is null)
+        {
+            return;
+        }
+
+        var call = EmbeddingCall.ForSearch(scope.TaskId, knowledgeBaseId, provider, model, dimensions, measurement);
+
+        lock (scope._gate)
+        {
+            scope._embeddingCalls.Add(call);
+        }
+    }
+
     /// <summary>Registra o resultado de uma delegação no escopo corrente.</summary>
     public static void RecordDelegation(DelegationOutcome outcome)
     {
@@ -216,6 +253,17 @@ public sealed class ExecutionMetricsScope : IDisposable
             lock (_gate)
             {
                 return [.. _delegationOutcomes];
+            }
+        }
+    }
+
+    public IReadOnlyList<EmbeddingCall> EmbeddingCalls
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _embeddingCalls];
             }
         }
     }

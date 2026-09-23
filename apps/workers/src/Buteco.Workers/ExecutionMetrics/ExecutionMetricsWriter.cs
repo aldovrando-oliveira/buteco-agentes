@@ -86,6 +86,12 @@ public sealed class ExecutionMetricsWriter(IServiceScopeFactory scopeFactory, IL
             dbContext.ProviderCalls.AddRange(metrics.ProviderCalls);
             dbContext.DelegationOutcomes.AddRange(metrics.DelegationOutcomes);
 
+            // As linhas de embedding da BUSCA entram no mesmo SaveChangesAsync
+            // (change metricas-embedding-coleta, D7): é isso que faz a chave
+            // estrangeira de embedding_calls para task_executions valer por
+            // construção — a filha é gravada junto com o fechamento do pai.
+            dbContext.EmbeddingCalls.AddRange(metrics.EmbeddingCalls);
+
             await dbContext.SaveChangesAsync(timeout.Token);
         }
         catch (Exception ex)

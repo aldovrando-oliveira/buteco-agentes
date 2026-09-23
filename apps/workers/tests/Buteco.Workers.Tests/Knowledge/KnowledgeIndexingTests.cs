@@ -1,3 +1,4 @@
+using Buteco.Workers.EmbeddingMetrics;
 using Buteco.Workers.Knowledge.Entities;
 using Buteco.Workers.Knowledge.Indexing;
 using Buteco.Workers.Tests.Knowledge.Support;
@@ -442,6 +443,416 @@ public class KnowledgeIndexingTests(WorkerInfrastructureFixture fixture) : IClas
         var reason = (await ReadAsync(dbContext, documentId)).FailureReason;
         Assert.Contains("1536", reason!, StringComparison.Ordinal);
         Assert.Contains("4096", reason!, StringComparison.Ordinal);
+    }
+
+    // ===================================================================
+    // Guardas da coleta de embedding (change metricas-embedding-coleta).
+    // Vermelhos contra HEAD + schema, com as tabelas VAZIAS — é a
+    // propriedade que falta, não a compilação (design.md, D11).
+    // ===================================================================
+
+    // ESCOPO "grão do lote": uma linha POR CHAMADA, e o par do guarda de
+    // loteamento que já existe acima.
+    [Fact]
+    public async Task DocumentLargerThanTheBatch_WritesOneEmbeddingCallRowPerBatch()
+    {
+        const int BatchSize = 2;
+        const int Sections = 5;
+
+        var harness = KnowledgeIndexingHarness.Build(
+            fixture.Postgres.GetConnectionString(), batchSize: BatchSize);
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (baseId, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(
+            dbContext, KnowledgeIndexingHarness.MultiFragmentMarkdown(Sections));
+
+        var outcome = await harness.Service.IndexAsync(new KnowledgeIndexingJobMessage(documentId, 1), default);
+        Assert.Equal(KnowledgeIndexingOutcome.Indexed, outcome);
+
+        // PRECONDIÇÃO AFIRMADA, e não suposta pelo arranjo: sem MAIS fragmentos
+        // que o lote este cenário não exercitaria loteamento nenhum, e passaria
+        // por vacuidade com uma linha só.
+        var fragmentCount = await dbContext.KnowledgeFragments.CountAsync(f => f.KnowledgeDocumentId == documentId);
+        Assert.Equal(Sections, fragmentCount);
+        Assert.True(fragmentCount > BatchSize);
+
+        var calls = await EmbeddingMetricsReader.CallsForDocumentAsync(fixture.Postgres.GetConnectionString(), documentId);
+
+        Assert.Equal(3, calls.Count);
+        Assert.Equal(fragmentCount, calls.Sum(call => call.InputCount));
+        Assert.All(calls, call => Assert.True(call.InputCount <= BatchSize));
+        Assert.All(calls, call => Assert.Equal(EmbeddingMetricsValues.Purpose.Indexing, call.Purpose));
+        Assert.All(calls, call => Assert.Equal(baseId, call.KnowledgeBaseId));
+        Assert.All(calls, call => Assert.Equal(KnowledgeIndexingHarness.Dimensions, call.Dimensions));
+        Assert.All(calls, call => Assert.False(call.Failed));
+
+        // O par do grão: cada linha é de UMA chamada, e as contagens batem com o
+        // que o duplo viu. Sem isto, uma linha por documento com a soma passaria.
+        //
+        // COMPARADO COMO CONJUNTO (ordenado), e não como sequência: a tabela NÃO
+        // tem coluna de ordem, e nada promete que a leitura devolva as linhas na
+        // ordem em que os lotes rodaram — medido, devolve [1,2,2] onde os lotes
+        // foram [2,2,1]. A propriedade que o desenho promete é "uma linha por
+        // chamada, com o tamanho de cada chamada"; afirmar a sequência seria o
+        // teste exigindo mais do que o schema garante.
+        Assert.Equal(
+            harness.Embeddings.BatchSizes.Order(),
+            calls.Select(call => call.InputCount).Order());
+    }
+
+    // O PAR: documento que cabe no lote grava UMA linha. Existe para reprovar a
+    // correção errada — gravar uma linha por fragmento.
+    [Fact]
+    public async Task DocumentSmallerThanTheBatch_WritesExactlyOneEmbeddingCallRow()
+    {
+        var harness = KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, Markdown);
+
+        await harness.Service.IndexAsync(new KnowledgeIndexingJobMessage(documentId, 1), default);
+
+        var fragmentCount = await dbContext.KnowledgeFragments.CountAsync(f => f.KnowledgeDocumentId == documentId);
+        Assert.True(fragmentCount < KnowledgeIndexingHarness.NoBatching);
+
+        var call = Assert.Single(
+            await EmbeddingMetricsReader.CallsForDocumentAsync(fixture.Postgres.GetConnectionString(), documentId));
+
+        Assert.Equal(fragmentCount, call.InputCount);
+        Assert.Null(call.TaskId);
+        Assert.NotNull(call.KnowledgeIndexingAttemptId);
+    }
+
+    // ESCOPO "status HTTP": o 502 que motivou o loteamento, virando consulta.
+    // Foi a ausência desta linha que obrigou a reproduzir aquele erro à mão em
+    // 20/09/2026.
+    //
+    // ClientResultException e NÃO HttpRequestException de propósito: é a exceção
+    // que o caminho `openai` realmente lança, e ela deriva de Exception
+    // (verificado por execução, design.md, D6). Um guarda com
+    // HttpRequestException passaria por outro braço do HttpStatusOf e não
+    // provaria nada sobre o gateway real.
+    [Fact]
+    public async Task GatewayFailureWithTypedStatus_WritesFailedRowWithTheHttpStatus()
+    {
+        var harness = KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, Markdown);
+
+        harness.Embeddings.ThrowOnNextCall = UpstreamError;
+
+        var outcome = await harness.Service.IndexAsync(
+            new KnowledgeIndexingJobMessage(documentId, 1, KnowledgeIndexingQueues.MaxAttempts), default);
+
+        Assert.Equal(KnowledgeIndexingOutcome.Failed, outcome);
+
+        var call = Assert.Single(
+            await EmbeddingMetricsReader.CallsForDocumentAsync(fixture.Postgres.GetConnectionString(), documentId));
+
+        Assert.True(call.Failed);
+        Assert.Equal(502, call.HttpStatus);
+        Assert.Null(call.InputTokens);
+
+        // E a fase, no pai — o status diz O QUE o gateway respondeu, a fase diz
+        // ONDE o código estava. Os dois, e não um no lugar do outro (D5).
+        var attempt = await EmbeddingMetricsReader.SingleAttemptAsync(fixture.Postgres.GetConnectionString(), documentId);
+        Assert.Equal(EmbeddingMetricsValues.FailurePhase.EmbeddingGateway, attempt.FailurePhase);
+    }
+
+    // O par negativo: sem status tipado, HttpStatus fica NULO — "não se sabe",
+    // nunca um código inventado.
+    [Fact]
+    public async Task GatewayFailureWithoutTypedStatus_WritesFailedRowWithNullHttpStatus()
+    {
+        var harness = KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, Markdown);
+
+        harness.Embeddings.ThrowOnNextCall = () => new InvalidOperationException("sem status tipado");
+
+        await harness.Service.IndexAsync(
+            new KnowledgeIndexingJobMessage(documentId, 1, KnowledgeIndexingQueues.MaxAttempts), default);
+
+        var call = Assert.Single(
+            await EmbeddingMetricsReader.CallsForDocumentAsync(fixture.Postgres.GetConnectionString(), documentId));
+
+        Assert.True(call.Failed);
+        Assert.Null(call.HttpStatus);
+    }
+
+    // ESCOPO "falha no segundo lote": o consumo do primeiro lote ACONTECEU e foi
+    // cobrado, mesmo com o documento terminando Failed e nenhum fragmento
+    // gravado. Uma soma por documento teria de escolher entre mentir e perder.
+    [Fact]
+    public async Task FailureOnTheSecondBatch_KeepsTheRowOfTheFirst()
+    {
+        const int BatchSize = 2;
+
+        var harness = KnowledgeIndexingHarness.Build(
+            fixture.Postgres.GetConnectionString(), batchSize: BatchSize);
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(
+            dbContext, KnowledgeIndexingHarness.MultiFragmentMarkdown(5));
+
+        harness.Embeddings.ThrowOnCall = call => call == 2 ? UpstreamError() : null;
+
+        var outcome = await harness.Service.IndexAsync(
+            new KnowledgeIndexingJobMessage(documentId, 1, KnowledgeIndexingQueues.MaxAttempts), default);
+
+        Assert.Equal(KnowledgeIndexingOutcome.Failed, outcome);
+
+        var calls = await EmbeddingMetricsReader.CallsForDocumentAsync(fixture.Postgres.GetConnectionString(), documentId);
+
+        Assert.Equal(2, calls.Count);
+        Assert.False(calls.First(call => !call.Failed).Failed);
+        var failed = calls.Single(call => call.Failed);
+        Assert.Equal(502, failed.HttpStatus);
+
+        // E nenhum fragmento gravado — a coleta não alterou a garantia de "tudo
+        // ou nada" da indexação.
+        Assert.Empty(await dbContext.KnowledgeFragments.Where(f => f.KnowledgeDocumentId == documentId).ToListAsync());
+    }
+
+    // ESCOPO "nulo não é zero" (convenção 13), com o GUARDA NEGATIVO: a asserção
+    // afirma a AUSÊNCIA do zero, e não só a presença do nulo. Sem a segunda
+    // asserção, uma normalização para zero passaria.
+    //
+    // Os DOIS estados de "não reportou" — Usage ausente e Usage sem contagem —
+    // porque são caminhos diferentes no código que lê.
+    [Theory]
+    [InlineData(EmbeddingUsageShape.None)]
+    [InlineData(EmbeddingUsageShape.WithoutInputCount)]
+    public async Task ProviderReportsNoInputCount_WritesNullInputTokens_AndNotZero(
+        EmbeddingUsageShape shape)
+    {
+        var harness = KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, Markdown);
+
+        harness.Embeddings.UsageShape = shape;
+
+        await harness.Service.IndexAsync(new KnowledgeIndexingJobMessage(documentId, 1), default);
+
+        var call = Assert.Single(
+            await EmbeddingMetricsReader.CallsForDocumentAsync(fixture.Postgres.GetConnectionString(), documentId));
+
+        Assert.Null(call.InputTokens);
+        Assert.NotEqual(0, call.InputTokens);
+    }
+
+    // O par: zero REPORTADO é gravado como zero. Sem ele, "nunca grave zero"
+    // passaria — e seria a convenção 13 na direção errada.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1234)]
+    public async Task ProviderReportsInputCount_WritesTheReportedValue(long reported)
+    {
+        var harness = KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, Markdown);
+
+        harness.Embeddings.UsageShape = EmbeddingUsageShape.WithInputCount;
+        harness.Embeddings.ReportedInputTokens = reported;
+
+        await harness.Service.IndexAsync(new KnowledgeIndexingJobMessage(documentId, 1), default);
+
+        var call = Assert.Single(
+            await EmbeddingMetricsReader.CallsForDocumentAsync(fixture.Postgres.GetConnectionString(), documentId));
+
+        Assert.Equal(reported, call.InputTokens);
+    }
+
+    // ESCOPO "linha de tentativa": o desfecho feliz, com o par "sem item" antes.
+    [Fact]
+    public async Task SuccessfulIndexing_WritesAClosedAttemptRow()
+    {
+        var harness = KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (baseId, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, Markdown);
+
+        // Par "sem item": antes de indexar, nenhuma tentativa foi afirmada.
+        Assert.Empty(await EmbeddingMetricsReader.AttemptsAsync(fixture.Postgres.GetConnectionString(), documentId));
+
+        await harness.Service.IndexAsync(new KnowledgeIndexingJobMessage(documentId, 1), default);
+
+        var attempt = await EmbeddingMetricsReader.SingleAttemptAsync(fixture.Postgres.GetConnectionString(), documentId);
+        var fragmentCount = await dbContext.KnowledgeFragments.CountAsync(f => f.KnowledgeDocumentId == documentId);
+
+        Assert.Equal(EmbeddingMetricsValues.Outcome.Indexed, attempt.Outcome);
+        Assert.Equal(1, attempt.Attempt);
+        Assert.Equal(KnowledgeIndexingQueues.MaxAttempts, attempt.MaxAttempts);
+        Assert.Equal(baseId, attempt.KnowledgeBaseId);
+        Assert.Equal(1, attempt.ContentRevision);
+        Assert.Null(attempt.FailurePhase);
+        Assert.Equal(fragmentCount, attempt.FragmentCount);
+        Assert.True(attempt.EndedAt >= attempt.StartedAt);
+    }
+
+    // ESCOPO "M30": três tentativas consultáveis, com a terceira em Failed. É a
+    // métrica inteira — sem esta tabela, "falhas de indexação num período" não
+    // tem de onde sair, porque knowledge_documents guarda só o estado corrente.
+    [Fact]
+    public async Task ThreeFailedAttempts_LeaveThreeQueryableAttemptRows()
+    {
+        var harness = KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, Markdown);
+
+        for (var attempt = 1; attempt <= KnowledgeIndexingQueues.MaxAttempts; attempt++)
+        {
+            harness.Embeddings.ThrowOnNextCall = UpstreamError;
+            await harness.Service.IndexAsync(new KnowledgeIndexingJobMessage(documentId, 1, attempt), default);
+        }
+
+        var attempts = await EmbeddingMetricsReader.AttemptsAsync(fixture.Postgres.GetConnectionString(), documentId);
+
+        Assert.Equal(3, attempts.Count);
+        Assert.Equal([1, 2, 3], attempts.Select(row => row.Attempt));
+        Assert.Equal(
+            [
+                EmbeddingMetricsValues.Outcome.RetryScheduled,
+                EmbeddingMetricsValues.Outcome.RetryScheduled,
+                EmbeddingMetricsValues.Outcome.Failed,
+            ],
+            attempts.Select(row => row.Outcome));
+        Assert.All(attempts, row => Assert.Equal(EmbeddingMetricsValues.FailurePhase.EmbeddingGateway, row.FailurePhase));
+        Assert.All(attempts, row => Assert.Null(row.FragmentCount));
+    }
+
+    // ESCOPO "fase da falha": vocabulário fechado, determinado por ONDE o código
+    // estava — nunca pelo texto da exceção, que é de quem a lança e muda sem
+    // aviso (D5).
+    [Theory]
+    [InlineData(EmbeddingFailureKind.ProviderResolution, EmbeddingMetricsValues.FailurePhase.ProviderResolution)]
+    [InlineData(EmbeddingFailureKind.Gateway, EmbeddingMetricsValues.FailurePhase.EmbeddingGateway)]
+    [InlineData(EmbeddingFailureKind.VectorCount, EmbeddingMetricsValues.FailurePhase.VectorCountMismatch)]
+    [InlineData(EmbeddingFailureKind.Dimension, EmbeddingMetricsValues.FailurePhase.DimensionMismatch)]
+    public async Task FailurePhase_IsTheStepWhereItStopped(EmbeddingFailureKind kind, string expectedPhase)
+    {
+        var harness = kind == EmbeddingFailureKind.ProviderResolution
+            ? KnowledgeIndexingHarness.BuildWithThrowingResolver(fixture.Postgres.GetConnectionString())
+            : KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+
+        // DOCUMENTO MULTI-FRAGMENTO, e não o `Markdown` curto — a diferença é o
+        // caso `VectorCount`. Aquele texto produz UM fragmento, e truncar a
+        // resposta para um vetor é então um NO-OP: a contagem confere, a
+        // indexação termina `Indexed`, e o cenário ficaria verde sem nunca
+        // exercitar a divergência. Foi o que aconteceu na primeira execução
+        // deste guarda — reprovou pelo motivo errado, e o enunciado mudou antes
+        // da correção.
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(
+            dbContext, KnowledgeIndexingHarness.MultiFragmentMarkdown(3));
+
+        switch (kind)
+        {
+            case EmbeddingFailureKind.Gateway:
+                harness.Embeddings.ThrowOnNextCall = UpstreamError;
+                break;
+            case EmbeddingFailureKind.VectorCount:
+                harness.Embeddings.OverrideResultCount = 1;
+                break;
+            case EmbeddingFailureKind.Dimension:
+                harness.Embeddings.OverrideDimensions = KnowledgeIndexingHarness.Dimensions - 1;
+                break;
+        }
+
+        // Precondição afirmada para o caso `VectorCount`: só há divergência de
+        // contagem se houver MAIS de um fragmento para truncar.
+        if (kind == EmbeddingFailureKind.VectorCount)
+        {
+            Assert.True(new Buteco.Workers.Knowledge.Chunking.KnowledgeChunker()
+                .Chunk(KnowledgeIndexingHarness.MultiFragmentMarkdown(3)).Count > 1);
+        }
+
+        var outcome = await harness.Service.IndexAsync(
+            new KnowledgeIndexingJobMessage(documentId, 1, KnowledgeIndexingQueues.MaxAttempts), default);
+
+        Assert.Equal(KnowledgeIndexingOutcome.Failed, outcome);
+
+        var attempt = await EmbeddingMetricsReader.SingleAttemptAsync(fixture.Postgres.GetConnectionString(), documentId);
+        Assert.Equal(expectedPhase, attempt.FailurePhase);
+    }
+
+    // ESCOPO "degradação graciosa": sem a tabela de métrica, a indexação termina
+    // exatamente como terminaria com ela. A escrita acontece DEPOIS do estado do
+    // documento, então não há ordem de execução em que ela altere o que a
+    // indexação terminou sendo (D7).
+    [Fact]
+    public async Task MetricsTableMissing_DoesNotChangeTheIndexingOutcome()
+    {
+        var harness = KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, Markdown);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "ALTER TABLE knowledge_indexing_attempts RENAME TO knowledge_indexing_attempts_hidden;");
+        try
+        {
+            var outcome = await harness.Service.IndexAsync(new KnowledgeIndexingJobMessage(documentId, 1), default);
+
+            Assert.Equal(KnowledgeIndexingOutcome.Indexed, outcome);
+
+            var after = await ReadAsync(dbContext, documentId);
+            var fragmentCount = await dbContext.KnowledgeFragments.CountAsync(f => f.KnowledgeDocumentId == documentId);
+
+            Assert.Equal(KnowledgeIndexingStatus.Indexed, after.IndexingStatus);
+            Assert.Equal(fragmentCount, after.FragmentCount);
+            Assert.True(fragmentCount > 0);
+            Assert.Null(after.FailureReason);
+        }
+        finally
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE knowledge_indexing_attempts_hidden RENAME TO knowledge_indexing_attempts;");
+        }
+    }
+
+    /// <summary>
+    /// A exceção do caminho <c>openai</c> para um <c>502</c> do gateway.
+    /// <c>ClientResultException</c> deriva de <see cref="Exception"/>, e NÃO de
+    /// <see cref="HttpRequestException"/> — verificado por execução (design.md,
+    /// D6). É o tipo que o <c>HttpStatusOf</c> precisa alcançar pelo braço
+    /// certo, e usar <c>HttpRequestException</c> aqui não provaria nada sobre o
+    /// gateway real.
+    /// </summary>
+    private static Exception UpstreamError() =>
+        new System.ClientModel.ClientResultException(new StubPipelineResponse(502));
+
+    public enum EmbeddingFailureKind
+    {
+        ProviderResolution,
+        Gateway,
+        VectorCount,
+        Dimension,
+    }
+
+    /// <summary>
+    /// Infraestrutura de duplo: o mínimo de <c>PipelineResponse</c> para
+    /// construir um <c>ClientResultException</c> com status. Os membros que os
+    /// guardas não leem estouram de propósito — se algum dia forem lidos, o
+    /// teste diz isso em vez de devolver um valor inventado.
+    /// </summary>
+    private sealed class StubPipelineResponse(int status) : System.ClientModel.Primitives.PipelineResponse
+    {
+        public override int Status => status;
+
+        public override string ReasonPhrase => "upstream_error";
+
+        protected override System.ClientModel.Primitives.PipelineResponseHeaders HeadersCore =>
+            throw new NotSupportedException();
+
+        public override Stream? ContentStream { get; set; }
+
+        public override BinaryData Content => BinaryData.Empty;
+
+        public override BinaryData BufferContent(CancellationToken cancellationToken = default) => Content;
+
+        public override ValueTask<BinaryData> BufferContentAsync(CancellationToken cancellationToken = default) =>
+            new(Content);
+
+        public override void Dispose()
+        {
+        }
     }
 
     private static async Task<KnowledgeDocument> ReadAsync(Buteco.Workers.Infrastructure.AppDbContext dbContext, Guid id)

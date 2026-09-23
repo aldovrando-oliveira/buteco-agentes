@@ -1,3 +1,5 @@
+using Buteco.Workers.EmbeddingMetrics;
+using Buteco.Workers.EmbeddingMetrics.Entities;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Knowledge.Chunking;
 using Buteco.Workers.Knowledge.Embedding;
@@ -24,7 +26,44 @@ public sealed class KnowledgeIndexingService(
     TimeProvider timeProvider,
     ILogger<KnowledgeIndexingService> logger)
 {
+    /// <summary>
+    /// A unidade de trabalho, com a <b>coleta de embedding</b> em volta (change
+    /// <c>metricas-embedding-coleta</c>).
+    ///
+    /// <para>
+    /// <b>A escrita da métrica acontece DEPOIS do estado do documento</b>
+    /// (design.md, D7), e <see cref="EmbeddingMetricsWriter"/> nunca lança: não
+    /// há ordem de execução em que ela altere o
+    /// <see cref="KnowledgeIndexingOutcome"/> que o consumidor recebe.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Se <see cref="IndexCoreAsync"/> lançar, não há métrica a gravar</b>, e
+    /// isso é escolha e não esquecimento: o único jeito de ele lançar é o banco
+    /// estar fora na gravação do estado de falha, ou o cancelamento de shutdown
+    /// — e nos dois casos a gravação da métrica falharia pelo mesmo motivo. É o
+    /// custo de crash que D7 nomeia e aceita.
+    /// </para>
+    /// </summary>
     public async Task<KnowledgeIndexingOutcome> IndexAsync(KnowledgeIndexingJobMessage message, CancellationToken cancellationToken)
+    {
+        var context = new KnowledgeIndexingAttemptContext(
+            message.KnowledgeDocumentId,
+            message.ContentRevision,
+            message.Attempt,
+            KnowledgeIndexingQueues.MaxAttempts,
+            timeProvider.GetUtcNow());
+
+        var outcome = await IndexCoreAsync(context, message, cancellationToken);
+
+        await new EmbeddingMetricsWriter(scopeFactory, logger)
+            .WriteAsync(context, outcome, timeProvider.GetUtcNow());
+
+        return outcome;
+    }
+
+    private async Task<KnowledgeIndexingOutcome> IndexCoreAsync(
+        KnowledgeIndexingAttemptContext context, KnowledgeIndexingJobMessage message, CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -48,11 +87,20 @@ public sealed class KnowledgeIndexingService(
         // saídas do catch. Contar só no fim faria a execução que estoura por
         // timeout não aparecer no contador — e o operador veria "2 tentativas"
         // onde houve 3.
+        context.KnowledgeBaseId = document.KnowledgeBaseId;
+
         var now = timeProvider.GetUtcNow();
         await MarkAttemptStartedAsync(dbContext, message, now, cancellationToken);
 
+        // A tentativa está contada — e é a partir daqui que existe linha de
+        // tentativa a gravar (design.md, D8). O descarte acima retornou antes, e
+        // não gastou chamada ao gateway: é o que mantém a contagem de linhas
+        // reconciliável com IndexingAttempts do documento.
+        context.MarkCounted();
+
         try
         {
+            context.Phase = EmbeddingMetricsValues.FailurePhase.Chunking;
             var fragments = chunker.Chunk(document.ExtractedText);
 
             // Guarda de "sucesso com zero fragmentos é recusado" (spec própria).
@@ -70,8 +118,12 @@ public sealed class KnowledgeIndexingService(
             }
 
             var options = embeddingOptions.Value;
+
+            context.Phase = EmbeddingMetricsValues.FailurePhase.ProviderResolution;
             var generator = embeddingResolver.Resolve();
-            var embeddings = await GenerateInBatchesAsync(generator, fragments, options.BatchSize, cancellationToken);
+
+            context.Phase = EmbeddingMetricsValues.FailurePhase.EmbeddingGateway;
+            var embeddings = await GenerateInBatchesAsync(generator, fragments, options, context, cancellationToken);
 
             var rows = new List<KnowledgeFragment>(fragments.Count);
             for (var i = 0; i < fragments.Count; i++)
@@ -84,6 +136,7 @@ public sealed class KnowledgeIndexingService(
                 // incompatível sem erro nenhum.
                 if (vector.Length != options.Dimensions)
                 {
+                    context.Phase = EmbeddingMetricsValues.FailurePhase.DimensionMismatch;
                     throw new InvalidOperationException(
                         $"O provedor devolveu embedding com dimensão {vector.Length}, "
                       + $"diferente da dimensão {options.Dimensions} declarada em Embedding:Dimensions. "
@@ -95,6 +148,8 @@ public sealed class KnowledgeIndexingService(
                     new Vector(vector), options.Provider, options.Model, options.Dimensions));
             }
 
+            context.FragmentCount = rows.Count;
+            context.Phase = EmbeddingMetricsValues.FailurePhase.Persistence;
             return await CommitAsync(dbContext, message, rows, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -177,21 +232,43 @@ public sealed class KnowledgeIndexingService(
     private static async Task<List<Embedding<float>>> GenerateInBatchesAsync(
         IEmbeddingGenerator<string, Embedding<float>> generator,
         IReadOnlyList<ChunkedFragment> fragments,
-        int batchSize,
+        EmbeddingOptions options,
+        KnowledgeIndexingAttemptContext context,
         CancellationToken cancellationToken)
     {
         var vectors = new List<Embedding<float>>(fragments.Count);
 
-        foreach (var batch in fragments.Chunk(batchSize))
+        // A MEDIDA ENTRA AQUI, no sítio de chamada, e NÃO dentro de
+        // EmbeddingGeneratorResolver.Resolve() (design.md da change
+        // metricas-embedding-coleta, D4). O motivo é de verificação: os duplos
+        // dos testes substituem o RESOLVEDOR, então embrulhar lá faria todo
+        // cenário de teste passar por fora da medição, e os guardas ficariam
+        // verdes sem nada medido.
+        //
+        // Uma linha por CHAMADA — e como a chamada é o lote, um documento
+        // grande produz N linhas. É esse grão que torna o 502 de um lote
+        // específico consultável (D3).
+        var measured = new MeasuredEmbeddingGenerator(
+            generator,
+            measurement => context.Record(EmbeddingCall.ForIndexing(
+                context.AttemptId,
+                context.KnowledgeBaseId,
+                options.Provider,
+                options.Model,
+                options.Dimensions,
+                measurement)));
+
+        foreach (var batch in fragments.Chunk(options.BatchSize))
         {
             var texts = batch.Select(f => f.Text).ToList();
-            var generated = await generator.GenerateAsync(texts, cancellationToken: cancellationToken);
+            var generated = await measured.GenerateAsync(texts, cancellationToken: cancellationToken);
 
             // Conferência POR LOTE, e não só no total: aqui a informação é
             // local, e a mensagem pode dizer qual lote divergiu. O total fica
             // implicado — se todo lote casa, a soma casa.
             if (generated.Count != texts.Count)
             {
+                context.Phase = EmbeddingMetricsValues.FailurePhase.VectorCountMismatch;
                 throw new InvalidOperationException(
                     $"O provedor devolveu {generated.Count} vetores para {texts.Count} fragmentos "
                   + $"no lote começando no fragmento {vectors.Count}.");

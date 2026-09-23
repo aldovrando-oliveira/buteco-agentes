@@ -360,6 +360,34 @@ o versionamento pretende seguir
 - **Sem rota nem tela ainda**: isto é só a coleta. A série começa no deploy e não
   é retroativa.
 
+**Métricas de operação — coleta de embedding (etapa 2)**
+
+- `apps/workers` passa a gravar uma linha em `embedding_calls` por **chamada ao
+  gateway de embedding**, com provedor, modelo e dimensão no momento da chamada,
+  duração, número de entradas, tokens reportados, falha e status HTTP quando
+  tipado. Como a indexação é **loteada**, um documento grande produz **uma linha
+  por lote** — é esse grão que torna consultável o `502` de um lote específico.
+- **A finalidade separa indexação de busca.** São dois consumidores do mesmo
+  gateway com perguntas diferentes: indexação é custo de cadastro, busca é custo
+  por conversa. A busca roda dentro do turno do agente, então a linha dela
+  carrega o `TaskId` da execução.
+- Uma linha em `knowledge_indexing_attempts` por **tentativa** de indexação que
+  contou tentativa, com documento, base, revisão, número da tentativa e o
+  máximo, desfecho e a **fase** em que parou. É o histórico que
+  `knowledge_documents` não guarda — lá o estado é corrente e sobrescrito a cada
+  tentativa, então uma tentativa que falhou e depois deu certo não deixava
+  rastro.
+- **Token que o gateway não reportou é gravado nulo, nunca zero.** Não há coluna
+  de tokens de saída: embedding não produz saída, e uma coluna sempre nula
+  convida a somá-la.
+- **Falha ao gravar métrica nunca muda o resultado da indexação nem da busca** —
+  é registrada em log de aviso, e a escrita acontece depois do estado do
+  documento.
+- Tabelas próprias, e não `provider_calls`: tokens de conversa e de embedding são
+  visões separadas, e só se somam no nível do provedor.
+- **Sem rota nem tela ainda.** A série de embedding começa no próprio deploy, e
+  é um **segundo regime** — não a mesma data da etapa 1.
+
 **Documentação e governança**
 
 - Licenciamento sob Apache-2.0, com `LICENSE` e `NOTICE`.

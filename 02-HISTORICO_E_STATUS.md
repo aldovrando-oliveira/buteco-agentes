@@ -5000,6 +5000,145 @@ código ver o dado (exploração de 20/09, V2).
 **Na fila com posição própria:** M31, e M36–M39 (bloco do inbox), depois da
 correlação da mensagem de saída.
 
+### Etapa 2 da linha — `metricas-embedding-coleta` (2026-09-23)
+
+**O que a change entrega.** Duas tabelas novas, migradas por `apps/api` e
+escritas por `apps/workers`: `embedding_calls` (uma linha por **chamada ao
+gateway de embedding**, e como a indexação é loteada isso quer dizer **uma linha
+por lote**) e `knowledge_indexing_attempts` (uma linha por **tentativa** de
+indexação que contou tentativa). Fecham **M19** e **M30**. **Sem rota e sem
+tela** — etapas 3 a 5.
+
+**A decisão que se inverteu, e por quê (convenção 9).** A etapa 1 registrou, em
+D7 dela, que a etapa 2 tornaria `provider_calls.TaskId` anulável e reusaria a
+tabela. **Está errado, e `provider_calls` não foi tocada.** A causa é uma
+decisão que a própria etapa 1 registrou do outro lado: M11 e M19 são visões
+separadas por decisão do dono. Reusar a tabela obrigaria **toda** consulta de
+M11 a M17 a filtrar por `Purpose` — e quem esquecesse o filtro não receberia
+erro, receberia um número **maior e plausível**, com o modelo de embedding em
+primeiro lugar no ranking, que é exatamente o que aquela decisão existe para
+impedir. D7 pesou o custo de migração, que é baixo, e não o de consulta, que é o
+que decide.
+
+**A busca entrou junto da indexação**, e não é escopo a mais: a busca gera um
+vetor por **mensagem** de agente, contra um por documento indexado — é
+provavelmente o **termo dominante** do consumo. Um card rotulado "Tokens de
+embedding" só com indexação mostraria a parte pequena com o rótulo do todo.
+Ela roda dentro do turno, então reusa o `AsyncLocal` da etapa 1: **esta change
+não criou `AsyncLocal` nenhum**. **Não fecha M35**, que continua adiada — a
+linha dá provedor, modelo, duração e tokens, e M35 pergunta qual base, com que
+resultado e com que relevância.
+
+**Achado verificado por execução, e ele corrige um registro.**
+`ClientResultException` — a exceção do caminho `openai` — deriva de `Exception`,
+e **não** de `HttpRequestException`. Duas consequências opostas:
+
+- **Para a coleta, nada a fazer:** o `HttpStatusOf` da etapa 1 **já** tem o braço
+  de `ClientResultException`, então o status do gateway sai correto sem trabalho
+  novo. O `502 upstream_error` que motivou a `indexacao-lote-de-fragmentos`
+  passa a sair por consulta.
+- **Para a tela, é defeito:** em `KnowledgeIndexingFailure.Describe` os braços de
+  `429`, `401` e `403` são **inalcançáveis no caminho real**, e todo erro HTTP do
+  gateway cai no balde genérico. **Absorvido no item que já existia** sobre o
+  mesmo texto (aberto pela `indexacao-lote-de-fragmentos`), com a posição
+  recalibrada — deixou de ser só de `apps/frontend`.
+
+**O que a change NÃO prova, e por que ficou assim.** Duas coisas, e as duas
+dependem de **execução real contra o gateway do piloto**, que **não é o que o
+`.env.prod` da cópia de trabalho descreve**: aquele arquivo não define
+`EMBEDDING_MODEL` nem `EMBEDDING_DIMENSIONS` e aponta `OPENAI_BASE_URL` para
+`https://api.openai.com/v1` — e a OpenAI não serve modelo de embedding de
+**4.096 dimensões**, que é a dimensão da coluna do índice. O gateway sobrescreve
+a base URL no servidor. Rodar contra a OpenAI responderia sobre outro provedor e
+pararia em `DimensionMismatch`. **Decisão do dono em 23/09/2026: as duas ficam
+para o deploy.**
+
+- **Se o gateway reporta uso em resposta de embedding.** A *fonte* existe
+  (`GeneratedEmbeddings<T>.Usage` com `InputTokenCount` anulável, medido por
+  reflexão); que o gateway **preencha** não foi medido. A coluna é anulável
+  justamente por isso. Se vier nulo, a etapa 4 exibe **"não reportado"**, nunca
+  zero (convenção 13).
+- **Se a exceção do `502` chega à borda de medição com `Status = 502`.** Está
+  verificado que `ClientResultException` deriva de `Exception`; que ela
+  **atravesse** `Microsoft.Extensions.AI.OpenAI` até o `HttpStatusOf` é
+  inferência apoiada, não medição. **É o ciclo aberto em 20/09, e ele continua
+  aberto** — fecha no deploy (tarefas 7.4 e 7.5 da change).
+
+**Marco de regime.** A série de embedding começa **no deploy desta change** — é
+um **segundo regime** da linha, e não a mesma data da etapa 1 (que mede desde
+22/09/2026 01:21, `America/Sao_Paulo`). As duas datas vão na tela.
+
+**Suítes:** `apps/workers` **386/386** (baseline 340/340, **+46 casos**, 14
+classes de coleção continuam 14); `apps/api` **351/351** (baseline 346/346, +5);
+`apps/inbox` **203/203**, intocado.
+
+**Achados de método:**
+
+- **A décima terceira medição separou três níveis** (à mão, duplo, gerado) e os
+  **dois níveis novos foram os que acertaram** — gerado **+8%**, duplo **+11%**,
+  ambos dentro da faixa; os dois níveis "à mão" erraram +34% e +23%, e **casos**
+  errou +34% junto. Contagem de arquivos acertou **exata** nos dois sentidos (15
+  criados, 15 modificados). **Código gerado sozinho é 1.836 de 4.090 linhas —
+  45% do diff**, escrito pelo `dotnet ef`: uma projeção que não o separe está
+  projetando o gerador, não o trabalho.
+
+- **ITEM DA DÉCIMA QUARTA — projetar o PAR, não o guarda.** O erro que sobrou
+  tem **causa única identificada**, e é isso que o torna registrável em vez de
+  ruído: casos (**+34%**) e linhas à mão (**+34%**) erraram na **mesma proporção
+  e na mesma direção**. Duas réguas independentes com o mesmo erro é assinatura
+  de causa comum, não de dispersão. A causa: **a projeção conta o guarda, e a
+  convenção 15 pede o par.** Onde ela previu um guarda, saíram dois — positivo e
+  negativo; onde previu um `[Fact]`, saiu uma `[Theory]` de quatro. A décima
+  quarta projeta **guarda mais par**, e a série confere se o erro à mão cai.
+
+- **Refinamento da lição da décima segunda: duplo não se separa por arquivo.**
+  Aquela medição errou +70% por não contar infraestrutura de duplo; esta a
+  contou — e mesmo assim o `StubPipelineResponse` (**22 linhas** de
+  `PipelineResponse` mínimo, para construir um `ClientResultException` com
+  status) ficou dentro de `KnowledgeIndexingTests.cs` e foi contado como "caso".
+  **A classificação é por natureza do código, não por onde ele está**: um duplo
+  cabe dentro de um arquivo de casos, e separar por caminho de arquivo não o
+  pega.
+- **RÉGUA NOVA DA CONVENÇÃO 15 — a rodada vermelha global não verifica guarda
+  nenhum.** Numa change de **coleta**, a rodada vermelha é feita neutralizando a
+  escrita, e então **a ausência das linhas reprova todos os guardas de uma vez**.
+  Ausência é um vermelho barato: ela **não distingue guarda bom de guarda
+  vazio**, porque um guarda que nunca alcança o caminho que afirma reprova pelo
+  mesmo `Assert.Single() — coleção vazia` que um guarda correto.
+
+  O sinal útil vem da **rodada verde**: guarda que passa sem nunca ter
+  exercitado a propriedade só aparece ali — ou não aparece. Foi o que aconteceu
+  aqui: o caso `VectorCount` ficou vermelho na rodada vermelha **por ausência de
+  linha**, e isso mascarou que ele nunca exercitava a divergência — o documento
+  do arranjo produzia **um** fragmento, e truncar uma resposta de um vetor para
+  um vetor é operação nula. Na rodada verde ele mediu `Indexed` onde esperava
+  `Failed`, e o defeito apareceu.
+
+  **A forma curta, para carregar: guarda vermelho na rodada vermelha não está
+  verificado.** A convenção 15 pede o vermelho; ela não diz que o vermelho basta,
+  e até aqui a base tratava como se dissesse.
+
+- **A ordem dos lotes não é recuperável de `embedding_calls`** — o segundo
+  guarda que reprovou pelo motivo errado, e de outra natureza. Ele exigia a
+  **sequência** `[2, 2, 1]` e mediu `[1, 2, 2]`: a tabela não tem coluna de
+  ordem, e o desenho nunca prometeu posição. Passou a comparar conjunto, com a
+  **limitação declarada**: dá para dizer *"um lote de N entradas falhou com
+  502"* — que é o que o diagnóstico de 20/09 precisava — e **não** *"foi o
+  segundo lote"*. Se a etapa 3 ou 4 quiser a posição, é coluna nova
+  (`BatchOrdinal`). **Descobrir isso na revisão do guarda é melhor que na etapa
+  de agregação**, que é quem vai consumir a tabela.
+- **O duplo cabe dentro do arquivo de casos.** O `StubPipelineResponse` (22
+  linhas) mora em `KnowledgeIndexingTests.cs` e foi contado como "caso".
+  Separar por arquivo não basta.
+- **O flake de `apps/inbox` não reproduziu**: a baseline medida deu **203/203**
+  em suíte cheia, onde o registro dizia 202/203. Não prova que acabou — prova
+  que a régua "202/203" enganaria a comparação seguinte.
+- **Duas propriedades do ambiente, não da change:** `dotnet test` trava
+  indefinidamente no restore implícito com a rede bloqueada (usar
+  `--no-restore --no-build`), e o Ryuk do Testcontainers tenta montar o socket
+  do Podman como volume e o Podman recusa (`TESTCONTAINERS_RYUK_DISABLED=true`
+  junto do `DOCKER_HOST`).
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -5117,6 +5256,39 @@ Cada um tem gatilho de quando revisitar:
   **Gatilho: a próxima change que tocar `apps/inbox`**, que é quem terá a classe
   na mão. O conserto provável é o mesmo da família: espaçamento real entre alvos,
   ou `apps/inbox` antes dos alvos pesados na ordem do runner.
+
+  **QUARTO PONTO DE MEDIÇÃO (23/09/2026, `metricas-embedding-coleta`): NÃO
+  reprovou — 203/203 em suíte cheia, nas duas rodadas do dia.** O item registrava
+  202/203, e a baseline desta change mediu 203/203 com `podman ps` em zero.
+
+  **E isso CONFIRMA o mecanismo em vez de contrariá-lo, porque a ordem foi
+  outra.** Nas três medições anteriores o alvo imediatamente anterior ao
+  `apps/inbox` era `apps/workers` — o pesado. Nesta, a ordem foi
+  `workers → api → inbox`, e quem rodou imediatamente antes foi **`apps/api`**:
+
+  | | alvo imediatamente anterior | duração dele | `apps/inbox` |
+  |---|---|---|---|
+  | baseline 12/09 | `apps/workers` | 5 m 05 s | 163/164 |
+  | fechamento 12/09 | `apps/workers` | 6 m 50 s | 162/164 |
+  | 22/09 (`compactacao-historico`) | `apps/workers` | — | reprovou |
+  | **23/09 baseline** | **`apps/api`** | **1 m 21 s** | **203/203** |
+  | **23/09 fechamento** | **`apps/api`** | **2 m 18 s** | **203/203** |
+
+  Um alvo anterior **4 a 5 vezes mais leve**, e a reprovação some. É exatamente o
+  que *"a suíte de `apps/inbox` é derrubada pelo resíduo da suíte pesada
+  imediatamente anterior"* prevê — e a primeira vez que a previsão é testada
+  **na direção de passar**, não de reprovar. As três medições anteriores mostram
+  que ele reprova sob contenção; esta mostra que **não reprova sem ela**.
+
+  **Caracterização atualizada: reprova sob contenção, não sempre.** O gatilho
+  registrado — *reprovar **isolado** com a máquina descarregada muda a natureza
+  do item* — **não foi disparado** e continua valendo. O item segue aberto, e o
+  conserto provável segue o mesmo.
+
+  **Consequência para quem comparar suíte:** a régua "202/203" engana. Quem
+  comparar contra ela vai ver melhora que não é da change — foi o que quase
+  aconteceu no fechamento desta. **A baseline de `apps/inbox` depende da ordem do
+  runner, e quem a citar diz qual alvo rodou antes.**
 
 - **`AgentDelegationExecutionTests.DelegatedTask_WithMessageInstantOnSource_CarriesSameMessageInstantToTarget`
   é dependente de ordem dentro da sua classe — segunda ocorrência da família de
@@ -8343,10 +8515,44 @@ duas changes parado até alguém lhe dar posição.
   já aconteceram, e o texto não diz isso. É a **segunda ocorrência** da família
   que a `frontend-mensagem-recusa-ciclo` corrigiu na tela de delegações: mensagem
   que instrui a repetir sem dizer o que já foi repetido.
-  - **Gatilho:** cumprido — é esta medição.
-  - **Posição:** change de `apps/frontend`, **depois de
-    `indexacao-lote-de-fragmentos`**. Se o lote resolver o caso em produção, a
-    urgência cai mas o texto continua impreciso.
+
+  **Segunda causa, acrescentada em 23/09/2026 pela `metricas-embedding-coleta`
+  (absorvida aqui, e não aberta como item próprio).** O mesmo arquivo, o mesmo
+  braço `_` e o mesmo texto, por outro motivo: os braços de `429`, `401` e `403`
+  daquele `switch` casam `HttpRequestException.StatusCode`, e **o único provedor
+  de embedding implementado nunca lança esse tipo quando o gateway responde com
+  status**. O caminho `openai` usa `System.ClientModel`, cuja exceção é
+  `ClientResultException`, que deriva de `Exception` e **não** de
+  `HttpRequestException` — **verificado por execução** (convenção 6), refletindo
+  sobre os assemblies contra os quais o repositório compila. Então os três
+  braços com status são **inalcançáveis no caminho real**, e **todo** erro HTTP
+  do gateway cai no genérico — inclusive o `502 upstream_error` que motivou a
+  própria `indexacao-lote-de-fragmentos`. Para quem opera: a tela diz *"erro
+  interno … Reindexe o documento"* num caso em que reindexar não resolve, e é o
+  **único** texto que aquele caminho produz.
+
+  **Por que absorvido e não item próprio:** as duas correções não são
+  independentes. Reescrever só o texto genérico dá uma mensagem melhor redigida
+  que continua errada para `429`, `401` e `403`; acrescentar só o braço de
+  `ClientResultException` deixa o genérico ainda mandando repetir sem dizer o que
+  já foi repetido. **Quem corrigir tem de fazer as duas**, e um item só é o que
+  garante isso — precedente da `lock-de-contexto-falha-terminal`, que acrescentou
+  a segunda fonte ao item da `PendingDispatch` órfã em vez de abrir outro.
+
+  A **classificação de M30 não depende disto**: a `metricas-embedding-coleta`
+  grava `FailurePhase` de vocabulário fechado, determinada por onde o código
+  estava, e o status HTTP na linha de `embedding_calls` — onde o `HttpStatusOf`
+  da etapa 1 já o coloca corretamente, porque ele **já** tem o braço de
+  `ClientResultException`.
+  - **Gatilho:** cumprido — pelas duas causas.
+  - **Posição:** ~~change de `apps/frontend`~~ → **change que toca
+    `apps/workers` e `apps/frontend`**. *(Correção de posição em 23/09/2026,
+    convenção 22: a posição foi fixada quando o item tinha uma causa só, que era
+    de texto. A segunda causa é o braço que falta em
+    `KnowledgeIndexingFailure.Describe`, que é `apps/workers` — não dá para
+    corrigir só no frontend.)* Depois de `indexacao-lote-de-fragmentos`; se o
+    lote resolver o caso em produção, a urgência cai mas o texto continua
+    impreciso **e o classificador continua com braços mortos**.
 
 ### Abertos por `compactacao-historico` (2026-09-22)
 
@@ -8718,3 +8924,46 @@ duas changes parado até alguém lhe dar posição.
     conexão** (posição `6a` da fila). O repositório é público, e cada commit sem a
     checagem repete o risco; as outras changes da fila não ficam mais caras por
     esperar uma change pequena.
+
+### Abertos por `metricas-embedding-coleta` (2026-09-23)
+
+- **As duas verificações por execução real da coleta de embedding não foram
+  feitas, e não são tarefa marcável — são item com gatilho.** Mesmo tratamento
+  que a conferência de campo da `indexacao-lote-de-fragmentos` e a da fonte única
+  do log da `compactacao-historico`: dependem do ambiente do piloto, e nenhuma
+  delas cabe na sessão que escreveu o código.
+
+  **Por que não deu para fazer aqui, e isto é fato medido, não suposição:** o
+  `.env.prod` da cópia de trabalho **não define `EMBEDDING_MODEL` nem
+  `EMBEDDING_DIMENSIONS`** — só o `.env.prod.example` define, com `changeme` no
+  modelo — e aponta `OPENAI_BASE_URL` para `https://api.openai.com/v1`. **Não é
+  o ambiente que produziu a medição de 20/09:** a OpenAI não serve modelo de
+  embedding de **4.096 dimensões**, que é a dimensão da coluna `vector(4096)` do
+  índice; o gateway do piloto sobrescreve a base URL no servidor. Rodar contra a
+  OpenAI responderia sobre **outro provedor**, e com dimensão incompatível a
+  indexação pararia em `DimensionMismatch` antes de gravar fragmento — não
+  fecharia nenhuma das duas.
+
+  **O que cada uma ainda NÃO prova**, e a etapa 4 não pode assumir o contrário:
+
+  - **D10 está verificado só até a fonte existir.** Foi medido por reflexão que
+    `GeneratedEmbeddings<T>.Usage` existe e que `InputTokenCount` é anulável.
+    Que o gateway **preencha** esse campo não foi medido. Se vier nulo, a tela
+    exibe **"não reportado"**, nunca zero (convenção 13) — e a coluna é anulável
+    desde o primeiro dia exatamente por isso.
+  - **D6 está verificado só na hierarquia do tipo.** Foi medido por execução que
+    `ClientResultException` deriva de `Exception` e **não** de
+    `HttpRequestException`, o que é o que faz o `HttpStatusOf` da etapa 1 servir
+    sem mudança. Que a exceção real do gateway **chegue** à borda de medição com
+    `Status = 502`, atravessando `Microsoft.Extensions.AI.OpenAI`, é inferência
+    apoiada — não medição. **É o ciclo aberto em 20/09, e ele continua aberto.**
+
+  **O que fechar a change significa**, dito para não ser lido de outro jeito:
+  *as tabelas existem, a coleta escreve e os guardas passam.* **Nunca** *medido
+  contra o gateway do piloto.*
+
+  - **Gatilho:** o primeiro deploy desta change no piloto.
+  - **Posição:** a janela desse deploy, **junto do registro do segundo regime da
+    série** — a data e a hora em que a coleta de embedding começa, com o fuso. É
+    regime **distinto** do da etapa 1, que mede desde **22/09/2026 às 01:21,
+    `America/Sao_Paulo`**, e a tela aprovada exibe as duas datas.

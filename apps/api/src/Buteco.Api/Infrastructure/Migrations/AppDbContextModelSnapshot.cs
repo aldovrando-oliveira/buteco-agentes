@@ -162,6 +162,106 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.ToTable("agents", (string)null);
                 });
 
+            modelBuilder.Entity("Buteco.Api.EmbeddingMetrics.Entities.EmbeddingCall", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Dimensions")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("DurationMs")
+                        .HasColumnType("double precision");
+
+                    b.Property<bool>("Failed")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("HttpStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InputCount")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("InputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("KnowledgeBaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("KnowledgeIndexingAttemptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TaskId")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KnowledgeIndexingAttemptId");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("embedding_calls", (string)null);
+                });
+
+            modelBuilder.Entity("Buteco.Api.EmbeddingMetrics.Entities.KnowledgeIndexingAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ContentRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailurePhase")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("FragmentCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("KnowledgeBaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("KnowledgeDocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KnowledgeDocumentId");
+
+                    b.HasIndex("StartedAt");
+
+                    b.ToTable("knowledge_indexing_attempts", (string)null);
+                });
+
             modelBuilder.Entity("Buteco.Api.ExecutionMetrics.Entities.DelegationOutcome", b =>
                 {
                     b.Property<Guid>("Id")
@@ -550,6 +650,19 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .HasForeignKey("McpServerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Api.EmbeddingMetrics.Entities.EmbeddingCall", b =>
+                {
+                    b.HasOne("Buteco.Api.EmbeddingMetrics.Entities.KnowledgeIndexingAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("KnowledgeIndexingAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Buteco.Api.ExecutionMetrics.Entities.TaskExecution", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Buteco.Api.ExecutionMetrics.Entities.DelegationOutcome", b =>
