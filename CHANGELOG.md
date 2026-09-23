@@ -477,7 +477,16 @@ o versionamento pretende seguir
 
 ### Fixed
 
-- **A compactação do histórico nunca funcionou com Gemini, e o piloto é Gemini:
+- **A página de Insights do sistema não recebia dado nenhum: a rota existia,
+  respondia, e não era alcançada.** `GET /insights/system` devolvia **`200` com
+  HTML** — o shell do SPA — em vez do agregado, com ou sem token, porque o
+  prefixo `insights` não estava na lista de prefixos que o nginx do stack
+  encaminha para `apps/api`. A requisição caía no fallback de SPA, e a
+  autenticação nem chegava a ser exercida. Chamada **de dentro** do container,
+  a mesma rota respondia `401`, o que isolou a causa no roteamento e não no app.
+  É a **quinta** vez que um prefixo servido fica fora da lista do nginx. A rota
+  **não mudou** — só passou a ser alcançável —, e a entrada cobre também as
+  rotas sob `/insights/`, sem precisar de uma entrada por rota. e o piloto é Gemini:
   toda conversa acima de dez turnos crescia sem parar.** A requisição de resumo
   terminava sempre em turno de modelo — por construção do pacote de compactação,
   que só derruba a contagem de turnos ao excluir também o grupo de assistente —
