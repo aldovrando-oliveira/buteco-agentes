@@ -5602,6 +5602,224 @@ desenvolvimento só sobe infraestrutura (`postgres`, `rabbitmq`, `waha`) — **n
 roda `api` nem `workers`**, então não há `TZ` a entregar ali. A lista fechada o
 incluiu por simetria com o de produção, e a simetria não existia.
 
+### A rota da etapa 3 não chegava ao painel: `insights` fora do nginx (`roteamento-insights-no-nginx`, 2026-09-23)
+
+**Estado real:** aplicada até a tarefa 2.3, **deploy pendente**, nada commitado.
+A change fecha com *"a linha está no arquivo versionado e o nginx descartável a
+exerce"* — **nunca** com *"o painel alcança a rota"*, que depende de rebuild e
+deploy que acontecem depois do merge (convenção 13).
+
+#### O defeito, e o passo que o isolou
+
+`GET /insights/system` **existia, subia e respondia** desde o deploy da etapa 3.
+O que não acontecia era a requisição **chegar** nela. Medido no piloto em
+23/09/2026, `America/Sao_Paulo`:
+
+| passo | resultado |
+|---|---|
+| `GET /insights/system` pelo navegador, com token | **`200 text/html`** — o `index.html` do SPA |
+| a mesma requisição **sem** token | **`200 text/html`** — a autenticação nem era exercida |
+| `GET /agents` pelo navegador, com token | `200 application/json` |
+| `GET /insights/system` **de dentro do container `api`**, sem token | **`401`** |
+
+**O `401` por dentro é o passo discriminante**, e é só ele que separa as duas
+hipóteses: *a rota não subiu* contra *a rota não é alcançada*. Rota não
+registrada não devolve `401`. Logo o HTML de fora não saía do `apps/api` — saía
+do fallback de SPA do nginx, para um caminho que ele não repassa. Sem esse passo,
+as três primeiras linhas são compatíveis com "a etapa 3 entregou uma rota
+quebrada", que teria mandado a investigação para o app errado.
+
+**A causa:** `apps/frontend/deploy/nginx.conf`, a `location` que enumera os
+prefixos do `apps/api`. Seis prefixos; o `apps/api` serve sete. **A correção é
+uma palavra** — `git diff --stat`: 1 arquivo, 1 inserção, 1 remoção.
+
+**É a quinta ocorrência da mesma classe.** As três primeiras (`internal`,
+`knowledge-bases`, `knowledge-index`) em
+`openspec/changes/archive/2026-09-16-fix-stack-servidor-lacunas/`; a quarta
+(`messages`) em
+`openspec/changes/archive/2026-09-18-nginx-shell-sem-cache-e-prefixo-messages/`.
+
+#### A régua: rota nova exige entrada no nginx, e isso é passo de DEPLOY
+
+**Toda rota de primeiro nível nova em `apps/api` ou `apps/inbox` exige entrada no
+roteamento do nginx.** Não é passo de código: é passo de **deploy**.
+
+**O que torna a régua difícil de aplicar, e é o ponto todo:** o arquivo mora em
+`apps/frontend/deploy/`. A `rotas-de-agregacao-sistema` declarou `apps/frontend`
+como **"nada tocado"** — e declarou **corretamente**, porque as telas são das
+etapas 4 e 5. **Nenhuma conferência de lista de arquivos pegaria isto**, porque a
+lista é do app errado.
+
+**Este é o quarto desvio de escopo daquela change**, e é de natureza diferente
+dos três registrados acima em "Conferência de escopo de arquivo": aqueles são
+*arquivo tocado fora da lista* (dois) e *arquivo da lista não tocado* (um) — os
+três visíveis num `git status`. Este é **passo de deploy não previsto**, que não
+vira arquivo e por isso nenhum `git status` mostra.
+
+**E vale para a change B** (`GET /insights/agents/{id}`): como o padrão é por
+prefixo com `(/|$)`, a entrada `insights` **já a cobre**, e isso foi medido, não
+suposto — `/insights/agents/abc` com `Sec-Fetch-Mode: cors` foi ao upstream do
+`apps/api` na verificação da 2.2.
+
+#### O `grep` do arquivo TERIA pego — a lacuna é de gatilho, não de método
+
+A change nasceu com a pergunta de se o `grep` de conferência escrito no topo do
+`nginx.conf` tem ponto cego. **Não tem**, e o veredito é medido:
+
+```
+$ grep -rhoE '"/[a-z0-9-]+' --include="*.cs" apps/api/src/Buteco.Api/ | sort -u
+"/agents  "/auth  "/health  "/indexing-summary  "/insights  ← aqui
+"/knowledge-bases  "/knowledge-index  "/mcp-servers  "/providers  "/test
+```
+
+`"/insights` sai pelo `MapGet` real (`InsightsEndpoints.cs:34`), não por menção
+em comentário, e a classificação por linha de código o dá como **servido**, sem
+ambiguidade. O ruído não mudou: continuam os mesmos quatro falsos positivos já
+nomeados no arquivo. **Nada a corrigir no comentário** — inventar um ponto cego
+para ter o que escrever afirmaria mais do que se mediu.
+
+**E o método existia em DOIS lugares, os dois corretos, e o defeito passou pelos
+dois.** Além do `grep`, o `docs/deployment.md` §2 já traz a checagem genérica
+(*"para conferir todos os prefixos, e não só `/messages`, a lista está nos blocos
+`location ~`… nunca `200 text/html`"*). Ter o método em dois lugares não impediu
+a quinta ocorrência, porque **nada obriga a rodar qualquer um deles quando nasce
+uma rota**. A lacuna é de gatilho, e é por isso que a régua vai para cá e para a
+spec `server-deployment`, e não para uma frase a mais no comentário: quem não
+abriu o arquivo não lê o comentário dele.
+
+#### O guarda, e por que ele fecha a change (convenção 15)
+
+**Nenhuma das quatro suítes lê `nginx.conf`**, e não há teste de app que reprove
+com `insights` fora da regex. Isso está declarado, não contornado.
+
+**Mas a premissa de que esta base não tem precedente de testar configuração era
+FALSA**, e foi corrigida antes de a change ser escrita (convenção 9): a tarefa
+2.1 da `nginx-shell-sem-cache-e-prefixo-messages`, de 18/09, já fizera nginx
+descartável com upstreams falsos e 20 requisições. O guarda desta change é o
+mesmo molde, e ele **discriminou**:
+
+| requisição | editado | defeito reintroduzido |
+|---|---|---|
+| `/insights/system` (cors) | `application/json` | **`text/html`, shell** |
+| `/insights/agents/abc` (cors) | `application/json` | **`text/html`, shell** |
+| as outras **seis** linhas | — | **idênticas nos dois estados** |
+
+O defeito foi reintroduzido apagando a palavra do arquivo **já editado**, e o
+resultado conferido por `diff` contra `git show HEAD:…`: **idêntico** — a
+reintrodução reproduz o estado de produção exatamente, e prova de passagem que a
+edição não mexeu em mais nada. Registrar **quais** duas discriminam é o que evita
+a quinta forma da convenção 15: as outras seis aprovam nos dois estados **de
+propósito** (são não-regressão e os dois casos de borda), e tratá-las como
+guarda daria impressão de cobertura sem ter.
+
+**Achado de método, sobre o próprio harness de verificação:** a primeira execução
+saiu com a última linha da tabela **faltando**, sem erro visível — `cat body.out |
+head -c 20` leva SIGPIPE num arquivo de 935 KB, e com `set -o pipefail` o `set -e`
+encerrava o script calado. **Uma tabela que termina cedo parece uma tabela
+completa.** É a forma da convenção 21, e só foi pega porque o número de linhas
+esperadas estava escrito antes de a tabela ser lida.
+
+#### Verificação em produção da rota da etapa 3 — já aconteceu, é registro
+
+Depois da correção aplicada à mão e do rebuild do `frontend` no piloto, a rota foi
+exercida de verdade. **Isto não é tarefa desta change** — é a evidência de que a
+rota serve o painel.
+
+**Com o regime colado** (convenção 22): medido em **23/09/2026**, no piloto, fuso
+`America/Sao_Paulo`, sobre a **primeira janela medida** — **01/09 a 23/09, 156
+execuções** —, com os regimes declarados em `execution` **22/09 01:21** e
+`embedding` **23/09 01:18**.
+
+| requisição | resultado |
+|---|---|
+| `?from=…-03:00&to=…-03:00` (deslocamento ≠ 0) | `200 application/json` |
+| `?from=…&to=…` (sem deslocamento) | `200`, e `window.from` volta `+00:00` — lido como UTC |
+| sem token | `401` |
+| `?to=abc` (`from` ausente + `to` malformado) | `400 application/problem+json`, **uma entrada por limite**, numa resposta só |
+
+E o corpo confirmou o contrato da change anterior:
+
+- **mapa de regimes com as duas datas**, cada grupo declarando a sua;
+- **a série omite os dias anteriores ao regime** — a janela pediu desde 01/09 e a
+  série trouxe **só 22 e 23**, sem nenhum `0` nos vinte e um dias anteriores;
+- **nulo preservado e visível**: `gemini` com `embeddingInputTokens: null`,
+  `openai` com `conversationInputTokens: null` — não zero;
+- **as cinco parcialidades declaradas** em `caveats`:
+  `submitted-at-missing-on-redelivery`, `residual-is-not-only-tools`,
+  `rejections-missing-from-executions`, `rejection-reason-not-collected`,
+  `point-in-time-only`;
+- **o resíduo não se chama "tempo em tools"** — é `nonProviderResidual`;
+- **M32 com as duas populações separadas** e `observedStates` explícito;
+- **os dois `Expired`** da janela de instância única aparecem no par
+  origem→destino: é o `C` saindo de consulta, que justificou a reordenação da
+  etapa 1.
+
+> **Gatilho de recalibração:** qualquer número deste registro citado sobre uma
+> janela que **comece antes de 22/09/2026 01:21** está sendo citado fora do
+> regime em que foi medido. A própria série confirma a propriedade — ela omite o
+> que antecede o regime em vez de zerar.
+
+#### Convenção 18 no extremo inferior: a razão lógica : comentário não existe aqui
+
+Com **uma palavra** de produção, qualquer razão lógica : comentário é degenerada.
+A régua conta *registros de mecanismo entregues em código de produção*, e aqui
+são **zero** — o mecanismo já estava registrado no arquivo desde
+`fix-stack-servidor-lacunas`, e a conferência mediu que continua correto.
+
+**O que decide o tamanho nesta escala é a projeção de REGISTRO**, não a de
+código: `02` e `CHANGELOG` respondem por ~80% das linhas fora dos artefatos
+OpenSpec. E a própria convenção já avisa que registro cresce com quantos achados
+a change produz, *que é justamente o que não se projeta* — esta produziu **três**
+antes de a implementação começar (o veredito do `grep`, o precedente de nginx
+descartável, a ausência de `/insights` em `routes.tsx`) e **dois** durante (o
+método em dois lugares, o SIGPIPE do harness).
+
+**A conferência, medida:**
+
+| dimensão | projetado | entregue | erro |
+|---|---|---|---|
+| produção — lógica | 1 palavra / 1 linha | **1 / 1** | **exato** |
+| produção — comentário | 0 | **0** | **exato** |
+| delta de spec | ~30 linhas | **87** no arquivo, **~23** escritas | ver abaixo |
+| `02` | ~110 linhas | **231** (medido antes desta conferência entrar; com ela, **276**) | **+110%** |
+| `CHANGELOG` | ~12 linhas | **10** | −17% |
+| artefatos OpenSpec | ~500 linhas | **962** | **+92%** |
+
+**As duas dimensões de produção acertaram exato, e não é mérito:** com uma
+palavra não havia o que errar. A régua não se testa aí — testa-se no `02`.
+
+**O `02` errou +110%, e as duas metades da causa valem separadas.** Decomposto:
+entrada de histórico **173**, seção "Abertos por" **33**, atualização do item
+pré-existente da lista mantida à mão **25**.
+
+- **As 25 são modificação em seção de OUTRA change**, e a projeção só enumerou o
+  que esta cria. É a causa estrutural que a convenção 18 já nomeia — *projeção
+  conta criados, não modificados* — aqui na forma de **seção**, não de arquivo.
+  Ter a convenção escrita não impediu de repeti-la, o que sugere que a pergunta
+  útil não é *"quantos arquivos modifico"* e sim **"que registro pré-existente
+  esta change torna desatualizado"**.
+- **As 173 da entrada sozinha já passaram a projeção inteira**, e essa é a metade
+  dominante. A causa é a que a convenção declara não-projetável: registro cresce
+  com quantos achados a change produz. A projeção contou os **três** achados
+  existentes quando o `design.md` fechou; a aplicação produziu **mais dois**.
+
+**Terceira confirmação da propriedade, e a primeira em que ela é o termo
+DOMINANTE do erro** — não um acréscimo sobre base de código. **Item para a
+convenção 18:** em change cuja produção é de uma linha, projetar registro pelo
+número de achados **conhecidos** erra por construção. O que a projeção pode fazer
+é declarar a contagem no momento em que projeta — *"três achados, ~110 linhas"* —
+para o erro ser lido como *"saíram cinco"* em vez de *"projetou mal"*.
+
+**E o delta de spec é convenção 22 aplicada à própria régua.** Projetado ~30,
+entregue **87 no arquivo** e **~23 escritas**: um `MODIFIED` exige copiar o
+requirement inteiro, então o tamanho do arquivo é dominado por cópia obrigatória
+e **não** mede trabalho. Os dois números estão certos sobre perguntas diferentes,
+e a projeção não disse qual respondia. Pelo mesmo motivo, a previsão de *"~80%
+das linhas fora dos artefatos OpenSpec são registro"* acertou a direção e é
+ambígua na magnitude: **73%** contando o delta pelo arquivo, **91%** contando-o
+por linhas escritas, com o projetado entre os dois. **Projeção de delta de spec
+declara a unidade, ou não é comparável.**
+
 ## Itens em aberto, registrados conscientemente (não esquecidos)
 
 Cada um tem gatilho de quando revisitar:
@@ -8358,8 +8576,9 @@ candidatos abaixo são independentes entre si, sem ordem imposta.
   lugar do shell. Enquanto o truque do `Sec-Fetch-Mode` existir, essa change
   precisa declarar `Cache-Control` nas respostas de API.
 - **A lista de prefixos do nginx mantida à mão: change própria candidata.**
-  Quatro ocorrências (`internal`, `knowledge-bases`, `knowledge-index`,
-  `messages`) já cumprem qualquer gatilho razoável. A change do prefixo
+  **CINCO** ocorrências (`internal`, `knowledge-bases`, `knowledge-index`,
+  `messages`, e `insights` em 23/09/2026) já cumprem qualquer gatilho razoável.
+  A change do prefixo
   `/painel/` **não** resolve isso: ela separa o frontend das APIs, não o
   `apps/api` do `apps/inbox`. Forma: checagem **bidirecional** entre os prefixos
   mapeados pelos apps e a lista do `nginx.conf`, no molde de
@@ -8378,6 +8597,28 @@ candidatos abaixo são independentes entre si, sem ordem imposta.
   `AgentReferenceValidator.cs:27`, e passou na exploração desta change porque
   `agents` estava na lista esperada, só que do outro app. Um método que depende
   de classificação humana a cada rodada já errou nas duas direções.
+
+  **O que a QUINTA ocorrência (`insights`) acrescenta, e é o que torna a
+  candidata mais forte — uma causa a mais, de outra natureza.** As quatro
+  primeiras são todas *"o autor da rota esqueceu de editar a lista"*. Esta tem
+  uma segunda causa, e ela é estrutural: **o arquivo mora no app errado**. A
+  change que criou a rota declarou `apps/frontend` como "nada tocado", e
+  **declarou certo** — as telas são de outra etapa. Conferência de escopo por
+  lista de arquivos não alcança isso por construção, porque a lista é do app que
+  serve a rota.
+
+  **A consequência para a forma da candidata:** um checklist humano (*"ao criar
+  rota, rode o `grep`"*) cobre a primeira causa e **não** cobre a segunda, porque
+  depende de alguém lembrar de olhar fora do próprio app. O guarda em `scripts/`
+  cobre as duas, porque não pergunta qual app está sendo mexido — compara os dois
+  conjuntos sempre. **Isso deixa de ser preferência e vira requisito da forma.**
+
+  **E o gatilho pesa mais do que a contagem sugere:** na quinta ocorrência o
+  método de conferência existia em **dois** lugares — o `grep` no próprio
+  `nginx.conf` e a checagem genérica do `docs/deployment.md` §2 —, os **dois
+  corretos**, e o defeito passou pelos dois. Ter o método escrito não é ter o
+  método executado; o que falta é algo que **obrigue**, e é exatamente o que um
+  guarda de `scripts/` no fechamento faz.
 - **Para a change do prefixo `/painel/`: o `no-store` do shell já está no
   `nginx.conf`.** Ela não deve propô-lo de novo nem assumir que está ausente.
   Ela decide se o mantém depois de remover o truque do `Sec-Fetch-Mode`; é boa
@@ -9472,3 +9713,36 @@ onde se procura.
   `.codegraph/` é ignorado por git inteiro e a CLI vive fora do repositório.
   - **Gatilho:** o primeiro clone novo, ou o primeiro colaborador.
   - **Posição:** item próprio — versionar índice ou acrescentar bootstrap.
+
+### Abertos por `roteamento-insights-no-nginx` (2026-09-23)
+
+- **A verificação pós-deploy, que esta change NÃO pode fechar.** A change fecha
+  sobre o arquivo versionado; o painel só alcança a rota depois de `build
+  frontend` + `up -d frontend` (convenção 13).
+  - **Gatilho:** o próximo redeploy do `frontend` contra o piloto.
+  - **Posição:** este item. O procedimento **já existe** e não precisa ser
+    escrito de novo: `docs/deployment.md` §2, "Redeploy só do frontend",
+    checagem 3.
+  - **Critério:** `GET /insights/system` com `Sec-Fetch-Mode: cors` e **sem
+    token** → **`401`**, nunca `200 text/html`. Sem token de propósito: não
+    depende de ter um token válido à mão, e o `401` já prova que a requisição
+    atravessou o nginx e chegou ao `apps/api`.
+
+- **Para a change B (`GET /insights/agents/{id}`): nada a fazer no nginx.** A
+  entrada `insights` com `(/|$)` já a cobre, e isso foi **medido** na
+  verificação desta change, não suposto. Supor que precisa custaria uma segunda
+  edição do mesmo arquivo; supor que não precisa **sem** este registro seria
+  aposta.
+  - **Gatilho:** a change B começar. **Posição:** antes dela.
+
+- **Para a etapa 4 (tela de Insights): não tocar o `nginx.conf` por causa
+  dela.** `/insights` vai passar a ser **ao mesmo tempo** rota de página do
+  `react-router` e prefixo de API — o mesmo caso já resolvido para `/agents`,
+  `/channels`, `/mcp-servers` e `/knowledge-bases`. O bloco que recebeu
+  `insights` **já** tem o tratamento de `Sec-Fetch-Mode: navigate`: navegação
+  real cai no SPA, `fetch()` da própria app vai ao backend. Hoje `/insights`
+  **não** é rota de página (`apps/frontend/src/app/routes.tsx`, conferido em
+  23/09/2026), e por isso ela **não** entrou na frase do achado empírico no
+  comentário do arquivo — quando a etapa 4 criar a rota de página, é essa frase
+  que passa a merecer a inclusão, e só ela.
+  - **Gatilho:** a etapa 4 começar. **Posição:** antes dela.
