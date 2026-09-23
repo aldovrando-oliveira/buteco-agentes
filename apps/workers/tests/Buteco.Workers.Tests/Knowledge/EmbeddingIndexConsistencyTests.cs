@@ -6,6 +6,7 @@ using Buteco.Workers.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Buteco.Workers.Tests.Knowledge;
@@ -171,6 +172,75 @@ public class EmbeddingIndexConsistencyTests(WorkerInfrastructureFixture fixture)
 
         var outcome = await harness.Service.IndexAsync(new KnowledgeIndexingJobMessage(documentId, 1), default);
         Assert.Equal(KnowledgeIndexingOutcome.Indexed, outcome);
+    }
+
+    /// <summary>
+    /// Escopo 4 da change <c>compactacao-historico</c> (D6): os DOIS caminhos de
+    /// sucesso desta checagem registram linha, e dizem coisas diferentes —
+    /// "índice vazio, primeiro deploy" não é "conferido contra o índice".
+    ///
+    /// <para>
+    /// <b>Por que agora.</b> A única manifestação desta checagem no log era a
+    /// consulta que o EF Core imprimia, e o mesmo escopo a silencia em produção
+    /// (`Microsoft.EntityFrameworkCore.Database.Command` em `Warning`). Sem
+    /// linha própria, ela passaria a rodar invisível — a change teria tornado
+    /// uma checagem de boot muda.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task EmptyIndex_LogsThatTheIndexIsEmpty()
+    {
+        await ResetIndexAsync();
+
+        using var host = BuildHost(
+            KnowledgeIndexingHarness.Model, KnowledgeIndexingHarness.Dimensions, out var logs);
+
+        host.ValidateEmbeddingIndexConsistency();
+
+        Assert.Contains(
+            logs,
+            entry => entry.Level == LogLevel.Information
+                && entry.Message.Contains("vazio", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task IndexConsistentWithConfiguration_LogsWhatWasChecked()
+    {
+        await ResetIndexAsync();
+        await SeedIndexedDocumentAsync(KnowledgeIndexingHarness.Model, KnowledgeIndexingHarness.Dimensions);
+
+        using var host = BuildHost(
+            KnowledgeIndexingHarness.Model, KnowledgeIndexingHarness.Dimensions, out var logs);
+
+        host.ValidateEmbeddingIndexConsistency();
+
+        Assert.Contains(
+            logs,
+            entry => entry.Level == LogLevel.Information
+                && entry.Message.Contains(KnowledgeIndexingHarness.Model, StringComparison.Ordinal)
+                && entry.Message.Contains(
+                    KnowledgeIndexingHarness.Dimensions.ToString(), StringComparison.Ordinal));
+    }
+
+    private IHost BuildHost(
+        string model, int dimensions, out List<(LogLevel Level, string Message)> capturedLogs)
+    {
+        var logs = new List<(LogLevel Level, string Message)>();
+        capturedLogs = logs;
+
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddDbContext<AppDbContext>(options =>
+            options.UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()));
+        builder.Services.Configure<EmbeddingOptions>(options =>
+        {
+            options.Provider = KnowledgeIndexingHarness.Provider;
+            options.Model = model;
+            options.Dimensions = dimensions;
+        });
+        builder.Logging.ClearProviders();
+        builder.Logging.AddProvider(new EmbeddingBatchSizeValidationTests.StartupLogCapture(logs));
+
+        return builder.Build();
     }
 
     private IHost BuildHost(string model, int dimensions)

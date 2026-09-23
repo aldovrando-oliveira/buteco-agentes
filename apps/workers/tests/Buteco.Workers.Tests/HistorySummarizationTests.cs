@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RabbitMQ.Client;
@@ -388,6 +389,299 @@ public class HistorySummarizationTests(WorkerInfrastructureFixture fixture) : IC
     }
 
     /// <summary>
+    /// <b>Escopo 2 da change <c>compactacao-historico</c>:</b> a falha da chamada
+    /// de resumo passa a aparecer em log.
+    ///
+    /// <para>
+    /// <b>Era invisível por construção, não por nível de log.</b> A
+    /// <c>SummarizationCompactionStrategy</c> captura a exceção, desfaz a
+    /// exclusão dos grupos e registra um aviso — num logger que vinha do
+    /// <c>NullLoggerFactory</c>, porque o <c>CompactionProvider</c> era
+    /// construído sem <c>loggerFactory</c>. O diagnóstico do defeito do Gemini
+    /// custou duas rodadas de exploração, um harness e uma chave de dev
+    /// justamente por causa deste silêncio.
+    /// </para>
+    ///
+    /// <para>
+    /// O guarda afirma a linha, não o texto dela: a mensagem é do pacote, e
+    /// prendê-la inteira seria prender versão de dependência.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task FalhaNaChamadaDeResumo_ApareceEmLogDeAviso()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var turns = SummarizationTurnThreshold + 2;
+
+        await SeedAgentAsync(agentId);
+
+        var chatClient = new Mock<IChatClient>();
+
+        chatClient
+            .Setup(c => c.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.Is<ChatOptions?>(o => o == null),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Requests ending with a model turn are not supported."));
+
+        chatClient
+            .Setup(c => c.GetResponseAsync(
+                It.IsAny<IEnumerable<ChatMessage>>(),
+                It.Is<ChatOptions?>(o => o != null),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
+
+        var logs = new List<(LogLevel Level, string Message)>();
+        using var host = BuildHost(chatClient.Object, mcpToolSetResolver: null, capturedLogs: logs);
+        await host.StartAsync();
+
+        try
+        {
+            for (var turn = 1; turn <= turns; turn++)
+            {
+                var record = await RunTurnAsync(agentId, contextId, $"pergunta {turn}");
+
+                // O turno do usuário continua chegando a completed: a falha de
+                // resumo aparece, mas não derruba a conversa.
+                Assert.Equal(nameof(TaskState.Completed), record.State);
+            }
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+
+        Assert.Contains(
+            logs,
+            entry => entry.Level == LogLevel.Warning
+                && entry.Message.Contains("Summarization failed", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// <b>Escopo 1 da change <c>compactacao-historico</c>, fim a fim:</b> com a
+    /// chamada de resumo funcionando contra um provedor que recusa requisição
+    /// terminada em turno de modelo, e com <b>tool chamada em todo turno</b>, a
+    /// entrada do turno para de crescer.
+    ///
+    /// <para>
+    /// <b>Por que com tool.</b> A sessão 1 do piloto tinha delegações, e grupos
+    /// <c>ToolCall</c> são atômicos no índice de compactação — a dúvida era se a
+    /// estratégia conseguiria excluí-los. Medido em 40 turnos na exploração de
+    /// 22/09/2026: consegue, e o patamar se segura (entrada oscilando entre ~190
+    /// e ~3.570, teto parado entre o 21º e o 40º turno, contra crescimento
+    /// monótono até 4.082 com a compactação falhando).
+    /// </para>
+    ///
+    /// <para>
+    /// <b>A MEDIDA CONTA TODO O CONTEÚDO, NÃO SÓ <c>ChatMessage.Text</c></b> —
+    /// ver <see cref="TamanhoDoConteudo"/>. Somar só texto deixa
+    /// <c>FunctionCallContent</c> e <c>FunctionResultContent</c> de fora, e foi
+    /// o erro de instrumento que quase fez a exploração reportar patamar falso:
+    /// os dois cenários (compactação funcionando e compactação falhando) davam
+    /// <b>185–189 tokens idênticos</b>. Um teste que meça só texto não distingue
+    /// os dois comportamentos.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task CompactacaoComToolNoHistorico_SeguraOPatamarDeEntrada()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        // Margem além do limiar: o patamar só é afirmável depois de vários
+        // gatilhos seguidos, não do primeiro.
+        var turns = SummarizationTurnThreshold + 9;
+
+        await SeedAgentAsync(agentId);
+
+        var chatClient = new ToolCallingChatClient();
+        using var host = BuildHost(chatClient, new SingleToolSetResolver());
+        await host.StartAsync();
+
+        try
+        {
+            for (var turn = 1; turn <= turns; turn++)
+            {
+                var record = await RunTurnAsync(agentId, contextId, $"pergunta {turn}");
+                Assert.Equal(nameof(TaskState.Completed), record.State);
+            }
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+
+        // (a) a compactação aconteceu de verdade — sem isto, "não cresceu"
+        // poderia ser um histórico que nunca chegou ao limiar.
+        Assert.NotEmpty(chatClient.ResumosProduzidos);
+
+        // (b) e nenhuma tentativa foi recusada pelo provedor: é o defeito que
+        // esta change corrige, e ele é silencioso por construção.
+        Assert.Empty(chatClient.ResumosRecusados);
+
+        // (c) o patamar. A referência é o turno em que o primeiro resumo entrou
+        // no histórico; daí em diante a entrada oscila, mas não sobe.
+        var entradas = chatClient.EntradasPorTurno;
+        Assert.Equal(turns, entradas.Count);
+
+        var referencia = entradas[SummarizationTurnThreshold];
+        var picoDepois = entradas.Skip(SummarizationTurnThreshold + 1).Max();
+
+        Assert.True(
+            picoDepois <= referencia * 1.2,
+            $"A entrada deveria ter parado de crescer depois do primeiro resumo: referência {referencia}, "
+          + $"pico posterior {picoDepois}. Série: {string.Join(", ", entradas)}");
+    }
+
+    /// <summary>
+    /// Soma o conteúdo de todas as mensagens — texto, chamada de tool e
+    /// resultado de tool. Ver o comentário do teste acima para por que
+    /// <c>ChatMessage.Text</c> sozinho não serve.
+    /// </summary>
+    private static int TamanhoDoConteudo(IEnumerable<ChatMessage> messages) =>
+        messages.Sum(m => m.Contents.Sum(content => content switch
+        {
+            TextContent t => (t.Text ?? string.Empty).Length,
+            FunctionCallContent c => c.Name.Length + JsonSerializer.Serialize(c.Arguments).Length,
+            FunctionResultContent r => (r.Result?.ToString() ?? string.Empty).Length,
+            _ => content.ToString()?.Length ?? 0,
+        }));
+
+    /// <summary>
+    /// Resolve UMA tool para o agente, com resultado grande — da ordem de uma
+    /// resposta de delegação, que é o que o histórico do piloto carregava.
+    /// </summary>
+    private sealed class SingleToolSetResolver : IMcpToolSetResolver
+    {
+        public Task<McpToolSet> ResolveAsync(AppDbContext dbContext, Guid agentId, CancellationToken cancellationToken) =>
+            Task.FromResult(new McpToolSet(
+                [
+                    AIFunctionFactory.Create(
+                        (string conta) => string.Join(
+                            " ",
+                            Enumerable.Range(0, 400).Select(i => $"linha{i} do extrato da conta {conta};")),
+                        "consultar_saldo"),
+                ],
+                []));
+    }
+
+    /// <summary>
+    /// Provedor simulado que (a) pede a tool em todo turno e (b) <b>recusa
+    /// requisição de resumo terminada em turno de modelo</b>, como o Gemini faz
+    /// — <c>400</c>, <i>"Requests ending with a model turn are not
+    /// supported."</i>, reproduzido em 22/09/2026 contra
+    /// <c>gemini-3.6-flash</c>. Sem essa recusa, o teste ficaria verde mesmo com
+    /// o defeito de pé.
+    ///
+    /// <para>
+    /// Não é <c>Mock&lt;IChatClient&gt;</c> porque a resposta depende do estado
+    /// da conversa (pedir tool × responder texto), e não só dos argumentos.
+    /// </para>
+    /// </summary>
+    /// <summary>
+    /// Captura nível e mensagem de cada linha de log do host — o mesmo idioma
+    /// de <c>TimeZoneStartupValidationTests</c>.
+    /// </summary>
+    private sealed class CapturingLoggerProvider(List<(LogLevel Level, string Message)> entries) : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(entries);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(List<(LogLevel Level, string Message)> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                lock (entries)
+                {
+                    entries.Add((logLevel, formatter(state, exception)));
+                }
+            }
+        }
+    }
+
+    private sealed class ToolCallingChatClient : IChatClient
+    {
+        private readonly Lock _gate = new();
+
+        public List<int> EntradasPorTurno { get; } = [];
+
+        public List<string> ResumosProduzidos { get; } = [];
+
+        public List<string> ResumosRecusados { get; } = [];
+
+        public Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var list = messages.ToList();
+
+            // ChatOptions nulo é a chamada de resumo — a estratégia do pacote
+            // sempre chama assim (decompilado, CompactCoreAsync).
+            if (options is null)
+            {
+                if (list.Count > 0 && list[^1].Role == ChatRole.Assistant)
+                {
+                    lock (_gate)
+                    {
+                        ResumosRecusados.Add(list[^1].Text ?? string.Empty);
+                    }
+
+                    throw new HttpRequestException("Requests ending with a model turn are not supported.");
+                }
+
+                lock (_gate)
+                {
+                    ResumosProduzidos.Add(list[^1].Text ?? string.Empty);
+                }
+
+                return Task.FromResult(new ChatResponse(
+                    new ChatMessage(ChatRole.Assistant, "resumo da conversa até aqui")));
+            }
+
+            // Turno do agente. A primeira chamada do turno pede a tool; a
+            // segunda — já com o resultado dela na lista — responde texto.
+            if (list.Count > 0 && list[^1].Role == ChatRole.Tool)
+            {
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
+            }
+
+            lock (_gate)
+            {
+                EntradasPorTurno.Add(TamanhoDoConteudo(list));
+            }
+
+            var call = new FunctionCallContent(
+                Guid.NewGuid().ToString("N")[..8],
+                "consultar_saldo",
+                new Dictionary<string, object?> { ["conta"] = "123" });
+
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, [call])));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var response = await GetResponseAsync(messages, options, cancellationToken);
+            yield return new ChatResponseUpdate(ChatRole.Assistant, response.Text);
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>
     /// Constrói um mock de <see cref="IChatClient"/> capaz de distinguir a
     /// chamada de resumo do <c>SummarizationCompactionStrategy</c> (sempre
     /// invocada com <c>ChatOptions</c> nulo — confirmado decompilando
@@ -425,9 +719,17 @@ public class HistorySummarizationTests(WorkerInfrastructureFixture fixture) : IC
         return mock;
     }
 
-    private IHost BuildHost(IChatClient chatClient)
+    private IHost BuildHost(
+        IChatClient chatClient,
+        IMcpToolSetResolver? mcpToolSetResolver = null,
+        List<(LogLevel Level, string Message)>? capturedLogs = null)
     {
         var builder = Host.CreateApplicationBuilder();
+
+        if (capturedLogs is not null)
+        {
+            builder.Logging.AddProvider(new CapturingLoggerProvider(capturedLogs));
+        }
 
         builder.Configuration["ConnectionStrings:Postgres"] = fixture.Postgres.GetConnectionString();
         builder.Services.AddInfrastructure(builder.Configuration);
@@ -443,7 +745,7 @@ public class HistorySummarizationTests(WorkerInfrastructureFixture fixture) : IC
         var resolverMock = new Mock<IChatClientResolver>();
         resolverMock.Setup(resolver => resolver.Resolve(It.IsAny<string>(), It.IsAny<string>())).Returns(chatClient);
         builder.Services.AddSingleton(resolverMock.Object);
-        builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
+        builder.Services.AddSingleton(mcpToolSetResolver ?? new NullMcpToolSetResolver());
         builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
         builder.Services.AddSingleton<IKnowledgeToolSetResolver, NullKnowledgeToolSetResolver>();
         builder.Services.AddSingleton(TimeProvider.System);

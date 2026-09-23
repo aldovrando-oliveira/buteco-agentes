@@ -28,7 +28,20 @@ public sealed class AgentExecutionService(
     ToolNameDeduplicator toolNameDeduplicator,
     PushNotificationSender pushNotificationSender,
     TimeProvider timeProvider,
-    ILogger<AgentExecutionService> logger)
+    ILogger<AgentExecutionService> logger,
+    // O CompactionProvider precisa de um ILoggerFactory para que a falha da
+    // chamada de resumo apareça (change compactacao-historico, D3) — ver o
+    // comentário na composição dele, abaixo.
+    //
+    // ESTE PARÂMETRO NÃO CUSTA OS 14 HARNESS DE TESTE, e o contraste com a D2 da
+    // change metricas-execucao-coleta é deliberado: lá, injetar um COLETOR por
+    // construtor foi recusado porque quebraria em runtime nos harness que
+    // registram este serviço sem registrar o coletor. ILoggerFactory sai do
+    // MESMO registro que já serve o ILogger<AgentExecutionService> acima — todo
+    // harness constrói o host por Host.CreateApplicationBuilder(), que registra
+    // logging. Se algum dia um harness montar ServiceCollection cru, a
+    // resolução falha e este comentário é o primeiro lugar a olhar.
+    ILoggerFactory loggerFactory)
 {
     // Teto de segurança, não um limiar concorrente com
     // SummarizationTurnThreshold — ver design.md da change
@@ -371,6 +384,22 @@ public sealed class AgentExecutionService(
                     ? instructionsWithTemporalContext
                     : TemporalContextBlockBuilder.Concatenate(instructionsWithTemporalContext, channelContextBlock);
 
+                // SEM loggerFactory E SEM services AQUI, DE PROPÓSITO — e o que
+                // isso esconde está medido, não suposto (change
+                // compactacao-historico, D3 e Open Question 1). Decompilado
+                // (Microsoft.Agents.AI 1.15.0): o logger do próprio
+                // ChatClientAgent sai do parâmetro `loggerFactory`, mas o
+                // middleware que ele empilha por WithDefaultAgentMiddleware —
+                // inclusive o FunctionInvokingChatClient, que loga invocação de
+                // tool — resolve ILoggerFactory do parâmetro `services`, que é
+                // outro. Passar só o primeiro acende as linhas do agente e não
+                // as do middleware.
+                //
+                // Ligar o log do middleware é decisão de VOLUME de log, não de
+                // correção: o gatilho registrado é a próxima investigação de
+                // tool que dependa de saber qual foi chamada e com quê. O
+                // CompactionProvider abaixo recebe o loggerFactory porque ali
+                // havia um defeito — falha engolida em silêncio —, e aqui não.
                 var aiAgent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
                 {
                     Name = agent.Name,
@@ -404,10 +433,24 @@ public sealed class AgentExecutionService(
                         // CompactionCallChatClient marca a chamada de resumo como
                         // `Compaction` nas métricas (change
                         // metricas-execucao-coleta, D8) — o client por baixo é o
-                        // MESMO compartilhado, e o marcador não é dono dele.
-                        new CompactionProvider(new SummarizationCompactionStrategy(
-                            new CompactionCallChatClient(chatClient),
-                            CompactionTriggers.TurnsExceed(SummarizationTurnThreshold))),
+                        // MESMO compartilhado, e o marcador não é dono dele. Ele
+                        // também garante que a requisição de resumo não termine
+                        // em turno de modelo (change compactacao-historico, D1).
+                        //
+                        // O loggerFactory NÃO É ENFEITE: sem ele o provider cai
+                        // em NullLoggerFactory (decompilado,
+                        // CompactionProvider.GetLoggerFactory), e o aviso que a
+                        // estratégia emite ao ENGOLIR uma falha de resumo
+                        // (CompactCoreAsync captura, restaura os grupos e segue)
+                        // não chega a lugar nenhum. Foi esse silêncio que fez a
+                        // compactação ficar quebrada contra o Gemini sem ninguém
+                        // ver, do primeiro deploy até o piloto.
+                        new CompactionProvider(
+                            new SummarizationCompactionStrategy(
+                                new CompactionCallChatClient(chatClient),
+                                CompactionTriggers.TurnsExceed(SummarizationTurnThreshold)),
+                            stateKey: null,
+                            loggerFactory: loggerFactory),
                     },
     #pragma warning restore MAAI001
                 });

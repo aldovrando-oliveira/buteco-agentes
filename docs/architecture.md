@@ -20,6 +20,7 @@ Para integrar um cliente externo via A2A, ver
 - [Namespace de tools do agente](#namespace-de-tools-do-agente)
 - [Protocolo A2A](#protocolo-a2a)
 - [Contexto do agente](#contexto-do-agente)
+- [Histórico de conversa e compactação](#histórico-de-conversa-e-compactação)
 - [Contrato de plugin de canal](#contrato-de-plugin-de-canal)
 - [Autenticação](#autenticação)
 - [Fuso horário do sistema](#fuso-horário-do-sistema)
@@ -447,6 +448,70 @@ diretamente":
 > dica textual, não uma fronteira estrutural. A pergunta a fazer antes de
 > adicionar qualquer valor novo é **de onde ele vem**, não só o que ele
 > ajuda o agente a fazer.
+
+---
+
+## Histórico de conversa e compactação
+
+Uma conversa é uma sequência de tasks A2A com o mesmo `contextId`. O histórico
+**não** é remontado a partir das mensagens: `apps/workers` persiste a sessão do
+agente serializada em `AgentTask.Metadata`, sob a chave `conversationSession`,
+e a próxima execução do mesmo `contextId` carrega a sessão da task `completed`
+mais recente. Tasks que terminaram `failed` ou `rejected` **não** entram — o
+conteúdo de um turno que não deu certo não contamina o seguinte.
+
+A sessão é gravada como **string JSON escapada**, não como estrutura aninhada.
+O `jsonb` do Postgres normaliza a ordem das propriedades, e o polimorfismo de
+`AIContent` exige `"$type"` como **primeira** propriedade do objeto: guardada
+como estrutura, a sessão deixaria de ser desserializável assim que houvesse mais
+de uma persistida.
+
+**Dois limites, com papéis diferentes:**
+
+| mecanismo | valor | papel |
+|---|---|---|
+| truncamento por número de mensagens | 200 | **teto de segurança** — degrada para descarte puro, e a essa altura já invalida o bookkeeping incremental da compactação |
+| gatilho de compactação | 10 turnos de usuário | **faixa de operação** — resume a porção mais antiga em vez de descartá-la |
+
+A compactação é incremental: cada resumo novo parte do resumo anterior somado
+aos turnos desde então, preservando os grupos mais recentes crus. Ela roda
+**dentro** do turno do usuário, como uma requisição a mais ao provedor — por
+isso aparece em `provider_calls` com finalidade própria (`Compaction`), separada
+das requisições do turno.
+
+### A requisição de resumo não pode terminar em turno de modelo
+
+O pacote de compactação monta a requisição de resumo terminando **sempre** em
+mensagem de assistente: a contagem de turnos só cai quando o grupo de assistente
+do turno também sai, então o laço de exclusão para logo depois dele. **O Gemini
+recusa essa forma** com `400 "Requests ending with a model turn are not
+supported."`; OpenAI e Anthropic aceitam.
+
+Por isso `apps/workers` acrescenta uma **mensagem final de usuário** à requisição
+de resumo quando a porção resumida termina em assistente — sem alterar papel,
+conteúdo ou ordem do histórico. O texto acrescentado é uma **afirmação de
+fronteira**, não um segundo comando de resumir: quem comanda é a instrução de
+sistema do pacote, e dois comandos concorrentes produzem resumo pior que um.
+
+> Este é um defeito do par **(payload, provedor)**, não da compactação. Foi
+> medido em produção antes de ser corrigido: enquanto durou, **toda** conversa
+> acima de dez turnos num agente Gemini seguia com o histórico cru, crescendo
+> ~300 a 500 tokens por turno, sem teto.
+
+### Falha de resumo não derruba o turno — mas aparece
+
+Uma chamada de resumo que falha é capturada pela estratégia do pacote, que
+restaura os grupos e segue sem compactar: o turno do usuário chega a `completed`
+do mesmo jeito. Essa escolha continua valendo — **o que mudou é que a falha
+deixou de ser silenciosa**. O provider de compactação recebe o `ILoggerFactory`
+do host, então o aviso é registrado; sem ele, o aviso ia para um logger nulo, e
+uma compactação quebrada era indistinguível de uma compactação que nunca
+disparou.
+
+A mesma leitura vale pelo dado, sem depender de log: em `provider_calls`, linhas
+com finalidade `Compaction` e `Failed = true` são compactação quebrada, e a
+entrada por turno crescendo sem parar é o sintoma que o usuário sente primeiro —
+custo e latência subindo a cada mensagem da mesma conversa.
 
 ---
 

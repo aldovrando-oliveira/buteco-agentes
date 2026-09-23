@@ -536,6 +536,11 @@ ambas explicadas abaixo, não celebradas sem entender a causa).
   e deixa de ser uma falha conhecida: corrigida e o mesmo teste
   reproduzido **10/10** depois da correção. `apps/inbox` (`Buteco.Inbox.Tests`)
   não tem mais nenhum flake conhecido — suíte completa **160/160**.
+  **CORREÇÃO DE 22/09/2026 (`compactacao-historico`): a última frase não vale
+  mais.** Em `HEAD` limpo (`4e6707b`), a suíte completa reprovou
+  `DebounceSweepServiceTests.InfrastructureFailure_ProcessingOneCandidate_…`
+  nas duas rodadas do dia, e a classe isolada passou 10/10 em duas rodadas —
+  flake de contenção da suíte completa. Ver "Abertos por `compactacao-historico`".
 - **`apps/workers` (`Buteco.Workers.Tests`)** — base: 30/75 falhas,
   quase todas com a mesma mensagem de erro exata (`Unable to resolve
   service for type 'Buteco.Workers.Notifications.PushNotificationSender'`),
@@ -4849,6 +4854,73 @@ Pela terceira vez na série, nomear direções não substituiu contar.
   "Convenção 22 — memória de sessão é uma fonte de referência que a convenção não
   previa".
 
+### Compactação do histórico quebrada com Gemini (`compactacao-historico`, 2026-09-22)
+
+**Estado: aplicada e verificada (suítes + execução real contra o Gemini); não
+arquivada, não commitada.**
+
+**O defeito, e por que ninguém via.** A compactação do histórico **nunca
+funcionou com Gemini**, e o piloto é Gemini: toda conversa acima de dez turnos
+estava nesse regime. A requisição de resumo termina **sempre** em turno de
+modelo — por construção do pacote: o `TurnIndex` é copiado para os grupos de
+assistente (`CompactionMessageIndex.cs:205,211`) e `IncludedTurnCount` conta
+índices distintos entre os grupos não excluídos (`:43-45`), então excluir só a
+mensagem de usuário não derruba a contagem e o laço precisa excluir o grupo de
+assistente também, parando logo depois dele. O Gemini recusa essa forma:
+`400 "Requests ending with a model turn are not supported."` **O defeito é do
+par (nosso payload, Gemini)** — OpenAI e Anthropic aceitam mensagem final de
+assistente.
+
+**A invisibilidade era por construção, não por nível de log:** a estratégia
+captura a exceção, restaura os grupos e avisa num logger que vinha do
+`NullLoggerFactory`, porque o `CompactionProvider` era construído sem
+`loggerFactory`. **Seis chamadas de compactação no piloto, seis falhas, zero
+linhas em log nenhum.** O dano medido: sem resumo, a entrada cresce ~300 a 500
+tokens por turno, sem teto — as duas conversas do piloto chegaram a 5.405 e
+14.520.
+
+**Cinco escopos, todos com guarda vermelho registrado antes da correção:**
+
+| escopo | o que | guarda |
+|---|---|---|
+| 1 | a requisição de resumo deixa de terminar em turno de modelo, no `CompactionCallChatClient` que já era nosso | 5 casos + patamar fim a fim |
+| 2 | `loggerFactory` no `CompactionProvider` — a falha de resumo passa a aparecer | 1 |
+| 3 | `HttpStatusOf` lê o status das exceções do Gemini (convenção 9: defeito da `metricas-execucao-coleta`) | 2 |
+| 4 | nível de log de produção versionado + linha nas checagens de boot | 3 |
+| 5 | linhas distintas de sucesso e falha no cliente de LLM, com `TaskId` e finalidade | 4 |
+
+**Execução real, 22/09/2026 22:27 (`America/Sao_Paulo`)**, `gemini-3.6-flash`,
+chave de **dev** por variável de ambiente, com a chamada passando pelo
+`CompactionCallChatClient` **real** de `apps/workers`:
+
+| | antes (21:15) | depois (22:27) |
+|---|---|---|
+| compactação do 11º turno | `ClientError` 400 em 256 ms | **OK em 3.842 ms** |
+| entrada, turnos 10 → 12 | 2.176 → 2.638 (+231/turno) | 1.478 → 1.485 → **1.489** |
+| mensagens enviadas | 19 → 21 → 23 | 19 → **20 → 20** |
+
+**Suítes:** `apps/workers` **340/340** (baseline 324/324, **+16 casos**, 14
+classes continuam 14); `apps/api` **346/346**; `apps/inbox` 202/203, o mesmo
+flake da baseline, pelo nome.
+
+**O que a change NÃO prova**, e está escrito ao lado do guarda: que o Gemini
+aceita a requisição. O guarda da costura afirma uma propriedade do **nosso
+payload** e roda em CI sem chave; a aceitação é a execução real acima, com o
+regime colado (convenções 13 e 22).
+
+**Achados de método desta change:**
+
+- **Medir só `ChatMessage.Text` não distingue compactação funcionando de
+  compactação falhando.** Na exploração, os dois cenários deram **185–189 tokens
+  idênticos**, porque `FunctionCallContent` e `FunctionResultContent` não
+  aparecem em `Text`. O guarda de patamar conta todo o conteúdo, e isso está
+  escrito ao lado dele.
+- **Projeção da convenção 18 acertou o total de casos (+16) e errou a
+  distribuição** — comparado na tarefa 7.4 da change.
+- **O `launchSettings.json` de `apps/workers` força `Development`**: qualquer
+  conferência de comportamento de produção rodada por `dotnet run` sem
+  `--no-launch-profile` testa outra coisa.
+
 ### Linha de trabalho `metricas-de-operacao` — catálogo de métricas (REFERÊNCIA VIVA)
 
 **Esta é a numeração que as etapas da linha citam.** Fechada com o dono antes da
@@ -7217,6 +7289,8 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 6 metricas-execucao-coleta          aplicada em 21/09/2026, verificada em execução real em 22/09  (subiu da 7)
   → revogação da chave OpenAI (dono) ANTES de qualquer push
 6a <varredura de segredos>           acrescentada em 22/09/2026 — nome provisório; ver o item
+6b compactacao-historico             aplicada em 22/09/2026, verificada contra o Gemini real (acrescentada em 22/09)
+  → no deploy: REMOVER a configuração de log do ambiente do piloto (item próprio)
 7 <timeout de conexão HTTP>         acrescentada em 22/09/2026 — nome provisório
 8 <PendingDispatch órfã / push>     acrescentada em 22/09/2026 — nome provisório; posição revista
 9 replicas-de-worker                (desceu da 6)
@@ -8273,6 +8347,134 @@ duas changes parado até alguém lhe dar posição.
   - **Posição:** change de `apps/frontend`, **depois de
     `indexacao-lote-de-fragmentos`**. Se o lote resolver o caso em produção, a
     urgência cai mas o texto continua impreciso.
+
+### Abertos por `compactacao-historico` (2026-09-22)
+
+- **Conferência da fonte única do nível de log — pós-deploy, e NÃO fecha a
+  change.** A change põe `appsettings.Production.json` nos três apps, mas
+  **variável de ambiente vence `appsettings`** na precedência do
+  `ConfigurationBuilder`: enquanto a configuração de log do ambiente do piloto
+  existir, o valor versionado não tem efeito, e a spec passa a afirmar algo que
+  não vale no único ambiente que importa. **Ausência de variável não deixa
+  rastro** — sem esta conferência, a única prova de que a fonte única funcionou
+  seria alguém lembrar de ter apagado.
+  O roteiro, no idioma da conferência local que a change já fez: subir **sem** a
+  variável; confirmar que o log de comando do EF **não aparece**; confirmar que
+  a linha de início do `NonTerminalTaskDetectorService` **continua aparecendo**,
+  com janela e intervalo (é ela que prova que o `Default` não subiu junto);
+  registrar aqui com o regime colado — data, hora, fuso, instância.
+  - **Gatilho:** o primeiro deploy com esta change aplicada.
+  - **Posição:** a janela desse deploy.
+
+- **Marco da série de entrada por turno.** A métrica de entrada por turno muda
+  de regime quando a compactação passa a funcionar em produção: a série se
+  divide ali. **Ação:** registrar aqui a data e o fuso da primeira conversa
+  medida já com resumo funcionando, conferindo no dado —
+  `provider_calls` com `Purpose = Compaction` e `Failed = false`, e a entrada do
+  turno seguinte parando de crescer.
+  - **Gatilho:** o mesmo deploy.
+  - **Posição:** a janela desse deploy, junto do item acima.
+
+- **A anomalia dos turnos 1 e 2 continua sem causa — com CINCO candidatos já
+  eliminados.** Na sessão 2 do piloto, os turnos 1 e 2 têm **exatamente a mesma
+  entrada** (2.930 tokens) e a compactação disparou no 12º turno, contra o 11º
+  da sessão 1 — o que casa com uma troca a menos no histórico. **Eliminados, e é
+  isso que evita refazer o caminho:** (a) task do turno 1 falhada — terminou
+  `Completed`; (b) contextos diferentes — mesmo `ContextId` e mesmo `AgentId`;
+  (c) anterior à coleta — a coleta começou 32 min antes; (d) metadata perdido — a
+  primeira task tem `conversationSession`; (e) corrida entre as execuções — a
+  primeira terminou 01:53:06,87 e a segunda começou 01:53:26,05, ~19 s depois.
+  **Sobram duas, que consulta não separa:** a sessão foi carregada e o histórico
+  não entrou na requisição, ou as duas mensagens têm tamanho parecido e o número
+  igual é coincidência. A favor da primeira: o harness reproduz as **duas**
+  marcas juntas ao tirar a primeira troca do histórico.
+  - **Gatilho:** a primeira conversa real em que o agente não lembre de uma
+    mensagem anterior.
+  - **Posição:** depois da `compactacao-historico` e da varredura de
+    `PendingDispatch`.
+
+- **`provider_calls` não grava quantas mensagens a requisição levou.** Foi o
+  `msgsEnviadas` do harness que tornou este diagnóstico legível — "19 → 21 → 23"
+  é a forma mais direta de ver histórico crescendo —, e com essa contagem na
+  tabela a anomalia acima teria sido respondida por consulta.
+  - **Gatilho:** a próxima investigação que precisar dela.
+  - **Posição:** linha de métricas, junto do item de categoria de exceção.
+
+- **A coluna de categoria de exceção em `provider_calls` pode ter perdido a
+  razão de existir.** Ela foi proposta para responder "que tipo de erro foi" por
+  consulta; com o `HttpStatusOf` corrigido (escopo 3 desta change), o status do
+  Gemini passa a ser gravado, e era ele que faltava neste diagnóstico.
+  - **Gatilho:** reavaliar **depois** de a correção rodar em produção e alguém
+    precisar de uma consulta que o status não responda.
+  - **Posição:** linha de métricas.
+
+- **O log do middleware do agente continua apagado, e isso é escolha
+  registrada.** `ChatClientAgent` é construído sem `services`, e é do `services`
+  — não do `loggerFactory` — que `WithDefaultAgentMiddleware` resolve o logger do
+  `FunctionInvokingChatClient`, que loga invocação de tool. Ligar é decisão de
+  **volume** de log, não de correção.
+  - **Gatilho:** a próxima investigação de tool que dependa de saber qual foi
+    chamada e com quê.
+  - **Posição:** junto da próxima decisão de volume de log.
+
+- **`apps/inbox` voltou a ter flake conhecido, e este documento afirmava o
+  contrário.** A seção de baselines diz *"`apps/inbox` não tem mais nenhum flake
+  conhecido — suíte completa 160/160"*.
+
+  **O teste, pelo nome completo — contagem não discrimina:**
+
+  ```
+  Buteco.Inbox.Tests.DebounceSweepServiceTests
+      .InfrastructureFailure_ProcessingOneCandidate_IsLoggedAndDoesNotBlockAnotherCandidate
+  ```
+
+  Falha num `PollUntil` estourado (`DebounceSweepServiceTests.cs:410`, chamado
+  de `:320`). **É pelo nome que a próxima rodada reconhece em vez de
+  reinvestigar:** "202/203" sozinho não separa este flake de uma regressão nova.
+
+  **A discriminação, que é o que prova não ser desta change** — regime: Darwin
+  24.6.0, 22/09/2026, `America/Sao_Paulo`, `DOCKER_HOST` do Podman com
+  `TESTCONTAINERS_RYUK_DISABLED=true`:
+
+  | rodada | quando | árvore | resultado |
+  |---|---|---|---|
+  | baseline | 21:46–21:50 | `HEAD` limpo (`4e6707b`) | 202/203, **este** teste |
+  | classe isolada | 21:51 e 21:52 | `HEAD` limpo | **10/10** nas duas |
+  | verificação | 22:17–22:18 | com as mudanças da change | 202/203, **o mesmo** teste |
+
+  Reprova igual **antes e depois**, e passa isolado: é contenção da suíte
+  completa, não aleatoriedade rara nem regressão. **Nenhum `.cs` de `apps/inbox`
+  foi tocado por esta change** — ela só acrescentou
+  `appsettings.Production.json` ali. A baseline de comparação passa a ser
+  **203 casos com esse flake conhecido, nomeado**.
+  - **Gatilho:** a próxima change que toque `apps/inbox` — ou a primeira vez que
+    ele reprovar **isolado**, que aí muda de natureza.
+  - **Posição:** antes de qualquer afirmação nova de suíte verde em
+    `apps/inbox`.
+
+- **Capability entregue e não documentada: a compactação não deve ser a única —
+  falta varrer o `architecture.md`.** Esta change precisou escrever sobre
+  histórico de conversa e compactação em `docs/architecture.md` e no `01`, e
+  descobriu que **não havia nada** sobre o assunto em nenhum dos dois. A
+  compactação existe desde `apps-workers-resumo-historico-conversa` (02/08/2026)
+  e nunca esteve lá. **Ninguém notou porque ninguém precisou escrever ali** — e é
+  exatamente essa a forma do defeito: a lacuna só aparece para quem tropeça nela.
+
+  **O que varrer:** as capabilities entregues nas últimas semanas, uma a uma,
+  contra o `architecture.md`. Candidatas conhecidas, pelo mesmo padrão (entregues
+  com spec e sem seção de arquitetura): a **coleta de métricas de execução**, o
+  **detector de tasks não-terminais**, a **detecção de ciclo de delegação no
+  cadastro** e o **loteamento de embedding**. A régua é a lista de
+  `openspec/specs/`, não a memória de quem varre.
+
+  **Por que importa:** sem a varredura, cada change futura redescobre a lacuna da
+  própria área e paga, dentro de um escopo que não previa isso, o custo de
+  escrever documentação de capability antiga — foi o que aconteceu aqui, e está
+  registrado como Nota 2 da tarefa 0 desta change.
+  - **Gatilho:** cumprido — esta change encontrou a primeira.
+  - **Posição:** change própria e pequena, **ou** a próxima que precise escrever
+    no `architecture.md`, decidido na hora. **Nomeada**, não "quando der": se
+    virar change própria, entra na fila do "Próximo passo" como as outras.
 
 ### Abertos por `metricas-execucao-coleta` (2026-09-21)
 

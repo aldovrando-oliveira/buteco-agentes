@@ -2,6 +2,7 @@ using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.Net;
 using Buteco.Workers.ExecutionMetrics;
+using Google.GenAI;
 using Microsoft.Extensions.AI;
 
 namespace Buteco.Workers.Tests.ExecutionMetrics;
@@ -142,6 +143,16 @@ public class ExecutionMetricsScopeTests
         { new HttpRequestException("limite", null, HttpStatusCode.TooManyRequests), 429 },
         { new ClientResultException("credencial", new StubResponse(401)), 401 },
         { new InvalidOperationException("Provedor 'anthropic' não está configurado."), null },
+
+        // As duas exceções do SDK do Gemini (change compactacao-historico, D4).
+        // Elas DERIVAM de HttpRequestException e declaram `public new int
+        // StatusCode`, deixando NULA a propriedade da base — então o padrão que
+        // casa por HttpRequestException lê a da base e descarta o status que o
+        // SDK tinha. Foi assim que as seis chamadas de compactação do piloto
+        // gravaram HttpStatus nulo carregando um 400 legítimo, e foi por isso
+        // que o diagnóstico precisou de `grep` em log em vez de uma consulta.
+        { new ClientError("Requests ending with a model turn are not supported.", 400, "INVALID_ARGUMENT"), 400 },
+        { new ServerError("backend indisponível", 503, "UNAVAILABLE"), 503 },
     };
 
     [Theory]

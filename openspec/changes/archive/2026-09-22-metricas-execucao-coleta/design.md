@@ -358,6 +358,23 @@ O detalhe da chamada que falhou fica na **filha** (`Failed`, `HttpStatus`).
 as exceções próprias do SDK da Anthropic ficam com nulo — não se sabe, e o nulo
 diz isso.
 
+> **CORREÇÃO DE REGISTRO — 22/09/2026, convenção 9** (feita pela change
+> `compactacao-historico`, escopo 3). **Este `switch` saiu desta change com um
+> defeito, e o defeito apagou exatamente o dado que ele existia para gravar.**
+> `Google.GenAI.ClientError` e `Google.GenAI.ServerError` derivam de
+> `HttpRequestException` e declaram `public new int StatusCode`, preenchendo só
+> a propriedade nova; a da base fica **nula**. Como o `switch` casava por
+> `HttpRequestException`, **todo** erro HTTP do Gemini gravou `HttpStatus` nulo
+> — inclusive `400` e `429` legítimos. Medido: as **seis** chamadas de
+> compactação do piloto (22/09/2026, `America/Sao_Paulo`) gravaram nulo
+> carregando um `400`, e o diagnóstico do defeito de compactação precisou de
+> duas rodadas de exploração, um harness e uma chave de dev porque o número que
+> responderia por consulta tinha sido descartado aqui. A verificação da
+> exploração conferiu os dois tipos que ela nomeou e **não conferiu a hierarquia
+> do SDK do Gemini** — a lacuna é essa, não a decisão de só aceitar status
+> tipado, que segue de pé. Corrigido com os dois braços derivados **antes** do
+> da base (ordem de `switch`), com guarda próprio em `ExecutionMetricsScopeTests`.
+
 ### D13 — Snapshot de provedor e modelo, sem join com `agents`
 
 Provedor e modelo são gravados **na linha**: na filha, os do client que fez a
