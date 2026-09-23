@@ -5043,30 +5043,109 @@ e **não** de `HttpRequestException`. Duas consequências opostas:
   mesmo texto (aberto pela `indexacao-lote-de-fragmentos`), com a posição
   recalibrada — deixou de ser só de `apps/frontend`.
 
-**O que a change NÃO prova, e por que ficou assim.** Duas coisas, e as duas
-dependem de **execução real contra o gateway do piloto**, que **não é o que o
-`.env.prod` da cópia de trabalho descreve**: aquele arquivo não define
-`EMBEDDING_MODEL` nem `EMBEDDING_DIMENSIONS` e aponta `OPENAI_BASE_URL` para
-`https://api.openai.com/v1` — e a OpenAI não serve modelo de embedding de
-**4.096 dimensões**, que é a dimensão da coluna do índice. O gateway sobrescreve
-a base URL no servidor. Rodar contra a OpenAI responderia sobre outro provedor e
-pararia em `DimensionMismatch`. **Decisão do dono em 23/09/2026: as duas ficam
-para o deploy.**
+### Verificação em produção — 23/09/2026, depois do deploy
 
-- **Se o gateway reporta uso em resposta de embedding.** A *fonte* existe
-  (`GeneratedEmbeddings<T>.Usage` com `InputTokenCount` anulável, medido por
-  reflexão); que o gateway **preencha** não foi medido. A coluna é anulável
-  justamente por isso. Se vier nulo, a etapa 4 exibe **"não reportado"**, nunca
-  zero (convenção 13).
-- **Se a exceção do `502` chega à borda de medição com `Status = 502`.** Está
-  verificado que `ClientResultException` deriva de `Exception`; que ela
-  **atravesse** `Microsoft.Extensions.AI.OpenAI` até o `HttpStatusOf` é
-  inferência apoiada, não medição. **É o ciclo aberto em 20/09, e ele continua
-  aberto** — fecha no deploy (tarefas 7.4 e 7.5 da change).
+Consulta ao piloto, com o regime colado (convenção 22): gateway do `.env.prod`
+do servidor, provedor `openai`, modelo `qwen-qwen3-embedding-8b`, **4.096
+dimensões**, `EMBEDDING_BATCH_SIZE = 250`. **Seis chamadas medidas**, quatro de
+indexação e duas de busca.
 
-**Marco de regime.** A série de embedding começa **no deploy desta change** — é
-um **segundo regime** da linha, e não a mesma data da etapa 1 (que mede desde
-22/09/2026 01:21, `America/Sao_Paulo`). As duas datas vão na tela.
+**As duas finalidades gravam, e gravam certo.**
+
+*Indexação*, dois documentos:
+
+- **529 fragmentos → três chamadas de 250, 250 e 29.** A soma fecha exata e
+  nenhuma passa do teto: **o grão do lote e o `EMBEDDING_BATCH_SIZE = 250` valem
+  em produção**, não só no duplo.
+- **81 fragmentos → uma chamada só** — o par, na produção.
+- Tentativas fechadas: `Outcome = Indexed`, `FailurePhase` nulo, `FragmentCount`
+  batendo com os fragmentos gravados, `MaxAttempts = 3`.
+- Snapshot na linha: `openai` / `qwen-qwen3-embedding-8b` / `4096`.
+- Vínculo: `TaskId` **nulo**, `KnowledgeIndexingAttemptId` preenchido.
+
+*Busca*, duas chamadas:
+
+- `InputCount = 1`, `TaskId` preenchido, `KnowledgeIndexingAttemptId` **nulo**.
+- **As duas na MESMA execução**, que terminou `Completed`: o agente consultou a
+  base duas vezes no mesmo turno e a coleta atribuiu as duas à mesma task. É a
+  invariante de D9 — *exatamente um pai por linha, determinado pela finalidade*
+  — verificada nas duas direções contra dado real.
+
+**M19 TEM FONTE, e a pergunta aberta de D10 está respondida: o gateway reporta
+uso.** `InputTokens` preenchido em **todas as seis** chamadas, `sem_uso = 0`. A
+tela da etapa 4 **não** vai exibir "não reportado" para esta métrica — a
+salvaguarda da convenção 13 continua no lugar, e não vai precisar ser exercida.
+
+**O que a verificação NÃO fechou** está reduzido a um item só, e segue em
+*Abertos por `metricas-embedding-coleta`*: `HttpStatus` veio **nulo nas seis —
+porque nenhuma falhou**, não porque a coluna não receba. A estrutura está
+verificada; o valor vindo de exceção real do gateway, não.
+
+**Marco de regime — o segundo da linha.**
+
+> **Coleta de embedding medindo desde 23/09/2026 às 01:18, `America/Sao_Paulo`.**
+
+**É distinto do primeiro, e a tela precisa dos dois.** A etapa 1 mede desde
+**22/09/2026 às 01:21**. M11 (tokens de conversa) e M19 (tokens de embedding)
+começam em datas diferentes, e um *"medindo desde"* único **mentiria sobre uma
+das duas**.
+
+### Previsão a conferir — a busca ainda NÃO é o termo dominante
+
+A proposta afirmou que a busca seria o **termo dominante** de M19 (um vetor por
+mensagem contra um por documento), e foi esse o argumento de peso para incluí-la
+nesta etapa. Medido hoje, é o inverso, e por muito:
+
+| finalidade | chamadas | tokens | ms médio | ms mín | ms máx |
+|---|---|---|---|---|---|
+| `Indexing` | 4 | **228.125** | 4.155 | 1.331 | 9.281 |
+| `Search` | 2 | **33** | 292 | 253 | 332 |
+
+**Isso não contradiz a previsão**, e a razão é de regime, não de número: o que
+foi medido é o **oposto** do regime de operação — uma indexação de acervo contra
+**duas mensagens de teste**. Indexação acontece **uma vez por documento**; busca
+acontece **por mensagem**. É o volume que decide, e ainda não houve volume.
+
+**O que torna a previsão falsificável, em vez de indefinidamente adiável.**
+Gatilho por data se adia sozinho; limiar por volume, não. A aritmética, colada
+ao número para quem for conferir não ter de reconstruí-la:
+
+```
+busca:      33 tokens ÷ 2 chamadas   = ~16,5 tokens por mensagem
+indexação:  228.125 tokens (acervo de 610 fragmentos, 4 chamadas)
+cruzamento: 228.125 ÷ 16,5           = ~13.800 mensagens
+```
+
+**O 13.800 é CONTRA ESTE ACERVO, e não é número absoluto.** Indexar outro
+documento grande **move o alvo para cima** — o numerador cresce e o divisor não.
+Reindexar o mesmo acervo (edição de documento, troca de modelo) **recoloca o
+contador**, porque a indexação é cobrada de novo. **Quem for conferir
+recalcula**, com os tokens de indexação acumulados no período, em vez de usar o
+13.800 como se fosse fixo. A consulta é a soma de `InputTokens` em
+`embedding_calls` por `Purpose`, no período.
+
+- **Gatilho:** o primeiro mês de tráfego real.
+- **Se não inverter, a premissa que justificou incluir a busca nesta etapa
+  estava errada** — e isso é **achado, não problema**: a linha de busca continua
+  correta e barata, só deixa de ser o argumento que ela foi.
+
+### Dois números que sustentam decisões já tomadas
+
+**A instabilidade do gateway, agora com dois pontos independentes e dado
+guardado.** O **mesmo lote de 250 entradas** variou **3.426 ms e 9.281 ms —
+2,7×**. É a mesma assinatura que a exploração mediu no documento `01` do lado de
+**conversa** (0,83 s contra 3,62 s para trabalho idêntico), agora no gateway de
+**embedding** — e desta vez **guardada em tabela**, não observada à mão.
+
+É o contexto do `502` que motivou o loteamento: **um upstream que varia assim
+derruba o que está mais perto do limite**, e é por isso que o tamanho do lote
+segue sendo configuração e não constante.
+
+**A ordem de grandeza que sustenta a escrita em bloco (D7).** O `design.md`
+afirmou que a escrita no banco não é o termo dominante. Está medido: **gateway
+entre 253 ms e 9.281 ms**, escrita em **milissegundos**. A alternativa recusada
+— gravar dentro do laço de lotes — continua recusada pelo motivo estrutural que
+D7 dá, e agora também sem dúvida sobre custo.
 
 **Suítes:** `apps/workers` **386/386** (baseline 340/340, **+46 casos**, 14
 classes de coleção continuam 14); `apps/api` **351/351** (baseline 346/346, +5);
@@ -8927,43 +9006,37 @@ duas changes parado até alguém lhe dar posição.
 
 ### Abertos por `metricas-embedding-coleta` (2026-09-23)
 
-- **As duas verificações por execução real da coleta de embedding não foram
-  feitas, e não são tarefa marcável — são item com gatilho.** Mesmo tratamento
-  que a conferência de campo da `indexacao-lote-de-fragmentos` e a da fonte única
-  do log da `compactacao-historico`: dependem do ambiente do piloto, e nenhuma
-  delas cabe na sessão que escreveu o código.
+- **Falta o `HttpStatus` preenchido a partir de uma falha REAL do gateway.**
+  Este item nasceu cobrindo as duas verificações por execução real da coleta de
+  embedding. **Duas foram feitas no deploy de 23/09/2026 e saíram daqui** — o
+  registro está em *Verificação em produção*, na seção da etapa 2. Sobra uma, e
+  o escopo dela é menor do que o do item original.
 
-  **Por que não deu para fazer aqui, e isto é fato medido, não suposição:** o
-  `.env.prod` da cópia de trabalho **não define `EMBEDDING_MODEL` nem
-  `EMBEDDING_DIMENSIONS`** — só o `.env.prod.example` define, com `changeme` no
-  modelo — e aponta `OPENAI_BASE_URL` para `https://api.openai.com/v1`. **Não é
-  o ambiente que produziu a medição de 20/09:** a OpenAI não serve modelo de
-  embedding de **4.096 dimensões**, que é a dimensão da coluna `vector(4096)` do
-  índice; o gateway do piloto sobrescreve a base URL no servidor. Rodar contra a
-  OpenAI responderia sobre **outro provedor**, e com dimensão incompatível a
-  indexação pararia em `DimensionMismatch` antes de gravar fragmento — não
-  fecharia nenhuma das duas.
+  **O que a produção verificou:** as duas finalidades gravam, o grão do lote vale
+  (529 fragmentos → 250 + 250 + 29), e **o gateway reporta uso** —
+  `InputTokens` preenchido nas seis chamadas medidas, o que **fecha a pergunta
+  aberta de D10**.
 
-  **O que cada uma ainda NÃO prova**, e a etapa 4 não pode assumir o contrário:
+  **O que sobra, e por que não dá para forçar:** `HttpStatus` veio **nulo nas
+  seis — porque nenhuma falhou**, não porque a coluna não receba. Então:
 
-  - **D10 está verificado só até a fonte existir.** Foi medido por reflexão que
-    `GeneratedEmbeddings<T>.Usage` existe e que `InputTokenCount` é anulável.
-    Que o gateway **preencha** esse campo não foi medido. Se vier nulo, a tela
-    exibe **"não reportado"**, nunca zero (convenção 13) — e a coluna é anulável
-    desde o primeiro dia exatamente por isso.
-  - **D6 está verificado só na hierarquia do tipo.** Foi medido por execução que
-    `ClientResultException` deriva de `Exception` e **não** de
-    `HttpRequestException`, o que é o que faz o `HttpStatusOf` da etapa 1 servir
-    sem mudança. Que a exceção real do gateway **chegue** à borda de medição com
-    `Status = 502`, atravessando `Microsoft.Extensions.AI.OpenAI`, é inferência
-    apoiada — não medição. **É o ciclo aberto em 20/09, e ele continua aberto.**
+  - **Está verificado:** a estrutura existe, a coluna aceita, e o `HttpStatusOf`
+    da etapa 1 tem o braço de `ClientResultException` (medido por execução: ela
+    deriva de `Exception`, e **não** de `HttpRequestException`).
+  - **NÃO está verificado:** o valor **preenchido a partir de uma exceção real
+    do gateway**. Provocar isso de propósito exigiria derrubar o gateway do
+    piloto, e **não vale** — o ganho é confirmar um braço de `switch` já lido,
+    e o custo é indisponibilidade real.
+  - **É o ciclo aberto em 20/09** — o `502 upstream_error` que não deixou status
+    em lugar nenhum — e ele **fecha sozinho** na primeira vez que o gateway
+    falhar em produção, sem ninguém fazer nada além de consultar.
 
-  **O que fechar a change significa**, dito para não ser lido de outro jeito:
-  *as tabelas existem, a coleta escreve e os guardas passam.* **Nunca** *medido
-  contra o gateway do piloto.*
+  **A consulta que fecha:**
 
-  - **Gatilho:** o primeiro deploy desta change no piloto.
-  - **Posição:** a janela desse deploy, **junto do registro do segundo regime da
-    série** — a data e a hora em que a coleta de embedding começa, com o fuso. É
-    regime **distinto** do da etapa 1, que mede desde **22/09/2026 às 01:21,
-    `America/Sao_Paulo`**, e a tela aprovada exibe as duas datas.
+  ```sql
+  SELECT "Purpose", "HttpStatus", "Failed" FROM embedding_calls WHERE "Failed" = true;
+  ```
+
+  - **Gatilho:** a **primeira falha real do gateway em produção**. Não é tarefa
+    a agendar — é consulta a rodar quando a falha acontecer.
+  - **Posição:** nenhuma change. A coleta já grava; só falta o evento.

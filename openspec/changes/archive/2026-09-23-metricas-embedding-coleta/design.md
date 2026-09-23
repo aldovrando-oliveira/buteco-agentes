@@ -940,3 +940,30 @@ contrário:
   de `Exception`, medido por execução). Que a exceção do `502` **chegue** à borda
   de medição com `Status = 502`, atravessando `Microsoft.Extensions.AI.OpenAI`,
   é inferência — apoiada, mas inferência.
+
+### Correção de 23/09/2026, depois do deploy (convenção 9)
+
+**As duas declarações acima eram verdadeiras quando foram escritas, e uma delas
+deixou de ser.** Ficam onde estão, e não apagadas, porque explicam **por que a
+change fechou antes da verificação** — e essa razão continua valendo para a
+próxima etapa que dependa do ambiente do piloto.
+
+**D10 está FECHADA.** A verificação em produção de 23/09/2026 mediu **seis
+chamadas**, nas duas finalidades, com `InputTokens` preenchido em **todas** e
+`sem_uso = 0`. **O gateway reporta uso.** A salvaguarda continua no código — a
+coluna é anulável e a tela sabe exibir "não reportado" —, mas não vai precisar
+ser exercida para M19. Mesma execução confirmou o grão do lote em produção (529
+fragmentos → 250 + 250 + 29; 81 → uma chamada) e o pai correto nas duas
+finalidades.
+
+**D6 continua ABERTA, e é dela que a frase original ainda fala.** `HttpStatus`
+veio **nulo nas seis — porque nenhuma falhou**, não porque a coluna não receba.
+O que está verificado é a **estrutura**; o valor vindo de exceção real do
+gateway, não. **Não se provoca de propósito:** derrubar o gateway do piloto
+custaria indisponibilidade real para confirmar um braço de `switch` já lido.
+Fecha sozinho na primeira falha real, pela consulta registrada no `02`.
+
+**Então "fechar esta change" passou a significar** *as tabelas existem, a coleta
+escreve, os guardas passam **e as duas finalidades foram medidas contra o
+gateway do piloto**.* O que **não** significa, e a distinção é o ponto: **medido
+contra uma falha do gateway** — isso segue em aberto, com gatilho.
