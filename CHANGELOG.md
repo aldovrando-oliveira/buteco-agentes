@@ -388,6 +388,38 @@ o versionamento pretende seguir
 - **Sem rota nem tela ainda.** A série de embedding começa no próprio deploy, e
   é um **segundo regime** — não a mesma data da etapa 1.
 
+**Métricas de operação — rotas de agregação, escopo do sistema (etapa 3)**
+
+- `GET /insights/system`, com `from` e `to`, devolvendo o **agregado inteiro** da
+  página de Insights do sistema. **Uma rota, e não uma por métrica:** janela,
+  fuso, tratamento de nulo e "medindo desde" são um contrato só, e reparti-los
+  criaria N lugares onde o balde pode discordar.
+- **`apps/api` passa a ter fuso.** A mesma variável `TZ` já entregue a
+  `apps/workers` passa a ser entregue também ao serviço `api`, com `:?` no
+  compose, e é lida **como configuração** do balde diário — nunca via
+  `TimeZoneInfo.Local`. Os dois processos passam a concordar **por construção**.
+  - **Mudança que se nota no deploy:** o serviço `api` **não sobe mais sem `TZ`**,
+    onde antes subia. O boot reprova também com nome inválido, vazio ou com o
+    prefixo POSIX `:`.
+  - O motivo tem número: **27,7%** das tasks caem em outro dia — e em outro dia da
+    semana — se o balde sair em UTC.
+- **O balde sai em SQL**, com `AT TIME ZONE` sobre o nome configurado, aplicado às
+  linhas já restritas pela janela. **Sem índice de expressão**, que congelaria o
+  fuso no schema.
+- **Nulo é preservado ponta a ponta.** Token que o provedor não reportou chega
+  ausente; `0` fica reservado a contagem **medida**.
+- **"Medindo desde" é um mapa de regimes**, não um texto único: a coleta de
+  execução e a de embedding começaram em datas diferentes, e um texto só mentiria
+  sobre uma delas. A série **omite** os dias anteriores ao início do regime, em
+  vez de emitir `0` — é o que torna "não medido" distinguível de "sem uso".
+- **Métrica de fonte parcial declara a parcialidade**, em códigos estáveis. As
+  recusas feitas por `apps/api` não produzem linha de execução, e o **motivo delas
+  não é coletado por nada** — a contagem não é apresentada como se fosse completa.
+- **A métrica de tasks sem estado terminal cobre as duas populações** — execução
+  aberta e task nunca consumida —, e é explicitamente uma leitura **do instante**,
+  não uma série.
+- **Nenhuma migração, nenhum índice, nenhuma coluna.** A etapa é somente leitura.
+
 **Documentação e governança**
 
 - Licenciamento sob Apache-2.0, com `LICENSE` e `NOTICE`.

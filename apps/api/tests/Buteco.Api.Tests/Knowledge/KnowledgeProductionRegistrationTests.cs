@@ -1,6 +1,7 @@
 using Buteco.Api.KnowledgeDocuments.Extraction;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Buteco.Api.Tests.Knowledge;
@@ -23,6 +24,14 @@ public class KnowledgeProductionRegistrationTests
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            // Esta factory não usa TestAuthentication.ConfigOverrides — ela só
+            // captura a IServiceCollection. Mas desde a change
+            // rotas-de-agregacao-sistema o boot confere TZ contra o fuso que o
+            // processo resolve, então o host não sobe sem ela. Mesmo valor e
+            // mesmo motivo do bloco em TestAuthentication.
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["TZ"] = TimeZoneInfo.Local.Id }));
+
             builder.ConfigureServices(services => Captured = services);
         }
     }

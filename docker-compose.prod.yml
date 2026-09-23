@@ -80,6 +80,16 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
+      # A MESMA variável entregue a workers, e é isso que faz os dois processos
+      # concordarem sobre que dia é hoje. apps/api a lê como CONFIGURAÇÃO do
+      # balde diário da agregação — nunca via TimeZoneInfo.Local — e confere no
+      # boot: divergir reprova a subida. O :? garante o mesmo valor em toda
+      # réplica, então o balde não depende de qual container respondeu.
+      #
+      # ANTES da change rotas-de-agregacao-sistema este serviço subia SEM TZ, e o
+      # processo rodava em UTC enquanto o worker renderizava em America/Sao_Paulo.
+      # É mudança que se nota: sem TZ definida, o api agora não sobe.
+      TZ: ${TZ:?defina TZ com nome IANA canônico, sem prefixo ":" — use --env-file .env.prod}
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=buteco_agents;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       RabbitMq__Host: rabbitmq
       RabbitMq__Port: "5672"

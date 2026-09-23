@@ -7,6 +7,7 @@ using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Auth;
 using Buteco.Api.Auth.Endpoints;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Insights.Endpoints;
 using Buteco.Api.Knowledge.Indexing;
 using Buteco.Api.KnowledgeBases.Endpoints;
 using Buteco.Api.KnowledgeDocuments.Endpoints;
@@ -36,6 +37,28 @@ builder.Services.Configure<McpCryptoOptions>(builder.Configuration.GetSection(Mc
 builder.Services.Configure<PublicUrlOptions>(builder.Configuration.GetSection(PublicUrlOptions.SectionName));
 builder.Services.Configure<TokenSigningOptions>(builder.Configuration.GetSection(TokenSigningOptions.SectionName));
 builder.Services.Configure<OperatorCredentialOptions>(builder.Configuration.GetSection(OperatorCredentialOptions.SectionName));
+
+// Configuração da agregação de métricas. O fuso NÃO vem da seção: vem de TZ, a
+// mesma variável entregue a apps/workers com :? no compose (design.md, D1). É o
+// que faz os dois processos concordarem por construção — sem isso, nada impede o
+// balde de sair em UTC enquanto o worker renderiza em America/Sao_Paulo, e 27,7%
+// da série muda de barra em silêncio (medido em 23/09/2026, 260 linhas).
+builder.Services.Configure<MetricsOptions>(options =>
+{
+    builder.Configuration.GetSection(MetricsOptions.SectionName).Bind(options);
+    options.TimeZone = builder.Configuration["TZ"];
+});
+
+// PRIMEIRO TimeProvider de apps/api. Precedente: apps/workers/Program.cs:38.
+// Registrado, e não TimeProvider.System resolvido direto no ponto de uso, por
+// duas razões: a checagem de fuso valida a instância que a aplicação de fato
+// usa, e a janela relativa da agregação fica verificável com FakeTimeProvider —
+// resolver o "agora" com now() no SQL a tornaria intestável de forma
+// determinística (design.md, D3).
+//
+// NÃO converte o DateTimeOffset.UtcNow que já existe nas entidades: é trabalho
+// de outra change, e misturá-lo aqui tornaria este diff ilegível.
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
@@ -75,6 +98,16 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Convenção 8, e a razão de ser no boot está no XML doc da extensão: um nome de
+// fuso digitado errado não falha aqui por si — ele chega intacto ao AT TIME ZONE
+// da agregação e vira 500 no painel, numa requisição de operador.
+//
+// Diferente de apps/workers, ESTE registro É provado por teste: a suíte de
+// apps/api monta o host pela WebApplicationFactory, que roda a composição real
+// do Program.cs. Remover esta linha reprova TimeZoneStartupValidationTests
+// .RealComposition_WithDivergentTimeZone_FailsToStart.
+app.ValidateTimeZoneConfiguration();
+
 // Sem UseHttpsRedirection: no compose de servidor (containerizacao-stack-servidor),
 // apps/api só recebe tráfego HTTP puro do nginx interno do stack — TLS termina
 // fora do stack (nginx/Cloudflare já existentes), sem ForwardedHeaders
@@ -97,6 +130,7 @@ app.MapAgentKnowledgeBindingEndpoints();
 app.MapKnowledgeBaseEndpoints();
 app.MapKnowledgeDocumentEndpoints();
 app.MapKnowledgeIndexEndpoints();
+app.MapInsightsEndpoints();
 app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a");
 app.MapAgentCardEndpoint();
 

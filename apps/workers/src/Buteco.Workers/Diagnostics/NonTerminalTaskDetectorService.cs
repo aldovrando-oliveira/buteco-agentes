@@ -68,19 +68,51 @@ namespace Buteco.Workers.Diagnostics;
 /// esta varredura, porque ela ainda não tem substituta:
 /// </para>
 ///
+/// <para>
+/// <b>A CONDIÇÃO ACIMA FOI REESCRITA EM 23/09/2026</b>, pela
+/// <c>rotas-de-agregacao-sistema</c> (D10 do design.md dela), porque a cláusula
+/// que ela tinha testava a coisa errada. O que estava escrito:
+/// </para>
+///
 /// <list type="bullet">
-/// <item><b>Sai quando</b> a rota da etapa de agregação que serve M32 (tasks sem
-/// estado terminal) cobrir as DUAS populações que esta varredura cobre: a
-/// execução aberta (<c>task_executions.EndedAt</c> nulo) e a task
-/// <c>Submitted</c> nunca consumida — que não tem linha em
-/// <c>task_executions</c>, porque a linha nasce no consumo. A segunda
-/// população, que é justamente a que responde o <c>C</c>, só existe em
-/// <c>a2a_tasks</c>; a rota M32 tem de lê-la.</item>
-/// <item><b>E não antes de</b> a <c>replicas-de-worker</c> fechar a decisão de
-/// capacidade: o <c>C</c> dela vai ser lido das duas fontes em paralelo, e é a
-/// coexistência que prova que as duas medem o mesmo número. Remover antes
-/// seria trocar o instrumento no meio da medição.</item>
+/// <item><i>"Sai quando a rota M32 cobrir as DUAS populações que esta varredura
+/// cobre — a execução aberta (<c>task_executions.EndedAt</c> nulo) e a task
+/// <c>Submitted</c> nunca consumida, que só existe em <c>a2a_tasks</c>."</i></item>
+/// <item><i>"E não antes de a <c>replicas-de-worker</c> fechar a decisão de
+/// capacidade."</i></item>
 /// </list>
+///
+/// <para>
+/// <b>A rota M32 existe desde 23/09/2026 e cobre as duas populações — e mesmo
+/// assim esta varredura FICA.</b> Cobrir a mesma população não é cobrir o mesmo
+/// uso:
+/// </para>
+///
+/// <list type="bullet">
+/// <item>esta varredura é uma <b>série</b>, amostrada a cada ciclo, que produz
+/// histórico de observações;</item>
+/// <item>M32 é <b>consulta sob demanda</b>: responde quantas estão não-terminais
+/// <i>agora</i>;</item>
+/// <item><c>a2a_tasks</c> <b>não guarda histórico de status</b> — o carimbo é
+/// sobrescrito a cada transição. M32 não reconstrói um pico passado, e o pico é
+/// exatamente o <c>C</c> de que a <c>replicas-de-worker</c> depende.</item>
+/// </list>
+///
+/// <para>
+/// <b>A condição vigente:</b> esta varredura sai quando o <c>C</c> de pico tiver
+/// sido <b>medido e a decisão tomada</b> — o instrumento sai com a decisão que
+/// ele existe para tomar. Ou, se a série precisar sobreviver à decisão, quando
+/// for <b>persistida em tabela</b>, que não é a etapa 3 e não está na fila.
+/// </para>
+///
+/// <para>
+/// <b>E um acordo que a rota M32 mantém de propósito:</b> ela varre o MESMO
+/// conjunto de estados desta varredura (<c>Submitted</c> e <c>Working</c>),
+/// embora o protocolo tenha cinco não-terminais. Conjuntos diferentes fariam as
+/// duas fontes medir números diferentes justamente durante a comparação
+/// paralela que as valida. As duas passam aos cinco juntas, quando a
+/// <c>replicas-de-worker</c> fechar.
+/// </para>
 ///
 /// <para>
 /// O log de desistência de <c>AgentDelegationToolSetResolver</c> segue a mesma
