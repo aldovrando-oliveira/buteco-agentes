@@ -151,24 +151,19 @@ classe que já tem o arranjo (D11). Nenhuma classe nova entra na coleção.
 - [x] 7.1 Compilar **todos os `.csproj`** (não há `.sln` na raiz) e conferir a projeção de que **nenhum construtor de produção muda** e **nenhum registro de DI novo** entra — por compilação, não por `grep`
 - [x] 7.2 Guardas do grupo 3 **verdes**, e cada um comparado ao vermelho registrado em 3.14
 - [x] 7.3 Rodar as três suítes com `podman ps` em zero e comparar com a baseline de 1.1 — regressão é achado a reportar, não a normalizar
-> **7.4 e 7.5 ficam PENDENTES para o deploy, por decisão do dono em
-> 23/09/2026 — e por impossibilidade material aqui.** O `.env.prod` desta cópia
-> de trabalho **não define `EMBEDDING_MODEL` nem `EMBEDDING_DIMENSIONS`** (só o
-> `.env.prod.example` define, com `changeme` no modelo), e aponta
-> `OPENAI_BASE_URL` para `https://api.openai.com/v1`. Não é o ambiente que
-> produziu a medição de 20/09: a OpenAI não serve modelo de embedding de **4.096
-> dimensões**, que é a dimensão da coluna do índice. O gateway do piloto
-> sobrescreve a base URL no servidor.
+> **7.4 e 7.5 ficaram pendentes no fechamento, e foram VERIFICADAS no deploy de
+> 23/09/2026.** Ficaram pendentes por impossibilidade material: o `.env.prod`
+> desta cópia de trabalho **não define `EMBEDDING_MODEL` nem
+> `EMBEDDING_DIMENSIONS`** (só o `.env.prod.example` define, com `changeme` no
+> modelo) e aponta `OPENAI_BASE_URL` para `https://api.openai.com/v1` — que não
+> serve modelo de **4.096 dimensões**, a dimensão da coluna do índice. Rodar
+> contra ele responderia sobre **outro provedor** e pararia em
+> `DimensionMismatch`. O gateway do piloto sobrescreve a base URL no servidor.
 >
-> Rodar contra `api.openai.com` responderia sobre **outro provedor** — e com
-> dimensão incompatível a indexação pararia em `DimensionMismatch` —, então não
-> fecha nenhuma das duas. **As duas ficam escritas como não verificadas**, e o
-> que cada uma deixa em aberto está no `design.md` (D6 e D10) e no `02`.
+> O registro das duas está no `02`, em *Verificação em produção* (seção da etapa
+> 2), com o regime colado. **7.10 continua desmarcada**, com o escopo reduzido
+> ao que sobrou.
 
-- [ ] 7.4 **Execução real, NO DEPLOY** (convenção 6, segredo por variável de ambiente ou `dotnet user-secrets`, **nunca** `appsettings` versionado): indexar um documento contra o gateway do piloto e conferir **(a)** se `InputTokens` vem preenchido ou nulo — resposta da pergunta aberta de D10 — e **(b)** o número de linhas gravadas contra o número de lotes esperado. Rodar `apps/workers` com `--no-launch-profile`, senão o `launchSettings.json` força `Development` e a conferência testa outra coisa
-- [ ] 7.5 **Execução real do `502`, NO DEPLOY** (D6): reproduzir a falha do gateway com um lote grande o bastante e conferir que a linha sai com `HttpStatus = 502`. É o ciclo aberto em 20/09 fechando — o status que não ficou gravado em lugar nenhum passa a sair por consulta. Se a exceção **não** chegar como `ClientResultException` com `Status`, é achado a reportar e a corrigir, porque é a premissa de D6
-- [x] 7.6 **Convenção 18 — fechamento compara, não reescreve**: medir arquivos, tipos públicos, casos de xUnit e linhas (`git diff -w`), com **infraestrutura de duplo** e **código gerado** contados à parte, e registrar o erro de cada item contra a projeção do `design.md`
-- [x] 7.7 `openspec validate --all` verde
-- [x] 7.8 `git status` conferido contra a lista fechada da seção 0
-- [x] 7.9 Atualizar `02-HISTORICO_E_STATUS.md` (o que a change provou, o que ela **não** prova, os achados de método e o resultado de 7.4/7.5) e `CHANGELOG.md`
-- [ ] 7.10 No deploy, registrar no `02` a data e a hora em que a coleta de embedding começa em produção, com o fuso — é o **segundo** regime da linha, ao lado de *"medindo desde 22/09/2026 01:21, `America/Sao_Paulo`"* da etapa 1 (convenção 22)
+- [x] 7.4 **Execução real, no deploy — VERIFICADA em 23/09/2026** (gateway do piloto, `openai` / `qwen-qwen3-embedding-8b` / 4.096 dimensões, `EMBEDDING_BATCH_SIZE = 250`). **(a) O gateway REPORTA uso:** `InputTokens` preenchido em **todas as seis** chamadas medidas, `sem_uso = 0` — a pergunta aberta de D10 está respondida, e a tela da etapa 4 não vai exibir "não reportado" para M19. **(b) O grão do lote vale em produção:** documento de 529 fragmentos → **três chamadas de 250, 250 e 29** (soma exata, nenhuma acima do teto); documento de 81 fragmentos → **uma chamada só**. Busca: `InputCount = 1`, `TaskId` preenchido, duas chamadas atribuídas à **mesma execução**
+- [x] 7.5 **Execução real do `502`, no deploy — VERIFICADA em parte, e o que falta virou item com gatilho.** Não foi provocada: derrubar o gateway do piloto de propósito custaria indisponibilidade real para confirmar um braço de `switch` já lido. **Verificado:** a estrutura existe, a coluna `HttpStatus` aceita, e o `HttpStatusOf` da etapa 1 tem o braço de `ClientResultException` — que deriva de `Exception` e **não** de `HttpRequestException`, medido por execução. **Não verificado:** o valor vindo de exceção real do gateway — `HttpStatus` veio nulo nas seis **porque nenhuma falhou**. Fecha sozinho na primeira falha real, pela consulta registrada no `02`; ver 7.10
+- [ ] 7.10 **`HttpStatus` preenchido a partir de uma falha REAL do gateway.** *(O escopo original desta tarefa — registrar no `02` a data e a hora do segundo regime — **está feito**: "coleta de embedding medindo desde **23/09/2026 às 01:18, `America/Sao_Paulo`**", ao lado do 22/09 01:21 da etapa 1, convenção 22. O que mantém a tarefa aberta é outra coisa, herdada da 7.5, e o escopo foi reduzido a ela.)* **Verificado:** a estrutura existe e a coluna aceita. **Não verificado:** o valor vindo de exceção real — `HttpStatus` veio nulo nas seis chamadas **porque nenhuma falhou**. **Não se provoca:** derrubar o gateway do piloto custaria indisponibilidade real. **Gatilho:** a primeira falha real do gateway em produção. **A consulta que fecha:** `SELECT "Purpose", "HttpStatus", "Failed" FROM embedding_calls WHERE "Failed" = true;` — registrada no `02`, em *Abertos por `metricas-embedding-coleta`*
