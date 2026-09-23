@@ -1,3 +1,4 @@
+using Buteco.Workers.EmbeddingMetrics;
 using Buteco.Workers.Knowledge.Chunking;
 using Buteco.Workers.Knowledge.Entities;
 using Buteco.Workers.Knowledge.Indexing;
@@ -134,5 +135,52 @@ public class KnowledgeIndexingZeroFragmentGuardTests(WorkerInfrastructureFixture
 
         // E o defeituoso é outra coisa, no mesmo contrato.
         Assert.Empty(new AlwaysEmptyChunker().Chunk(ContentfulMarkdown));
+    }
+
+    /// <summary>
+    /// O par "sem item" (convenção 5) do lado da <b>coleta de embedding</b>:
+    /// documento <b>com conteúdo</b> cuja fragmentação devolve zero não chama o
+    /// gateway, e portanto <b>não grava linha de chamada</b> — mas grava a linha
+    /// de <b>tentativa</b>, com a fase <c>Chunking</c>.
+    ///
+    /// <para>
+    /// <b>Os dois lados, e não só o primeiro.</b> "Nenhuma linha de chamada"
+    /// sozinho ficaria verde se a coleta inteira estivesse quebrada; é a linha
+    /// de tentativa que prova que o caminho de gravação funciona e que o zero é
+    /// do gateway, não do coletor.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task DocumentWithNoFragments_WritesNoEmbeddingCall_ButWritesTheAttemptWithChunkingPhase()
+    {
+        var harness = KnowledgeIndexingHarness.Build(
+            fixture.Postgres.GetConnectionString(), new AlwaysEmptyChunker());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, ContentfulMarkdown);
+
+        // PRECONDIÇÃO AFIRMADA, e não suposta pelo arranjo: o documento TEM
+        // conteúdo, e o vazio vem do fragmentador. Sem estas três linhas o
+        // cenário ficaria verde por nunca alcançar a chamada ao gateway — que é
+        // exatamente o que ele precisa provar que não acontece.
+        var document = await dbContext.KnowledgeDocuments.AsNoTracking().FirstAsync(d => d.Id == documentId);
+        Assert.False(string.IsNullOrWhiteSpace(document.ExtractedText));
+        Assert.Empty(new AlwaysEmptyChunker().Chunk(document.ExtractedText));
+
+        var outcome = await harness.Service.IndexAsync(
+            new KnowledgeIndexingJobMessage(documentId, 1, KnowledgeIndexingQueues.MaxAttempts), default);
+
+        Assert.Equal(KnowledgeIndexingOutcome.Failed, outcome);
+
+        // O gateway não foi chamado — e por isso não há linha de chamada.
+        Assert.Equal(0, harness.Embeddings.CallCount);
+        Assert.Empty(await EmbeddingMetricsReader.CallsForDocumentAsync(
+            fixture.Postgres.GetConnectionString(), documentId));
+
+        // O OUTRO lado do par: a tentativa foi contada, então a linha existe.
+        var attempt = await EmbeddingMetricsReader.SingleAttemptAsync(
+            fixture.Postgres.GetConnectionString(), documentId);
+        Assert.Equal(EmbeddingMetricsValues.Outcome.Failed, attempt.Outcome);
+        Assert.Equal(EmbeddingMetricsValues.FailurePhase.Chunking, attempt.FailurePhase);
+        Assert.Null(attempt.FragmentCount);
     }
 }

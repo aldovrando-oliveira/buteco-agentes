@@ -1,3 +1,4 @@
+using Buteco.Workers.EmbeddingMetrics;
 using System.Text.Json;
 using global::A2A;
 using Buteco.Workers.A2A;
@@ -266,6 +267,61 @@ public class KnowledgeToolExecutionEndToEndTests(WorkerInfrastructureFixture fix
 
     private AppDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options);
+
+    /// <summary>
+    /// Guarda da coleta de embedding de <b>busca</b> (change
+    /// <c>metricas-embedding-coleta</c>, D2/D4). A busca é o <b>único</b> ponto
+    /// em que embedding e execução de task se encontram: ela roda dentro do
+    /// turno do agente, então o <c>AsyncLocal</c> que a etapa 1 já abre a
+    /// alcança, e a linha sai com o <c>TaskId</c> da execução. Aquela change
+    /// <b>não cria <c>AsyncLocal</c> nenhum</b>.
+    /// </summary>
+    [Fact]
+    public async Task RoundTrip_SearchInsideAnExecution_WritesAnEmbeddingCallBoundToTheTask()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+
+        var baseId = await SeedBaseAsync("Políticas de Cobrança", "Prazos, descontos e reemissão de títulos.");
+        var documentId = await SeedDocumentAsync(baseId, "Política de reemissão");
+        await SeedFragmentAsync(baseId, documentId, 0, ConteudoQueSoExisteNaBase, Vector(0.0));
+        await SeedAgentAsync(agentId);
+        await SeedLinkAsync(agentId, baseId);
+
+        var chatClient = BuildToolCallingChatClientMock("search_politicas-de-cobranca", out _);
+
+        using var host = BuildHost(chatClient.Object);
+        await host.StartAsync();
+
+        A2ATaskRecord record;
+        try
+        {
+            record = await RunTurnAsync(agentId, contextId, "Qual o prazo de carência para reemissão?");
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+
+        // Precondição afirmada: a busca de fato aconteceu dentro de uma execução
+        // que concluiu. Sem ela, "existe uma linha" não diria de onde veio.
+        Assert.Equal(nameof(TaskState.Completed), record.State);
+
+        var calls = await EmbeddingMetricsReader.WaitForSearchCallsAsync(
+            fixture.Postgres.GetConnectionString(), record.TaskId);
+
+        var call = Assert.Single(calls);
+        Assert.Equal(EmbeddingMetricsValues.Purpose.Search, call.Purpose);
+        Assert.Equal(record.TaskId, call.TaskId);
+        Assert.Null(call.KnowledgeIndexingAttemptId);
+        Assert.Equal(baseId, call.KnowledgeBaseId);
+
+        // A busca manda UM texto por invocação — é o que a torna o termo
+        // dominante do consumo (um vetor por MENSAGEM), e o que separa o custo
+        // por conversa do custo de cadastro.
+        Assert.Equal(1, call.InputCount);
+        Assert.False(call.Failed);
+    }
 
     private async Task<A2ATaskRecord> RunTurnAsync(Guid agentId, string contextId, string userMessage)
     {

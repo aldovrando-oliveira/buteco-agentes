@@ -2,6 +2,7 @@ using System.Text.Json;
 using Buteco.Workers.A2A;
 using Buteco.Workers.AgentDelegations.Entities;
 using Buteco.Workers.Agents.Entities;
+using Buteco.Workers.EmbeddingMetrics.Entities;
 using Buteco.Workers.ExecutionMetrics.Entities;
 using Buteco.Workers.Knowledge.Entities;
 using Buteco.Workers.Mcp.Entities;
@@ -43,6 +44,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ProviderCall> ProviderCalls => Set<ProviderCall>();
 
     public DbSet<DelegationOutcome> DelegationOutcomes => Set<DelegationOutcome>();
+
+    public DbSet<KnowledgeIndexingAttempt> KnowledgeIndexingAttempts => Set<KnowledgeIndexingAttempt>();
+
+    public DbSet<EmbeddingCall> EmbeddingCalls => Set<EmbeddingCall>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -275,6 +280,54 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(outcome => outcome.SourceAgentId);
             entity.HasIndex(outcome => outcome.TargetAgentId);
             entity.HasOne<TaskExecution>().WithMany().HasForeignKey(outcome => outcome.SourceTaskId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Métricas de embedding (design.md da change metricas-embedding-coleta,
+        // D1). Espelho do mapeamento de apps/api, que é quem migra banco real —
+        // EmbeddingMetricsSchemaMirrorTests confere os dois lados.
+        //
+        // TABELA PRÓPRIA, e não `provider_calls` com TaskId anulável: M11
+        // (tokens de conversa) e M19 (embedding) são visões separadas, então
+        // reusar a tabela obrigaria TODA consulta de M11 a M17 a filtrar por
+        // Purpose — e quem esquecesse o filtro receberia um número maior e
+        // plausível, não um erro. Isto CORRIGE D7 da etapa 1, que registrou o
+        // contrário pesando só o custo de migração (convenção 9).
+        modelBuilder.Entity<KnowledgeIndexingAttempt>(entity =>
+        {
+            entity.ToTable("knowledge_indexing_attempts");
+            entity.HasKey(attempt => attempt.Id);
+            entity.Property(attempt => attempt.Outcome).IsRequired();
+            entity.Property(attempt => attempt.FailurePhase).IsRequired(false);
+            entity.Property(attempt => attempt.FragmentCount).IsRequired(false);
+            entity.HasIndex(attempt => attempt.KnowledgeDocumentId);
+            entity.HasIndex(attempt => attempt.StartedAt);
+        });
+
+        modelBuilder.Entity<EmbeddingCall>(entity =>
+        {
+            entity.ToTable("embedding_calls");
+            entity.HasKey(call => call.Id);
+            entity.Property(call => call.Purpose).IsRequired();
+            entity.Property(call => call.Provider).IsRequired();
+            entity.Property(call => call.Model).IsRequired();
+
+            // Os DOIS pais são anuláveis, e exatamente um é preenchido por
+            // linha — qual, depende de Purpose (D9). A indexação não roda dentro
+            // de task; a busca roda, e é o único ponto em que embedding e
+            // execução se encontram.
+            entity.Property(call => call.KnowledgeIndexingAttemptId).IsRequired(false);
+            entity.Property(call => call.TaskId).IsRequired(false);
+
+            entity.HasIndex(call => call.KnowledgeIndexingAttemptId);
+            entity.HasIndex(call => call.TaskId);
+
+            // As duas FKs valem por construção: as linhas de indexação são
+            // gravadas junto com o pai, num SaveChangesAsync só (D7), e as de
+            // busca no fechamento da execução, quando task_executions já existe.
+            entity.HasOne<KnowledgeIndexingAttempt>().WithMany()
+                .HasForeignKey(call => call.KnowledgeIndexingAttemptId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<TaskExecution>().WithMany()
+                .HasForeignKey(call => call.TaskId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

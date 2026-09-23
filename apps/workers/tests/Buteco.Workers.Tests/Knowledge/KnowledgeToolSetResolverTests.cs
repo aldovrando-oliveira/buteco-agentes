@@ -1,6 +1,8 @@
+using Buteco.Workers.ExecutionMetrics;
 using System.Text.RegularExpressions;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Knowledge.Execution;
+using Buteco.Workers.Options;
 using Buteco.Workers.Tests.Knowledge.Support;
 using Buteco.Workers.Tests.Support;
 using Microsoft.EntityFrameworkCore;
@@ -382,6 +384,43 @@ public class KnowledgeToolSetResolverTests(WorkerInfrastructureFixture fixture) 
         return await CallAsync(tool, consulta);
     }
 
+    /// <summary>
+    /// O par "sem item" da convenção 5 no lado da <b>coleta de embedding</b>
+    /// (change <c>metricas-embedding-coleta</c>): <b>fora</b> de qualquer
+    /// execução de task, registrar é no-op — e a busca <b>não falha</b> por
+    /// isso. Mesma regra que <c>RecordProviderCall</c> da etapa 1 já segue.
+    /// </summary>
+    [Fact]
+    public async Task Invoke_OutsideAnyExecution_WritesNoEmbeddingCall_AndDoesNotFail()
+    {
+        var agentId = Guid.NewGuid();
+        var baseId = await SeedBaseAsync("Cobrança", "Prazos e descontos.");
+        var documentId = await SeedDocumentAsync(baseId, "Política");
+        await SeedFragmentAsync(baseId, documentId, 0, "Carência de onze dias úteis.", Vectors.Of(0.0));
+        await SeedAgentAsync(agentId);
+        await SeedLinkAsync(agentId, baseId);
+
+        // PRECONDIÇÃO AFIRMADA, e não suposta pelo arranjo: não estamos dentro
+        // de execução nenhuma. Sem ela o cenário passaria por vacuidade se o
+        // escopo estivesse aberto por outro teste da mesma coleção.
+        Assert.Null(ExecutionMetricsScope.Current);
+
+        var before = await CountEmbeddingCallsAsync();
+
+        var result = await InvokeAsync(agentId, "prazo de carência", Vectors.Of(0.0));
+
+        // A busca FUNCIONOU — não é o caso de "não gravou porque nem rodou".
+        Assert.NotEmpty(result.Trechos);
+
+        Assert.Equal(before, await CountEmbeddingCallsAsync());
+    }
+
+    private async Task<long> CountEmbeddingCallsAsync()
+    {
+        await using var dbContext = CreateDbContext();
+        return await dbContext.EmbeddingCalls.CountAsync();
+    }
+
     private async Task<KnowledgeSearchToolResult> InvokeAsync(
         Guid agentId, string consulta, float[] queryVector, string? toolName = null, EmittedSqlCapture? capture = null) =>
         (await InvokeRawAsync(agentId, consulta, queryVector, toolName, capture)).Result;
@@ -433,9 +472,20 @@ public class KnowledgeToolSetResolverTests(WorkerInfrastructureFixture fixture) 
         services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()));
         var provider = services.BuildServiceProvider();
 
+        // EmbeddingOptions entrou no construtor na change
+        // metricas-embedding-coleta: a linha de embedding_calls grava provedor,
+        // modelo e dimensão em snapshot, e o resolvedor não tinha essa
+        // informação. Este é o ÚNICO sítio de construção manual — todo o resto
+        // passa pela interface registrada em DI.
         return new KnowledgeToolSetResolver(
             provider.GetRequiredService<IServiceScopeFactory>(),
             embeddings,
+            Microsoft.Extensions.Options.Options.Create(new EmbeddingOptions
+            {
+                Provider = "openai",
+                Model = "modelo-de-teste",
+                Dimensions = Dimensions,
+            }),
             NullLogger<KnowledgeToolSetResolver>.Instance);
     }
 

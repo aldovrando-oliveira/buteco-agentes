@@ -1,20 +1,40 @@
 using System.ComponentModel;
+using Buteco.Workers.EmbeddingMetrics;
+using Buteco.Workers.ExecutionMetrics;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Knowledge.Embedding;
 using Buteco.Workers.Mcp;
 using Buteco.Workers.Naming;
+using Buteco.Workers.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Pgvector;
 using Pgvector.EntityFrameworkCore;
 
 namespace Buteco.Workers.Knowledge.Execution;
 
+/// <remarks>
+/// <b><c>embeddingOptions</c> entrou na change <c>metricas-embedding-coleta</c></b>,
+/// e é a única assinatura de produção que ela muda. A linha de
+/// <c>embedding_calls</c> grava provedor, modelo e dimensão em <b>snapshot</b>
+/// (design.md, D9), e este resolvedor não tinha essa informação — só
+/// <c>KnowledgeIndexingService</c> tinha. A projeção da convenção 18 previu
+/// "nenhum construtor muda" e <b>errou aqui</b>; o custo real foi um sítio de
+/// construção manual, porque todo o resto passa pela interface registrada em DI.
+///
+/// <para>
+/// A alternativa — resolver <c>IOptions&lt;EmbeddingOptions&gt;</c> do escopo que
+/// <c>SearchAsync</c> já abre — foi recusada: é service locator, e o idioma da
+/// casa é injeção por construtor.
+/// </para>
+/// </remarks>
 public sealed class KnowledgeToolSetResolver(
     IServiceScopeFactory scopeFactory,
     IEmbeddingGeneratorResolver embeddingResolver,
+    IOptions<EmbeddingOptions> embeddingOptions,
     ILogger<KnowledgeToolSetResolver> logger) : IKnowledgeToolSetResolver
 {
     private const string ToolNamePrefix = "search_";
@@ -125,7 +145,24 @@ public sealed class KnowledgeToolSetResolver(
             // (design.md, D9): montar gastaria uma construção por mensagem mesmo
             // quando o modelo não chama tool nenhuma, que é o caso comum.
             var generator = embeddingResolver.Resolve();
-            var queryVector = new Vector(await generator.GenerateVectorAsync(consulta, cancellationToken: cancellationToken));
+
+            // A MEDIDA, no sítio de chamada (design.md da change
+            // metricas-embedding-coleta, D4). A busca é o ÚNICO ponto em que
+            // embedding e execução de task se encontram: ela roda dentro do
+            // turno do agente, então o AsyncLocal que a etapa 1 já abre a
+            // alcança, e a linha sai com o TaskId da execução. Fora de execução,
+            // RecordEmbeddingCall é no-op.
+            //
+            // GenerateVectorAsync é método de EXTENSÃO e desemboca em
+            // GenerateAsync com uma entrada só — um braço só cobre os dois
+            // caminhos, diferente do IChatClient da etapa 1.
+            var options = embeddingOptions.Value;
+            var measured = new MeasuredEmbeddingGenerator(
+                generator,
+                measurement => ExecutionMetricsScope.RecordEmbeddingCall(
+                    knowledgeBaseId, options.Provider, options.Model, options.Dimensions, measurement));
+
+            var queryVector = new Vector(await measured.GenerateVectorAsync(consulta, cancellationToken: cancellationToken));
 
             var results = await (
                 from fragment in dbContext.KnowledgeFragments.AsNoTracking()

@@ -15,6 +15,30 @@ using Microsoft.Extensions.Time.Testing;
 namespace Buteco.Workers.Tests.Knowledge.Support;
 
 /// <summary>
+/// O que o duplo do gerador devolve em <c>GeneratedEmbeddings.Usage</c>.
+///
+/// <para>
+/// <b>TRÊS estados, e não dois</b>, porque a spec distingue os três e o guarda
+/// negativo precisa dos dois primeiros separados: <c>Usage</c> ausente e
+/// <c>Usage</c> presente <b>sem</b> a contagem de entrada são caminhos
+/// diferentes em <c>generated.Usage?.InputTokenCount</c>, e os dois têm de dar
+/// nulo.
+/// </para>
+///
+/// <para>
+/// Público e fora de <c>FakeEmbeddingGenerator</c>, que é <c>internal</c>:
+/// os guardas o usam em <c>[InlineData]</c>, e método de teste público não pode
+/// ter parâmetro de tipo interno.
+/// </para>
+/// </summary>
+public enum EmbeddingUsageShape
+{
+    None,
+    WithoutInputCount,
+    WithInputCount,
+}
+
+/// <summary>
 /// Monta um <see cref="KnowledgeIndexingService"/> contra Postgres real, com o
 /// provedor de embedding substituído — nenhuma chamada de rede.
 /// </summary>
@@ -69,6 +93,45 @@ internal sealed class KnowledgeIndexingHarness
             scopeFactory,
             chunker ?? new KnowledgeChunker(),
             new StubEmbeddingResolver(embeddings),
+            options,
+            time,
+            NullLogger<KnowledgeIndexingService>.Instance);
+
+        return new KnowledgeIndexingHarness
+        {
+            ScopeFactory = scopeFactory,
+            Embeddings = embeddings,
+            Time = time,
+            Service = service,
+        };
+    }
+
+    /// <summary>
+    /// Arnês com o <b>resolvedor</b> estourando, para a fase
+    /// <c>ProviderResolution</c> (change <c>metricas-embedding-coleta</c>, D5):
+    /// é a falha que acontece <b>antes</b> de existir gerador, e por isso não
+    /// pode ser produzida pelo duplo do gerador.
+    /// </summary>
+    public static KnowledgeIndexingHarness BuildWithThrowingResolver(string connectionString)
+    {
+        var services = new ServiceCollection();
+        services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(connectionString));
+        var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+
+        var embeddings = new FakeEmbeddingGenerator(Dimensions);
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-09-11T03:00:00Z"));
+        var options = Microsoft.Extensions.Options.Options.Create(new EmbeddingOptions
+        {
+            Provider = Provider,
+            Model = Model,
+            Dimensions = Dimensions,
+            BatchSize = NoBatching,
+        });
+
+        var service = new KnowledgeIndexingService(
+            scopeFactory,
+            new KnowledgeChunker(),
+            new ThrowingEmbeddingGeneratorResolver(),
             options,
             time,
             NullLogger<KnowledgeIndexingService>.Instance);
@@ -204,6 +267,29 @@ internal sealed class FakeEmbeddingGenerator(int dimensions) : IEmbeddingGenerat
     /// <summary>Quando definido, a chamada seguinte lança isto.</summary>
     public Func<Exception>? ThrowOnNextCall { get; set; }
 
+    /// <summary>
+    /// Lança na N-ésima chamada (1-based), deixando as anteriores passarem — é
+    /// o que o guarda de "falha no segundo lote" precisa, e
+    /// <see cref="ThrowOnNextCall"/> não dá.
+    ///
+    /// <para>
+    /// Convive com ele em vez de substituí-lo: os cenários que já o usavam não
+    /// precisam saber do número da chamada, e trocá-los seria blast radius sem
+    /// ganho.
+    /// </para>
+    /// </summary>
+    public Func<int, Exception?>? ThrowOnCall { get; set; }
+
+    /// <summary>
+    /// Padrão <see cref="EmbeddingUsageShape.None"/>: preserva o que todos os
+    /// cenários anteriores a esta change viam, e é o estado em que o gateway
+    /// real pode estar — a coluna é anulável exatamente por isso.
+    /// </summary>
+    public EmbeddingUsageShape UsageShape { get; set; } = EmbeddingUsageShape.None;
+
+    /// <summary>Lido só quando <see cref="UsageShape"/> é <see cref="EmbeddingUsageShape.WithInputCount"/>.</summary>
+    public long ReportedInputTokens { get; set; }
+
     /// <summary>Quando definido, o vetor sai com esta dimensão em vez da declarada.</summary>
     public int? OverrideDimensions { get; set; }
 
@@ -232,6 +318,11 @@ internal sealed class FakeEmbeddingGenerator(int dimensions) : IEmbeddingGenerat
             throw factory();
         }
 
+        if (ThrowOnCall?.Invoke(CallCount) is { } scheduled)
+        {
+            throw scheduled;
+        }
+
         var texts = values.ToList();
         LastBatchSize = texts.Count;
         batchSizes.Add(texts.Count);
@@ -244,6 +335,16 @@ internal sealed class FakeEmbeddingGenerator(int dimensions) : IEmbeddingGenerat
 
         var result = new GeneratedEmbeddings<Embedding<float>>(
             texts.Select(text => new Embedding<float>(VectorFor(text, size))));
+
+        // Nulo NÃO é normalizado: `Usage` ausente e `Usage` sem a contagem de
+        // entrada são os dois "o provedor não reportou", e zero só entra quando
+        // o provedor reportar zero (convenção 13).
+        result.Usage = UsageShape switch
+        {
+            EmbeddingUsageShape.None => null,
+            EmbeddingUsageShape.WithoutInputCount => new UsageDetails(),
+            _ => new UsageDetails { InputTokenCount = ReportedInputTokens },
+        };
 
         return result;
     }
