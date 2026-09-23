@@ -479,6 +479,61 @@ objeto), o formato errado chega ao disco. Achado em
 benigno de `ConversationSessionCodec` corrigido em
 `crossapp-session-codec-encoder`.
 
+## Histórico de conversa e compactação (`apps/workers`)
+
+Conversa é o conjunto de tasks com o mesmo `contextId`. O histórico **não** é
+remontado das mensagens: `AgentExecutionService` serializa a sessão do agente e
+a grava em `AgentTask.Metadata["conversationSession"]` no caminho de sucesso
+(`apps-workers-historico-conversa`); a execução seguinte do mesmo `contextId`
+carrega a sessão da task `completed` mais recente (`LoadSessionAsync`,
+`ListTasksAsync` escopado por `agentId` e ordenado por `StatusTimestamp`).
+Tasks `failed`/`rejected` ficam de fora por desenho.
+
+`ConversationSessionCodec` grava a sessão como **string JSON escapada**: o
+`jsonb` normaliza ordem de propriedades e o polimorfismo de `AIContent` exige
+`"$type"` primeiro (Decisão 10 daquela change; encoder corrigido em
+`crossapp-session-codec-encoder`).
+
+**Dois limites com papéis diferentes** — constantes globais em
+`AgentExecutionService`, não configuráveis por agente:
+
+- `MaxHistoryMessages = 200` (`RecentMessageChatReducer`) — **teto de
+  segurança**. Truncar ativamente invalida o bookkeeping incremental do
+  `CompactionProvider`, por isso fica bem acima da faixa de operação
+  (`apps-workers-resumo-historico-conversa`, Decisão 9).
+- `SummarizationTurnThreshold = 10` (`CompactionTriggers.TurnsExceed`) — faixa
+  de operação. Conta **turnos de usuário**: dispara quando a 11ª mensagem de
+  usuário entra no contexto.
+
+A compactação roda **dentro** do turno, como requisição a mais ao provedor, e é
+marcada por `CompactionCallChatClient` para entrar em `provider_calls` com
+`Purpose = Compaction` (`metricas-execucao-coleta`, D8).
+
+**A requisição de resumo nunca termina em turno de modelo**
+(`compactacao-historico`, D1/D2). A estratégia do pacote termina sempre em
+mensagem de assistente — o `TurnIndex` é copiado para os grupos de assistente e
+a contagem de turnos só cai quando esse grupo também é excluído —, e o Gemini
+recusa com `400 "Requests ending with a model turn are not supported."`
+`CompactionCallChatClient` acrescenta uma mensagem final de usuário quando a
+última é de assistente, sem alterar o histórico. O texto é **afirmação de
+fronteira**, não segundo comando de resumir: a instrução `system` do pacote é
+quem comanda, e dois comandos concorrentes pioram o resumo. Trocar o texto muda
+o resumo — não é string de formatação.
+
+**Falha de resumo não derruba o turno, e não é silenciosa.**
+`SummarizationCompactionStrategy` captura a exceção, restaura os grupos e segue
+(guarda: `SummarizationCallFailure_DoesNotPreventUserTurnFromCompleting`). O
+`CompactionProvider` recebe o `ILoggerFactory` do host — sem ele cai em
+`NullLoggerFactory`, e foi esse silêncio que deixou a compactação quebrada
+contra o Gemini do primeiro deploy até o piloto, com seis falhas e zero linhas
+de log. Pelo dado, o sintoma é `Purpose = Compaction` com `Failed = true` e a
+entrada por turno crescendo sem parar.
+
+**`ChatClientAgent` continua sem `services`**, de propósito: o middleware
+empilhado por `WithDefaultAgentMiddleware` resolve o logger de lá, não do
+`loggerFactory`, então o log de invocação de tool segue apagado — decisão de
+volume de log, com gatilho registrado no `02`.
+
 ## Contexto do agente (blocos concatenados às `Instructions`)
 
 `apps/workers` (`AgentExecutionService`) concatena às `Instructions`

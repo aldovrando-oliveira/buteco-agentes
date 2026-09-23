@@ -1,5 +1,6 @@
 using System.ClientModel;
 using Buteco.Workers.ExecutionMetrics.Entities;
+using Google.GenAI;
 using Microsoft.Extensions.AI;
 
 namespace Buteco.Workers.ExecutionMetrics;
@@ -79,6 +80,22 @@ public sealed class ExecutionMetricsScope : IDisposable
     }
 
     /// <summary>
+    /// A finalidade das requisições feitas neste fluxo — o mesmo valor que vai
+    /// para a coluna <c>Purpose</c>. Sem marca, é
+    /// <see cref="ExecutionMetricsValues.Purpose.Turn"/>.
+    ///
+    /// <para>
+    /// Público desde a change <c>compactacao-historico</c> (D7), para que a
+    /// linha de log da requisição carregue a finalidade: sem ela, distinguir a
+    /// chamada de resumo da do turno no log dependia de as durações serem
+    /// únicas — foi assim, por coincidência de milissegundos, que as seis
+    /// chamadas de compactação do piloto foram identificadas.
+    /// </para>
+    /// </summary>
+    public static string CurrentPurposeOrDefault =>
+        CurrentPurpose.Value ?? ExecutionMetricsValues.Purpose.Turn;
+
+    /// <summary>
     /// Marca a finalidade das requisições feitas até o descarte do valor
     /// devolvido. Sem marca, a finalidade é
     /// <see cref="ExecutionMetricsValues.Purpose.Turn"/>.
@@ -108,7 +125,7 @@ public sealed class ExecutionMetricsScope : IDisposable
             scope.TaskId,
             provider,
             model,
-            CurrentPurpose.Value ?? ExecutionMetricsValues.Purpose.Turn,
+            CurrentPurposeOrDefault,
             durationMs,
             usage?.InputTokenCount,
             usage?.OutputTokenCount,
@@ -139,14 +156,43 @@ public sealed class ExecutionMetricsScope : IDisposable
 
     /// <summary>
     /// Status HTTP da exceção, só quando o SDK o expõe TIPADO (D12):
-    /// <see cref="HttpRequestException.StatusCode"/> e
+    /// <see cref="HttpRequestException.StatusCode"/>,
     /// <see cref="ClientResultException.Status"/> (OpenAI, via
-    /// <c>System.ClientModel</c>). Qualquer outra exceção — inclusive a
-    /// hierarquia própria do SDK da Anthropic — devolve nulo: não se sabe, e o
-    /// nulo diz isso em vez de um código inventado.
+    /// <c>System.ClientModel</c>) e o <c>StatusCode</c> declarado pelas exceções
+    /// do SDK do Gemini. Qualquer outra exceção — inclusive a hierarquia própria
+    /// do SDK da Anthropic — devolve nulo: não se sabe, e o nulo diz isso em vez
+    /// de um código inventado.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>OS DOIS BRAÇOS DO GEMINI VÊM ANTES DO DE <c>HttpRequestException</c>, E
+    /// A ORDEM É CORREÇÃO, NÃO ESTILO.</b> <c>Google.GenAI.ClientError</c> e
+    /// <c>ServerError</c> derivam de <see cref="HttpRequestException"/> e
+    /// declaram <c>public new int StatusCode</c>, preenchendo só a propriedade
+    /// nova — a da base fica nula. Um <c>switch</c> de padrões casa o PRIMEIRO
+    /// braço compatível: com <see cref="HttpRequestException"/> na frente, o
+    /// braço do tipo derivado nunca é alcançado e o status volta nulo.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Defeito da change <c>metricas-execucao-coleta</c>, corrigido aqui</b>
+    /// (change <c>compactacao-historico</c>, escopo 3; convenção 9). As seis
+    /// chamadas de compactação do piloto gravaram <c>HttpStatus</c> nulo
+    /// carregando um <c>400</c> legítimo — e o diagnóstico do defeito de
+    /// compactação precisou de duas rodadas de exploração e de um harness
+    /// porque o número que responderia por consulta tinha sido descartado aqui.
+    /// </para>
+    ///
+    /// <para>
+    /// <b><c>ServerError</c> entra junto</b>, embora o piloto só tenha produzido
+    /// <c>ClientError</c>: são a mesma forma pelo mesmo motivo, e corrigir
+    /// metade faria a próxima consulta concluir que 5xx não acontece.
+    /// </para>
+    /// </remarks>
     public static int? HttpStatusOf(Exception exception) => exception switch
     {
+        ClientError { StatusCode: > 0 } clientError => clientError.StatusCode,
+        ServerError { StatusCode: > 0 } serverError => serverError.StatusCode,
         HttpRequestException { StatusCode: { } statusCode } => (int)statusCode,
         ClientResultException { Status: > 0 } clientResult => clientResult.Status,
         _ => null,

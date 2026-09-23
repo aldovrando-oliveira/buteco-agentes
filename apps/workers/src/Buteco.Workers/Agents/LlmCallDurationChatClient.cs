@@ -87,7 +87,8 @@ public sealed class LlmCallDurationChatClient(
         }
         finally
         {
-            var elapsed = LogDuration(started, streaming: false);
+            var elapsed = Stopwatch.GetElapsedTime(started);
+            LogCall(elapsed, streaming: false, failure);
             RecordCall(elapsed, response?.Usage, failure);
         }
     }
@@ -124,7 +125,12 @@ public sealed class LlmCallDurationChatClient(
         }
         finally
         {
-            var elapsed = LogDuration(started, streaming: true);
+            var elapsed = Stopwatch.GetElapsedTime(started);
+
+            // Sem exceção em mãos no streaming (C# não permite `catch` com
+            // `yield`), então a linha de falha sai sem tipo: "não completou" é
+            // tudo o que este caminho sabe, e inventar mais seria pior.
+            LogCall(elapsed, streaming: true, failure: null, completed: completed);
             ExecutionMetricsScope.RecordProviderCall(
                 provider, model, elapsed.TotalMilliseconds, usage, failed: !completed, httpStatus: null);
         }
@@ -139,17 +145,60 @@ public sealed class LlmCallDurationChatClient(
             failed: failure is not null,
             httpStatus: failure is null ? null : ExecutionMetricsScope.HttpStatusOf(failure));
 
-    private TimeSpan LogDuration(long startedTimestamp, bool streaming)
+    /// <summary>
+    /// Escreve a linha da requisição — <b>sucesso e falha em linhas
+    /// DISTINTAS</b> (change <c>compactacao-historico</c>, D7).
+    ///
+    /// <para>
+    /// <b>Por que deixou de ser uma linha só.</b> Até esta change o
+    /// <c>finally</c> escrevia <i>"Chamada ao LLM concluída"</i> para os dois
+    /// casos: "concluída" queria dizer só "terminou". No piloto, as seis
+    /// chamadas de compactação que falharam apareceram no log com essa mesma
+    /// linha, enquanto a tabela as gravava com <c>Failed = true</c> — e o
+    /// diagnóstico começou tendo que decidir qual dos dois instrumentos estava
+    /// errado.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Task e finalidade saem do escopo ambiente</b>, não de parâmetro, pelo
+    /// mesmo motivo da linha filha (D2 da <c>metricas-execucao-coleta</c>): este
+    /// client é compartilhado por <c>(provider, model)</c> e não sabe de quem é
+    /// a chamada. Fora de execução, os dois saem vazios e a linha continua
+    /// saindo — casar log com tabela não pode depender de durações únicas, que
+    /// foi o que este diagnóstico teve de usar.
+    /// </para>
+    /// </summary>
+    private void LogCall(TimeSpan elapsed, bool streaming, Exception? failure, bool completed = true)
     {
-        var elapsed = Stopwatch.GetElapsedTime(startedTimestamp);
+        var taskId = ExecutionMetricsScope.Current?.TaskId ?? string.Empty;
+        var purpose = ExecutionMetricsScope.CurrentPurposeOrDefault;
 
-        logger.LogInformation(
-            "Chamada ao LLM concluída: provider={Provider} model={Model} streaming={Streaming} duracaoMs={DuracaoMs}",
+        if (failure is null && completed)
+        {
+            logger.LogInformation(
+                "Chamada ao LLM bem-sucedida: provider={Provider} model={Model} streaming={Streaming} "
+              + "duracaoMs={DuracaoMs} taskId={TaskId} finalidade={Purpose}",
+                provider,
+                model,
+                streaming,
+                elapsed.TotalMilliseconds,
+                taskId,
+                purpose);
+
+            return;
+        }
+
+        logger.LogWarning(
+            "Chamada ao LLM falhou: provider={Provider} model={Model} streaming={Streaming} "
+          + "duracaoMs={DuracaoMs} taskId={TaskId} finalidade={Purpose} "
+          + "excecao={ExceptionType} httpStatus={HttpStatus}",
             provider,
             model,
             streaming,
-            elapsed.TotalMilliseconds);
-
-        return elapsed;
+            elapsed.TotalMilliseconds,
+            taskId,
+            purpose,
+            failure?.GetType().Name ?? "EnumeracaoIncompleta",
+            failure is null ? null : ExecutionMetricsScope.HttpStatusOf(failure));
     }
 }

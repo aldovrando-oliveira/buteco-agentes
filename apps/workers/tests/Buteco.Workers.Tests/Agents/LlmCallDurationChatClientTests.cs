@@ -92,6 +92,96 @@ public class LlmCallDurationChatClientTests
     }
 
     // ── Métricas de execução (change metricas-execucao-coleta) ───────────
+    // ── Escopo 5 da change compactacao-historico (D7) ────────────────────
+    //
+    // Casar log com tabela dependeu de as durações serem únicas: as seis
+    // chamadas de compactação do piloto só foram identificadas no log porque
+    // 342,0 / 373,2 / 488,5 / 519,8 / 395,4 / 368,5 ms não se repetiam. A
+    // próxima vez pode não dar.
+
+    [Fact]
+    public async Task OnSuccess_InsideExecutionScope_LogsTaskAndPurpose()
+    {
+        var logger = new CapturingLogger();
+        var inner = new StubChatClient(_ => Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "oi"))));
+        using var client = new LlmCallDurationChatClient(inner, Provider, Model, logger);
+
+        using var scope = ExecutionMetricsScope.Begin("task-do-turno");
+        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "olá")]);
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Information, entry.Level);
+        Assert.Contains("task-do-turno", entry.Message, StringComparison.Ordinal);
+        Assert.Contains(ExecutionMetricsValues.Purpose.Turn, entry.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A linha de falha é <b>textualmente distinta</b> da de sucesso. Até esta
+    /// change as duas eram a mesma — escrita num <c>finally</c>, sem campo de
+    /// resultado —, e por isso o log do piloto mostrava "Chamada ao LLM
+    /// concluída" para seis chamadas que tinham falhado.
+    /// </summary>
+    [Fact]
+    public async Task OnFailure_LogsDistinctLineWithExceptionTypeAndStatus()
+    {
+        var logger = new CapturingLogger();
+        var sucesso = new StubChatClient(_ => Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "oi"))));
+        using (var okClient = new LlmCallDurationChatClient(sucesso, Provider, Model, logger))
+        {
+            await okClient.GetResponseAsync([new ChatMessage(ChatRole.User, "olá")]);
+        }
+
+        var inner = new StubChatClient(_ => throw new HttpRequestException(
+            "limite", null, HttpStatusCode.TooManyRequests));
+        using var client = new LlmCallDurationChatClient(inner, Provider, Model, logger);
+
+        using var scope = ExecutionMetricsScope.Begin("task-que-falha");
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => client.GetResponseAsync([new ChatMessage(ChatRole.User, "olá")]));
+
+        var linhaSucesso = logger.Entries[0];
+        var linhaFalha = logger.Entries[1];
+
+        Assert.NotEqual(linhaSucesso.Message, linhaFalha.Message);
+        Assert.Contains(nameof(HttpRequestException), linhaFalha.Message, StringComparison.Ordinal);
+        Assert.Contains("429", linhaFalha.Message, StringComparison.Ordinal);
+        Assert.Contains("task-que-falha", linhaFalha.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CompactionCall_LogsPurposeCompaction()
+    {
+        var logger = new CapturingLogger();
+        var inner = new StubChatClient(_ => Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "resumo"))));
+        using var client = new LlmCallDurationChatClient(inner, Provider, Model, logger);
+        using var marcado = new Buteco.Workers.ExecutionMetrics.CompactionCallChatClient(client);
+
+        using var scope = ExecutionMetricsScope.Begin("task-com-resumo");
+        await marcado.GetResponseAsync([new ChatMessage(ChatRole.User, "olá")]);
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains(ExecutionMetricsValues.Purpose.Compaction, entry.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Fora de execução de task não há identificador para registrar — e a linha
+    /// continua saindo, porque o client é usado fora de execução nos testes dele
+    /// e em qualquer caminho futuro que não seja task.
+    /// </summary>
+    [Fact]
+    public async Task OutsideExecutionScope_StillLogs_WithoutTaskIdentifier()
+    {
+        var logger = new CapturingLogger();
+        var inner = new StubChatClient(_ => Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "oi"))));
+        using var client = new LlmCallDurationChatClient(inner, Provider, Model, logger);
+
+        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "olá")]);
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains(Provider, entry.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("task-", entry.Message, StringComparison.Ordinal);
+    }
+
     // O client é o ÚNICO ponto que vê cada requisição HTTP ao provedor
     // separada do tempo das tools (comentário da classe), então é aqui que a
     // linha filha nasce. Os três guardas abrem o escopo à mão, como

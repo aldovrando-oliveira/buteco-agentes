@@ -1,6 +1,7 @@
 using Buteco.Workers.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Buteco.Workers.Knowledge.Indexing;
@@ -54,6 +55,17 @@ public static class EmbeddingBatchSizeValidation
 
         if (declared.BatchSize > 0)
         {
+            // LINHA DE SUCESSO, e não enfeite (change compactacao-historico, D6):
+            // sem ela, uma checagem que passa é indistinguível de uma checagem que
+            // não rodou — a mesma ambiguidade que a linha de início do
+            // NonTerminalTaskDetectorService existe para não ter. O valor vai na
+            // linha porque este parâmetro é feito para ser VARIADO À MÃO em
+            // produção: saber qual estava em vigor é metade do diagnóstico.
+            scope.ServiceProvider
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(EmbeddingBatchSizeValidation))
+                .LogInformation("Tamanho de lote de embedding conferido: {BatchSize}.", declared.BatchSize);
+
             return;
         }
 

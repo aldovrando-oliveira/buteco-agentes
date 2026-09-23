@@ -3,6 +3,7 @@ using Buteco.Workers.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Buteco.Workers.Knowledge.Indexing;
@@ -47,6 +48,16 @@ public static class EmbeddingIndexConsistencyValidation
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var declared = scope.ServiceProvider.GetRequiredService<IOptions<EmbeddingOptions>>().Value;
 
+        // LINHAS DE SUCESSO — change compactacao-historico, D6. Até esta change a
+        // única manifestação desta checagem no log era a consulta que o EF Core
+        // imprimia, e o MESMO escopo silencia essa consulta em produção
+        // (Microsoft.EntityFrameworkCore.Database.Command em Warning). Sem linha
+        // própria, a checagem passaria a rodar invisível: sucesso indistinguível
+        // de ausência, que é o defeito que checagem de boot existe para não ter.
+        var logger = scope.ServiceProvider
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger(typeof(EmbeddingIndexConsistencyValidation));
+
         // SELECT DISTINCT sobre as três colunas de proveniência. Uma combinação
         // por modelo já usado no índice.
         var found = dbContext.KnowledgeFragments
@@ -61,8 +72,20 @@ public static class EmbeddingIndexConsistencyValidation
 
         // Índice vazio sobe: é o primeiro deploy, e não há nada contra o que
         // divergir.
+        //
+        // DUAS LINHAS DISTINTAS PARA OS DOIS CAMINHOS DE SUCESSO, de propósito:
+        // "índice vazio" e "conferido contra o índice" são fatos diferentes, e
+        // uma linha só para os dois devolveria a ambiguidade que a linha veio
+        // remover — quem lê o boot precisa saber se houve conferência de verdade.
         if (found.Count == 0)
         {
+            logger.LogInformation(
+                "Índice de conhecimento vazio: nada a conferir contra o modelo declarado "
+              + "'{Provider}'/'{Model}'/{Dimensions}.",
+                declared.Provider,
+                declared.Model,
+                declared.Dimensions);
+
             return;
         }
 
@@ -86,6 +109,13 @@ public static class EmbeddingIndexConsistencyValidation
             && string.Equals(single.EmbeddingModel, declared.Model, StringComparison.Ordinal)
             && single.EmbeddingDimensions == declared.Dimensions)
         {
+            logger.LogInformation(
+                "Índice de conhecimento conferido: fragmentos e configuração usam "
+              + "'{Provider}'/'{Model}'/{Dimensions}.",
+                declared.Provider,
+                declared.Model,
+                declared.Dimensions);
+
             return;
         }
 

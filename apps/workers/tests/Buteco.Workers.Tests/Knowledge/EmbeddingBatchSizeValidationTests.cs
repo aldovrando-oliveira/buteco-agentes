@@ -2,6 +2,7 @@ using Buteco.Workers.Knowledge.Indexing;
 using Buteco.Workers.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Buteco.Workers.Tests.Knowledge;
 
@@ -71,10 +72,75 @@ public class EmbeddingBatchSizeValidationTests
         host.ValidateEmbeddingBatchSize();
     }
 
+    /// <summary>
+    /// Escopo 4 da change <c>compactacao-historico</c> (D6): a checagem que passa
+    /// registra uma linha.
+    ///
+    /// <para>
+    /// <b>Por que isto é guarda e não enfeite.</b> Sucesso indistinguível de "a
+    /// checagem não rodou" é a forma de silêncio ambíguo que a linha de início do
+    /// detector de tasks não-terminais já existe para evitar. Sem a linha, remover
+    /// a chamada do <c>Program.cs</c> continuaria deixando esta classe verde —
+    /// é conferência manual de escopo — <b>e</b> não deixaria rastro no boot.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void PositiveBatchSize_LogsTheCheckedValue()
+    {
+        using var host = BuildHost(250, out var logs);
+
+        host.ValidateEmbeddingBatchSize();
+
+        Assert.Contains(
+            logs,
+            entry => entry.Level == LogLevel.Information
+                && entry.Message.Contains("250", StringComparison.Ordinal)
+                && entry.Message.Contains("lote", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static IHost BuildHost(int batchSize)
     {
         var builder = Host.CreateApplicationBuilder();
         builder.Services.Configure<EmbeddingOptions>(options => options.BatchSize = batchSize);
         return builder.Build();
+    }
+
+    private static IHost BuildHost(int batchSize, out List<(LogLevel Level, string Message)> capturedLogs)
+    {
+        var logs = new List<(LogLevel Level, string Message)>();
+        capturedLogs = logs;
+
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.Configure<EmbeddingOptions>(options => options.BatchSize = batchSize);
+        builder.Logging.ClearProviders();
+        builder.Logging.AddProvider(new StartupLogCapture(logs));
+
+        return builder.Build();
+    }
+
+    /// <summary>Captura nível e mensagem — idioma de <c>TimeZoneStartupValidationTests</c>.</summary>
+    internal sealed class StartupLogCapture(List<(LogLevel Level, string Message)> entries) : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(entries);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(List<(LogLevel Level, string Message)> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                lock (entries)
+                {
+                    entries.Add((logLevel, formatter(state, exception)));
+                }
+            }
+        }
     }
 }

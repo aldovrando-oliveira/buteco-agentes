@@ -371,6 +371,20 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **Nível de log de produção passa a viver no repositório.** Cada app ganha
+  `appsettings.Production.json` com o log de comando de banco do EF Core em
+  `Warning` — antes isso era ajustado no ambiente do servidor, fora do
+  repositório, e duas fontes do mesmo valor divergem. O `Default` **não** sobe:
+  subir esconderia a linha de início da varredura de tasks não-terminais, que é
+  a única prova de que ela está registrada. **No deploy, a configuração
+  equivalente do ambiente precisa ser removida** — variável de ambiente vence
+  `appsettings`.
+- **As duas checagens de boot de embedding passam a registrar uma linha ao
+  passar.** A de consistência do índice só se manifestava pela consulta que o EF
+  imprimia, que a mudança acima silencia; sem linha própria, ela passaria a
+  rodar invisível. São duas linhas distintas: "índice vazio, nada a conferir" e
+  "índice conferido".
+
 - Enums de `Message` passaram a atravessar a API como **string**, nunca como
   inteiro ordinal — formato de fio agora faz parte do contrato entre
   `apps/inbox` e `apps/frontend`.
@@ -402,6 +416,38 @@ o versionamento pretende seguir
   "manter a atual".
 
 ### Fixed
+
+- **A compactação do histórico nunca funcionou com Gemini, e o piloto é Gemini:
+  toda conversa acima de dez turnos crescia sem parar.** A requisição de resumo
+  terminava sempre em turno de modelo — por construção do pacote de compactação,
+  que só derruba a contagem de turnos ao excluir também o grupo de assistente —
+  e o Gemini recusa essa forma com `400 "Requests ending with a model turn are
+  not supported."`. Sem resumo, a entrada crescia ~300 a 500 tokens por turno,
+  sem teto: as duas conversas do piloto chegaram a 5.405 e 14.520 tokens.
+  **A falha era invisível por construção**, não por nível de log: a estratégia
+  do pacote captura a exceção, restaura os grupos e avisa num logger nulo,
+  porque o provider era construído sem `loggerFactory`. Seis chamadas de
+  compactação no piloto, seis falhas, nenhuma linha em log nenhum. Corrigido no
+  ponto que já era nosso: a requisição de resumo passa a terminar em mensagem de
+  usuário quando a porção resumida termina em assistente, sem alterar o
+  histórico. Verificado contra o Gemini real (22/09/2026, `gemini-3.6-flash`,
+  chave de dev): a compactação passa a devolver resumo, e a entrada do turno
+  seguinte para em ~1.490 tokens em vez de subir.
+- **Falha de resumo deixa de ser silenciosa.** O provider de compactação passa a
+  receber o `loggerFactory` do host, então a próxima falha — de qualquer
+  natureza — aparece como aviso no primeiro dia, e não depois de um diagnóstico
+  de dois dias.
+- **`HttpStatus` das chamadas ao Gemini era sempre nulo em `provider_calls`.** As
+  exceções do SDK do Gemini derivam de `HttpRequestException` mas declaram o
+  status numa propriedade própria, deixando nula a da classe base — e a
+  correspondência por tipo lia a da base. Todo erro HTTP daquele provedor
+  gravava nulo, inclusive `400` e `429` legítimos. O `400` deste defeito estava
+  gravado e foi descartado assim.
+- **Log da requisição ao provedor de LLM não distinguia sucesso de falha.** A
+  linha era escrita num `finally`, sem campo de resultado: "Chamada ao LLM
+  concluída" saía igual para as duas. Agora são linhas distintas, com `TaskId` e
+  finalidade (turno × resumo) nas duas, e tipo da exceção e status HTTP na de
+  falha — casar log com tabela deixa de depender de as durações serem únicas.
 
 - **Mensagem reentregue pelo RabbitMQ reexecutava uma task já concluída.** Se o
   worker parasse entre gravar o estado final da task e confirmar a mensagem, a
