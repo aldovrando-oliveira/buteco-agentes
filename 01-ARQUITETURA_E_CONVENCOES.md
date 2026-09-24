@@ -1465,3 +1465,169 @@ de propor algo nesta base:
     em `apps/workers/tests/`** — conjuntos distintos que coincidem por acaso, que
     é justamente o tipo de coincidência que faz um número migrar de pergunta sem
     ninguém notar.
+
+23. **Toda change nasce de uma issue, e toda change e todo PR referenciam a
+    que os originou.** Demanda nova **cria issue antes** de virar change — a
+    issue é onde o problema é descrito antes de alguém decidir a forma da
+    solução, e é o único registro que sobrevive ao archive da change.
+
+    O mecanismo que ela protege: os artefatos de uma change são apagados do
+    radar quando ela é arquivada. Um achado que existe só no `design.md` —
+    uma lacuna declarada na tela, um defeito encontrado de passagem, um
+    gatilho pendurado — some junto, e reaparece meses depois como descoberta
+    nova. A change `insights-pagina-do-sistema` fechou com **cinco** lacunas
+    entre o protótipo aprovado e o que a rota serve; sem issue, as cinco
+    teriam durado exatamente até o archive.
+
+    **Na prática:**
+
+    - `proposal.md` abre com `**Issue:** #NN`, antes do `## Why`;
+    - o corpo do PR referencia a mesma issue;
+    - achado descoberto **dentro** de uma change vira issue **na hora**, não
+      no fechamento — a régua é a mesma da convenção 1 (achado de UI é
+      sequenciado, não corrigido de improviso), e a issue é o instrumento do
+      sequenciamento;
+    - issue com gatilho leva o rótulo `aguardando gatilho`, e o gatilho é
+      condição observável, não "quando fizer sentido" (convenção 22).
+
+    **A forma curta: _o que não tem issue não existe depois do archive._**
+
+24. **A issue tem ciclo de vida, e ele é o que a 23 não diz.** A 23 fixou que
+    toda change nasce de uma issue; ela para na criação. Esta diz quem move a
+    issue depois, com que gatilho, e — a parte que não estava escrita em lugar
+    nenhum — **em que ponto do fluxo o push e o PR são permitidos**.
+
+    **A forma curta: _o PR chega sobre o contrato, não sobre o rascunho._**
+
+    **As cinco colunas**
+
+    Os nomes vão como o campo `Status` do board os grava, **com a caixa que ele
+    usa** — `In progress` e `In review`, minúsculas na segunda palavra. A grafia
+    `In Progress`/`In Review` circulou em três documentos desta base e não
+    existe no board; é o tipo de divergência que nunca causa defeito e sempre
+    causa a dúvida de se é a mesma coluna.
+
+    | coluna | o que está lá | quem move, e quando |
+    |---|---|---|
+    | `Backlog` | toda issue na fila, **não priorizada** e não em andamento | workflow, na criação da issue |
+    | `Ready` | issues de uma **funcionalidade em implementação**, ordenadas | o dono, ao priorizar |
+    | `In progress` | issue com **change aberta** | pessoa, **ao abrir a change** — não no primeiro commit |
+    | `In review` | change **arquivada**, push feito e **PR aberto** | pessoa, ao abrir o PR, depois do archive |
+    | `Done` | issue fechada pelo merge do PR | workflow, quando a issue fecha |
+
+    **O gatilho de `In progress` é a change, não o código.** Issue com change
+    aberta e parada em `Ready` faz alguém pegar trabalho que já tem dono.
+
+    **Archive antes de push — a regra, e o motivo que a impede de virar ritual**
+
+    **Nenhum push e nenhum PR com a change ativa.** A change precisa estar
+    **arquivada** — `/opsx:archive` feito, specs sincronizadas — para o push
+    acontecer e o PR ser aberto. **Salvo exceção explícita do dono**, dita no
+    momento e registrada no `02` quando acontecer.
+
+    **O motivo:** change ativa é proposta que ainda pode mudar. PR aberto sobre
+    ela convida revisão de um estado que não é o final, e o archive é o que move
+    as decisões dos artefatos da change para as specs vivas. **Revisar antes do
+    archive é revisar o rascunho do contrato.**
+
+    **Por isso `In review` tem três condições, não uma** — change arquivada,
+    push feito, PR aberto. Com só a terceira, a issue apareceria em revisão com
+    a change ainda mutável, que é exatamente o estado que a regra evita.
+
+    **E isto substitui o padrão de dois PRs**, que é o que a casa fez cinco
+    vezes: os PRs #37, #39, #41, #42 e #70 são todos `chore/archive-*` abertos
+    **depois** do PR de código. Com o archive antes do push, esse segundo PR
+    **deixa de existir** — código e specs sincronizadas entram no mesmo PR. Está
+    escrito porque cinco ocorrências viram hábito, e hábito não pede permissão.
+
+    **`Closes #<issue>` no corpo do PR**
+
+    Todo PR carrega `Closes #<issue>`, e a issue fecha junto com o merge. Duas
+    precisões que a regra precisa carregar, porque sem elas ela é lida errado
+    nos dois sentidos:
+
+    - **`Closes` fecha no merge, não na aprovação.** Aprovar não fecha nada e
+      não move cartão nenhum.
+    - **Uma issue por PR** — a que originou a change. Achado descoberto dentro
+      da change que virou issue própria entra como `Refs #N`, **nunca** como
+      `Closes`. Ele é fila, não escopo deste PR; fechá-lo junto apagaria da fila
+      um trabalho que não foi feito, que é o oposto do que a 23 existe para
+      garantir.
+
+    **O que é automático, e o que não é**
+
+    Três baldes, não dois, porque a configuração dos workflows do Projects
+    **não é exposta pela API** — só o nome e se está habilitado. Afirmar mais do
+    que se mediu é a convenção 13 aplicada à própria documentação.
+
+    | | o quê |
+    |---|---|
+    | **automático, verificado** | a issue fecha no merge, pelo `Closes` do corpo do PR |
+    | **automático, inferido** | o cartão vai para `Done` quando a issue fecha — sete workflows habilitados em 24/09/2026, entre eles `Item closed`, e observado na #65 |
+    | **manual** | as quatro transições anteriores: `Backlog` → `Ready` → `In progress` → `In review` |
+
+    **Não mover à mão o que já se move**: o cartão chega a `Done` sozinho.
+
+    **A fila ordenada mora no `02`, e o board é vista**
+
+    **A ordem de execução está em `02-HISTORICO_E_STATUS.md`.** O board informa
+    **em que coluna** cada issue está, **não em que posição**.
+
+    Não é preferência: é o que sobrou depois de duas medições, ambas de
+    24/09/2026, ambas com gatilho pendurado (convenção 22).
+
+    - **A ordem manual não aparece em view nenhuma.** `Current iteration` e
+      `Next iteration` filtram por `Iteration`, vazia nos 20 itens indexados;
+      `Prioritized backlog` não filtra mas ordena por `Priority ASC`, e
+      `Priority` está vazia em todos. A ordenação gravada não aparece na view
+      sem filtro, e a view sem filtro ordena por um campo que ninguém preenche.
+      **Gatilho: alguém preencher `Priority` ou `Iteration` em qualquer item.**
+    - **O índice de itens do board está travado em 20** (`#45`–`#64`), medido
+      por CLI **e** por GraphQL. As issues #65–#68 **são** itens não-arquivados
+      do projeto — `issue.projectItems` devolve o `Status` certo de cada uma —,
+      e `project.items` continua em `totalCount: 20`. O lado de escrita
+      funciona; o de leitura do projeto não. **Gatilho: `project.items` devolver
+      mais de 20.**
+
+    **`Priority` e `Iteration` ficam vazios por decisão**, não por esquecimento:
+    preenchê-los conserta a view e não conserta o índice, e três valores de
+    prioridade não ordenam uma fila de vinte itens.
+
+    **Enquanto o índice não destravar, o board não é fonte confiável da fila** —
+    e a documentação diz isso em vez de descrever um board que funciona.
+
+    **A bloqueante mora na mesma coluna, acima da bloqueada**
+
+    E a relação vai registrada como **`blocked-by` nativo do GitHub**, que se
+    declara numa ponta e o GitHub mantém a inversa — não como prosa no corpo da
+    issue, que ninguém cruza.
+
+    O caso que expôs isso: a **#52** ficou em `Ready` marcada como bloqueada
+    enquanto a **#65**, que a bloqueava, estava em `Backlog`. Quem pegasse a
+    primeira da fila travaria no primeiro dia, e o desbloqueio não aparecia em
+    lugar nenhum sem abrir a issue.
+
+    **O nome da branch carrega o número da issue**
+
+    **`<tipo>/<numero>-<nome>`** — `docs/68-fluxo-de-trabalho-no-board`,
+    `fix/65-serie-diaria-dia-medido-vazio`. Vale daqui em diante; as 20 branches
+    anteriores são `<tipo>/<nome>` e **nenhuma é renomeada**.
+
+    É a mesma razão da 23, aplicada ao único artefato do ciclo que ainda não
+    carregava o número: fecha o circuito issue → branch → PR → archive sem
+    depender de alguém lembrar de citar.
+
+    **O que esta convenção NÃO decide**
+
+    Registrado como não decidido, que é resultado — não omissão:
+
+    - **Change abandonada, ou que não vira PR.** A issue vai para `In progress`
+      ao abrir a change; se a change for descartada, a issue volta para `Ready`,
+      volta para `Backlog`, ou fica? **Não há caso real nesta base** — nenhuma
+      das changes arquivadas foi abandonada —, e decidir sem caso seria inventar
+      regra. Vira issue quando a primeira acontecer.
+    - **Se `Ready` tem limite de itens.** O GraphQL de Projects v2 não expõe
+      limite de coluna: `ProjectV2View` não tem o campo e
+      `ProjectV2ViewConfiguration` só traz `visibleFields`. É conferência de UI,
+      não feita. Se houver limite e a fila o estourar, o que sai é decisão de
+      fila, do dono.

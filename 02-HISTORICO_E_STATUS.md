@@ -10166,3 +10166,292 @@ não rodaram — nenhum arquivo desta change vive fora de `apps/api`.
   fato. Não é defeito, e reduzir a sobreposição enfraqueceria cada um deles.
   Registrado para que a próxima mutação da área não trate as seis reprovações
   como sintoma. **Sem gatilho.**
+
+## `fluxo-de-trabalho-no-board` — 24/09/2026 · issue #68 · complementa a convenção 23
+
+Change de **registro puro**. Nenhuma linha de código, nenhum app tocado, nenhuma
+spec de comportamento de sistema. O entregável é a **convenção 24** — o ciclo de
+vida da issue pelo board —, a linha dela no `context:` do `openspec/config.yaml`,
+e este registro.
+
+### A regra nova, e a partir de quando ela vale
+
+**Nenhum push e nenhum PR com a change ativa.** A change precisa estar arquivada
+— `/opsx:archive` feito, specs sincronizadas — para o push acontecer e o PR ser
+aberto. Exceção só do dono, dita no momento, e registrada aqui quando acontecer.
+
+**A regra vale a partir desta change, e não retroage.** Escrito explicitamente
+porque o que veio antes dela vai ser lido depois por quem não viu a ordem dos
+fatos.
+
+**E ela troca o gatilho de `In review`**: a coluna deixa de ser "issue com PR
+aberto" e passa a exigir **três** condições — change arquivada, push feito, PR
+aberto. Com só a terceira, a issue apareceria em revisão com a change ainda
+mutável.
+
+### O precedente do #69, com a causa (convenção 9)
+
+O #69 abriu PR com a change ativa. **Não é violação**: a regra não existia.
+
+| evento | quando |
+|---|---|
+| #69 mergeado (`fix/65-serie-diaria-dia-medido-vazio`, `Closes #65`) | 24/09/2026 02:58:50Z |
+| #65 fechada | 24/09/2026 02:58:52Z |
+| #70 mergeado (`chore/65-archive-serie-diaria-...`, `Refs #65`) | 24/09/2026 03:13:05Z |
+
+O enunciado desta change oferecia duas saídas — arquivar antes do merge, ou
+tratar como exceção consumada. **A primeira era impossível quando a change
+abriu**: o merge já tinha acontecido, e o archive veio 14 minutos depois.
+
+**E o #69 não é caso isolado — é a quinta ocorrência do padrão que a regra
+substitui.** Medido por `gh pr list --state merged`: os PRs **#37, #39, #41, #42
+e #70** são todos `chore/archive-*` abertos **depois** do PR de código. O padrão
+de dois PRs é o que a casa fez cinco vezes, e a convenção 24 o elimina — código e
+specs sincronizadas passam a entrar no mesmo PR. Tratar o #69 como desvio
+individual teria escondido que o desvio era o padrão.
+
+### O estado do board, medido (convenção 22 — o estado ao lado, e o gatilho junto)
+
+**Tudo em 24/09/2026**, por `gh` contra `aldovrando-oliveira/buteco-agentes`,
+projeto `3` (`PVT_kwHOAVZBpM4Bkfu8`). Convenção 6: o estado do board vem de
+consulta, não de memória.
+
+**C1 — a ordem em `Ready` não aparece em view nenhuma.** `Current iteration` e
+`Next iteration` filtram por `Iteration`, **vazia nos 20 itens indexados**;
+`Prioritized backlog` não filtra mas ordena por `Priority ASC`, e `Priority`
+está **vazia em todos** (opções existentes: `P0`, `P1`, `P2`). A ordenação manual
+gravada não aparece na view sem filtro, e a view sem filtro ordena por um campo
+que ninguém preenche.
+**Gatilho:** alguém preencher `Priority` ou `Iteration` em qualquer item.
+
+**C2 — o índice do board persiste travado em 20 itens.** Medido duas vezes no
+dia, na proposta e de novo na aplicação:
+
+| consulta | resultado |
+|---|---|
+| `gh project item-list 3` | 20 itens, `totalCount: 20` |
+| GraphQL `projectV2(number:3){items(first:100)}` | **20**, `#45`–`#64`, **nenhum arquivado** |
+| `issue(65..68){projectItems}` | **os quatro estão lá**, projeto 3, `isArchived: false`, `Status` certo |
+
+Na segunda medição: #65 `Done`, #66 e #67 `Backlog`, #68 `In progress`. **O lado
+de escrita funciona e o de leitura do projeto não** — a #68 já tinha tentado
+mudar `Status`, reposicionar, e apagar e recriar o item, as três com sucesso e
+nenhuma registrada na listagem.
+**Gatilho:** `project.items` devolver mais de 20.
+
+**C3 — sete workflows habilitados, e a configuração de nenhum é exposta.**
+`Item added to project`, `Item closed`, `Pull request merged`, `Pull request
+linked to issue`, `Auto-close issue`, `Auto-add to project`, `Auto-add
+sub-issues to project`. O GraphQL devolve `name`, `number` e `enabled` — **não**
+qual `Status` cada um grava. Por isso a convenção 24 separa **três** baldes e
+não dois: automático **verificado** (a issue fecha no merge, pelo `Closes`),
+automático **inferido** (o cartão vai para `Done` quando a issue fecha — o que se
+observou na #65), e manual (as quatro transições anteriores).
+**Gatilho:** algum dos sete ser desabilitado, ou um cartão ficar fora de `Done`
+depois de um merge com `Closes`.
+
+**E os nomes das colunas não são os que todo mundo escreve** (a C4 do
+`design.md` é outra — é a da convenção 23 fora da `main`, logo abaixo). O campo `Status`
+define `Backlog`, `Ready`, **`In progress`**, **`In review`**, `Done` —
+minúsculas na segunda palavra. A grafia `In Progress`/`In Review` aparece no
+enunciado desta change, no corpo da #68 e no `tasks.md` arquivado da #65, e **não
+existe no board**. É o tipo de divergência que nunca causa defeito e sempre causa
+a dúvida de se é a mesma coluna.
+
+### O achado que não estava no enunciado: a convenção 23 não estava na `main`
+
+O `01-ARQUITETURA_E_CONVENCOES.md` da `main` **terminava na 22**. A convenção 23
+existia só no commit **`d9ba259`** da branch `feat/52-insights-pagina-do-sistema`,
+que **não foi pushada** — 26 linhas no `01` e 5 no `context:` do
+`openspec/config.yaml`, medidas por `git diff`.
+
+**E o `tasks.md` arquivado da change da #65 já citava "convenção 23", em duas
+linhas.** É a convenção 6 na forma exata que ela mesma nomeia: referência que
+sobrevive ao archive apontando para o que não existe no arquivo que ela cita. Não
+foi pega por conferência de linha nem de caminho — os dois estavam certos; o que
+estava errado era a existência do alvo.
+
+**A decisão (D1 do `design.md`):** esta change trouxe as 26 + 5 linhas para a
+`main`, **verbatim**, conferidas por `diff` contra `d9ba259`, e escreveu a 24 em
+cima. As alternativas custavam mais: ramificar da #52 prenderia esta change ao
+archive de uma change de frontend; deixar buraco no 23 garantiria conflito no fim
+do `01` e no `context:`; e renumerar a 23 para 24 faria a citação arquivada da
+#65 apontar para outra regra.
+
+### Itens abertos que esta change deixa
+
+- **O rebase da #52 precisa descartar a parte de convenção do `d9ba259`.** O
+  commit fixa a convenção 23 **e** propõe a change de frontend; a parte de
+  convenção agora vive na `main`, e mantê-la no rebase duplica as 26 + 5 linhas.
+  **Gatilho: o próprio rebase da #52.** O SHA está escrito aqui para não depender
+  de alguém lembrar.
+- **Change abandonada, ou que não vira PR: não decidido.** A issue vai para
+  `In progress` ao abrir a change; se a change for descartada, volta para
+  `Ready`, volta para `Backlog`, ou fica? **Não há caso real nesta base** —
+  nenhuma change arquivada foi abandonada —, e decidir sem caso seria inventar
+  regra. **Gatilho: a primeira change abandonada.**
+- **Se `Ready` tem limite de itens: não conferido.** O GraphQL de Projects v2 não
+  expõe limite de coluna (`ProjectV2View` não tem o campo;
+  `ProjectV2ViewConfiguration` só traz `visibleFields`). É conferência de UI. Se
+  houver limite e a fila o estourar, o que sai é decisão de fila, do dono. Fica
+  na #68.
+- **O refinamento da régua "o par não é universal" está roteado para o lugar
+  errado, e esta change não o executou.** O registro da change
+  `serie-diaria-dia-medido-vazio` escreveu que ele *"vai também para a #68, junto
+  da documentação do board"*. **Ele é régua de teste** — quando um requisito tem
+  duas metades, ou as duas têm cenário, ou o `design.md` diz qual não tem e por
+  quê — e **não tem nada a ver com o ciclo de vida da issue**. Escrevê-lo dentro
+  da convenção do board o esconderia de quem o procura. **Destino não decidido**;
+  candidatos são a convenção 5 (testes) e a 10 (risco nomeado tem contraparte
+  verificável). O instrumento é issue própria (convenção 23). **Gatilho: a
+  próxima change que toque guarda de par positivo/negativo.**
+
+### Décima oitava medição da convenção 18
+
+Projeção no `design.md`, feita **depois** de fechar as nove conferências. Esta
+seção só compara.
+
+**As três colunas de código, projetadas em zero — e zero é o resultado.**
+Verificado por `git status`: **nenhum** arquivo sob `apps/`, `libs/` ou `tests/`
+foi tocado.
+
+| coluna | projetado | medido |
+|---|---|---|
+| teste escrito à mão | 0 | **0** |
+| duplo de teste | 0 | **0** |
+| gerado | 0 | **0** |
+
+**E as três categorias de guarda também**, vazias por construção: guarda novo
+**0**, reforçado **0**, adaptado **0**. `openspec validate --all` e
+`scripts/check-docs.py` rodaram como verificação e **não foram modificados** —
+guarda preexistente que roda não conta em categoria nenhuma. Esta é a primeira
+change da série com as **seis** linhas em zero, e ela existe para medir uma coisa
+só: se a coluna de registro erra mais quando é a única coluna.
+
+**Erra, erra muito, e erra mais do que o total deixa ver.**
+
+| destino | projetado | medido | erro |
+|---|---|---|---|
+| `01`, convenção 23 trazida | **26** (medição) | 26 | exato, por construção |
+| `01`, convenção 24 nova | ~95 | **139** | **+46%** |
+| `config.yaml`, parágrafo da 23 | **5** (medição) | 5 | exato, por construção |
+| `config.yaml`, linha da 24 | ~7 | **6** | −14% |
+| `02-HISTORICO_E_STATUS.md` | ~130 | **289** | **+122,3%** |
+| `proposal.md` | **127** (medição) | 127 | exato, por construção |
+| `design.md` | **451** (medição) | **456** | ver a nota final |
+| delta de spec | ~95 | **130** | **+37%** |
+| `tasks.md` | ~200 | **205** | +2,5% |
+| **total** | **~1.138** | **1.383** | **+21,5%** |
+
+**A faixa declarada era 1.050–1.300, e o entregue ficou fora dela**, acima.
+Não é detalhe de apresentação: a faixa existe para ser o julgamento da projeção,
+e esta reprovou no critério que ela mesma fixou.
+
+#### A régua nova: linha medida dentro de uma projeção dilui o erro dela
+
+**O total errou +21,5%. As linhas que eram projeção de verdade erraram
++45,9%** — **527** projetadas contra **769** entregues.
+
+A diferença inteira vem das quatro linhas que a tabela já marcava como
+**medição, não projeção**: as 26 + 5 do diff da #52 e os dois artefatos escritos
+antes de projetar. Elas somam **614** linhas que não podiam errar — **44% de tudo
+que foi entregue**. É o bastante para puxar o erro aparente a **menos da metade**
+do real.
+
+**A régua:** projeção que mistura linhas medidas com linhas projetadas tem que
+comparar **as duas somas separadas**, senão o erro é medido contra um denominador
+que contém a própria resposta. É parente direto da convenção 22 — *régua citada
+sem escopo não é régua* —, aplicada à aritmética da projeção em vez de ao número
+citado.
+
+**A tabela do `design.md` marcava quais linhas eram medição, e é só por isso que
+esta comparação existe.** Sem as marcas, o +21,5% teria passado como o
+resultado da rodada, e a série teria registrado uma projeção boa onde houve uma
+ruim.
+
+#### A causa estrutural, e ela é a mesma nos dois piores componentes
+
+**O `02` e a convenção 24 erraram pelo mesmo motivo, e a projeção contou os dois
+do mesmo jeito errado: por tópico.**
+
+A convenção 24 foi projetada em **seis blocos** — tabela de colunas, archive com
+motivo, `Closes`, automático×manual, branch, não decididos. Entregou **nove**:
+ganhou a forma curta, o gatilho de `In progress` como parágrafo próprio, a
+consequência do padrão de dois PRs, e o bloco da bloqueante com `blocked-by`.
+
+**Mas o acréscimo não é "surgiram tópicos a mais" — é imposto por número
+medido.** A convenção 22 manda que todo número nasça com o estado ao lado **e**
+com o gatilho de recalibração. Esta change escreveu **sete** gatilhos entre a
+convenção 24 e o registro, e cada um custa de quatro a seis linhas que **uma
+contagem de tópicos não enxerga**: o gatilho não é um tópico, é um acréscimo
+obrigatório a todo tópico que carregue medição.
+
+O `02` é o caso extremo do mesmo mecanismo: ele carrega **as nove conferências
+inteiras**, cada uma com método, data, tabela de evidência e gatilho. A projeção
+o contou como "as nove conferências, o precedente, os não decididos e o
+fechamento" — quatro itens —, e cada um deles é um bloco com medição dentro.
+
+**A régua, a contar a partir daqui:** em projeção de registro, contar os tópicos
+**e** contar os números medidos que vão entrar, somando o custo do estado e do
+gatilho de cada um. O delta de spec teve o mesmo defeito por uma terceira via
+(+37%): projetou requisitos e não projetou que cada requisito medido rende dois a
+três cenários, não um.
+
+#### As duas direções de erro nomeadas de antemão
+
+O `design.md` nomeou duas, e a convenção 18 diz que nomear direção não substitui
+contar componentes. **Confirmado, e desta vez com um acerto e um erro que valem
+separados:**
+
+- **Acertou QUAL componente erraria.** O `design.md` escreveu, antes de aplicar:
+  *"a componente que mais provavelmente erra é o `02`, porque é a única cuja
+  contagem depende de quantos achados o fechamento acrescenta, e não de estrutura
+  conhecida"*. **Foi exatamente ela**, com folga.
+- **Errou a DIREÇÃO, e errou pela razão oposta à prevista.** A previsão era
+  **para cima** — o `02` escreveria por referência à #68 em vez de repetir. Ele
+  errou **para baixo**, e muito: repetiu tudo, porque referência a issue não
+  sobrevive ao archive e o `02` é justamente o que sobrevive.
+- **E a previsão de que "para baixo" viria de uma décima conferência não
+  aconteceu.** Nenhuma conferência nova apareceu na aplicação; as nove fecharam
+  antes de projetar, que é o que a convenção 18 manda. O erro para baixo veio de
+  outro lugar — do custo por conferência **já conhecida**, não de conferência
+  nova.
+
+A convenção 18 já registrava, na terceira ocorrência, que as duas direções
+nomeadas de antemão estavam as duas erradas e que o desvio veio de um terceiro
+lugar. **Aqui o padrão se repete com uma diferença nova:** é a primeira vez nesta
+série em que a **componente** nomeada estava certa e só a direção errou. A régua
+se afina: *nomear a componente que vai errar é possível e útil; nomear a
+direção dela continua sem valer nada.*
+
+**E a régua de registro da série se confirma com a causa mais precisa:**
+*projeção de registro cresce com os achados* — agora se sabe **por onde**. Não
+pelos achados novos que aparecem depois de projetar, mas pelo custo por achado
+**já conhecido** que a contagem de tópicos não cobra.
+
+#### Duas notas de medição, e as duas são convenção 22 em miniatura
+
+**A linha do `design.md`.** A tabela registra **451** linhas para ele próprio,
+medidas, e o arquivo fechou em **456**. As cinco de diferença são a própria
+correção que trocou as linhas projetadas dos artefatos pelas medidas. Um número
+medido continua correto sobre o estado em que foi medido, e aqui o estado mudou
+**por causa da medição**. Registrado, não corrigido lá — corrigir a projeção
+depois do fato é o que a convenção 18 proíbe.
+
+**A linha do `02`, e esta quase passou.** A primeira redação desta seção mediu o
+`02` em **138** linhas — o registro **sem** o fechamento da medição. Mas a
+projeção de ~130 dizia, com todas as letras, *"as nove conferências, o precedente
+do #69, os não decididos, **e o fechamento desta medição**"*. Medir 138 contra
+130 daria **+6%** e um resultado falso, porque o medido excluía um componente que
+o projetado incluía. O valor certo é o delta inteiro do arquivo: **289**.
+
+**E o número tem um ponto fixo, que é como ele foi obtido:** esta seção conta o
+arquivo inteiro, inclusive ela mesma, então medir, escrever o número e medir de
+novo só para quando o texto para de crescer. Foram três rodadas. O valor acima é
+o da rodada em que medir de novo devolveu o mesmo número.
+
+**É a ocorrência 3 da convenção 22** — o sistema não mudou, mudou a **pergunta**
+feita ao número. Dois números sobre a mesma grandeza aparente (linhas do `02`)
+respondendo a perguntas diferentes conviviam sem se contradizer, e só se
+contradizem quando um é citado no lugar do outro. **O sintoma foi o de sempre:
+uma medição correta, com o número certo, respondendo à pergunta errada.**
