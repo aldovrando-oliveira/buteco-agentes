@@ -193,13 +193,19 @@ com `git status` que o diff contém **apenas** o que está na primeira tabela.
 - [x] 8.1 **Nada de push e nada de PR até aqui.** Rodar `/opsx:archive`, com as
       specs sincronizadas, **antes** do primeiro `git push`. Se algo obrigar a
       inverter, é exceção do dono e vai escrita no `02` (D2).
-- [ ] 8.2 Depois do archive: push da branch `docs/68-fluxo-de-trabalho-no-board`
+- [x] 8.2 Depois do archive: push da branch `docs/68-fluxo-de-trabalho-no-board`
       (D6 — o número da issue no nome).
-- [ ] 8.3 Abrir o PR com **`Closes #68`** no corpo, e mover a #68 para
+- [x] 8.3 Abrir o PR com **`Closes #68`** no corpo, e mover a #68 para
       `In review` — as três condições da 2.4 estarão satisfeitas nesta ordem.
-- [ ] 8.4 **Não** abrir PR `chore/archive-*` depois (2.5): as specs
+- [x] 8.4 **Não** abrir PR `chore/archive-*` depois (2.5): as specs
       sincronizadas entram neste mesmo PR. Se o hábito puxar para o segundo PR,
       é o sinal de que a 2.5 precisava mesmo estar escrita.
-- [ ] 8.5 Conferir depois do merge que a #68 fechou pelo `Closes` e que o cartão
+- [x] 8.5 Conferir depois do merge que a #68 fechou pelo `Closes` e que o cartão
       foi para `Done` **sozinho** — é a verificação empírica da 2.7, e o
       resultado (automático ou manual) volta para o `02`.
+      **Medido em 24/09/2026:** PR #71 mergeado às 16:47:53Z, #68 fechada às
+      16:47:54Z (`reason=COMPLETED`, pelo `Closes`) e cartão em `Done` sem
+      intervenção. **O balde "automático, inferido" da 2.7 passa a verificado.**
+      E o contraste vale junto: o workflow `Pull request linked to issue`, também
+      habilitado, **não** moveu o cartão para `In review` na abertura do #71 —
+      confirma que as quatro transições anteriores são manuais.
