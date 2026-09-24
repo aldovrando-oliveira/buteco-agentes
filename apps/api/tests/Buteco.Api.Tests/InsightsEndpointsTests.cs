@@ -73,7 +73,7 @@ public class InsightsEndpointsTests : IClassFixture<InsightsEndpointsTests.Insig
 
     /// <summary>
     /// O instante que decide o guarda do balde: <b>2026-09-15T02:30Z</b> é
-    /// <b>domingo 14/09 às 23:30</b> em <c>America/Sao_Paulo</c> — outro dia
+    /// <b>segunda-feira 14/09 às 23:30</b> em <c>America/Sao_Paulo</c> — outro dia
     /// <i>e</i> outro dia da semana. Em UTC é terça 15/09.
     /// </summary>
     private const string NightInstant = "2026-09-15T02:30:00Z";

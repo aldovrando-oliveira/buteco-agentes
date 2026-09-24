@@ -420,6 +420,34 @@ o versionamento pretende seguir
   não uma série.
 - **Nenhuma migração, nenhum índice, nenhuma coluna.** A etapa é somente leitura.
 
+**Métricas de operação — rotas de agregação, escopo do agente (etapa 3, change B)**
+
+- `GET /insights/agents/{id}`, com `from` e `to`, devolvendo o agregado da aba de
+  Insights de **um** agente. Herda da rota do sistema a janela, o balde local, a
+  preservação de nulo e o mapa de regimes, **sem reabrir nada** — e a rota do
+  sistema não é alterada.
+- **Não é a rota do sistema filtrada por agente.** Das 27 métricas do catálogo,
+  **nove não transferem**: duas não existem neste escopo (por agente, e falhas de
+  indexação), quatro são outra consulta, e quatro mudam de **significado** com a
+  mesma consulta — "por modelo" passa a ser o histórico daquele agente, e a
+  profundidade de delegação passa a ser a **posição** dele na cadeia, não o
+  tamanho dela.
+- **Os dois lados da delegação leem fontes diferentes, e podem divergir.** "Delega
+  para" conta o que o agente **tentou**; "Acionado por" conta o que de fato
+  **rodou** nele. Com uma delegação que não virou execução, os dois lados da mesma
+  relação mostram números diferentes — **e isso é resultado correto**, declarado na
+  resposta em vez de implícito. Duas causas independentes, e a segunda é que os
+  dois lados são situados por **relógios diferentes**: a origem pela execução dela,
+  o destino pela execução dele.
+- **Agente inexistente responde `404`**, nunca `200` com agregado vazio. Agente que
+  **existe e não tem dado** responde `200` com contagens `0`, e agente **inativo**
+  responde `200` — inatividade é estado de cadastro, não ausência de sujeito.
+- **Os tokens de embedding do agente cobrem só a busca**, e dizem isso: a
+  indexação é trabalho da base, não de um agente, e atribuí-la pelo vínculo de
+  conhecimento contaria a mesma indexação em cada agente vinculado.
+- **Nenhuma migração, nenhum índice, nenhuma alteração no `nginx.conf`** — o
+  prefixo `insights` já roteia as rotas de escopo abaixo dele.
+
 **Documentação e governança**
 
 - Licenciamento sob Apache-2.0, com `LICENSE` e `NOTICE`.
