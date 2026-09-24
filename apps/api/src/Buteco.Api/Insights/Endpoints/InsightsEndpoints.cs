@@ -1,3 +1,4 @@
+using Buteco.Api.Insights.Queries.GetAgentInsights;
 using Buteco.Api.Insights.Queries.GetSystemInsights;
 using Buteco.Api.Insights.Responses;
 using Mediator;
@@ -33,6 +34,16 @@ public static class InsightsEndpoints
     {
         app.MapGet("/insights/system", GetSystemInsightsAsync);
 
+        // UMA rota por ESCOPO, e não a do sistema com um filtro. O escopo do
+        // agente é outro conjunto de consultas: nove das 27 métricas do catálogo
+        // não transferem — duas não existem, quatro são outra consulta, e quatro
+        // mudam de significado com a mesma consulta (design.md de
+        // rotas-de-agregacao-agente, D1).
+        //
+        // Program.cs NÃO precisa de nada: ele já chama MapInsightsEndpoints, e a
+        // rota nova entra por este mapeamento.
+        app.MapGet("/insights/agents/{id:guid}", GetAgentInsightsAsync);
+
         return app;
     }
 
@@ -56,5 +67,36 @@ public static class InsightsEndpoints
             new GetSystemInsightsQuery(resolvedFrom, resolvedTo), cancellationToken);
 
         return TypedResults.Ok(insights);
+    }
+
+    // A ORDEM das duas checagens é contrato, não acaso (design.md, D3): a JANELA
+    // é validada primeiro, a EXISTÊNCIA depois. Uma janela inválida para um id
+    // inexistente responde 400, não 404 — o cliente corrige um problema por vez,
+    // e o formato do erro de janela continua sendo o mesmo do resto da casa.
+    //
+    // O 404 é decisão, e o par que o torna discriminante está no guarda: agente
+    // que EXISTE e não tem dado no período responde 200 com contagens 0. Um
+    // agregado zerado para um id inexistente afirmaria medição sobre quem não
+    // existe — é o quarto estado da convenção 13 ("sei que não existe") caindo no
+    // segundo ("medi e não achei nada"). Agente INATIVO responde 200: inatividade
+    // é estado de cadastro, não ausência de sujeito.
+    private static async Task<Results<Ok<AgentInsightsResponse>, NotFound, ValidationProblem>> GetAgentInsightsAsync(
+        Guid id,
+        string? from,
+        string? to,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (!InsightsPeriod.TryResolve(from, to, out var resolvedFrom, out var resolvedTo, out var errors))
+        {
+            return TypedResults.ValidationProblem(errors);
+        }
+
+        var insights = await mediator.Send(
+            new GetAgentInsightsQuery(id, resolvedFrom, resolvedTo), cancellationToken);
+
+        return insights is null
+            ? TypedResults.NotFound()
+            : TypedResults.Ok(insights);
     }
 }

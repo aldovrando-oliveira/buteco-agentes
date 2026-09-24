@@ -5602,6 +5602,232 @@ desenvolvimento só sobe infraestrutura (`postgres`, `rabbitmq`, `waha`) — **n
 roda `api` nem `workers`**, então não há `TZ` a entregar ali. A lista fechada o
 incluiu por simetria com o de produção, e a simetria não existia.
 
+### Etapa 3, change B — a rota por agente (`rotas-de-agregacao-agente`, 2026-09-23)
+
+`GET /insights/agents/{id}`, herdando de A a janela, o balde, o nulo e o mapa de
+regimes — `InsightsPeriod` e `MetricsOptions` reusadas sem alteração, e a rota do
+sistema **não tocada**.
+
+#### O mapa das 27 no escopo do agente — nove NÃO transferem
+
+Montado contra as seis tabelas, não por analogia com o mapa da A. O veredito é
+um de quatro: **filtro** (mesma consulta com `AgentId`), **significado** (mesma
+consulta, outra pergunta), **outra consulta**, **não existe**.
+
+| veredito | quantas | quais |
+|---|---|---|
+| filtro | **17** | M1, M2, M6, M7, M9, M10, M11, M12, M17, M21–M25, M27, M29, M32 |
+| significado | **4** | M15, M16a, M16b (histórico daquele agente, não comparação entre agentes) e **M26** (posição na cadeia, não tamanho dela) |
+| outra consulta | **4** | M14, M19, M28, M34 |
+| **não existe** | **2** | **M13** (o recorte já é o agente) e **M30** (`knowledge_indexing_attempts` não tem coluna de agente) |
+
+**A frase que a etapa 5 precisa receber: nove das 27 não transferem por
+analogia.** Se o mapa tivesse sido herdado, M13 e M30 sairiam como listas vazias
+— que é o texto de *"medi e não achei nada"* —, M19 e M14 sairiam com o rótulo do
+todo sobre metade do dado, M28 com um agrupamento de um elemento, M15/M16a/M16b/
+M26 com o rótulo da comparação errada, e **M34 com um lado só**.
+
+#### A assimetria tem DUAS causas, e a segunda é achado desta change
+
+A D16 de `metricas-execucao-coleta` nomeou a primeira: **resultado que não produz
+execução** (`NotStarted` nunca cria task; `Expired` pode ter criado uma que nunca
+rodou).
+
+**A segunda é a janela, e ela aparece ao ler de onde cada lado tira o seu tempo:**
+
+| lado | fonte | de onde vem a janela |
+|---|---|---|
+| "Delega para" | `delegation_outcomes` | `StartedAt` da execução **de origem**, por `SourceTaskId` |
+| "Acionado por" | `task_executions` | `StartedAt` da execução **de destino**, a própria linha |
+
+`delegation_outcomes` não tem coluna temporal utilizável — `LastObservedAt` é a
+última leitura, não o instante do evento —, então a janela dela é emprestada do
+pai. **São dois relógios.** Uma delegação disparada às 23:58 cuja task de destino
+roda às 00:03 tem os dois lados em **dias diferentes** do balde.
+
+**Consequência que a etapa 5 precisa receber antes de desenhar: a divergência não
+some com período maior, e não é ruído de borda a arredondar.** Ela é estrutural
+nas duas causas. A resposta a declara pelo código `delegation-sides-are-not-mirrors`.
+
+**Recusado:** situar os dois lados pelo mesmo relógio. Quebraria a soma do
+protótipo aprovado — *"Tasks executadas 97 · 97 por delegação"* compara com as
+execuções do próprio agente na janela, e trocar o relógio de um lado faria o card
+discordar do número logo acima, na mesma tela.
+
+#### As duas parcialidades NOVAS deste escopo, e a recusa que as produz
+
+- **M19 cobre só a busca** (`embedding-covers-search-only`). A metade de
+  indexação pendura em `knowledge_indexing_attempts`, sem coluna de agente.
+- **M30 não existe** — mesma causa, e não há campo para ela no DTO.
+
+**O caminho por `AgentKnowledgeBases` foi RECUSADO, e a razão é aritmética:** o
+vínculo é de **muitos para muitos**, então uma indexação que aconteceu **uma vez**
+seria contada em cada agente vinculado à base. O total por agente somaria mais que
+o total do sistema, e cada número afirmaria como trabalho daquele agente um
+trabalho que não foi dele — nenhum agente pediu aquela indexação.
+
+**Registrado porque a etapa seguinte a redescobre e pode aceitá-la.** O guarda que
+a impede semeia o vínculo de propósito: sem ele, a implementação recusada também
+devolveria o número certo, e o guarda ficaria verde com e sem o defeito
+(convenção 15, primeira forma). **Verificado por mutação** — ver abaixo.
+
+#### A régua de contenção de `apps/api`, recalibrada E com o uso escrito
+
+**31 classes de teste que sobem contêiner**, medido em 23/09/2026 (30 antes desta
+change: 26 por `IClassFixture` e 4 que constroem o seu direto). Recalibrar é
+tarefa de quem muda o estado (convenção 22).
+
+**E o registro diz para que o número serve, porque referência que ninguém
+consulta não é régua:**
+
+- **Quando é consultada:** suíte lenta; suíte reprovando **em bloco na
+  inicialização de fixture** (o sintoma de contenção, que parece falha de teste);
+  ou a decisão de acrescentar mais uma classe com contêiner.
+- **O que permite concluir hoje: nada além de registrar o crescimento** — e isso
+  é resultado, não lacuna. Não há limiar porque a duração da suíte de `apps/api`
+  **nunca foi registrada com a contagem de classes ao lado**. Existe duração
+  medida (`1 m 21 s` e `2 m 18 s`, 23/09/2026), mas anotada para explicar o flake
+  de `apps/inbox`, sem dizer quantas classes havia — número certo, sem o estado
+  colado.
+- **O que NÃO permite:** concluir que `apps/api` esteja perto da parede que
+  `apps/workers` encontrou na **13ª** classe. O transporte é inválido:
+
+  | | `apps/workers` | `apps/api` |
+  |---|---|---|
+  | contêineres por classe | **2** (Postgres + RabbitMQ) | **1** (o fixture não sobe RabbitMQ) |
+  | classes rodam | **serializadas** por `WorkerHostCollection` | **em paralelo** — nenhuma `CollectionDefinition` |
+  | contagem | 14 na coleção | **31** com esta change |
+
+  Trinta e uma classes de um contêiner em paralelo e treze de dois não são a mesma
+  grandeza. Usar um número no lugar do outro é a ocorrência 3 da convenção 22 — o
+  mesmo número respondendo a outra pergunta.
+- **O que a tornaria acionável:** a duração da suíte registrada **com a contagem
+  ao lado**, no molde que `apps/workers` recalibrou em 20/09/2026 (`podman ps` em
+  zero + teto de ~10 min, referência `6m37s com 14 classes`). Lá o critério de
+  **carga foi abandonado** por não discriminar: a mesma suíte fechou `268/268 em
+  6m37s com load 3,10` e reprovou `2 de 268 em 38m07s com load 3,24`.
+
+**As duas são a mesma família de referência, mantida à mão em dois apps** — quem
+mexer numa olha a outra. A alternativa estrutural também é a mesma dos dois lados,
+e não é desta change: uma `ICollectionFixture` compartilhando **um** par de
+contêineres.
+
+#### Suítes, com o regime colado
+
+**Baseline remedida em `git worktree` limpo** (`4c9e768`), **não herdada** — e a
+ordem foi a mesma nas duas rodadas: `workers → api → inbox`.
+
+| alvo | baseline | fechamento | |
+|---|---|---|---|
+| `apps/workers` | **386/386**, 8m05s | **386/386**, 7m56s | intocada |
+| `apps/api` | **372/372**, 2m51s | **391/391**, 1m52s | **+19 casos** |
+| `apps/inbox` | **203/203**, 0m45s | **203/203**, 0m33s | intocada |
+
+**Regime:** Darwin 24.6.0, Podman, `TESTCONTAINERS_RYUK_DISABLED=true`. **`podman
+ps` NÃO estava em zero** nas duas rodadas — os três contêineres de
+desenvolvimento (`postgres`, `rabbitmq`, `waha`) ficaram no ar. **Carga na
+largada: 5,29 na baseline e 14,32 no fechamento** (resíduo da rodada anterior).
+Nenhum contêiner de teste vazou. Os **10 `.csproj` compilam** (não há `.sln` na
+raiz). Saídas completas guardadas em arquivo, sem filtro (convenção 19).
+
+**O flake de `apps/inbox` não reproduziu — 203/203 nas duas rodadas —, e pelo
+mecanismo já registrado:** quem rodou imediatamente antes foi `apps/api`, o alvo
+leve. **Quinto ponto de medição**, e a caracterização *"reprova sob contenção, não
+sempre"* segue valendo. A régua "202/203" continua enganando.
+
+**E um resultado que vale direto para o item da régua de contenção:** o fechamento
+rodou `apps/api` em **1m52s com 31 classes de contêiner**, mais rápido que a
+baseline em **2m51s com 30** — uma classe a mais, 34% menos tempo. **Contagem de
+classe sozinha não prevê duração**, e duração sozinha, sem controlar os
+contêineres de dev, também não é régua calibrada. É a primeira duração de
+`apps/api` registrada **com a contagem de classes colada**, que é o que o item de
+método pede para poder decidir.
+
+#### Décima quinta medição da convenção 18 — o par não é universal, mas a UNIDADE era outra
+
+**Arquivos criados: 4 projetados, 4 reais. Modificados: 4 projetados, 4 reais —
+exato nos dois, e é o terceiro acerto seguido do método de contar criados e
+modificados separadamente a partir do blast radius lido no código.**
+**Gerado: 0 projetado, 0 real.**
+
+| régua | projetado | real | erro |
+|---|---|---|---|
+| arquivos criados | 4 | **4** | **0%** |
+| arquivos modificados | 4 | **4** | **0%** |
+| linhas à mão, `src` | ~700 | **948** | +35% |
+| linhas à mão, teste (casos) | ~250 | **333** | +33% |
+| duplo / infraestrutura de teste | ~290 | **231** | −20% |
+| linhas geradas | 0 | **0** | **0%** |
+| documentação | ~170 | **194** | +14% |
+| **casos de teste** | **15** | **19** | **+27%** |
+| **total de linhas** | ~1.410 | **1.739** | +23% |
+
+**A pergunta desta medição era se "projetar o par só onde o oposto é exprimível"
+derrubaria o erro em casos para a faixa das linhas. Derrubou pela metade, e a
+causa do que sobrou NÃO é o par.**
+
+- décima terceira: **−34%** (contou guarda e não par);
+- décima quarta: **+62%** (contou par em todo requisito);
+- décima quinta: **+27%** — magnitude menor que as duas, e **o par acertou**: os
+  três pares projetados (`404`/vazio, só delega/só é delegado, nulo) saíram
+  exatamente três.
+
+**A causa dos 4 casos a mais é a UNIDADE, e ela já estava registrada.** Os quatro
+extras — dia da semana, janela antes do regime, delegação sem execução, e o
+desdobramento do bloco de regime — são todos **cenários da delta de spec** que a
+projeção agrupou por *afirmação*. É literalmente a régua que a 5a-4 escreveu:
+*"projetar contando os cenários da delta, não a lista de afirmações"*. A prova é
+aritmética e não deixa margem:
+
+> **A delta de spec tem 19 `#### Scenario:`. Foram entregues 19 casos. Exato.**
+
+**Régua para a décima sexta, e ela substitui a lista de blocos: contar
+`#### Scenario:` na delta de spec.** O par continua valendo como critério para
+*escrever* o cenário; ele não é mais a unidade de *contagem*.
+
+**Segunda leitura, sobre as linhas de `src` (+35%):** a change entrega **registro
+de mecanismo**, e nessas o comentário é o produto (convenção 18). Medido: o DTO
+saiu em **2,08:1** de comentário para código — ele é quase inteiro a razão de cada
+campo existir e de os ausentes estarem ausentes —, e o handler em **0,43:1**,
+porque é SQL. Combinados, **0,65:1**. A projeção não separou os dois artefatos e
+usou um custo único; **projetar a proporção por arquivo, conforme o que cada um
+entrega**, é o refinamento que esta medição sugere.
+
+**Terceira leitura, sobre o duplo (−20%):** a única régua que errou **para
+baixo**. A projeção previu ~290 linhas para um fixture mais rico que o da change A
+(~230) por causa dos três cenários do protótipo; o real foram **231** — a mesma
+ordem do gêmeo. Cinco agentes e cinco blocos de `insert` custaram o que um agente
+e cinco blocos custaram lá: **o custo do duplo é dirigido pelo número de blocos de
+semeadura, não pelo número de sujeitos semeados.**
+
+#### Conferência de escopo de arquivo — zero desvios
+
+A lista fechada foi montada **por leitura do repositório**, e não por analogia com
+a da change A. Resultado: **nenhum arquivo tocado fora dela**.
+
+As duas exclusões que a analogia teria produzido, e que foram conferidas antes:
+
+- **`Program.cs`** — a A o modificou; aqui `:133` **já** chama
+  `MapInsightsEndpoints()`, e a rota nova entra pelo mapeamento existente.
+- **`01-ARQUITETURA_E_CONVENCOES.md`** — a A o modificou pela seção de fuso; este
+  arquivo **não tem inventário de rotas** e a palavra `insights` não aparece nele.
+
+É o contraste direto com a change A, que teve **três desvios** — dois arquivos
+tocados fora da lista e um da lista não tocado (`docker-compose.yml`, incluído por
+simetria com o de produção, e a simetria não existia).
+
+#### Guardas verificados por mutação (convenção 15, quinta forma)
+
+**Quatro mutações, quatro reprovas do tamanho certo** — e a quarta testa uma
+afirmação do próprio `design.md`, não do código:
+
+| mutação | reprovou | quais |
+|---|---|---|
+| "Acionado por" passa a ler `delegation_outcomes` por `TargetAgentId` | **2 de 19** | só os dois guardas da assimetria |
+| balde da rota nova trocado para `UTC` | **2 de 19** | só os dois guardas de dia local e dia da semana |
+| a checagem de existência removida (`404` vira `200` com agregado vazio) | **1 de 19** | só o guarda de agente inexistente |
+| **a implementação RECUSADA** — somar a indexação pelo vínculo de base | **1 de 19** | só o guarda de M19, que é o que prova que ele discrimina |
+
 ### A rota da etapa 3 não chegava ao painel: `insights` fora do nginx (`roteamento-insights-no-nginx`, 2026-09-23)
 
 **Estado real:** aplicada até a tarefa 2.3, **deploy pendente**, nada commitado.
@@ -9746,3 +9972,47 @@ onde se procura.
   comentário do arquivo — quando a etapa 4 criar a rota de página, é essa frase
   que passa a merecer a inclusão, e só ela.
   - **Gatilho:** a etapa 4 começar. **Posição:** antes dela.
+
+### Abertos por `rotas-de-agregacao-agente` (2026-09-23)
+
+- **M27 somar as DUAS fontes — este escopo torna a lacuna quantificável sem
+  torná-la resolvida.** `a2a_tasks` tem `agent_id`, então, no escopo do agente,
+  as recusas feitas por `apps/api` — que nunca produzem linha de execução — são
+  **contáveis**. Não foram contadas, e a razão que decide é a terceira: (1) a
+  change A não as contou no escopo do sistema, embora pudesse pelo mesmo
+  caminho, e contá-las só de um lado faria os dois escopos medirem coisas
+  diferentes com o mesmo rótulo; (2) contar a recusa não traz o motivo, nem
+  provedor, nem modelo, então a lacuna que a tela precisa continua aberta; (3) é
+  correção de **coleta** feita dentro de uma change de **agregação**, decidida no
+  meio do caminho — o que a convenção 1 recusa.
+  - **Gatilho:** a change de coleta do motivo das recusas fechar.
+  - **Posição:** dentro dela, decidindo para **os dois escopos ao mesmo tempo**.
+
+- **A régua de contenção de `apps/api` não tem critério, só contagem.** Esta
+  change a deixa em **31 classes** com a primeira duração registrada ao lado, e
+  escreveu para que ela serve — mas **não** decidiu o limiar. O que falta
+  decidir: se o critério passa a ser **duração com a contagem colada** (molde da
+  recalibração de `apps/workers` de 20/09/2026), ou se as duas suítes vão direto
+  para a `ICollectionFixture` que dispensa a régua.
+  - **Item de MÉTODO**, não da linha `metricas-de-operacao`.
+  - **Gatilho:** a primeira das três situações de consulta — suíte lenta, suíte
+    reprovando em bloco na inicialização de fixture, ou a **32ª** classe de
+    contêiner.
+  - **Posição:** item próprio, **junto do item da `ICollectionFixture` de
+    `apps/workers`**, porque são a mesma família e separá-los é o que produziu
+    este estado.
+
+- **Os protótipos continuam SEM ser abertos.** A recusa de autenticação do MCP do
+  Claude Design (`FIRST_PARTY_AUTH_REJECTED`, HTTP 403, pedindo `/design-login`)
+  se repetiu nesta sessão — mesmo estado que a change A declarou. Tudo que as
+  duas changes afirmam sobre as telas vem da D16 arquivada e do catálogo acima.
+  **Onde o protótipo contrariar, o protótipo vence**, e a divergência vira
+  registro pela convenção 9.
+  - **Gatilho:** `/design-login` rodado pelo dono.
+  - **Posição:** antes de a **etapa 5** começar.
+
+- **Os rótulos das cinco que mudam de significado** (M15, M16a, M16b, M26 e o
+  M14 parcial) não podem ser copiados da tela do sistema. A métrica declara o que
+  é; **o texto** é decisão da tela.
+  - **Gatilho:** o desenho da etapa 5. **Posição:** etapa 5, com esta restrição
+    como entrada.
