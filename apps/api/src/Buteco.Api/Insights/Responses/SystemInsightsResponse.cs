@@ -88,9 +88,35 @@ public sealed record TemporalInsightsResponse(
     DayOfWeek? PeakWeekday);
 
 /// <summary>
-/// Um dia LOCAL da série. Só existem pontos para dias dentro do regime: um dia
-/// anterior ao início da medição é OMITIDO, nunca emitido com <c>0</c> — é o que
-/// torna "não medido" distinguível de "medido e sem uso".
+/// Um dia LOCAL da série, e a série é DENSA: existe um ponto para <b>todo</b> dia
+/// medido da janela, inclusive o dia em que nada aconteceu, que chega com
+/// <c>TaskCount = 0</c>.
+///
+/// <para>
+/// <b>A ausência de um dia significa uma coisa só: ele não foi medido.</b> Dia
+/// anterior ao início do regime é OMITIDO, nunca emitido com <c>0</c>; dia
+/// posterior ao instante da consulta também, porque emitir <c>0</c> para um dia
+/// que ainda não aconteceu afirmaria medição sobre o futuro. É esta densidade
+/// que torna "não medido" distinguível de "medido e sem uso" — e é o que permite
+/// ao cliente decidir o estado de um dia lendo a série, sem cruzá-la com o mapa
+/// de regimes.
+/// </para>
+///
+/// <para>
+/// <b>Isto foi corrigido pela change <c>serie-diaria-dia-medido-vazio</c>, e o
+/// texto anterior afirmava mais do que a consulta fazia</b> (convenção 9). Ele
+/// dizia que "só existem pontos para dias dentro do regime", o que descrevia
+/// apenas a metade negativa: a consulta era um <c>group by</c> sobre as linhas
+/// existentes, e o dia medido e vazio sumia exatamente como o dia não medido. A
+/// spec exigia as duas metades desde a change que criou a rota; só uma tinha
+/// implementação, e só uma tinha guarda.
+/// </para>
+///
+/// <para>
+/// <c>TokenCount</c> permanece anulável e chega <b>nulo</b> no dia medido e
+/// vazio: "foram zero tasks" e "não há token a relatar" são afirmações
+/// diferentes, e o <c>0</c> de uma não vaza para a outra.
+/// </para>
 /// </summary>
 public sealed record DailyInsightPoint(DateOnly Day, int TaskCount, long? TokenCount);
 
