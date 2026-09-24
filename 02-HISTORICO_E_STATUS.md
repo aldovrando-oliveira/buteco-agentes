@@ -10455,3 +10455,66 @@ feita ao número. Dois números sobre a mesma grandeza aparente (linhas do `02`)
 respondendo a perguntas diferentes conviviam sem se contradizer, e só se
 contradizem quando um é citado no lugar do outro. **O sintoma foi o de sempre:
 uma medição correta, com o número certo, respondendo à pergunta errada.**
+
+## `fluxo-de-trabalho-no-board`, cauda — 24/09/2026 · issue #72 · PRs #73 e #71
+
+A change da #68 foi arquivada com **quatro tarefas pendentes que só podiam rodar
+depois do merge**: push, PR, a ausência do segundo PR, e a conferência da
+automação. A última é a que carregava medição.
+
+### O que foi medido, e o que ele promoveu
+
+Conferido pela API depois do merge do **#71**:
+
+| evento | quando |
+|---|---|
+| PR #71 mergeado | 16:47:53Z |
+| #68 fechada, `reason=COMPLETED`, pelo `Closes` | 16:47:5**4**Z |
+| cartão em `Done` | sem nenhuma intervenção manual |
+
+**Isso promoveu uma linha da tabela de automação da convenção 24, de inferência
+a fato.** A observação anterior, na #65, era **indireta** — ninguém sabia se o
+cartão tinha sido movido à mão. A do #71 é **controlada**: o cartão não foi
+tocado.
+
+**E o contraste vale tanto quanto o resultado, porque prova a outra metade da
+tabela.** O workflow `Pull request linked to issue` está **habilitado** e **não**
+moveu o cartão para `In review` na abertura do #71 — precisou ser movido à mão.
+Era justamente a metade que a API não deixava conferir, porque a configuração dos
+workflows não é exposta.
+
+**A régua que sai daí, e ela é geral:** quando a configuração de um mecanismo é
+opaca, **um gatilho habilitado que não produz efeito prova tanto quanto um que
+produz**. A tabela da convenção 24 passou a ter uma coluna `como se sabe`, com a
+evidência colada em cada linha — inclusive na linha `manual`, que antes não tinha
+nenhuma.
+
+### O buraco foi encontrado pela própria change que criou a convenção
+
+A convenção 24 documentou o ciclo da issue **até `Done`** e não dizia nada sobre
+o que vem depois. A tarefa 8.5 da change que a escreveu era, ela mesma, uma
+tarefa pós-`Done` — e quando chegou a hora de executá-la, a change estava
+arquivada, a issue fechada e a branch apagada. **Não havia onde escrever o
+resultado.**
+
+**A regra escrita agora tem duas saídas, e o que decide é o que a tarefa
+produz:** só marcar ou medir → **PR de cauda** sobre o `tasks.md` do archive, sem
+change e sem issue; resultado que muda convenção ou spec → **issue própria**.
+
+**O precedente é este caso, e ele exercitou as duas no mesmo ciclo:** o **#73**
+foi o PR de cauda; a **#72** existiu porque a medição promoveu a linha da tabela.
+Registrado assim para que não se leia como improviso — a regra nasceu do caso que
+a exigiu, e o caso está escrito.
+
+### Um caso que apareceu e se resolveu sozinho
+
+O #73 nasceu cobrindo **um** dos quatro itens de escopo da #72 e ficou aberto com
+`Refs #72`, sem fechá-la. Isso expôs uma pergunta que a convenção 24 também não
+responde: **que coluna recebe issue com PR parcial aberto?** Não é `In review`,
+que exige o escopo inteiro sob revisão; não é `In progress`, que a convenção
+define como "issue com change aberta".
+
+**Não virou regra porque o caso deixou de existir:** os três itens restantes
+foram escritos no mesmo PR, que passou a `Closes #72`. Fica registrado como caso
+conhecido, **sem gatilho** — se um PR parcial voltar a acontecer por necessidade,
+e não por sequenciamento malfeito, aí a pergunta vira issue.

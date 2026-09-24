@@ -1556,17 +1556,25 @@ de propor algo nesta base:
 
     **O que é automático, e o que não é**
 
-    Três baldes, não dois, porque a configuração dos workflows do Projects
-    **não é exposta pela API** — só o nome e se está habilitado. Afirmar mais do
-    que se mediu é a convenção 13 aplicada à própria documentação.
+    A configuração dos workflows do Projects **não é exposta pela API** — só o
+    nome e se está habilitado. Então cada linha desta tabela vale pelo **efeito
+    medido**, não pelo que o workflow declara fazer. Afirmar mais do que se mediu
+    é a convenção 13 aplicada à própria documentação.
 
-    | | o quê |
-    |---|---|
-    | **automático, verificado** | a issue fecha no merge, pelo `Closes` do corpo do PR |
-    | **automático, inferido** | o cartão vai para `Done` quando a issue fecha — sete workflows habilitados em 24/09/2026, entre eles `Item closed`, e observado na #65 |
-    | **manual** | as quatro transições anteriores: `Backlog` → `Ready` → `In progress` → `In review` |
+    | | o quê | como se sabe |
+    |---|---|---|
+    | **automático** | a issue fecha no merge, pelo `Closes` do corpo do PR | #65 e #68 |
+    | **automático** | o cartão vai para `Done` quando a issue fecha | #71: merge às 16:47:53Z, issue fechada às 16:47:54Z, cartão em `Done` **sem ninguém tocar** |
+    | **manual** | `Backlog` → `Ready` → `In progress` → `In review` | o workflow `Pull request linked to issue` está **habilitado** e **não** moveu o cartão na abertura do #71 |
 
     **Não mover à mão o que já se move**: o cartão chega a `Done` sozinho.
+
+    **A segunda linha era inferência até 24/09/2026 e deixou de ser.** A
+    observação na #65 era indireta — ninguém sabia se o cartão tinha sido movido
+    à mão. A do #71 é controlada: o cartão não foi tocado, e foi para `Done`.
+    **E a terceira linha ganhou evidência pelo mesmo caminho**, que é o único
+    disponível quando a configuração é opaca: um workflow habilitado que **não**
+    produz efeito prova tanto quanto um que produz.
 
     **A fila ordenada mora no `02`, e o board é vista**
 
@@ -1616,6 +1624,34 @@ de propor algo nesta base:
     É a mesma razão da 23, aplicada ao único artefato do ciclo que ainda não
     carregava o número: fecha o circuito issue → branch → PR → archive sem
     depender de alguém lembrar de citar.
+
+    **Tarefa que só roda depois do merge**
+
+    O ciclo acima termina em `Done`, e há tarefa que **só existe depois dele**:
+    conferir que o `Closes` fechou a issue, medir o efeito de uma automação, ver
+    o comportamento com o código já em `main`. Ela não cabe na change, porque a
+    change já está arquivada e commitada quando chega a hora de executá-la.
+
+    **A regra tem duas saídas, e o que decide é o que a tarefa produz:**
+
+    - **Só marcar ou medir** → **PR de cauda**: um PR pequeno que atualiza o
+      `tasks.md` do archive com o resultado inline. Sem change OpenSpec, sem
+      issue — não há artefato a arquivar, e a regra do archive antes do push
+      governa a change, não uma marcação no registro dela.
+    - **O resultado muda convenção ou spec** → **issue própria**, e daí o ciclo
+      normal recomeça. A medição deixou de ser registro e virou decisão.
+
+    **O precedente, e ele é desta própria convenção:** a tarefa 8.5 da change
+    `fluxo-de-trabalho-no-board` só podia rodar depois do merge do **#71**. O
+    **#73** foi o PR de cauda que marcou as quatro tarefas do grupo 8 no archive;
+    a **#72** existiu porque a mesma medição promoveu uma linha da tabela de
+    automação acima, de inferência a fato. As duas saídas, no mesmo caso.
+
+    **Por que não "sempre issue":** abrir issue para marcar quatro caixas
+    transforma registro mecânico em cerimônia, e a convenção 23 existe para que a
+    issue signifique alguma coisa. **Por que não "nunca issue":** sem ela, a
+    promoção de um balde da tabela teria vivido só no `tasks.md` de uma change
+    arquivada — que é exatamente o que a 23 diz que some depois do archive.
 
     **O que esta convenção NÃO decide**
 
