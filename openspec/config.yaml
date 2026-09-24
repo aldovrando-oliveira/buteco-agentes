@@ -31,6 +31,17 @@ context: |
   CONTRIBUTING.md e CHANGELOG.md em pt-BR. Ver docs/conventions.md. Link para
   mudança arquivada usa sempre openspec/changes/archive/AAAA-MM-DD-<nome>/.
   Sempre utilize a ferramenta codegraph
+  Toda change nasce de uma issue: demanda nova cria issue ANTES de virar
+  change, o proposal.md abre com `**Issue:** #NN` e o PR referencia a mesma
+  issue. Achado descoberto dentro de uma change vira issue na hora — o que
+  não tem issue não existe depois do archive (convenção 23 do
+  01-ARQUITETURA_E_CONVENCOES.md).
+  E a issue tem ciclo de vida: abrir a change move a issue para In progress.
+  O archive PRECEDE o push e a abertura do PR — nenhum push e nenhum PR com a
+  change ativa, salvo exceção explícita do dono. Arquivada a change, o push
+  acontece e o PR carrega `Closes #<issue>`, o que move a issue para In review.
+  Um PR só: não há mais PR de archive em separado (convenção 24 do
+  01-ARQUITETURA_E_CONVENCOES.md).
 
 
 rules:
