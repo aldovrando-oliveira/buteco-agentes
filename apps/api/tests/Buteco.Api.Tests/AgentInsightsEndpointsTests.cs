@@ -103,6 +103,24 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
 
     private const string WindowTo = "2026-09-30T23:59:59Z";
 
+    /// <summary>
+    /// A janela dos guardas do dia medido e vazio: 14/09 00:00 a 17/09 23:59 em
+    /// <c>-03:00</c>. O agente consultado tem execução em <b>14/09</b> e em
+    /// <b>17/09</b>; <b>15/09</b> não teve execução nenhuma no sistema e
+    /// <b>16/09</b> teve — de OUTROS agentes. Os dois são dias medidos.
+    /// </summary>
+    private const string GapWindowFrom = "2026-09-14T03:00:00Z";
+
+    /// <inheritdoc cref="GapWindowFrom"/>
+    private const string GapWindowTo = "2026-09-18T02:59:59Z";
+
+    /// <summary>
+    /// O dia LOCAL do instante fixado no <c>FakeTimeProvider</c>
+    /// (<c>2026-09-23T12:00:00Z</c> é 23/09 às 09:00 em <c>-03:00</c>) — o limite
+    /// superior da série.
+    /// </summary>
+    private static readonly DateOnly QueryInstantLocalDay = new(2026, 9, 23);
+
     /// <summary>Cenário 3 do protótipo: delega <b>e</b> é delegado.</summary>
     private static readonly Guid BothAgentId = Guid.Parse("b0b0b0b0-0000-0000-0000-000000000001");
 
@@ -180,7 +198,22 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
         var body = await GetAsync(EmptyAgentId);
 
         Assert.Equal(0, body.GetProperty("volume").GetProperty("executedTaskCount").GetInt32());
-        Assert.Empty(body.GetProperty("temporal").GetProperty("dailySeries").EnumerateArray());
+
+        // A SÉRIE NÃO É VAZIA, E ISSO É O REQUISITO — não uma concessão.
+        //
+        // A asserção aqui era `Assert.Empty`, e ela codificava o defeito que a
+        // change serie-diaria-dia-medido-vazio corrigiu: agente sem dado
+        // devolvia série vazia, indistinguível de agente cujo período nunca foi
+        // medido. Os dias DA JANELA FORAM MEDIDOS pelo sistema; quem deu zero
+        // foi a participação deste agente, e cada dia diz isso com 0.
+        var series = DailySeries(body);
+
+        Assert.NotEmpty(series);
+        Assert.All(series.Values, point => Assert.Equal(0, point.TaskCount));
+
+        // E o contador de tokens continua NULO em todos eles: "zero tasks" e
+        // "nenhum token a relatar" são afirmações diferentes.
+        Assert.All(series.Values, point => Assert.Equal(JsonValueKind.Null, point.TokenCount.ValueKind));
 
         // Contagem medida é 0; valor não coletado continua ausente, nunca 0.
         Assert.Equal(
@@ -329,34 +362,39 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
 
     // ------------------------------------------------------------ Balde local
 
+    /// <summary>
+    /// A ASSERÇÃO MUDOU DE FORMA pela mesma razão do gêmeo, e a razão vale
+    /// literalmente igual: a ausência do dia UTC deixou de separar nada quando a
+    /// série passou a cobrir todo dia medido. A forma nova afirma <b>onde a task
+    /// caiu</b>, e balde em UTC reprova nas duas asserções.
+    /// </summary>
     [Fact]
     public async Task DailyBucket_UsesTheLocalDay_NotTheUtcDay()
     {
         var body = await GetAsync(BothAgentId);
 
-        var days = body.GetProperty("temporal").GetProperty("dailySeries").EnumerateArray()
-            .Select(point => point.GetProperty("day").GetDateTime())
-            .Select(DateOnly.FromDateTime)
-            .ToList();
+        var series = DailySeries(body);
 
-        Assert.Contains(ExpectedLocalDay, days);
+        Assert.Contains(ExpectedLocalDay, series.Keys);
+        Assert.Contains(UtcDay, series.Keys);
 
-        // A asserção que REPROVA contra balde em UTC. A positiva sozinha não
-        // separa os dois comportamentos.
-        Assert.DoesNotContain(UtcDay, days);
+        Assert.Equal(1, series[ExpectedLocalDay].TaskCount);
+        Assert.Equal(0, series[UtcDay].TaskCount);
     }
 
+    /// <inheritdoc cref="DailyBucket_UsesTheLocalDay_NotTheUtcDay"/>
     [Fact]
     public async Task Weekday_FollowsTheLocalDay_NotTheUtcDay()
     {
         var body = await GetAsync(BothAgentId);
 
-        var weekdays = body.GetProperty("temporal").GetProperty("byWeekday").EnumerateArray()
-            .Select(point => (DayOfWeek)point.GetProperty("weekday").GetInt32())
-            .ToList();
+        var weekdays = Weekdays(body);
 
-        Assert.Contains(ExpectedLocalWeekday, weekdays);
-        Assert.DoesNotContain(UtcWeekday, weekdays);
+        Assert.Contains(ExpectedLocalWeekday, weekdays.Keys);
+        Assert.Contains(UtcWeekday, weekdays.Keys);
+
+        Assert.Equal(1, weekdays[ExpectedLocalWeekday]);
+        Assert.Equal(0, weekdays[UtcWeekday]);
     }
 
     // ------------------------------------------------------------- Regime
@@ -373,19 +411,150 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    /// <summary>
+    /// <b>A PRECONDIÇÃO É O QUE FAZ ESTE GUARDA DISCRIMINAR</b>, acrescentada
+    /// pela change <c>serie-diaria-dia-medido-vazio</c>: sem ela,
+    /// <c>Assert.DoesNotContain</c> sobre lista vazia é verde, e a implementação
+    /// que ele deveria prender era justamente uma que não emitia dia nenhum.
+    /// </summary>
     [Fact]
     public async Task DaysBeforeTheRegime_AreOmitted_NeverEmittedAsZero()
     {
         var body = await GetAsync(BothAgentId, from: "2026-08-01T00:00:00Z");
 
-        var days = body.GetProperty("temporal").GetProperty("dailySeries").EnumerateArray()
-            .Select(point => point.GetProperty("day").GetDateTime())
-            .Select(DateOnly.FromDateTime)
-            .ToList();
+        var days = DailySeries(body).Keys.ToList();
+
+        // PRECONDIÇÃO: a série cobre o regime inteiro até o instante da consulta.
+        Assert.Equal(23, days.Count);
+        Assert.Equal(new DateOnly(2026, 9, 1), days.Min());
+        Assert.Equal(QueryInstantLocalDay, days.Max());
 
         // Nenhum dia anterior ao regime aparece — nem com 0, que afirmaria
         // medição que não houve.
         Assert.DoesNotContain(days, day => day < new DateOnly(2026, 9, 1));
+    }
+
+    // ------------------------------------------- Dia medido e sem ocorrência
+
+    /// <summary>
+    /// O par que faltava, no escopo do agente. A capability do agente declarava
+    /// <b>só</b> a metade negativa — a positiva nunca foi escrita para este
+    /// escopo, então aqui não havia contrato a violar, havia contrato faltando
+    /// (design.md, D7).
+    /// </summary>
+    [Fact]
+    public async Task MeasuredAndEmptyDay_AppearsInTheSeries_WithZero()
+    {
+        var body = await GetAsync(BothAgentId, GapWindowFrom, GapWindowTo);
+
+        var series = DailySeries(body);
+
+        Assert.Equal(
+            [new(2026, 9, 14), new(2026, 9, 15), new(2026, 9, 16), new(2026, 9, 17)],
+            series.Keys.ToList());
+
+        Assert.Equal(1, series[new(2026, 9, 14)].TaskCount);
+        Assert.Equal(0, series[new(2026, 9, 15)].TaskCount);
+        Assert.Equal(1, series[new(2026, 9, 17)].TaskCount);
+    }
+
+    /// <summary>
+    /// <b>O guarda que só existe neste escopo.</b> Em 16/09 rodaram execuções —
+    /// de <c>OnlyDelegates</c> e de <c>OnlyTriggered</c> —, e nenhuma do agente
+    /// consultado. O dia foi MEDIDO; o que deu zero foi a participação dele.
+    /// Omiti-lo diria que ninguém mediu aquele dia, que é falso.
+    /// </summary>
+    [Fact]
+    public async Task DayWhereOnlyAnotherAgentRan_IsStillMeasured_WithZero()
+    {
+        var body = await GetAsync(BothAgentId, GapWindowFrom, GapWindowTo);
+
+        var series = DailySeries(body);
+
+        Assert.Contains(new DateOnly(2026, 9, 16), series.Keys);
+        Assert.Equal(0, series[new(2026, 9, 16)].TaskCount);
+    }
+
+    /// <inheritdoc cref="MeasuredAndEmptyDay_AppearsInTheSeries_WithZero"/>
+    [Fact]
+    public async Task MeasuredAndEmptyDay_HasNullTokenCount_NotZero()
+    {
+        var body = await GetAsync(BothAgentId, GapWindowFrom, GapWindowTo);
+
+        var emptyDay = DailySeries(body)[new DateOnly(2026, 9, 15)];
+
+        Assert.Equal(0, emptyDay.TaskCount);
+        Assert.Equal(JsonValueKind.Null, emptyDay.TokenCount.ValueKind);
+    }
+
+    /// <summary>
+    /// O simétrico do dia anterior ao regime (design.md, D3): emitir <c>0</c>
+    /// para dia que ainda não aconteceu afirma medição sobre o futuro.
+    /// </summary>
+    [Fact]
+    public async Task DaysAfterTheQueryInstant_AreNotEmittedAsZero()
+    {
+        var body = await GetAsync(BothAgentId, "2026-09-22T03:00:00Z", "2026-10-01T02:59:59Z");
+
+        var days = DailySeries(body).Keys.ToList();
+
+        Assert.Equal([new(2026, 9, 22), QueryInstantLocalDay], days);
+        Assert.DoesNotContain(days, day => day > QueryInstantLocalDay);
+    }
+
+    // ------------------------------------------------------- Dia da semana
+
+    /// <summary>
+    /// A armadilha da forma (design.md, D4): <c>count(*)</c> com <c>left join</c>
+    /// devolve <b>1</b> no dia sem correspondência. A asserção é contra <c>0</c>.
+    /// </summary>
+    [Fact]
+    public async Task WeekdayCoveredAndEmpty_ArrivesAsZero()
+    {
+        var body = await GetAsync(BothAgentId, GapWindowFrom, GapWindowTo);
+
+        var weekdays = Weekdays(body);
+
+        // 14/09 segunda, 15/09 terça, 16/09 quarta, 17/09 quinta.
+        Assert.Equal(1, weekdays[DayOfWeek.Monday]);
+        Assert.Equal(0, weekdays[DayOfWeek.Tuesday]);
+        Assert.Equal(0, weekdays[DayOfWeek.Wednesday]);
+        Assert.Equal(1, weekdays[DayOfWeek.Thursday]);
+    }
+
+    /// <summary>
+    /// O par do de cima: dia da semana que não ocorre na faixa medida nunca foi
+    /// medido.
+    /// </summary>
+    [Fact]
+    public async Task WeekdayNotCoveredByTheMeasuredRange_IsOmitted()
+    {
+        var body = await GetAsync(BothAgentId, GapWindowFrom, "2026-09-16T02:59:59Z");
+
+        var weekdays = Weekdays(body);
+
+        Assert.Equal([DayOfWeek.Monday, DayOfWeek.Tuesday], weekdays.Keys.OrderBy(day => day).ToList());
+    }
+
+    /// <summary>
+    /// A regressão que a correção introduziria (design.md, D5): sete contagens
+    /// iguais a zero e o <c>MaxBy</c> elegendo domingo como pico de um período
+    /// em que o agente não fez nada.
+    /// </summary>
+    [Fact]
+    public async Task PeriodMeasuredWithoutOccurrences_HasNoPeakWeekday()
+    {
+        var body = await GetAsync(BothAgentId, "2026-09-02T03:00:00Z", "2026-09-04T02:59:59Z");
+
+        var weekdays = Weekdays(body);
+
+        // PRECONDIÇÃO: há dias da semana na resposta, todos zerados.
+        Assert.NotEmpty(weekdays);
+        Assert.All(weekdays.Values, count => Assert.Equal(0, count));
+
+        Assert.Equal(
+            JsonValueKind.Null,
+            body.GetProperty("temporal").GetProperty("peakWeekday").ValueKind);
     }
 
     // ---------------------------------------------------------------- Nulo
@@ -426,6 +595,29 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
 
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
+
+    /// <summary>
+    /// O contador de tokens chega CRU, e não convertido: o guarda precisa
+    /// distinguir <c>null</c> de <c>0</c>, e converter para <c>long?</c> aqui
+    /// reintroduziria no teste o colapso que ele existe para proibir.
+    /// </summary>
+    private sealed record DailyPoint(int TaskCount, JsonElement TokenCount);
+
+    private static SortedDictionary<DateOnly, DailyPoint> DailySeries(JsonElement body) =>
+        new(body.GetProperty("temporal").GetProperty("dailySeries")
+            .EnumerateArray()
+            .ToDictionary(
+                point => DateOnly.FromDateTime(point.GetProperty("day").GetDateTime()),
+                point => new DailyPoint(
+                    point.GetProperty("taskCount").GetInt32(),
+                    point.GetProperty("tokenCount"))));
+
+    private static Dictionary<DayOfWeek, int> Weekdays(JsonElement body) =>
+        body.GetProperty("temporal").GetProperty("byWeekday")
+            .EnumerateArray()
+            .ToDictionary(
+                point => (DayOfWeek)point.GetProperty("weekday").GetInt32(),
+                point => point.GetProperty("taskCount").GetInt32());
 
     private sealed record SeededRowCounts(int Executions, int Delegations, int EmbeddingCalls, int Bindings);
 

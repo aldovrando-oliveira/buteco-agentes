@@ -34,7 +34,8 @@ namespace Buteco.Api.Insights.Queries.GetSystemInsights;
 /// é por isso que esta rota não pode ser "uma consulta por tabela".
 /// </para>
 /// </summary>
-public sealed class GetSystemInsightsQueryHandler(AppDbContext dbContext, IOptions<MetricsOptions> options)
+public sealed class GetSystemInsightsQueryHandler(
+    AppDbContext dbContext, IOptions<MetricsOptions> options, TimeProvider timeProvider)
     : IQueryHandler<GetSystemInsightsQuery, SystemInsightsResponse>
 {
     /// <summary>
@@ -75,7 +76,7 @@ public sealed class GetSystemInsightsQueryHandler(AppDbContext dbContext, IOptio
             window,
             regimes,
             await VolumeAsync(executionFrom, query.To, cancellationToken),
-            await TemporalAsync(timeZone, executionFrom, query.To, cancellationToken),
+            await TemporalAsync(timeZone, executionFrom, SeriesEnd(query.To), cancellationToken),
             await TokensAsync(executionFrom, embeddingFrom, query.To, cancellationToken),
             await PerformanceAsync(executionFrom, query.To, cancellationToken),
             await ErrorsAsync(executionFrom, embeddingFrom, query.To, cancellationToken),
@@ -110,6 +111,38 @@ public sealed class GetSystemInsightsQueryHandler(AppDbContext dbContext, IOptio
     private static DateTimeOffset Later(DateTimeOffset requested, DateTimeOffset? regimeStart) =>
         regimeStart is not null && regimeStart.Value > requested ? regimeStart.Value : requested;
 
+    /// <summary>
+    /// O limite SUPERIOR da série densa: o mais cedo entre o <c>to</c> pedido e o
+    /// instante da consulta.
+    ///
+    /// <para>
+    /// <b>É o simétrico do recorte de regime, e sem ele a correção da série
+    /// criaria o defeito que ela existe para corrigir</b>, virado para o outro
+    /// lado: o <c>generate_series</c> emitiria <c>0</c> para dias que AINDA NÃO
+    /// ACONTECERAM, afirmando medição sobre o futuro. A rota não valida teto de
+    /// intervalo, então um <c>to</c> no futuro é aceito.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>O "agora" vem de <see cref="TimeProvider"/>, nunca de <c>now()</c> no
+    /// SQL.</b> A alternativa foi recusada na D3 da <c>rotas-de-agregacao-sistema</c>:
+    /// uma janela cujo "agora" nasce no banco não é verificável de forma
+    /// determinística, e não haveria como afirmar em teste onde a série termina.
+    /// </para>
+    ///
+    /// <para>
+    /// Recorta <b>só a série temporal</b>. As demais agregações continuam usando
+    /// o <c>to</c> pedido: elas somam o que existe, e linha de métrica com
+    /// carimbo no futuro não existe. É a série densa que teria de INVENTAR o
+    /// ponto.
+    /// </para>
+    /// </summary>
+    private DateTimeOffset SeriesEnd(DateTimeOffset requestedTo)
+    {
+        var now = timeProvider.GetUtcNow();
+        return requestedTo < now ? requestedTo : now;
+    }
+
     // ---------------------------------------------------------------- Volume
 
     private sealed record VolumeRow(int ExecutedTaskCount, int ExternalOriginTaskCount);
@@ -140,35 +173,72 @@ public sealed class GetSystemInsightsQueryHandler(AppDbContext dbContext, IOptio
     private async Task<TemporalInsightsResponse> TemporalAsync(
         string timeZone, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
     {
-        // M10 e M7. count(distinct) porque o join com provider_calls multiplica
-        // as linhas da execução — count(*) daria o número de CHAMADAS com cara
-        // de número de tasks, que sai maior e plausível.
+        // M10 e M7. A série nasce do DOMÍNIO DE DIAS, não das linhas existentes.
+        //
+        // Antes desta change era um group by sobre task_executions, e o efeito
+        // era que um dia DENTRO do regime, medido e sem nenhuma task, sumia
+        // exatamente como um dia ANTERIOR ao regime. A spec exige as duas
+        // metades — omitir o dia não medido E emitir 0 para o dia medido e vazio
+        // —, e só a primeira estava implementada. Com o generate_series, a
+        // AUSÊNCIA de um dia passa a significar uma coisa só: não foi medido.
+        //
+        // OS DOIS LIMITES SÃO CONTRATO, e cada um tem o seu motivo:
+        //
+        //   inferior  `from` já é o recorte do regime (Later, acima). Gerar
+        //             antes dele reintroduziria o defeito que a metade negativa
+        //             proíbe — e seria PIOR que o anterior, porque emitiria 0
+        //             em vez de omitir.
+        //   superior  SeriesEnd recorta pelo instante da consulta. Sem isso, um
+        //             `to` no futuro faria a série afirmar medição sobre dias
+        //             que ainda não aconteceram.
+        //
+        // count(distinct) porque o join com provider_calls multiplica as linhas
+        // da execução — count(*) daria o número de CHAMADAS com cara de número
+        // de tasks, que sai maior e plausível.
         //
         // O token é nulo quando NENHUMA chamada do dia reportou número, e soma o
         // que se sabe quando alguma reportou: o filter preserva a distinção que
-        // um coalesce solto apagaria.
+        // um coalesce solto apagaria. No dia medido e vazio ele é nulo por
+        // construção — "foram zero tasks" e "não há token a relatar" são
+        // afirmações diferentes, e o 0 de uma não vaza para a outra.
         var daily = await dbContext.Database
             .SqlQuery<DailyRow>($"""
-                select ("StartedAt" at time zone {timeZone})::date as "Day",
+                select d.day::date as "Day",
                        count(distinct e."TaskId")::int as "TaskCount",
                        sum(coalesce(pc."InputTokens", 0) + coalesce(pc."OutputTokens", 0))
                            filter (where pc."InputTokens" is not null or pc."OutputTokens" is not null)::bigint as "TokenCount"
-                from task_executions e
+                from generate_series(
+                         ({from} at time zone {timeZone})::date,
+                         ({to} at time zone {timeZone})::date,
+                         interval '1 day') as d(day)
+                left join task_executions e
+                       on (e."StartedAt" at time zone {timeZone})::date = d.day::date
+                      and e."StartedAt" >= {from} and e."StartedAt" <= {to}
                 left join provider_calls pc on pc."TaskId" = e."TaskId"
-                where e."StartedAt" >= {from} and e."StartedAt" <= {to}
                 group by 1
                 order by 1
                 """)
             .ToListAsync(cancellationToken);
 
-        // M6 — dia da semana LOCAL, não UTC. extract(dow) sobre o instante já
-        // convertido; 0 = domingo, que é o mesmo mapeamento de DayOfWeek.
+        // M6 — dia da semana LOCAL, não UTC. extract(dow) sobre o MESMO domínio
+        // de dias da série: um dia da semana que ocorre na faixa medida e não
+        // teve task chega com 0; um que NÃO ocorre nela é omitido, porque nunca
+        // houve medição dele para dar zero.
+        //
+        // count(e."TaskId") E NÃO count(*): com o left join ao domínio de dias,
+        // count(*) conta 1 para o dia sem correspondência, e todo dia da semana
+        // vazio chegaria com 1 — número pequeno, positivo, sem sintoma nenhum.
         var weekday = await dbContext.Database
             .SqlQuery<WeekdayRow>($"""
-                select extract(dow from ("StartedAt" at time zone {timeZone}))::int as "Weekday",
-                       count(*)::int as "TaskCount"
-                from task_executions
-                where "StartedAt" >= {from} and "StartedAt" <= {to}
+                select extract(dow from d.day)::int as "Weekday",
+                       count(e."TaskId")::int as "TaskCount"
+                from generate_series(
+                         ({from} at time zone {timeZone})::date,
+                         ({to} at time zone {timeZone})::date,
+                         interval '1 day') as d(day)
+                left join task_executions e
+                       on (e."StartedAt" at time zone {timeZone})::date = d.day::date
+                      and e."StartedAt" >= {from} and e."StartedAt" <= {to}
                 group by 1
                 order by 1
                 """)
@@ -181,7 +251,13 @@ public sealed class GetSystemInsightsQueryHandler(AppDbContext dbContext, IOptio
         // M9 — derivada de M6, e NULA quando não há nenhuma task no período:
         // sem medição não há pico, e inventar "domingo" seria afirmar o que não
         // se sabe.
-        DayOfWeek? peak = byWeekday.Count == 0
+        //
+        // A SEGUNDA CONDIÇÃO SÓ PASSOU A SER NECESSÁRIA COM O DOMÍNIO DENSO, e
+        // sem ela a correção acima criaria uma regressão de convenção 13: a
+        // faixa medida sem nenhuma task agora devolve linhas ZERADAS em vez de
+        // lista vazia, e o MaxBy elegeria a primeira delas — domingo — como pico
+        // de um período em que nada aconteceu. As duas condições, não uma.
+        DayOfWeek? peak = byWeekday.Count == 0 || byWeekday.Max(point => point.TaskCount) == 0
             ? null
             : byWeekday.MaxBy(point => point.TaskCount)!.Weekday;
 

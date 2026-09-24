@@ -505,6 +505,24 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **A série diária de Insights não distinguia "dia não medido" de "dia medido e
+  sem uso" — as duas metades da distinção que a linha de métricas existe para
+  preservar.** A spec exigia omitir o dia anterior ao início do regime **e**
+  emitir `0` para o dia medido e vazio; só a primeira estava implementada,
+  porque a consulta era um `group by` sobre as linhas existentes. Os dois casos
+  sumiam idênticos, e o cliente não tinha como separá-los. Medido contra a rota
+  real: uma janela de 31 dias devolvia série **vazia**, com 29 dias não medidos
+  e 2 medidos e vazios colapsados. A série passa a ser **densa** — um ponto para
+  todo dia medido —, e a ausência de um dia passa a significar uma coisa só. Os
+  dias posteriores ao instante da consulta também são omitidos: emitir `0` para
+  dia que ainda não aconteceu afirmaria medição sobre o futuro. O mapa por
+  **dia da semana** recebeu o mesmo tratamento, e o **dia de pico** deixou de ser
+  eleito quando nada foi medido — sem isso, sete contagens zeradas fariam domingo
+  virar "pico" de um período em que nada aconteceu. Corrigido nos **dois**
+  escopos, sistema e agente, que têm consultas distintas. `TokenCount` continua
+  nulo no dia vazio: "foram zero tasks" e "não há token a relatar" são
+  afirmações diferentes.
+
 - **A página de Insights do sistema não recebia dado nenhum: a rota existia,
   respondia, e não era alcançada.** `GET /insights/system` devolvia **`200` com
   HTML** — o shell do SPA — em vez do agregado, com ou sem token, porque o

@@ -36,7 +36,8 @@ namespace Buteco.Api.Insights.Queries.GetAgentInsights;
 /// índice de expressão sobre a conversão de fuso (D12).
 /// </para>
 /// </summary>
-public sealed class GetAgentInsightsQueryHandler(AppDbContext dbContext, IOptions<MetricsOptions> options)
+public sealed class GetAgentInsightsQueryHandler(
+    AppDbContext dbContext, IOptions<MetricsOptions> options, TimeProvider timeProvider)
     : IQueryHandler<GetAgentInsightsQuery, AgentInsightsResponse?>
 {
     /// <summary>
@@ -84,7 +85,7 @@ public sealed class GetAgentInsightsQueryHandler(AppDbContext dbContext, IOption
             window,
             regimes,
             await VolumeAsync(query.AgentId, executionFrom, query.To, cancellationToken),
-            await TemporalAsync(query.AgentId, timeZone, executionFrom, query.To, cancellationToken),
+            await TemporalAsync(query.AgentId, timeZone, executionFrom, SeriesEnd(query.To), cancellationToken),
             await TokensAsync(query.AgentId, executionFrom, embeddingFrom, query.To, cancellationToken),
             await PerformanceAsync(query.AgentId, executionFrom, query.To, cancellationToken),
             await ErrorsAsync(query.AgentId, executionFrom, query.To, cancellationToken),
@@ -124,6 +125,27 @@ public sealed class GetAgentInsightsQueryHandler(AppDbContext dbContext, IOption
     private static DateTimeOffset Later(DateTimeOffset requested, DateTimeOffset? regimeStart) =>
         regimeStart is not null && regimeStart.Value > requested ? regimeStart.Value : requested;
 
+    /// <summary>
+    /// O limite SUPERIOR da série densa — o mais cedo entre o <c>to</c> pedido e
+    /// o instante da consulta. <b>Gêmeo de
+    /// <c>GetSystemInsightsQueryHandler.SeriesEnd</c></b>, e a duplicação é
+    /// deliberada pelo mesmo motivo das duas consultas temporais: ver o
+    /// comentário de <see cref="TemporalAsync"/>.
+    ///
+    /// <para>
+    /// Sem ele, o <c>generate_series</c> emitiria <c>0</c> para dias que ainda
+    /// não aconteceram — o simétrico do defeito que o recorte de regime evita no
+    /// passado. O "agora" vem de <see cref="TimeProvider"/> e nunca de
+    /// <c>now()</c> no SQL, que a D3 da <c>rotas-de-agregacao-sistema</c>
+    /// recusou por tornar a janela não verificável em teste.
+    /// </para>
+    /// </summary>
+    private DateTimeOffset SeriesEnd(DateTimeOffset requestedTo)
+    {
+        var now = timeProvider.GetUtcNow();
+        return requestedTo < now ? requestedTo : now;
+    }
+
     // ---------------------------------------------------------------- Volume
 
     private sealed record VolumeRow(int ExecutedTaskCount, int ExternalOriginTaskCount, int DelegationOriginTaskCount);
@@ -162,35 +184,63 @@ public sealed class GetAgentInsightsQueryHandler(AppDbContext dbContext, IOption
     private async Task<TemporalInsightsResponse> TemporalAsync(
         Guid agentId, string timeZone, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
     {
-        // M10 e M7. count(distinct) porque o join com provider_calls multiplica
-        // as linhas da execução.
+        // M10 e M7. A série nasce do DOMÍNIO DE DIAS, não das linhas existentes.
         //
-        // O balde é o DIA LOCAL, nunca o dia UTC, e o guarda desta rota reprova
-        // contra UTC — não herdado do gêmeo: é consulta nova, e o verde de lá não
-        // cobre esta.
+        // COPIADA DO GÊMEO, NÃO EXTRAÍDA — GetSystemInsightsQueryHandler.
+        // TemporalAsync. São consultas DIFERENTES, não a mesma com um parâmetro:
+        // esta filtra por AgentId em dois pontos e a de lá não tem o conceito.
+        // Um método comum com Guid? opcional e dois caminhos internos esconderia
+        // a diferença em vez de compartilhar a semelhança. Mesmo tratamento das
+        // entidades de métrica duplicadas entre apps/api e apps/workers, e cada
+        // cópia tem o seu guarda: o verde de lá não cobre esta.
+        //
+        // O QUE MUDA NO ESCOPO DO AGENTE, e é o que o guarda próprio afirma: um
+        // dia em que o SISTEMA mediu e este agente não executou nada é um dia
+        // MEDIDO, e chega com 0. Omiti-lo diria que ninguém mediu aquele dia.
+        //
+        // OS DOIS LIMITES: o inferior já é o recorte do regime (Later); gerar
+        // antes dele emitiria 0 onde não houve medição. O superior é SeriesEnd,
+        // que impede a série de afirmar medição sobre dias futuros.
+        //
+        // O balde é o DIA LOCAL, nunca o dia UTC.
         var daily = await dbContext.Database
             .SqlQuery<DailyRow>($"""
-                select (e."StartedAt" at time zone {timeZone})::date as "Day",
+                select d.day::date as "Day",
                        count(distinct e."TaskId")::int as "TaskCount",
                        sum(coalesce(pc."InputTokens", 0) + coalesce(pc."OutputTokens", 0))
                            filter (where pc."InputTokens" is not null or pc."OutputTokens" is not null)::bigint as "TokenCount"
-                from task_executions e
+                from generate_series(
+                         ({from} at time zone {timeZone})::date,
+                         ({to} at time zone {timeZone})::date,
+                         interval '1 day') as d(day)
+                left join task_executions e
+                       on (e."StartedAt" at time zone {timeZone})::date = d.day::date
+                      and e."AgentId" = {agentId}
+                      and e."StartedAt" >= {from} and e."StartedAt" <= {to}
                 left join provider_calls pc on pc."TaskId" = e."TaskId"
-                where e."AgentId" = {agentId}
-                  and e."StartedAt" >= {from} and e."StartedAt" <= {to}
                 group by 1
                 order by 1
                 """)
             .ToListAsync(cancellationToken);
 
-        // M6 — dia da semana LOCAL. 0 = domingo, mesmo mapeamento de DayOfWeek.
+        // M6 — dia da semana LOCAL sobre o MESMO domínio de dias. 0 = domingo,
+        // mesmo mapeamento de DayOfWeek.
+        //
+        // count(e."TaskId") E NÃO count(*): com o left join ao domínio, count(*)
+        // conta 1 no dia sem correspondência, e todo dia da semana vazio
+        // chegaria com 1 — pequeno, positivo, sem sintoma.
         var weekday = await dbContext.Database
             .SqlQuery<WeekdayRow>($"""
-                select extract(dow from ("StartedAt" at time zone {timeZone}))::int as "Weekday",
-                       count(*)::int as "TaskCount"
-                from task_executions
-                where "AgentId" = {agentId}
-                  and "StartedAt" >= {from} and "StartedAt" <= {to}
+                select extract(dow from d.day)::int as "Weekday",
+                       count(e."TaskId")::int as "TaskCount"
+                from generate_series(
+                         ({from} at time zone {timeZone})::date,
+                         ({to} at time zone {timeZone})::date,
+                         interval '1 day') as d(day)
+                left join task_executions e
+                       on (e."StartedAt" at time zone {timeZone})::date = d.day::date
+                      and e."AgentId" = {agentId}
+                      and e."StartedAt" >= {from} and e."StartedAt" <= {to}
                 group by 1
                 order by 1
                 """)
@@ -202,7 +252,12 @@ public sealed class GetAgentInsightsQueryHandler(AppDbContext dbContext, IOption
 
         // M9 — derivada de M6, e NULA quando não há nenhuma task: sem medição não
         // há pico, e inventar "domingo" seria afirmar o que não se sabe.
-        DayOfWeek? peak = byWeekday.Count == 0
+        //
+        // A SEGUNDA CONDIÇÃO só passou a ser necessária com o domínio denso: a
+        // faixa medida sem nenhuma task do agente agora devolve linhas ZERADAS
+        // em vez de lista vazia, e o MaxBy elegeria domingo como pico de um
+        // período em que ele não fez nada.
+        DayOfWeek? peak = byWeekday.Count == 0 || byWeekday.Max(point => point.TaskCount) == 0
             ? null
             : byWeekday.MaxBy(point => point.TaskCount)!.Weekday;
 

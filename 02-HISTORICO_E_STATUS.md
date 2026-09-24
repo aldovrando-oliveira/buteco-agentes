@@ -10016,3 +10016,153 @@ onde se procura.
   é; **o texto** é decisão da tela.
   - **Gatilho:** o desenho da etapa 5. **Posição:** etapa 5, com esta restrição
     como entrada.
+
+---
+
+## `serie-diaria-dia-medido-vazio` — 24/09/2026 · issue #65 · bloqueava a #52
+
+Correção de defeito em `apps/api`. **A série diária não emitia `0` para dia
+medido e vazio**, contra a spec de `system-insights-aggregation` que exige as
+duas metades da distinção.
+
+### O defeito, e por que sobreviveu ao archive
+
+A consulta de M10 era `group by` sobre as linhas existentes, sem
+`generate_series`: dia **dentro** do regime, medido e sem task, sumia exatamente
+como dia **anterior** ao regime. Medido contra a rota real em 23/09/2026 —
+janela de 24/08 a 23/09, regime em 22/09 01:21 -03 — a resposta trouxe
+`dailySeries: []`, com 29 dias não medidos e 2 medidos e vazios colapsados, e
+`volume.executedTaskCount: 0` provando que os dois últimos foram medidos.
+
+**Os dois guardas existentes cobriam só a metade negativa:**
+
+| guarda | afirmava | deixava de fora |
+|---|---|---|
+| `DaysBeforeTheRegime_AreOmitted_NeverEmittedAsZero` | nenhum dia é anterior ao regime | **passava por vacuidade** — `Assert.All` sobre lista vazia é verde |
+| `MeasuredAndEmptyPeriod_ArrivesAsZero_NotAsNull` | o zero medido chega como número | afirmava sobre `volume.executedTaskCount`, um **escalar** — não sobre a série |
+
+O segundo é o mais enganoso: **promete no nome** o caso que falta e mede outra
+coisa. Quem lesse a lista de guardas concluiria que o par estava coberto.
+
+### Refinamento da régua "o par não é universal"
+
+A régua dizia **quando o par não existe** — requisito cujo oposto é inobservável
+não tem guarda negativo. Este caso é o inverso e ela não o cobria: **o par
+existia, era exprimível, o requisito o declarava em texto, e nenhum guarda foi
+escrito.** Como a metade negativa passa por vacuidade sobre série vazia, o
+conjunto ficou **verde sem nenhuma das duas metades funcionando**.
+
+**O refinamento:** a ausência do par precisa ser **decidida e escrita**, não
+omitida por esquecimento. Quando um requisito tem duas metades, ou as duas têm
+cenário, ou o `design.md` diz qual não tem e por quê. Vai também para a **#68**,
+junto da documentação do board.
+
+### O que a change fez
+
+- `generate_series` sobre o dia local, **nos dois handlers** — a rota do agente
+  tem consulta **própria**, conferida no arquivo, e o comentário de lá já
+  registrava que *"o verde de lá não cobre esta"*.
+- **`byWeekday` recebeu o mesmo tratamento** (D4): dia da semana que ocorre na
+  faixa medida e não teve task chega com `0`; o que não ocorre é omitido. Nenhuma
+  das duas specs cobria isso — as duas ganharam delta.
+- **O limite superior recortado pelo instante da consulta** (D3), via
+  `TimeProvider`. Contraria a letra do enunciado da #65, que dizia "termina no
+  `to` pedido", e preserva a razão dele (convenção 9): sem o recorte a correção
+  emitiria `0` para dias que ainda não aconteceram — o defeito simétrico.
+- **O pico deixou de ser eleito quando o máximo é `0`** (D5). É uma **regressão
+  que a própria correção introduziria**: com sete linhas zeradas, o `MaxBy`
+  elegeria domingo como pico de um período em que nada aconteceu.
+
+### As três mutações, com a causa atribuída
+
+| mutação | esperado | medido |
+|---|---|---|
+| limite inferior `executionFrom` → `query.From` | só os guardas do regime | **exato** — 2, um por escopo |
+| pico: remover a condição do máximo zero | só o guarda do pico | **exato** — 2, um por escopo |
+| `count(e."TaskId")` → `count(*)` no dia da semana | só o guarda do dia da semana coberto e vazio | **6, não 2** |
+
+**A terceira é achado.** As seis que caem asseguram **o mesmo fato** — dia da
+semana sem ocorrência conta `0` — por três motivos diferentes: o guarda dedicado,
+a **precondição** do guarda do pico, e o guarda do balde local, cuja asserção
+`terça == 0` é o que o faz reprovar contra balde em UTC. **É sobreposição, não
+falta de discriminação:** nenhuma cai por acaso. O conjunto discrimina; não é
+mínimo.
+
+### Três guardas preexistentes tinham forma de asserção que codificava o defeito
+
+Achado que a projeção não previu, e é a causa do estouro de linhas de teste:
+
+| guarda | forma antiga | por que deixou de discriminar |
+|---|---|---|
+| `DailyBucket_UsesTheLocalDay_NotTheUtcDay` (2 escopos) | `DoesNotContain(diaUtc)` | com a série densa, o dia UTC aparece **nos dois** comportamentos |
+| `Weekday_FollowsTheLocalDay_NotTheUtcDay` (2 escopos) | `DoesNotContain(terça)` | idem |
+| `ExistingAgentWithoutData_…` | `Assert.Empty(dailySeries)` | codificava o defeito: agente sem dado devolvia série vazia, indistinguível de período não medido |
+
+As três viraram formas **estritamente mais fortes**, que afirmam **onde a
+contagem caiu** em vez da ausência da chave.
+
+### Décima sétima medição da convenção 18
+
+| coluna | projetado | medido | erro |
+|---|---|---|---|
+| fonte | 3 arq, 180 | 3 arq, **194** | +8% |
+| teste escrito à mão | 2 arq, 320 | 2 arq, **412** | **+29%** |
+| **duplo** | **0** | **0** | **exato** |
+| gerado | 0 | **0** | exato |
+| total `apps/api` | ~500 (faixa 400–650) | **606** | dentro da faixa |
+| cenários novos | ~12 | **12** | exato |
+| registro (`openspec/`) | ~800 | **944** | +18% |
+
+**O duplo projetado em zero bateu exatamente**, e era a linha que mais
+interessava: é a primeira change da série a projetar **ausência** de
+infraestrutura de teste, e a projeção acertou porque o caso que faltava já
+estava no seed desde a change que criou a rota — 14/09 e 16/09 com execução,
+**15/09 vazio**, regime em 01/09. O guarda ausente não custava dado; custava
+alguém ter escrito o par.
+
+**O +29% em teste tem causa nomeada, e é categoria nova para a série.** A
+projeção contava duas categorias — caso **novo** e caso **reforçado**. Faltou a
+terceira: **caso ADAPTADO**, o guarda preexistente cuja forma de asserção deixa
+de discriminar porque o domínio mudou. Foram cinco (as três da tabela acima, duas
+delas em dois escopos), e nenhuma estava projetada.
+
+**Régua nova, a contar a partir daqui:** projetar guardas em **três**
+categorias — novo, reforçado e **adaptado** —, e perguntar por guarda existente
+que toque o mesmo dado: *a asserção dele continua discriminando depois desta
+mudança de domínio?*
+
+**Contagem de cenários com `MODIFIED` separada** — outra régua nova: os deltas
+fecharam em **16** `#### Scenario:`, dos quais **12 novos**; os outros 4 são
+preexistentes que o `MODIFIED` obriga a copiar. Medições anteriores não
+separavam, e a contagem saía inflada.
+
+### Verificação contra a rota real
+
+`apps/api` local (com `TZ=America/Sao_Paulo`, senão a checagem de boot reprova),
+mesma janela do diagnóstico:
+
+| | antes | depois |
+|---|---|---|
+| `dailySeries` | `[]` | 2 pontos: `22/09` e `23/09`, ambos `taskCount: 0`, `tokenCount: null` |
+| dias anteriores a 22/09 | indistinguíveis dos medidos | **nenhum** |
+| `byWeekday` | `[]` | terça e quarta, ambas `0` — os dois dias da semana da faixa medida; os outros cinco omitidos |
+| `peakWeekday` | `null` | `null` — a D5 contra dados reais |
+
+**Os dois escopos conferidos**, com resultado idêntico na rota do agente.
+
+### Suíte
+
+`apps/api` **404/404** (baseline 391/391 de 24/09). Comparação **por nome**:
+**+13 testes, nenhum removido**. `apps/workers`, `apps/inbox` e `apps/frontend`
+não rodaram — nenhum arquivo desta change vive fora de `apps/api`.
+
+### Itens abertos que esta change deixa
+
+- **`byWeekday` e o `generate_series`**: a spec do sistema agora cobre o dia da
+  semana, e a decisão de estender o recorte foi tomada aqui. **Nada pendente** —
+  o item que a proposta previa como "avaliar depois" foi resolvido dentro da
+  change (D4).
+- **Sobreposição de guardas do dia da semana**: três guardas asseguram o mesmo
+  fato. Não é defeito, e reduzir a sobreposição enfraqueceria cada um deles.
+  Registrado para que a próxima mutação da área não trate as seis reprovações
+  como sintoma. **Sem gatilho.**
