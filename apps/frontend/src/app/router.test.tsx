@@ -17,6 +17,8 @@ import {
   listKnowledgeBases,
 } from '../features/knowledge-bases/api/knowledgeBasesApi';
 import { getMessagesSummary, getSessionsSummary } from '../features/sessions/api/sessionsApi';
+import { getSystemInsights } from '../features/insights/api/insightsApi';
+import { systemInsightsFixture } from '../features/insights/test/systemInsightsFixture';
 import { clearToken, setToken } from '../auth/token';
 
 // importOriginal preserva ApiError: o detalhe do agente faz `instanceof
@@ -68,6 +70,12 @@ vi.mock('../features/knowledge-bases/api/knowledgeBasesApi', async (importOrigin
 vi.mock('../features/sessions/api/sessionsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../features/sessions/api/sessionsApi')>();
   return { ...actual, getSessionsSummary: vi.fn(), getMessagesSummary: vi.fn() };
+});
+
+// Mesmo motivo do de cima: sem este mock a rota /insights escaparia para a rede.
+vi.mock('../features/insights/api/insightsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../features/insights/api/insightsApi')>();
+  return { ...actual, getSystemInsights: vi.fn() };
 });
 
 const agent: Agent = {
@@ -128,6 +136,8 @@ describe('appRoutes', () => {
     vi.mocked(getSessionsSummary).mockResolvedValue({ startedCount: 0 });
     vi.mocked(getMessagesSummary).mockReset();
     vi.mocked(getMessagesSummary).mockResolvedValue({ inboundCount: 0 });
+    vi.mocked(getSystemInsights).mockReset();
+    vi.mocked(getSystemInsights).mockResolvedValue(systemInsightsFixture());
     setToken('token-de-teste');
   });
 
@@ -148,6 +158,12 @@ describe('appRoutes', () => {
     renderRoutesFrom('/');
 
     expect(await screen.findByRole('heading', { name: 'Inventário' })).toBeInTheDocument();
+  });
+
+  it('a rota /insights resolve para a página de Insights do sistema', async () => {
+    renderRoutesFrom('/insights');
+
+    expect(await screen.findByRole('heading', { name: 'Insights' })).toBeInTheDocument();
   });
 
   it('preserva o layout do AppShell ao navegar entre rotas', async () => {
@@ -287,6 +303,8 @@ describe('AppRouter', () => {
     vi.mocked(getSessionsSummary).mockResolvedValue({ startedCount: 0 });
     vi.mocked(getMessagesSummary).mockReset();
     vi.mocked(getMessagesSummary).mockResolvedValue({ inboundCount: 0 });
+    vi.mocked(getSystemInsights).mockReset();
+    vi.mocked(getSystemInsights).mockResolvedValue(systemInsightsFixture());
     setToken('token-de-teste');
   });
 

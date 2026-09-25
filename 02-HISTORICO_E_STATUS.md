@@ -10280,11 +10280,22 @@ do `01` e no `context:`; e renumerar a 23 para 24 faria a citação arquivada da
 
 ### Itens abertos que esta change deixa
 
-- **O rebase da #52 precisa descartar a parte de convenção do `d9ba259`.** O
-  commit fixa a convenção 23 **e** propõe a change de frontend; a parte de
-  convenção agora vive na `main`, e mantê-la no rebase duplica as 26 + 5 linhas.
-  **Gatilho: o próprio rebase da #52.** O SHA está escrito aqui para não depender
-  de alguém lembrar.
+- ~~**O rebase da #52 precisa descartar a parte de convenção do `d9ba259`.**~~
+  **FECHADO em 24/09/2026.** O commit fixava a convenção 23 **e** propunha a
+  change de frontend; a parte de convenção já vivia na `main`, e mantê-la
+  duplicaria as 26 + 5 linhas. O rebase foi feito: `d9ba259` → **`e1bfe34`**,
+  sobre `4c33eba`, com os **6 artefatos** de
+  `openspec/changes/insights-pagina-do-sistema/` — hoje em
+  `openspec/changes/archive/2026-09-25-insights-pagina-do-sistema/` — e **1747
+  linhas**, exatamente
+  `1778 − 26 − 5`. O `01` e o `openspec/config.yaml` não são mais tocados pelo
+  commit, e autoria e data originais foram preservadas. Antes de descartar, as
+  26 linhas do `01` e as 5 do `context:` foram conferidas por `diff` contra a
+  `main`: **idênticas, verbatim**. `openspec validate --all` verde, 59/59.
+  A mensagem foi reescrita no ponto em que deixou de ser verdade — o parágrafo
+  que dizia registrar a convenção no `01` e no `config.yaml` agora diz que ela
+  chegou pela #68. Backup em `backup/52-pre-rebase` → `d9ba259`, **descartável**
+  agora que o rebase está confirmado.
 - **Change abandonada, ou que não vira PR: não decidido.** A issue vai para
   `In progress` ao abrir a change; se a change for descartada, volta para
   `Ready`, volta para `Backlog`, ou fica? **Não há caso real nesta base** —
@@ -10518,3 +10529,1085 @@ define como "issue com change aberta".
 foram escritos no mesmo PR, que passou a `Closes #72`. Fica registrado como caso
 conhecido, **sem gatilho** — se um PR parcial voltar a acontecer por necessidade,
 e não por sequenciamento malfeito, aí a pergunta vira issue.
+
+## `insights-pagina-do-sistema`, preparação — 24/09/2026 · issue #52 · antes do apply
+
+A change da #52 foi **proposta em 23/09 e retomada em 24/09**, com a #65 e a #68
+mergeadas no meio. Antes do apply, a etapa preparatória rebaseou a branch,
+reconferiu as afirmações da proposta contra o repositório de hoje e remediu as
+baselines. **Quatro afirmações do `design.md` divergiram, e uma quinta apareceu
+no protótipo.**
+
+### O rebase, e o que ele descartou
+
+`d9ba259` → **`e1bfe34`**, sobre `4c33eba`. O commit original carregava três
+coisas: os artefatos da change, 26 linhas de convenção 23 no `01` e 5 linhas no
+`context:` do `openspec/config.yaml`. As duas últimas a #68 já tinha trazido
+para a `main`, **verbatim** — conferido por `diff` antes de descartar. O commit
+rebaseado tem **1747 linhas**, exatamente `1778 − 26 − 5`, e não toca mais o
+`01` nem o `config.yaml`. Detalhe no item fechado da seção da #68.
+
+### As quatro correções no `design.md`, e a distinção que elas registram
+
+**Três eram verdadeiras quando escritas, e uma estava errada.** A convenção 9
+pede corrigir com a causa, e a causa é diferente nos dois casos — por isso a
+distinção fica escrita em vez de tudo virar "corrigido":
+
+| onde | o que dizia | o que é | natureza |
+|---|---|---|---|
+| leitura do corpo real, linha `temporal` | `dailySeries: []`, `byWeekday: []` | vêm 3 e 3 | **caducou** |
+| "fato 3" | a omissão de dia não distingue os dois casos | resolvido | **caducou** |
+| leitura do código, 2 linhas | `dailySeries`/`byWeekday` saem de `group by`, "nenhum `generate_series`" | as duas usam `generate_series` | **caducou** |
+| projeção da convenção 18 | "décima sexta medição" | **décima nona** | **erro de contagem** |
+
+**As três primeiras caducaram pela #65**, que entrou depois da proposta. Não são
+erro de leitura: descrevem a rota que existia em 23/09, e é **por causa delas**
+que a D2 decidiu corrigir a rota em vez de reconstruir a distinção no cliente. A
+D2 foi escrita contra o comportamento corrigido **antes de ele existir**. Apagar
+as linhas esconderia por que a decisão foi tomada, então elas ficam marcadas
+`CADUCOU`, com o estado novo ao lado.
+
+**A quarta é contagem e custa uma palavra:** a #65 foi a 17ª medição da
+convenção 18 e a #68 a 18ª, então esta é a 19ª.
+
+**O par de linhas do código é o que mais custava se passasse.** O `design.md` é
+lido durante o apply, e quem lesse "nenhum `generate_series`" como estado atual
+concluiria que a série chega esburacada e que a tela precisa cruzá-la com o mapa
+de regimes — **a reconstrução no cliente que a D2 recusou**, e que faria o
+cliente inventar zeros.
+
+### A tarefa 0.1 conferida contra a rota real, não contra o documento
+
+`apps/api` local com `TZ=America/Sao_Paulo`, janela começando **antes** do início
+do regime de propósito. Os quatro pontos que a D2 assume:
+
+| assunção | rota real |
+|---|---|
+| dia medido e vazio com `taskCount: 0` e `tokenCount` nulo | `{"day":"2026-09-22","taskCount":0,"tokenCount":null}`, e 23 e 24 iguais |
+| nenhum dia anterior ao regime | pedidos desde 15/09; a série começa em 22/09 |
+| `byWeekday` com `0` no coberto, omitindo o não coberto | só `2`, `3`, `4` |
+| `peakWeekday` nulo sem ocorrência | `null` |
+
+**A D2 não precisa de revisão.** A forma da resposta não mudou — os 5 códigos de
+`caveats`, só em `performance` (2) e `errors` (3), e as cinco lacunas da D8
+conferem campo a campo contra o contrato de hoje. O que a #65 mudou foi
+**quantas linhas** chegam, e a tela consome as duas coisas.
+
+### O deslize do protótipo, registrado antes do apply
+
+**O quadro 4 do `Estados.dc.html` se intitula "A gramática dos _três_ estados" e
+desenha QUATRO linhas.** Contadas no artboard reaberto em 24/09: `12,4 M` (valor
+medido), célula em branco (há linha e não há o que dizer), `—` (dado
+desconhecido) e `0` (contagem feita que deu zero).
+
+**São quatro, e o desenho manda sobre o título.** A D6 já lia quatro.
+
+**O motivo de registrar em vez de deixar passar** é o que o deslize habilita:
+quem ler só o título vai **cortar um estado** para a conta fechar, e o que cai é
+o **travessão** — o menos observado dos quatro, porque nenhum dado de exemplo do
+protótipo o exercita (todos supõem consulta que respondeu), e o mais difícil de
+defender sem o desenho ao lado. Perdê-lo colapsaria "a consulta não respondeu"
+em "não há o que dizer", que é exatamente o modo de falha que o quadro 3 existe
+para proibir, e que ele descreve por escrito.
+
+**O protótipo continua sendo a autoridade** — um título errado não muda isso. A
+nota `estados` do `canvas.json` diz, do autor: *"os estados de exceção são metade
+do protótipo, não um apêndice"*.
+
+**E os protótipos abriram**, pelo caminho que a etapa 4 tinha declarado como
+limitação: o MCP `claude-design` continua recusando com
+`FIRST_PARTY_AUTH_REJECTED`, e os artboards saíram pela leitura direta dos
+arquivos publicados do canvas. A escala do mapa de calor foi conferida **cor a
+cor** nos dois esquemas, e a inversão da D7 confere: escuro `#24272c → #1e4d92 →
+#245cad → #2a6ecb → #4180d4 → #6495db` (cresce clareando), claro `#f1f1f1 →
+#d6e3f6 → #b0c8ee → #6495db → #4180d4 → #2a6ecb` (cresce escurecendo).
+
+### As baselines remedidas, com o regime colado
+
+Uma suíte por vez, com a API local derrubada, sobre `4c33eba`:
+
+| suíte | 23/09 (`0b189fa`) | 24/09 (`4c33eba`) | duração |
+|---|---|---|---|
+| `apps/frontend` | 927/927 | **927/927**, 84 arquivos | 1m15s |
+| `apps/api` | 391/391 | **404/404** | 2m05s |
+| `apps/workers` | 386/386 | **386/386** | 6m48s |
+| `apps/inbox` | 203/203 | **203/203** | 20s |
+
+**Os +13 de `apps/api` vêm da #65**, que os declara no próprio commit
+(`aae444d`: *"+13, nenhum removido"*) — são os guardas da série densa, em
+`AgentInsightsEndpointsTests.cs` e `InsightsEndpointsTests.cs`. É a baseline de
+**404** que a projeção da convenção 18 desta change usa.
+
+**O regime do `podman ps` é DIFERENTE do de 23/09, e isso fica escrito** porque a
+convenção 22 pede o estado ao lado do número, e trocar o regime em silêncio faria
+a comparação parecer mais limpa do que é. **Dois** containers de pé, não três:
+`buteco-agents_postgres_1` (`Up 15 hours`, healthy) e `buteco-agents_rabbitmq_1`.
+**`buteco-agents_waha_1` ficou parado.** Mesmo `DOCKER_HOST` do Podman e mesmo
+`TESTCONTAINERS_RYUK_DISABLED=true`. Nenhuma reprovação e nenhuma rodada em
+paralelo — a contenção que derrubou `apps/inbox` para 202/203 em 23/09 não se
+repetiu.
+
+### O que o apply entregou, e o que ele deixa aberto
+
+**A tela existe**, em `apps/frontend/src/features/insights/`, servida por uma
+consulta só a `GET /insights/system`, com a rota `/insights` e o item na casca.
+`apps/frontend` fechou em **1174/1174** em 106 arquivos, contra a baseline de
+**927/927** em 84 — o delta fecha por nome: +230 da feature nova, +15 no
+`theme.test.ts`, +1 no `router.test.tsx` e +1 no `AppShell.test.tsx`, e nenhum
+teste pré-existente desapareceu. `npm run lint` e `tsc -b` limpos. As três
+suítes de backend **não foram rodadas de novo e não precisavam**: o `git status`
+confirma que nenhum arquivo fora de `apps/frontend`, dos artefatos da change e
+do `02` foi tocado.
+
+#### A décima nona medição da convenção 18
+
+| categoria | projetado | medido | erro |
+|---|---|---|---|
+| fonte | 28 arq, 1.520 | 26 arq, 2.764 | **+82%** |
+| teste à mão | 24 arq, 1.210 | 25 arq, 2.883 | **+138%** |
+| **duplo** | 1 arq, 180 | 1 arq, 140 | **−22%** |
+| gerado | 0 | 0 | exato |
+| **total** | ≈53 arq, ≈2.900 | **52 arq, 5.787** | **+100%** |
+| cenários | ≈48 | 51 | +3 |
+
+**Arquivos acertaram, linhas erraram por 100%, e o total saiu fora da faixa
+declarada** (2.300 a 3.400) — que era deliberadamente larga. **O duplo foi a
+categoria mais precisa**, o que inverte o sinal da lição da décima segunda: o
+problema nunca foi o duplo ser imprevisível, foi ele não ter onde ser contado.
+
+**A contribuição nova para a série:** 113 linhas por cenário, contra 22 a 54 das
+quatro âncoras. A causa é que os guardas desta change são **negativos**, e
+asserção negativa custa mais linha que positiva — cada uma carrega por escrito o
+defeito que impede, porque "não há `0` aqui" é ininteligível sem dizer que zero
+seria plausível ali. **Quando a change é sobre uma distinção, o custo por
+cenário não se herda de changes sobre funcionalidade.**
+
+**O efeito da D2, medido porque a projeção mandou:** `measuredDays.ts` tem 150
+linhas e **não recebe `regimes`**. A versão que reconstruiria a distinção no
+cliente custaria 60 a 80 linhas de fonte e 3 a 4 cenários a mais — ~5% do total,
+número modesto. **A economia real não está nas linhas: está em não existir uma
+segunda definição de "dia medido" para sair de sincronia com a do servidor.**
+
+#### Os dois gatilhos já cumpridos por esta change
+
+- **Latência da D6 da etapa 3.** A resposta levou **2,24 s** contra o banco de
+  dev na leitura de 23/09, disparando o gatilho. **Ressalva que impede a
+  conclusão fácil:** a medição de dev inclui subida a frio do processo, e a
+  releitura de 24/09 com a API já quente não repetiu o número. O gatilho está
+  disparado; a causa não está estabelecida.
+- **O caso que a D8 da etapa 3 nomeou sem resolver** — configuração de regime que
+  não corresponde à medição real — é exatamente o ambiente de dev em que a tela
+  foi exercitada. E a tela **não** se apoia nele: `measuredDays.ts` lê a série, e
+  a divergência entre regime declarado e medição real não muda nenhuma célula.
+
+#### Itens abertos que esta change cria
+
+- **(a) O motivo das recusas — M29, issue #51.** Change de coleta, e a ordem foi
+  **invertida de propósito**: nasce **depois** desta, sabendo o formato que o
+  card de Motivos pediu. Hoje a recusa entra como lacuna declarada com a contagem
+  e sem causa nomeada.
+- **(b) Turno × compactação (L2), cache lido por modelo (L3) e mediana da duração
+  (L5) — issue #66.** Uma mudança só em `apps/api`, na rota do sistema. Gatilho:
+  o primeiro pedido do dono. **A L3 é divergência com decisão registrada**
+  (`02:4994`), não só com o protótipo — a coluna "Cache lido" foi decidida na
+  exploração e sai porque `ModelTokenResponse` não tem o campo.
+- **(c) As três colunas por agente (L4) — issue #67.** Gatilho: a etapa 5 (#53),
+  que ao abrir a aba do agente pode tornar a L4 redundante por outro caminho.
+- **(d) `byWeekday` tem o mesmo defeito que a #65 corrigiu na série diária**, e a
+  spec da rota não o cobre: ele omite o dia da semana sem ocorrência, e a
+  ausência sozinha não distingue "medido e zerado" de "nunca medido". **A tela
+  cobre isso lendo a série** (`measuredDays.coveredWeekdays`) — é a única
+  reconstrução que sobrou no cliente. **Gatilho: a decisão de estender o recorte
+  a M6 no servidor, ou de deixar a cobertura com o cliente** (D2).
+- **(e) Campos servidos e não desenhados**, sem gatilho, porque é escolha de
+  produto e não lacuna: resíduo (M25), tempo de fila, duração de chamada ao
+  provedor, profundidade de delegação, pares de delegação, falhas de indexação
+  como bloco próprio e cache global. O protótipo não os desenhou, e inventar card
+  para eles seria desenhar sem protótipo. **É por isso que
+  `residual-is-not-only-tools` é o único dos cinco caveats que não é
+  renderizado** — o número que ele limita não está na página, e o mapa de
+  `caveatLabels.ts` o classifica como `not-on-this-page` em vez de descartá-lo em
+  silêncio.
+- **(f) Subir `apps/api` em macOS exige `TZ=America/Sao_Paulo` no ambiente.** Sem
+  a variável o fuso local resolve como `Brazil/East` e a checagem de boot
+  reprova. A checagem está **certa** — é o caso que ela existe para pegar.
+- **(g) O banner de não-terminais não tem link.** O protótipo oferece "Ver as
+  tasks"; não existe tela que liste exatamente essas tasks, e um link para uma
+  listagem que não filtra por isso faria o operador concluir que o aviso mentiu.
+  **Gatilho: a primeira tela de tasks.**
+- **(h) O período não vai para a URL.** Hoje é estado de componente, e trocar de
+  período não muda o endereço. **Gatilho: o primeiro pedido de compartilhar link
+  de um período.**
+
+### A conferência manual pegou um defeito que a suíte não pegava
+
+**Convenção 14 rendendo o que ela existe para render.** A suíte fechou verde em
+1174/1174, `lint` e `tsc` limpos, e a tela ainda tinha um defeito de
+**correção**, não de estética. Ele apareceu na primeira conferência com a API
+derrubada, em 24/09.
+
+#### O defeito: três estados de consulta modelados como dois
+
+Com `apps/api` fora do ar, a página exibia **"Tasks executadas: 0"**,
+**"Chamadas ao provedor: 0"** e **"Nenhum consumo por provedor neste período."**
+
+**É exatamente o modo de falha que o quadro 3 do `Estados.dc.html` proíbe por
+escrito** — *"requisição que não respondeu não é evidência de ausência"* —, e o
+quadro existe justamente porque alguém colapsaria o estado 3 no estado 2 numa
+change futura. Colapsou nesta.
+
+**A causa, em uma linha:** `insightsQuery.isError ? 'failed' : 'ok'`. A negação
+deixa o estado **pendente** cair em `'ok'`, e o esqueleto que sustenta a tela
+antes da resposta tem as contagens `int` do contrato em `0` — que a gramática lê,
+corretamente, como zero **medido**.
+
+**Por que nenhum teste pegou:** todos os cenários de falha cobriam `isError`, e
+nenhum cobria `isPending`. O erro não foi de asserção, foi de **modelagem**: a
+consulta tem três estados e foram modelados dois. A asserção negativa estava
+certa e apontada para o lugar errado.
+
+**A correção:** `QueryState` passa a ser `'ok' | 'loading' | 'failed'`, e só
+`isSuccess` autoriza `'ok'` — **não** `!isError`, que é a negação por onde o
+defeito entrou. Os dois estados não-ok produzem o mesmo travessão e continuam
+separados na razão, porque "consultando" e "não respondeu" não são a mesma frase
+para quem lê, e o segundo convidaria a uma nova tentativa desnecessária.
+
+**O guarda reprovou contra o defeito real antes de valer** (convenção 15):
+revertida a linha, os dois casos novos falham; reposta, passam. `apps/frontend`
+fecha em **1177/1177**.
+
+**A régua que sai daí, e ela é geral:** *derivar um estado por negação do estado
+de erro esconde o terceiro estado.* Vale para toda consulta assíncrona do painel,
+e é barata de aplicar — `isSuccess` em vez de `!isError` é a mesma quantidade de
+código.
+
+#### O achado visual que fica para o dono julgar
+
+**No tema ESCURO, a célula de zero medido do mapa de calor é invisível**, e com
+ela some a distinção que a change inteira defende. `--buteco-heat-0` é
+`dark[6]` (`#24272c`) e a superfície do card é `dark[7]` (`#1b1d21`) — razão de
+contraste perto de 1,1:1. A célula de 23/09 (dia medido e vazio) não se
+distingue do fundo, e o primeiro passo da legenda "menos … mais" também some.
+
+**No tema CLARO a distinção funciona**, e funciona bem: hachura com listras
+visíveis, zero medido em cinza sólido, rampa invertendo corretamente. **É o
+oposto do que a tarefa 7.3 previu** — ela apontava o claro como o risco.
+
+**O código está fiel ao protótipo, e é por isso que não foi alterado.** A D7
+especifica `dark[6]` para o zero no escuro, e é o que o `Main.dc.html` usa. **O
+protótipo tem o mesmo contraste** — mas ele nunca precisou distinguir zero
+medido de dia NÃO medido no calendário, porque a hachura só existe no quadro 1
+do `Estados.dc.html`, que é um gráfico de barras. **O protótipo não decide este
+caso**, e a decisão é do dono (convenções 14 e 17).
+
+**Gatilho: o julgamento do dono sobre as capturas.** Se ele mandar corrigir, o
+caminho é um passo 0 mais claro que `dark[6]` no escuro — `dark[5]` (`#2b2e34`)
+ou `dark[4]` (`#343639`) —, e a tabela da D7 muda junto.
+
+### O dono pegou a segunda, e ela é do mesmo tipo da primeira
+
+Na segunda rodada de conferência, o dono apontou o quadro **"Chamadas ao
+provedor"**: *"foi implementado um aviso que não existe no protótipo. Inclusive
+a mensagem dentro dela não ficou clara."* As duas metades são achado, e a
+segunda é mais grave que a primeira.
+
+#### O peso visual: moldura onde o protótipo tem subtítulo
+
+A D8 especifica, para a L2: *"o KPI mostra o total; **o subtítulo** vira a
+lacuna declarada"*. O protótipo escreve ali `522 de turno · 41 de compactação`,
+uma linha do mesmo peso das dos outros cinco cards.
+
+**Foi implementado com a moldura tracejada do quadro 6, e ela ficou maior que o
+próprio número.** A moldura é o tratamento para lacuna que substitui **elemento
+próprio** do protótipo — uma coluna, um grupo de colunas —, e entra no **rodapé**
+do card, que é o que a D8 diz para a L3 e a L4. Aplicá-la a um subtítulo trocou
+a hierarquia da leitura: o que falta passou a pesar mais que o que existe.
+
+**Correção:** `DeclaredGap` ganha `variant`. `inline` para lacuna que substitui
+subtítulo, `block` para a que substitui elemento próprio. **O estado é o mesmo**
+— mesma marca `data-declared-gap`, mesmo vocabulário —, e o que muda é o peso,
+que passa a seguir o do elemento substituído.
+
+#### O texto: a lacuna se contradizia em duas linhas
+
+O quadro dizia, uma linha embaixo da outra:
+
+> **Separação entre turno e compactação — não coletado**
+> A rota não expõe o propósito da chamada, **embora ele seja gravado**.
+
+**"Não coletado" e "é gravado" são a mesma afirmação com o sinal trocado**, e as
+duas estavam no mesmo quadro. `ProviderCall.Purpose` **existe na tabela** e é
+escrito por `apps/workers`; o que falta é a **rota devolvê-lo**.
+
+**A causa:** `"não coletado"` estava **cravado no componente**, e aplicado às
+quatro lacunas da tela — que não são a mesma coisa:
+
+| lacuna | o que de fato acontece |
+|---|---|
+| L1 — motivo da recusa | **não coletado**: o dado não existe em lugar nenhum |
+| L2 — turno × compactação | gravado, **não devolvido** por esta rota |
+| L3 — cache por modelo | existe como **total do sistema**, não neste grão |
+| L4 — três colunas do agente | existem no **escopo do agente** |
+
+**Só a L1 é "não coletado".** Nas outras três a frase manda procurar coleta onde
+falta exposição — e numa tela cujo ponto inteiro é não afirmar o que o sistema
+não sabe, **afirmar que o sistema não sabe o que ele sabe é o mesmo erro com o
+sinal trocado.** Não é mais benigno por ser conservador: quem ler "não coletado"
+abre change de coleta para um campo que já está gravado.
+
+**Correção:** `qualifier` vira prop **obrigatória**, sem default cômodo — o
+compilador passa a cobrar a escolha em cada uso, que é onde a diferença é
+conhecida. Guarda negativo no KPI afirmando que "não coletado" **não** aparece
+ali.
+
+#### A régua que sai das duas
+
+**Um estado de exceção tem dois eixos, e os dois se erram separadamente: o PESO
+e a AFIRMAÇÃO.** O peso vem do elemento que a lacuna substitui, não do estado; a
+afirmação vem da lacuna, não do componente. Um componente de estado que fixa
+qualquer um dos dois vai mentir em algum uso — e foi o que aconteceu nos dois.
+
+**E as duas passaram por uma suíte verde**, pelo mesmo motivo da primeira
+conferência: o guarda existia e afirmava a presença da lacuna, nunca o que ela
+**diz** nem o quanto ela **pesa**. `apps/frontend` fecha em **1180/1180**.
+
+### Terceira rodada: a lacuna engordou o card
+
+O dono comparou o card **"Chamadas ao provedor"** com o artboard e perguntou a
+diferença. São **três**, e só uma é decisão:
+
+| # | protótipo | implementado | o que é |
+|---|---|---|---|
+| 1 | `563` | `11` | **dado**, não comportamento — o artboard usa dados de exemplo |
+| 2 | `522 de turno · 41 de compactação` | `turno e compactação — não separados por esta rota` | **decisão** (D8/L2) |
+| 3 | — | uma **segunda** linha explicando o porquê | **erro** |
+
+**A #2 é a L2, e ela se sustenta:** `ProviderCall.Purpose` existe na tabela — o
+banco de dev mostra 20 `Turn` e 1 `Compaction` — e a consulta de `byModel`
+agrupa só por provedor e modelo. O recorte não tem fonte nesta rota. Sumir com o
+subtítulo deixaria a ausência invisível; inventar o número seria pior.
+
+**A #3 não tem defesa.** A D8 diz *"o subtítulo vira a lacuna declarada"* — **o**
+subtítulo, uma linha —, e o protótipo tem ali exatamente uma. O card ficou com
+quatro linhas onde o artboard tem três.
+
+**A causa:** `reason` era **obrigatória** no componente de lacuna, e a
+obrigatoriedade foi herdada do caso errado. No **rodapé de card** ela é o único
+contexto que o lugar tem: sem ela, "Cache lido por modelo — não servido por esta
+rota" não diz que o cache EXISTE como total do sistema, que é justamente o que
+impede alguém de abrir change para coletá-lo. No **subtítulo** não é assim — o
+porquê pertence à **issue** (#66), e a convenção 23 existe exatamente para que
+ele sobreviva ao archive. **A tela precisa nomear o que falta; ela não precisa
+argumentar.**
+
+**Correção:** `DeclaredGapProps` vira união discriminada — `reason` obrigatória
+no `block`, opcional no `inline` —, e o compilador continua cobrando onde ela
+importa. Guarda novo contando as **linhas** do card contra as do card ao lado.
+
+#### A terceira régua, e ela fecha o conjunto
+
+As três rodadas de conferência acharam três defeitos no **mesmo componente**, em
+três eixos diferentes:
+
+| rodada | eixo | o que estava cravado |
+|---|---|---|
+| 2ª | **peso** | a moldura do quadro 6, em lugar de subtítulo |
+| 2ª | **afirmação** | `"não coletado"` nas quatro lacunas |
+| 3ª | **extensão** | `reason` obrigatória nos dois lugares |
+
+**Os três vêm da mesma origem: um componente de estado que fixa o que pertence
+ao LUGAR em vez de ao ESTADO.** Peso, afirmação e extensão são do lugar; o
+estado é só a marca que diz "aqui falta algo, e não é falha de consulta".
+
+**E os três passaram por suíte verde**, sempre pelo mesmo motivo: os guardas
+afirmavam a **presença** da lacuna. Presença é o que jsdom enxerga bem — e é a
+única das quatro propriedades que nunca esteve errada. `apps/frontend` fecha em
+**1182/1182**.
+
+### Quarta rodada: o registro da lacuna, e o que saiu da tela
+
+O dono perguntou o que significava **"não servido por esta rota"**, que sobrara
+no card. A resposta é literal: *o endpoint `GET /insights/system` não devolve
+esse campo* — e é exatamente esse o problema.
+
+**É vocabulário de quem escreve o backend numa tela lida por quem opera.**
+"Rota" é o caminho HTTP; "servir" é o servidor devolver. Quem olha o painel não
+sabe o que é uma rota, e não deveria precisar saber.
+
+**E insinuava o que é falso:** "por **esta** rota" sugere que existe outra que
+serviria. Para a L2 e a L3 não existe — o recorte turno × compactação não é
+devolvido por rota nenhuma, e o cache por modelo não existe nesse grão em lugar
+algum.
+
+#### As duas decisões do dono
+
+**(1) O qualificador é `"não disponível"` nas quatro.** Escolhido com o risco na
+mesa e registrado aqui para que a escolha não pareça descuido: *"disponível" é
+vizinho de "tente de novo", que é o que o **travessão** significa.* O que contém
+o risco não é a palavra — é a marca `data-declared-gap` (nunca
+`data-metric-state`), a moldura tracejada que o travessão não tem, a ausência de
+qualquer ação de nova tentativa ao lado, e um guarda que proíbe "falhou", "erro"
+e "tentar de novo" no texto. **Se a confusão aparecer numa conferência futura, é
+aí que se mexe.**
+
+**(2) A lacuna não argumenta mais.** O `reason` saiu das quatro: a tela **nomeia
+o que falta e para por aí**. O porquê pertence à **issue** — e a convenção 23
+existe exatamente para isso, porque é a issue que sobrevive ao archive, não o
+`design.md` nem um parágrafo de tela.
+
+**Consequência que precisa ser cumprida, e é dívida aberta:** o que saiu da tela
+**tem que estar nas issues**, ou some no archive. Cada uma precisa carregar:
+
+- **#51 (L1)** — o motivo da recusa não é gravado em lugar nenhum; é M29, change
+  de coleta própria, e nasce **depois** desta sabendo o formato que o card pediu.
+- **#66 (L2, L3, L5)** — `ProviderCall.Purpose` **é gravado** e a rota não o
+  devolve; o cache existe **só como total do sistema**, e reparti-lo por modelo
+  inventaria a distribuição; a rota calcula `avg`, e mediana não é calculada.
+- **#67 (L4)** — tasks, tokens por task e duração p95 **existem no escopo do
+  agente**, e trazê-las de lá misturaria níveis de agregação.
+
+**O caveat NÃO saiu junto, e a distinção importa.** `rejection-reason-not-collected`
+continua renderizado ao lado da lacuna de recusa, porque ele é requisito próprio
+da spec — *"códigos de parcialidade renderizados junto do número que limitam"* —
+e não a explicação da lacuna. Mesmo tratamento que
+`rejections-missing-from-executions` recebe no card de Falhas.
+
+#### O quarto eixo, e o que o conjunto ensina
+
+| rodada | eixo | o que estava cravado |
+|---|---|---|
+| 2ª | **peso** | a moldura do quadro 6, em lugar de subtítulo |
+| 2ª | **afirmação** | `"não coletado"` nas quatro lacunas |
+| 3ª | **extensão** | `reason` obrigatória nos dois lugares |
+| 4ª | **registro** | vocabulário de servidor numa tela de operador |
+
+**Quatro defeitos, um componente, e a mesma origem: um componente de estado que
+fixava o que pertence ao LUGAR e ao LEITOR em vez de ao ESTADO.** O estado é só
+a marca que diz "aqui falta algo, e não é falha de consulta". Peso, afirmação,
+extensão e registro são de fora dele.
+
+**E o guarda que sobreviveu às quatro redações é o que não afirma redação
+nenhuma:** o do KPI afirma que a tela **não opina sobre coleta** — não que ela
+diga tal frase. Os que citavam texto literal quebraram em cada mudança e
+precisaram ser reescritos três vezes. `apps/frontend` fecha em **1183/1183**.
+
+### Quinta rodada: o card de série diária, e a legenda que era do outro artboard
+
+O dono comparou o card **"Tasks por dia"** com o `Main.dc.html`. Três achados,
+todos do agente, e o terceiro é de um tipo novo.
+
+| # | o artboard tem | foi entregue | o que é |
+|---|---|---|---|
+| 1 | eixo com `21/08 · 05/09 · 19/09` | nada | **omissão** |
+| 2 | `máximo 33 · mínimo 0` no cabeçalho | só no `aria-label` | **omissão para quem enxerga** |
+| 3 | — | uma legenda abaixo do gráfico | **artboard errado** |
+
+#### As duas omissões
+
+**O eixo de datas simplesmente não foi implementado.** O gráfico mostrava uma
+linha sem nenhuma âncora temporal — quem olha não sabe se o pico foi ontem ou há
+três semanas.
+
+**Os extremos existiam, e estavam invisíveis.** Máximo e mínimo estavam no
+`aria-label` do SVG: presentes para leitor de tela, ausentes para quem enxerga.
+**É o inverso do modo de falha habitual de acessibilidade, e passou pela suíte
+exatamente por isso** — `toHaveAccessibleName` afirmava o rótulo, e o rótulo
+estava certo. O guarda mirava no lugar certo e media a coisa errada.
+
+Ambos entram com a gramática preservada: máximo e mínimo saem dos dias
+**medidos**, e somem quando não há nenhum — `máximo 0 · mínimo 0` afirmaria
+medição onde não houve.
+
+#### A legenda: ela existe, no artboard que descreve o estado
+
+A frase *"A faixa hachurada é o trecho sem medição..."* **está no protótipo** —
+no quadro 1 do `Estados.dc.html`, que é o estado de **período maior que a
+medição**. Ela não está no `Main.dc.html` porque ali a série cobre a janela
+inteira: **não há hachura para explicar.**
+
+**O protótipo decide isso por ESTADO, e foi implementado como incondicional.** A
+legenda agora aparece só quando há trecho não medido.
+
+**E ela estava parafraseada.** O texto entregue acrescentava *"A linha quebra ali
+em vez de cair a zero —"*, que é argumento do agente, não do autor. O texto do
+artboard entrou literal.
+
+#### O tipo novo de erro, e o que ele acrescenta
+
+As quatro rodadas anteriores erraram **como** dizer (peso, afirmação, extensão,
+registro). Esta errou **onde ler**: a legenda foi buscada no artboard que a tem
+e aplicada sem a condição que o artboard lhe dá.
+
+**A régua: um artboard de ESTADOS não é um catálogo de elementos da página — é o
+que a página vira EM CADA ESTADO.** Copiar um elemento de lá para a tela
+principal sem trazer a condição que o cerca transforma um estado de exceção em
+decoração permanente. Vale para os seis quadros, e é a leitura que a nota
+`estados` do `canvas.json` já pedia: *"os estados de exceção são metade do
+protótipo, não um apêndice"* — metade, não avulsos.
+
+**E a contagem das cinco rodadas:** todos os achados do dono foram de **fidelidade
+ao protótipo** ou de **registro**, nenhum de lógica. A lógica que a suíte cobre —
+nulo contra zero, série densa, percentual guardado — não teve um único defeito
+apontado. **A suíte cobre o que o jsdom enxerga, e o dono cobre o resto**, que é
+exatamente a divisão que a convenção 14 escreve. `apps/frontend` fecha em
+**1191/1191**.
+
+### Sexta rodada: o aviso de não-terminais, posição e peso
+
+O dono comparou o aviso **"Tasks sem estado terminal"** com o `Main.dc.html`.
+Duas divergências, ambas do agente, e nenhuma com decisão por trás.
+
+| | artboard | entregue |
+|---|---|---|
+| **posição** | **rodapé**, depois do card de Motivos | **topo**, antes dos KPIs |
+| **forma** | caixa discreta: fundo `dark[6]`, borda fina `yellow[8]`, título `yellow[4]`, corpo em prosa | `Alert` **preenchido** do Mantine, com lista de marcadores |
+
+**A posição foi julgamento do agente** — "aviso vai em cima" —, e o protótipo diz
+o contrário. **Ele tem razão:** o que o aviso relata são algumas tasks entre as
+do período, não interrupção de serviço. No topo, ele tomava a primeira leitura
+da tela e empurrava os números para baixo, invertendo o que a página existe para
+mostrar.
+
+**A forma é da mesma família do erro da 2ª rodada** (a moldura do quadro 6 num
+subtítulo): peso escolhido pelo agente em vez de medido no artboard. Um bloco
+preenchido é vocabulário de alarme; o artboard desenha nota de rodapé.
+
+**O conteúdo continua divergindo, e isso é a D11, não descuido** — sem afirmação
+de idade, sem somar as duas populações, sem link. A prosa substituiu a lista de
+marcadores: a separação das populações passa a ser do **texto**, como no
+artboard, e não de uma estrutura visual que ele não tem.
+
+#### O guarda de ORDEM, que não existia em nenhum arquivo
+
+Foi escrito agora, e **reprovou contra o defeito antes de valer** (convenção 15):
+com o aviso no topo ele falha, no rodapé passa. Usa
+`compareDocumentPosition` para afirmar que KPIs e Motivos vêm **antes** do aviso.
+
+**É a quarta propriedade que a suíte não olhava.** O apanhado das seis rodadas:
+
+| propriedade | rodada que a expôs |
+|---|---|
+| peso | 2ª (moldura no subtítulo) |
+| afirmação | 2ª (`"não coletado"` no que é gravado) |
+| extensão | 3ª (`reason` obrigatória) |
+| registro | 4ª (vocabulário de servidor) |
+| condição | 5ª (legenda de outro artboard, incondicional) |
+| **ordem** | **6ª** (aviso no topo) |
+| **visibilidade** | 5ª (extremos só no `aria-label`) |
+
+**Sete propriedades, e os guardas cobriam UMA: presença.** É a que o jsdom
+enxerga melhor, e a única que nunca esteve errada em seis rodadas. A conclusão
+prática, e vale para a próxima tela: **um guarda de apresentação que só afirma
+que o elemento existe não está cobrindo apresentação — está cobrindo montagem.**
+
+`apps/frontend` fecha em **1193/1193**.
+
+### Sétima rodada: o quadro 1 inteiro, e a hachura que existia sem aparecer
+
+O dono apontou o quadro 1 do `Estados.dc.html` — "coleta recém-iniciada". Dois
+achados, e o segundo é de um tipo que ainda não tinha aparecido: **código
+presente, efeito ausente**.
+
+#### O aviso do topo: omissão pura
+
+O quadro 1 abre com uma caixa azul — *"O período escolhido é maior que a
+medição / A coleta começou em 02/09/2026. Dos 30 dias pedidos, 13 têm medida e
+17 não existem — **não são dias sem uso**."*
+
+**Não foi implementado.** A tela desenhava a hachura e não explicava o que ela
+era em lugar nenhum acima do gráfico: o operador via um bloco listrado ocupando
+dois terços da série e tinha de deduzir sozinho.
+
+**A última frase é a que faz o trabalho.** "Não são dias sem uso" é a distinção
+que esta change inteira defende, dita em quatro palavras e no lugar em que é
+lida primeiro — antes dos números, não depois deles.
+
+**As duas fontes seguem o corte da D2:** as contagens saem da **série**
+(`measuredDays`), e o instante de início sai do **mapa de regimes**, que serve ao
+texto e não classifica dia nenhum. O guarda afirma isso com uma série que
+CONTRADIZ o regime: a contagem segue a série.
+
+#### A hachura: implementada, e invisível
+
+As listras **estavam no código** desde o primeiro apply, e não apareciam na
+tela. A causa tem duas camadas, e as duas precisam ser ditas:
+
+1. **`var()` em atributo de apresentação de SVG.** O padrão era
+   `stroke="var(--buteco-surface-subtle)"` — atributo, não CSS.
+2. **Escala não uniforme.** O `<pattern>` com `patternTransform="rotate(135)"`
+   vivia num SVG com `viewBox="0 0 600 120"` e `preserveAspectRatio="none"`,
+   esticado ~2× na horizontal e 1× na vertical. **A escala deforma o padrão
+   junto com o desenho**, e as listras saíam rarefeitas a ponto de sumir.
+
+**O protótipo nunca usou `<pattern>`** — usa `repeating-linear-gradient` em CSS,
+num `div`. A faixa passou a ser camada absoluta atrás do desenho, com o mesmo
+gradiente de 135° e período de 10px. **O desenho fica no SVG; a textura, fora
+dele**, onde nada a estica.
+
+#### O oitavo eixo: EFEITO
+
+| propriedade | rodada |
+|---|---|
+| peso | 2ª |
+| afirmação | 2ª |
+| extensão | 3ª |
+| registro | 4ª |
+| condição | 5ª |
+| visibilidade | 5ª |
+| ordem | 6ª |
+| **efeito** | **7ª** |
+
+**"Efeito" é diferente de "visibilidade", e a diferença importa.** Na 5ª rodada
+o dado estava em lugar errado (no `aria-label`, invisível para quem enxerga).
+Aqui o elemento estava no lugar certo, com a marca certa, e **não produzia
+pixel** — e o teste que o cobria (`toHaveAttribute('fill', 'url(#hachura...)')`)
+passava, porque a referência ao padrão existia. **Afirmar que um elemento
+aponta para uma textura não é afirmar que a textura aparece.**
+
+**É o limite do jsdom escrito com precisão**: ele não faz layout, não resolve
+`var()`, não aplica `preserveAspectRatio`. Um guarda de apresentação em jsdom
+pode afirmar estrutura e valores — nunca resultado visual. **A conferência do
+dono não é redundante com a suíte; é a única que mede esta propriedade**, e
+sete rodadas a mediram sete vezes.
+
+`apps/frontend` fecha em **1203/1203**, em 107 arquivos.
+
+### Oitava rodada: a primeira que NÃO era defeito — e dois achados dentro dela
+
+O dono apontou que o card **"Consumo por agente"** tem 5 colunas de métrica no
+artboard e 2 na tela. **É a lacuna L4, decisão registrada na D8 com issue #67** —
+a primeira das oito rodadas em que o apontamento não era erro do agente.
+
+**Os fatos, reconferidos no código:** a rota do sistema serve, por agente,
+`AgentTokenResponse(AgentId, InputTokens, OutputTokens)` e
+`AgentFailureResponse(AgentId, Provider, Model, FailedCount)`. Tasks, tokens por
+task e duração p95 existem em `GET /insights/agents/{id}` — escopo do **agente**,
+uma requisição por agente. Buscá-las de lá quebraria a spec desta tela ("uma
+única requisição") e faria N+1 chamadas com janelas que podem não coincidir;
+derivar "tokens por task" exigiria o denominador que não vem.
+
+**Decisão do dono: manter declarada.** A #67 segue na fila com gatilho na etapa
+5 (#53), que ao abrir a aba do agente pode torná-la redundante por outro
+caminho.
+
+#### Os dois achados que apareceram dentro do apontamento
+
+**(a) "Nenhuma", e não `0`.** O `Main.dc.html` escreve a palavra, esmaecida, na
+coluna Falhas quando não houve nenhuma. A tela escrevia o algarismo. **É a mesma
+régua que a spec já pede para card e seção** — o zero por extenso, "para que a
+diferença em relação ao travessão seja legível em palavras e não só em símbolo"
+— aplicada à célula. Corrigido com `zeroLabel`, e **o estado continua sendo
+`zero`**: muda a palavra, não a classificação, e os guardas negativos seguem
+valendo. Guarda novo afirma que tokens NULOS não viram "Nenhuma" — a palavra é
+reservada ao zero contado.
+
+**(b) O `9` em vermelho, sem regra.** No artboard um dos números sai em `red[4]`
+e os outros em branco, e **o protótipo não declara o critério**. Pelos dados de
+exemplo, o 9 é o maior E o de pior taxa (8,5% contra 2,4% e 3,1%) — as duas
+leituras cabem, e escolher sozinho seria cravar um limiar que só vale para
+aqueles dados. Mesmo problema que a D7 resolveu quantizando o mapa de calor
+sobre a série medida em vez de usar os limiares do artboard.
+
+**Decisão do dono: destacar o maior valor.** Implementado, com a ressalva escrita
+no código porque ela é real e não some com a decisão: **o destaque ordena por
+contagem ABSOLUTA, não por taxa.** Um agente com 9 falhas em 1.000 tasks fica
+marcado e um com 3 em 5 não — e o segundo é o que está pior. A taxa exigiria
+tasks por agente, que é exatamente a coluna da L4.
+
+**Então o destaque melhora quando a #67 fechar, e o gatilho ficou escrito no
+caso de teste** que documenta a limitação: com tasks por agente disponível, o
+critério passa a ser taxa. **É a primeira vez nesta change em que uma lacuna
+declarada tem consequência mensurável em outro elemento da tela** — a L4 não
+custa só as três colunas, custa também a qualidade do destaque na coluna que
+ficou.
+
+Empate destaca todos os empatados; zero em todas não destaca nenhuma, porque
+"Nenhuma" em vermelho afirmaria problema onde não houve.
+
+`apps/frontend` fecha em **1210/1210**.
+
+### Nona rodada: "medindo desde" — o primeiro conflito PROTÓTIPO × SPEC
+
+O dono apontou que vários cards têm um rodapé *"medindo desde DD/MM/AAAA"*, que
+se repete, e que **nenhum card do protótipo tem rodapé**. As duas metades estão
+certas, e juntas expõem um conflito que as oito rodadas anteriores não tinham.
+
+#### O conflito, e ele é legítimo dos dois lados
+
+| | o que diz |
+|---|---|
+| **protótipo** | **um só**, no cabeçalho da página: `21/08/2026 a 19/09/2026 · medindo desde 15/07/2026` |
+| **spec desta change** | *"SHALL NOT apresentar um único 'medindo desde' para a página inteira — com mais de um regime, um texto único mentiria sobre pelo menos um deles"* |
+
+**A razão da spec é real:** a resposta traz `execution` (22/09) e `embedding`
+(23/09), datas diferentes. Uma data só no cabeçalho estaria errada para um dos
+dois — e o protótipo foi desenhado quando o regime era um.
+
+**Então o protótipo não está errado: ele está desatualizado pelo contrato.** É
+diferente dos casos anteriores, em que o agente contrariou o artboard por
+julgamento próprio. Aqui o artboard não podia saber.
+
+#### Mas a forma era erro do agente, e independente do conflito
+
+**Seis notas para duas datas** — `22/09` três vezes, `23/09` três vezes —, e
+**flutuando FORA dos cards**, abaixo deles. Esse idioma não existe em lugar
+nenhum do painel: metadado de card vive no cabeçalho, à direita, como o
+`máximo · mínimo` do gráfico de série.
+
+**Decisão do dono: no cabeçalho do card, e só onde o regime muda.**
+
+Implementado com a régua explícita: o regime de **execução** governa volume,
+série temporal, desempenho e tokens de conversa — quase a página inteira — e é
+declarado **uma vez**, sob os números de destaque, que é o grupo dele. O de
+**embedding** é outro, começa noutro dia, e aparece no cabeçalho dos **dois**
+cards em que números dele de fato aparecem. **De seis notas para uma linha mais
+dois cabeçalhos**, sem perder nenhuma das duas datas.
+
+Guarda novo afirma que nenhuma data se repete entre as notas de cabeçalho e que
+nenhuma delas repete o regime já declarado.
+
+#### O nono eixo: PROCEDÊNCIA
+
+| propriedade | rodada |
+|---|---|
+| peso · afirmação | 2ª |
+| extensão | 3ª |
+| registro | 4ª |
+| condição · visibilidade | 5ª |
+| ordem | 6ª |
+| efeito | 7ª |
+| — (decisão registrada, não defeito) | 8ª |
+| **procedência** | **9ª** |
+
+**"Procedência" é saber DE ONDE uma exigência vem, e o que fazer quando duas
+fontes discordam.** Nas oito rodadas anteriores o protótipo sempre venceu, e
+vencia porque o agente o tinha contrariado por conta própria. Aqui ele perde —
+e perde com razão registrada, que é a única forma legítima (convenção 17).
+
+**A régua: o protótipo vence sobre JULGAMENTO, e perde para CONTRATO.** Quando
+o artboard e a resposta discordam sobre um fato do sistema — quantos regimes
+existem, que campos vêm —, quem sabe é a resposta; o artboard foi desenhado
+antes. Quando discordam sobre como apresentar, o artboard vence sempre. **As
+nove rodadas todas cabem nessa frase**, e as oito primeiras são o lado em que o
+agente errou.
+
+`apps/frontend` fecha em **1211/1211**.
+
+### Décima rodada: as lacunas em moldura saem da tela, e a D8 é revisada
+
+O dono apontou os quadros tracejados dentro dos cards — *"Cache lido por
+modelo"* e *"Motivo das 2 recusas"* —, disse que **não existem no protótipo e
+estão fora do padrão da tela**, e mandou removê-los. Removidos, junto com o
+terceiro idêntico que não estava nas imagens: *"Tasks, tokens por task e duração
+p95 por agente"*.
+
+**Antes disso, uma redundância que o agente tinha criado:** o card de Motivos
+mostrava a lacuna e, logo abaixo, o caveat dizendo a mesma coisa —
+*"Motivo das 2 recusas — não disponível"* / *"O motivo da recusa não é coletado
+hoje"*. Entrou na 4ª rodada, quando o motivo foi tirado de dentro da lacuna e
+reposto como linha irmã sob o argumento de que é requisito próprio da spec. **Ele
+é — mas os dois requisitos apontavam para o mesmo lugar**, e cumprir os dois ao
+pé da letra produziu texto dobrado.
+
+#### A D8 estava certa para UMA das quatro, e a diferença tem nome
+
+A decisão original era "todas entram no estado de lacuna declarada", com a
+moldura do quadro 6. **O que distingue os casos é se o protótipo tem um ELEMENTO
+para carregar a declaração:**
+
+| | o protótipo desenha | a lacuna | resultado |
+|---|---|---|---|
+| **L2** | um **subtítulo** no KPI | ocupa o lugar dele, mesmo peso | **certo** |
+| **L1, L3, L4** | uma **coluna** | entrava como **quadro novo** | **errado** |
+
+Na L2 a lacuna ocupa um lugar que já existia. Nas outras, a moldura era elemento
+que o `Main.dc.html` não desenha em card nenhum, **cuja única função era falar do
+que a tela não mostra** — e cujo peso competia com os números que ela mostra.
+
+**A regra nova: subtítulo vira lacuna; coluna sai sem deixar quadro.**
+
+**E o argumento original continua verdadeiro** — "elemento ausente é invisível, e
+ninguém volta para procurar o que não aparece". **A resposta dele é a ISSUE, não
+a tela.** É o que a convenção 23 garante que sobreviva ao archive, e a razão de
+cada uma das cinco ter issue própria desde o começo: #51, #66, #67.
+
+#### Um efeito em cadeia, resolvido pela própria spec
+
+Sem o elemento que nomeava o motivo da recusa, `rejection-reason-not-collected`
+ficou **sem número para qualificar**. A spec já dava a saída, e ela foi seguida
+em vez de inventada: *"código cujo número não é apresentado nesta página SHALL
+NOT ser renderizado — um texto de limitação sem o número que ele limita não tem o
+que qualificar"*. Ele passou a `not-on-this-page`, ao lado de
+`residual-is-not-only-tools`. **Nenhum dos dois é descartado em silêncio**: os
+dois têm texto e classificação por escrito, e o dia em que o número que cada um
+qualifica entrar na tela, os casos falham e apontam o lugar.
+
+A **contagem** de recusas continua na tela, no card de Falhas, com o caveat dela.
+O que saiu foi o motivo.
+
+#### O décimo eixo: EXISTÊNCIA
+
+| propriedade | rodada |
+|---|---|
+| peso · afirmação | 2ª |
+| extensão | 3ª |
+| registro | 4ª |
+| condição · visibilidade | 5ª |
+| ordem | 6ª |
+| efeito | 7ª |
+| procedência | 9ª |
+| **existência** | **10ª** |
+
+As nove rodadas anteriores perguntaram **como** um elemento deve ser. Esta
+perguntou **se ele deve existir** — e a resposta foi não, para três dos quatro.
+
+**A régua, e ela é a mais geral das dez:** *um elemento cuja única função é
+explicar a ausência de outro elemento precisa de um lugar que o protótipo já
+tenha. Sem isso, ele não é declaração — é acréscimo.* O lugar de um achado que
+não cabe na tela é a issue, e é para isso que a convenção 23 existe.
+
+A spec delta e a D8 foram revisadas junto — não só o código. `apps/frontend`
+fecha em **1210/1210**, com 50 cenários nos dois deltas.
+
+### Décima primeira rodada: o card de Falhas, três desvios de uma vez
+
+O dono apontou que o card **"Falhas"** *"ficou completamente diferente"*. São
+três desvios simultâneos do `Main.dc.html`, e é a primeira vez que um único
+elemento acumula três.
+
+| | artboard | entregue |
+|---|---|---|
+| **estrutura** | dois quadros de MESMO tamanho, fundo da superfície sutil, raio `sm`, 12px | **nenhum quadro** — dois blocos de texto soltos |
+| **largura** | `flex-grow: 1`, igual nos dois | dirigida pelo CONTEÚDO |
+| **cor** | falha em `red[4]`, recusa em `yellow[4]` | as duas na cor padrão |
+
+**Os três se agravam entre si.** Sem quadro, a largura passa a vir do conteúdo;
+e como a caixa da recusa carrega uma frase inteira no lugar do percentual (D10),
+ela ficava o dobro da outra. **O destaque das duas métricas — que é o que o card
+existe para dar — se perdia por completo.**
+
+**E a cor não é decoração:** falha e recusa em cores diferentes é a mesma
+distinção que o parágrafo abaixo explica em palavras, dita em cor. Entregar as
+duas na mesma cor apagava visualmente a separação que o card inteiro defende.
+
+Corrigido nos três: quadros com `grow` e `align="stretch"` — mesma largura E
+mesma altura, independente do conteúdo —, e as duas cores em tokens que invertem
+por esquema (`--mantine-color-red-filled`, `--mantine-color-yellow-filled`).
+
+**O que continua divergindo é a D10, e é decisão registrada:** o artboard
+escreve "1,1% das tasks" na caixa da recusa, e o percentual sai. A recusa não
+produz linha de execução, então subconta o denominador — o percentual seria
+sobre um total que não inclui as próprias recusas. No lugar dele vai o texto de
+`rejections-missing-from-executions`, e é ele que torna as duas caixas
+assimétricas em conteúdo. **`align="stretch"` é o que impede essa assimetria de
+virar assimetria visual.**
+
+#### Os guardas que faltavam, e o padrão deles
+
+Três casos novos: largura igual, cores, e **a cor não sobrevive ao travessão** —
+pintar de vermelho um dado que não chegou afirmaria gravidade sobre "não sei".
+
+**Nenhum dos guardas anteriores deste card olhava aparência.** Eles afirmavam
+que as duas contagens existem, que só a falha tem percentual, que a recusa traz
+o caveat, que não há divisão por zero — **toda a lógica, nenhuma da forma**. O
+card passou onze rodadas com a lógica certa e a apresentação errada, e é o
+retrato mais limpo da divisão que a convenção 14 escreve.
+
+#### O décimo primeiro eixo: ESTRUTURA
+
+| propriedade | rodada |
+|---|---|
+| peso · afirmação | 2ª |
+| extensão | 3ª |
+| registro | 4ª |
+| condição · visibilidade | 5ª |
+| ordem | 6ª |
+| efeito | 7ª |
+| procedência | 9ª |
+| existência | 10ª |
+| **estrutura** | **11ª** |
+
+"Estrutura" é o continente, não o conteúdo: **que caixas existem, e o que
+determina o tamanho delas.** Os dez eixos anteriores trataram de elementos que
+existiam; este é sobre os que deveriam existir e não existiam — os quadros
+internos. Um elemento pode ter conteúdo, peso, texto e ordem corretos e ainda
+assim estar errado, porque **o recipiente que deveria contê-lo não foi
+construído**.
+
+`apps/frontend` fecha em **1213/1213**.
+
+### Décima segunda rodada: a fonte pequena, e o contraste que o artboard erra
+
+O dono apontou duas coisas no card de Falhas: **o fundo dos quadros de métrica
+não é visível**, e *"tenho achado a fonte dos números proporcionalmente menores
+do que foi planejado — valide isso"*. **As duas se confirmaram na medição**, e
+são de naturezas diferentes.
+
+#### A fonte: 73% do desenhado, e a causa é a escala
+
+| onde | artboard | entregue | |
+|---|---|---|---|
+| os seis KPIs | **22px** | 16px | **73%** |
+| contagens de Falhas | **20px** | 16px | **80%** |
+
+**A causa:** a escala tipográfica do tema para em `xl: 16px`, porque foi feita
+para **texto** num painel de corpo 13px. **Não existe token para "número de
+métrica"** — e o agente usou o topo da escala, que era o maior valor
+disponível e ainda assim menor que o desenhado.
+
+Os números passam a sair em px medidos, num só lugar (`METRIC_SIZE`), porque é
+assim que o artboard os declara: são **medida**, não degrau de escala. No
+`Main.dc.html` os números de métrica são a maior tipografia da página — maiores
+que o próprio título, que tem 20px. Isso é deliberado num painel de métricas, e
+a escala do tema não tinha como expressá-lo.
+
+**Nenhum teste podia pegar:** jsdom não faz layout, e `size="xl"` é valor
+válido. **O que estava errado era a ESCOLHA do token, não o uso dele** — e essa
+é uma classe que só olho humano mede.
+
+#### O contraste: o artboard erra, e foi medido para se afirmar isso
+
+| par | contraste |
+|---|---|
+| claro: card `#fff` × `gray[1]` — **o valor do artboard** | **1,052:1** |
+| escuro: card `dark[7]` × `dark[6]` — **o valor do artboard** | **1,126:1** |
+
+**O token estava certo e o artboard está errado.** `--buteco-surface-subtle`
+apontava exatamente para os tons que o `Main.dc.html` declara; o degrau é que
+está abaixo do limiar de percepção numa área chapada.
+
+**E não era um card: era um token em três lugares** — os quadros de métrica, os
+**cabeçalhos de todos os cards** e as **listras da hachura** da série diária. O
+mesmo degrau, o mesmo problema, relatado por um card só.
+
+**Decisão do dono: abrir o degrau, na maior das opções** — `gray[3]` no claro
+(**1,26:1**) e `dark[4]` no escuro (**1,393:1**), sabendo que `dark[4]` é
+também a cor da borda do card e que quadro e borda passam a ter o mesmo tom.
+Contraria o artboard num valor que ele declara, e vira registro (convenção 17).
+
+#### O guarda de CONTRASTE, e por que os três anteriores não bastavam
+
+O token tinha três casos cobrindo-o, **todos passando**: que existe nos dois
+esquemas, que aponta para um tom da paleta, e que difere entre esquemas.
+**Nenhum media contraste.** O novo mede, com piso em 1,2:1, e **reprovou contra
+os valores antigos antes de valer** (convenção 15).
+
+**A régua:** *afirmar que uma cor existe, é da paleta e difere entre esquemas
+não afirma que ela é VISÍVEL.* A suíte já media contraste de texto — havia
+casos de legibilidade para as combinações de `variant="light"` — e não media o
+de superfície contra superfície, que é o que separa um quadro do fundo dele.
+
+#### Fica aberto, pelo mesmo motivo e sem decisão
+
+`--buteco-heat-0` — o zero medido do mapa de calor — continua em `dark[6]`
+sobre card `dark[7]`: **1,126:1**, o mesmo degrau invisível. É token separado,
+registrado como achado desde a primeira conferência manual, e não entrou nesta
+decisão. **Gatilho: o julgamento do dono sobre o mapa de calor.**
+
+`apps/frontend` fecha em **1217/1217**.
+
+### Décima terceira rodada: o último rodapé flutuante volta para onde o artboard o põe
+
+O dono apontou a linha *"medindo desde 22/09/2026"* abaixo do card de Tokens de
+conversa — **o último resto dos seis rodapés flutuantes** da nona rodada — e
+disse que podia ser removida.
+
+**Podia sair de onde estava, e não podia sair da tela.** Aquela linha declarava o
+regime de **execução**, que governa volume, série temporal, desempenho e tokens
+de conversa — quase a página inteira. Removê-la sem mais nada deixaria o regime
+que rege a maior parte dos números **sem declaração nenhuma**, contra a spec.
+
+**O lugar certo é o do próprio artboard.** O `Main.dc.html` escreve, no cabeçalho
+da página, `21/08/2026 a 19/09/2026 · medindo desde 15/07/2026` — janela e
+regime lado a lado. A linha foi para lá.
+
+**E o regime é NOMEADO**, o que resolve o conflito que a nona rodada registrou:
+a spec proíbe "um único medindo desde para a página inteira" porque, com dois
+regimes de datas diferentes, um texto sem dono mentiria sobre um deles. Este diz
+de qual fala — *"execução medida desde 22/09/2026"* — e o de embedding continua
+nos cabeçalhos dos dois cards em que números dele aparecem.
+
+**Nenhuma nota de regime flutua mais.** Toda uma delas vive ou no cabeçalho da
+página, ou no cabeçalho de um card, e há guarda afirmando isso.
+
+#### Duas coisas que saíram junto
+
+**O componente `RegimeNote` foi removido**: com a última nota no cabeçalho, ele
+ficou sem uso, e código morto numa change que ainda não fechou é dívida que
+ninguém vai cobrar depois.
+
+**E um defeito de compilação que o lint pegou na hora:** `regimeNoteFor` estava
+declarado ANTES de `insights` e `janela`, que ele usa. Funcionava — é closure
+chamada durante o render —, mas o compilador do React não conseguia preservar a
+memoização dos `useMemo` abaixo e **pulava a compilação do componente inteiro**.
+Movido para depois das dependências. O erro só apareceu quando o `regimeStartOfPage`
+entrou no meio; o acoplamento já estava lá, mudo.
+
+#### O que a décima terceira fecha
+
+**É a primeira rodada em que o apontamento do dono e o artboard levaram ao mesmo
+lugar por caminhos diferentes:** ele pediu para tirar a linha porque ela estava
+fora do padrão; o artboard dizia onde ela deveria estar desde o começo. As duas
+respostas coincidiram, e a nona rodada — que moveu as notas para os cabeçalhos
+de card — foi um passo intermediário necessário: sem ela, não estaria claro que
+o regime de execução precisa de lugar próprio, e não de repetição.
+
+`apps/frontend` fecha em **1218/1218**.
+
+### Archive da `insights-pagina-do-sistema` — 25/09/2026 · issue #52
+
+Arquivada em `openspec/changes/archive/2026-09-25-insights-pagina-do-sistema/`,
+**antes do push e da abertura do PR**, como a convenção 24 manda.
+
+#### O que foi para as specs principais
+
+| capability | antes | depois |
+|---|---|---|
+| `system-insights-ui` | **não existia** | criada: 14 requisitos, 50 cenários |
+| `frontend-visual-theme` | 6 requisitos, 16 cenários | **8 e 22** — +2 requisitos, +6 cenários |
+
+Os seis requisitos pré-existentes de `frontend-visual-theme` foram conferidos um
+a um depois da sync: **intactos**, e a mudança é puramente aditiva.
+
+**Os dois requisitos novos do tema não estavam na proposta.** Saíram das rodadas
+de conferência: a **escala de intensidade do mapa de calor** (a rampa que inverte
+entre esquemas, convenção 15) e o **degrau de superfície entre card e superfície
+sutil**, que nasceu da décima segunda rodada — o degrau do artboard estava em
+1,052:1 no claro e 1,126:1 no escuro, invisível, e o dono decidiu abri-lo. **O
+segundo foi acrescentado ao delta no momento do archive**, porque a decisão tinha
+guarda no código e não tinha spec: teria se perdido.
+
+**E o `Purpose` da capability nova foi escrito, não deixado como placeholder.** A
+sync gera `TBD - defined by change ... Update Purpose after archive`, e
+`openspec validate --strict` não reprova texto placeholder — ele passaria e
+ficaria lá. O texto escrito é o que organiza os catorze requisitos: a distinção
+entre os quatro estados de valor, e a razão de os guardas serem negativos.
+
+#### O estado no fechamento
+
+| | |
+|---|---|
+| `apps/frontend` | **1218/1218**, 107 arquivos — contra a baseline de 927/927 em 84 |
+| `npm run lint`, `tsc -b` | limpos |
+| `openspec validate --all` | 59/59 |
+| `scripts/check-docs.py` | OK |
+| escopo | nada fora de `apps/frontend`, dos artefatos, do `02` e do `CHANGELOG` |
+| tarefas | **72/74** |
+
+**As duas tarefas abertas são pós-archive por desenho da convenção 24:** abrir o
+PR com `Closes #52` (8.5) e registrar o fechamento na issue (8.6). Elas só podem
+rodar depois deste archive, que é exatamente a ordem que a #68 fixou.
+
+#### O que este archive deixa pendente, e é dívida real
+
+**As três lacunas saíram da tela na décima rodada, e o registro delas passou a
+depender inteiramente das issues.** Antes, a tela as nomeava; agora não. O texto
+de cada uma está escrito na rodada correspondente do `02`, e precisa chegar a
+**#51**, **#66** e **#67** — se não chegar, some, e é exatamente o cenário que a
+convenção 23 existe para impedir.
+
+**E um achado visual segue sem decisão:** `--buteco-heat-0`, o zero medido do
+mapa de calor, continua em `dark[6]` sobre card `dark[7]` — **1,126:1**, o mesmo
+degrau que a décima segunda rodada corrigiu no `--buteco-surface-subtle` e que
+não foi aplicado a este token. Gatilho: o julgamento do dono sobre o mapa de
+calor.

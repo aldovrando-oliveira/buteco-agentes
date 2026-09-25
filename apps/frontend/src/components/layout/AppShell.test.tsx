@@ -55,6 +55,9 @@ describe('AppShell', () => {
       '/knowledge-bases',
     );
     expect(screen.getByRole('link', { name: 'Canais' })).toBeInTheDocument();
+    // Insights entra pela mesma régua que reabriu o Inventário: o item existe
+    // porque a página existe.
+    expect(screen.getByRole('link', { name: 'Insights' })).toHaveAttribute('href', '/insights');
     expect(screen.queryByText('Inboxes')).not.toBeInTheDocument();
   });
 
@@ -108,7 +111,14 @@ describe('AppShell', () => {
     const { container } = renderAppShell();
 
     // O rótulo textual continua sendo o nome acessível; o ícone é decoração.
-    for (const label of ['Inventário', 'Agentes', 'Servidores MCP', 'Conhecimento', 'Canais']) {
+    for (const label of [
+      'Inventário',
+      'Agentes',
+      'Servidores MCP',
+      'Conhecimento',
+      'Canais',
+      'Insights',
+    ]) {
       const link = screen.getByRole('link', { name: label });
       const icon = link.querySelector('svg');
 
@@ -116,7 +126,7 @@ describe('AppShell', () => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     }
 
-    expect(container.querySelectorAll('a svg')).toHaveLength(5);
+    expect(container.querySelectorAll('a svg')).toHaveLength(6);
   });
 
   it.each([
@@ -129,6 +139,7 @@ describe('AppShell', () => {
     ['/knowledge-bases/new', 'Conhecimento'],
     ['/knowledge-bases/abc-123/edit', 'Conhecimento'],
     ['/channels/abc-123', 'Canais'],
+    ['/insights', 'Insights'],
   ])('mantém o item ativo em %s', (rota, ativo) => {
     renderAppShell(rota);
 
@@ -142,6 +153,7 @@ describe('AppShell', () => {
       'Servidores MCP',
       'Conhecimento',
       'Canais',
+      'Insights',
     ].filter((l) => l !== ativo)) {
       expect(screen.getByRole('link', { name: outro })).not.toHaveAttribute('data-active');
     }

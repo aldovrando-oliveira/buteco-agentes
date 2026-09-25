@@ -448,6 +448,43 @@ o versionamento pretende seguir
 - **Nenhuma migração, nenhum índice, nenhuma alteração no `nginx.conf`** — o
   prefixo `insights` já roteia as rotas de escopo abaixo dele.
 
+**Métricas de operação — página de Insights do sistema (etapa 4)**
+
+- Página `/insights` em `apps/frontend`, escopo do sistema, servida por **uma
+  única** requisição a `GET /insights/system`. Nenhum agregado é recalculado no
+  cliente: janela, fuso, tratamento de nulo e regime de medição são um contrato
+  só, e dois cards derivados de contratos diferentes divergiriam sem que a tela
+  tivesse como dizer qual está certo.
+- **A gramática dos quatro estados de valor virou código com guarda**: número
+  medido, **célula vazia** (não há o que dizer), **travessão** (dado
+  desconhecido, sempre com a razão ao lado) e **zero** escrito (contagem feita
+  que deu zero). Nenhum `?? 0`, `|| 0` ou `Number(x)` no caminho de
+  apresentação, e **as asserções que protegem isso são negativas** — afirmam a
+  ausência do zero onde a origem é nula, não a presença do vazio.
+- **Dia não medido é distinguível de dia medido sem uso, e a tela LÊ em vez de
+  reconstruir.** A ausência de um dia na série diária significa uma coisa só: não
+  foi medido. O mapa de regimes serve ao texto "medindo desde" e **não** decide
+  célula — rederivar no cliente o que o servidor já resolveu criaria duas regras
+  divergindo em silêncio.
+- **O "medindo desde" sai por regime**, junto do grupo de métricas que cada um
+  mede. São dois hoje (`execution` e `embedding`), com início em dias
+  diferentes; um texto único no cabeçalho mentiria sobre pelo menos um deles. Um
+  regime novo é absorvido sem mudança de estrutura.
+- **A escala de intensidade do mapa de calor é contrato do tema**, declarada nos
+  **dois** esquemas: no escuro cresce clareando, no claro cresce escurecendo. O
+  papel troca de ponta da escala, então sai de variável (`--buteco-heat-0` a
+  `--buteco-heat-5`) e nunca de tom cravado no componente. Nenhuma cor nova.
+- **Os cinco códigos de parcialidade são renderizados junto do número que
+  limitam**, não numa lista solta. Código desconhecido aparece cru, como aviso
+  visível, em vez de sumir.
+- **Cinco lacunas entre o protótipo aprovado e o que a rota serve entram
+  DECLARADAS, não escondidas** — motivo das recusas (#51), separação turno ×
+  compactação e cache lido por modelo (#66), três colunas por agente (#67) e a
+  mediana da duração da task, que vira **média** porque é o que a rota calcula.
+  Card ausente é invisível; lacuna declarada é item aberto que se vê.
+- **Nenhuma biblioteca de gráficos, nenhuma dependência nova** — os gráficos
+  saem em SVG inline e CSS.
+
 **Documentação e governança**
 
 - Licenciamento sob Apache-2.0, com `LICENSE` e `NOTICE`.

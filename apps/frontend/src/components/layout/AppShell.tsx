@@ -6,7 +6,16 @@ import {
   ScrollArea,
   Text,
 } from '@mantine/core';
-import { BookOpen, Bot, LayoutGrid, MessagesSquare, Moon, Server, Sun } from 'lucide-react';
+import {
+  BookOpen,
+  Bot,
+  ChartColumn,
+  LayoutGrid,
+  MessagesSquare,
+  Moon,
+  Server,
+  Sun,
+} from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
 import { Logo } from '../brand/Logo';
 import { useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
@@ -24,6 +33,9 @@ const navItems = [
   // (design.md da change frontend-knowledge-base-catalogo, D8).
   { to: '/knowledge-bases', label: 'Conhecimento', icon: BookOpen },
   { to: '/channels', label: 'Canais', icon: MessagesSquare },
+  // Última posição, como no `Insights-Claro.dc.html` desenha a barra. O ícone é
+  // ChartColumn do lucide-react — o painel usa lucide desde a change da casca.
+  { to: '/insights', label: 'Insights', icon: ChartColumn },
 ];
 
 export function AppShell() {
