@@ -141,6 +141,122 @@ describe('theme — âncoras da identidade visual', () => {
       }
     },
   );
+
+  // ------------------- A escala de intensidade do mapa de calor (convenção 15)
+
+  const HEAT_STEPS = [0, 1, 2, 3, 4, 5] as const;
+  const heatVar = (step: number): `--${string}` => `--buteco-heat-${step}`;
+
+  /** `var(--mantine-color-butecoBlue-6)` → `#2a6ecb`. */
+  function resolveToken(token: string | undefined): string {
+    const match = /^var\(--mantine-color-([A-Za-z]+)-(\d)\)$/.exec(token ?? '');
+    if (!match) throw new Error(`"${token}" não é um token da paleta`);
+    return shades(match[1] as Parameters<typeof shades>[0])[Number(match[2])];
+  }
+
+  it('a superfície sutil é PERCEPTÍVEL contra a superfície do card', () => {
+    // O GUARDA QUE FALTAVA, e é o que teria pego o defeito.
+    //
+    // O token existia, apontava para um tom da paleta e diferia entre esquemas
+    // — e os três casos que o cobriam afirmavam exatamente isso, todos
+    // passando. Nenhum media CONTRASTE, e o degrau estava em 1,052:1 no claro
+    // e 1,126:1 no escuro: abaixo do limiar de percepção numa área chapada.
+    //
+    // O dono relatou não ver os quadros de métrica do card de Falhas. O mesmo
+    // token pinta os cabeçalhos de todos os cards e as listras da hachura.
+    //
+    // 1,2:1 é o piso escolhido: abaixo disso, uma área chapada não se separa do
+    // fundo em tela de brilho médio.
+    const resolvido = cssVariablesResolver(DEFAULT_THEME);
+
+    const cardNoClaro = '#ffffff'; // --mantine-color-body no claro
+    const cardNoEscuro = shades('dark')[7]; // --mantine-color-body no escuro
+
+    expect(
+      contrastRatio(resolveToken(resolvido.light?.['--buteco-surface-subtle']), cardNoClaro),
+    ).toBeGreaterThan(1.2);
+    expect(
+      contrastRatio(resolveToken(resolvido.dark?.['--buteco-surface-subtle']), cardNoEscuro),
+    ).toBeGreaterThan(1.2);
+  });
+
+  it.each(HEAT_STEPS)('declara --buteco-heat-%i nos dois esquemas', (step) => {
+    const resolvido = cssVariablesResolver(DEFAULT_THEME);
+
+    expect(resolvido.light?.[heatVar(step)]).toBeDefined();
+    expect(resolvido.dark?.[heatVar(step)]).toBeDefined();
+  });
+
+  it.each(HEAT_STEPS)('--buteco-heat-%i aponta para um tom da paleta, sem literal novo', (step) => {
+    const resolvido = cssVariablesResolver(DEFAULT_THEME);
+
+    // Nenhuma cor nova entra pela escala: os doze valores já existem em
+    // `butecoBlue`, `gray` e `dark`. Um `#rrggbb` cravado aqui passaria
+    // despercebido, e é o que este caso impede.
+    for (const esquema of [resolvido.light, resolvido.dark]) {
+      const token = esquema?.[heatVar(step)];
+      expect(token).toMatch(/^var\(--mantine-color-[A-Za-z]+-\d\)$/);
+      expect(token).not.toMatch(/#/);
+      expect(resolveToken(token)).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
+  it('A RAMPA INVERTE ENTRE OS ESQUEMAS', () => {
+    // É o caso que a convenção 15 nomeia, e o motivo de a escala ser variável
+    // por esquema em vez de tom fixo: no ESCURO a intensidade cresce
+    // CLAREANDO, no CLARO cresce ESCURECENDO. Um tom fixo é claro nos dois ou
+    // escuro nos dois, e quebraria em um deles.
+    //
+    // Conferido cor a cor nos dois artboards aprovados em 24/09.
+    const resolvido = cssVariablesResolver(DEFAULT_THEME);
+    const luz = (esquema: 'light' | 'dark', step: number) =>
+      relativeLuminance(resolveToken(resolvido[esquema]?.[heatVar(step)]));
+
+    // Claro: do passo 1 ao 5, a luminância CAI — escurece.
+    for (let step = 2; step <= 5; step += 1) {
+      expect(luz('light', step)).toBeLessThan(luz('light', step - 1));
+    }
+
+    // Escuro: do passo 1 ao 5, a luminância SOBE — clareia.
+    for (let step = 2; step <= 5; step += 1) {
+      expect(luz('dark', step)).toBeGreaterThan(luz('dark', step - 1));
+    }
+
+    // E a afirmação da spec, direta: a ponta de maior intensidade do escuro é
+    // mais clara que a de menor, e no claro a relação é a inversa.
+    expect(luz('dark', 5)).toBeGreaterThan(luz('dark', 1));
+    expect(luz('light', 5)).toBeLessThan(luz('light', 1));
+  });
+
+  it('o passo do zero medido é distinto de todos os passos de intensidade', () => {
+    // O zero foi CONTADO, e a célula dele não pode ser confundida com a do dia
+    // mais fraco — é a distinção que a página inteira defende, aplicada à cor.
+    const resolvido = cssVariablesResolver(DEFAULT_THEME);
+
+    for (const esquema of ['light', 'dark'] as const) {
+      const zero = resolveToken(resolvido[esquema]?.[heatVar(0)]);
+      const intensidades = [1, 2, 3, 4, 5].map((s) =>
+        resolveToken(resolvido[esquema]?.[heatVar(s)]),
+      );
+
+      expect(intensidades).not.toContain(zero);
+    }
+  });
+
+  it('o zero medido é neutro, e as intensidades são da escala de destaque', () => {
+    const resolvido = cssVariablesResolver(DEFAULT_THEME);
+
+    // O zero sai da neutra (gray no claro, dark no escuro) e as cinco
+    // intensidades de `butecoBlue`: é o que faz "contei e deu zero" parecer
+    // ausência de calor em vez de pouco calor.
+    expect(resolvido.light?.['--buteco-heat-0']).toBe('var(--mantine-color-gray-2)');
+    expect(resolvido.dark?.['--buteco-heat-0']).toBe('var(--mantine-color-dark-6)');
+
+    for (const step of [1, 2, 3, 4, 5]) {
+      expect(resolvido.light?.[heatVar(step)]).toContain('butecoBlue');
+      expect(resolvido.dark?.[heatVar(step)]).toContain('butecoBlue');
+    }
+  });
 });
 
 describe('theme — contraste das combinações em uso', () => {

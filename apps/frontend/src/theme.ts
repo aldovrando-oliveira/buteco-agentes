@@ -205,12 +205,27 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     // Fundo da página (--bg do protótipo). Fora da paleta de propósito: ver o
     // comentário da escala `gray`. Consumido pelo body em index.css.
     '--buteco-page-bg': '#f6f5f3',
-    // Superfície sutil (--sf2 do protótipo): faixa de cabeçalho de card e de
-    // tabela. Precisa existir como variável, e não como um tom cravado, porque
-    // o papel troca de ponta da escala entre os esquemas — no claro é o tom
-    // mais claro que a superfície, no escuro é o mais escuro. Cravar `gray[1]`
-    // deixava a faixa branca no tema escuro.
-    '--buteco-surface-subtle': 'var(--mantine-color-gray-1)',
+    // Superfície sutil (--sf2 do protótipo): faixa de cabeçalho de card, de
+    // tabela, e fundo dos quadros de métrica. Precisa existir como variável, e
+    // não como um tom cravado, porque o papel troca de ponta da escala entre os
+    // esquemas — no claro é o tom mais claro que a superfície, no escuro é o
+    // mais escuro. Cravar `gray[1]` deixava a faixa branca no tema escuro.
+    //
+    // O DEGRAU FOI ABERTO EM 25/09, CONTRARIANDO O ARTBOARD NO VALOR — e a
+    // razão está medida (convenções 14 e 17).
+    //
+    // O `Main.dc.html` usa `#faf9f8` no claro e `#24272c` no escuro, que são
+    // `gray[1]` e `dark[6]`. Contra a superfície do card — `#fff` e `#1b1d21` —
+    // isso dá **1,052:1** e **1,126:1**: abaixo do limiar de percepção numa área
+    // chapada, e o dono relatou não ver os quadros de métrica do card de Falhas.
+    // O mesmo token pinta os cabeçalhos de TODOS os cards e as listras da
+    // hachura da série diária, então era um defeito em três lugares.
+    //
+    // Aberto para `gray[3]` (**1,26:1**) e `dark[4]` (**1,393:1**), a pedido do
+    // dono, que escolheu o degrau maior das duas opções oferecidas sabendo que
+    // `dark[4]` é também a cor da BORDA do card no escuro — quadro e borda
+    // passam a ter o mesmo tom.
+    '--buteco-surface-subtle': 'var(--mantine-color-gray-3)',
     // Tinta da marca. Entra aqui pelo mesmo critério das duas acima: o papel
     // troca de ponta da escala entre os esquemas, então precisa ser variável e
     // não tom cravado. Nenhuma cor nova — #191a1c é gray[9] e #e9eaec é
@@ -220,10 +235,40 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     // Consumido pelo componente Logo, que passa a tinta ao `currentColor` do
     // desenho (design.md da change frontend-marca-visual, D3).
     '--buteco-brand-ink': 'var(--mantine-color-gray-9)',
+
+    // A ESCALA DE INTENSIDADE DO MAPA DE CALOR — MESMO CRITÉRIO DAS TRÊS ACIMA,
+    // E O CASO MAIS LITERAL DELE.
+    //
+    // O papel troca de PONTA da escala entre os esquemas: no claro a
+    // intensidade cresce ESCURECENDO (tom 2 → 6), no escuro cresce CLAREANDO
+    // (tom 8 → 4). Um tom cravado no componente é claro nos dois esquemas ou
+    // escuro nos dois, e quebraria em um deles — é a convenção 15.
+    //
+    // Conferido cor a cor nos dois artboards aprovados (`Main.dc.html` e
+    // `Insights-Claro.dc.html`) em 24/09. NENHUMA COR NOVA: os doze valores já
+    // existem em `butecoBlue`, `gray` e `dark`.
+    //
+    // O passo 0 é o ZERO MEDIDO, e não a menor intensidade: ele foi contado, e
+    // precisa ser distinguível tanto do dia fraco quanto do dia não medido —
+    // que não usa a escala, e sai como hachura no componente.
+    '--buteco-heat-0': 'var(--mantine-color-gray-2)',
+    '--buteco-heat-1': 'var(--mantine-color-butecoBlue-2)',
+    '--buteco-heat-2': 'var(--mantine-color-butecoBlue-3)',
+    '--buteco-heat-3': 'var(--mantine-color-butecoBlue-4)',
+    '--buteco-heat-4': 'var(--mantine-color-butecoBlue-5)',
+    '--buteco-heat-5': 'var(--mantine-color-butecoBlue-6)',
   },
   dark: {
     '--buteco-page-bg': 'var(--mantine-color-dark-9)',
-    '--buteco-surface-subtle': 'var(--mantine-color-dark-6)',
+    '--buteco-surface-subtle': 'var(--mantine-color-dark-4)',
     '--buteco-brand-ink': 'var(--mantine-color-dark-0)',
+
+    // A MESMA PALETA PERCORRIDA NO SENTIDO OPOSTO: 8 → 4, cresce clareando.
+    '--buteco-heat-0': 'var(--mantine-color-dark-6)',
+    '--buteco-heat-1': 'var(--mantine-color-butecoBlue-8)',
+    '--buteco-heat-2': 'var(--mantine-color-butecoBlue-7)',
+    '--buteco-heat-3': 'var(--mantine-color-butecoBlue-6)',
+    '--buteco-heat-4': 'var(--mantine-color-butecoBlue-5)',
+    '--buteco-heat-5': 'var(--mantine-color-butecoBlue-4)',
   },
 });

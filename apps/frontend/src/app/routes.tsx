@@ -20,6 +20,7 @@ import { ChannelCreatePage } from '../features/channels/pages/ChannelCreatePage'
 import { ChannelDetailPage } from '../features/channels/pages/ChannelDetailPage';
 import { ChannelEditPage } from '../features/channels/pages/ChannelEditPage';
 import { InventoryPage } from '../features/inventory/pages/InventoryPage';
+import { SystemInsightsPage } from '../features/insights/pages/SystemInsightsPage';
 
 // A árvore de rotas mora aqui, e não em router.tsx, porque router.tsx cria
 // o browser router no escopo do módulo — importá-lo tem efeito colateral
@@ -42,6 +43,7 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
             ativo em toda rota do painel (design.md, D1). */}
         <Route index element={<Navigate to="/inventory" replace />} />
         <Route path="inventory" element={<InventoryPage />} />
+        <Route path="insights" element={<SystemInsightsPage />} />
         <Route path="agents">
           <Route index element={<AgentListPage />} />
           <Route path="new" element={<AgentCreatePage />} />

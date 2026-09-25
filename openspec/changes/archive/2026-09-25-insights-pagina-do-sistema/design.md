@@ -92,7 +92,7 @@ O corpo real, resumido pelo que ele **decide** (o JSON sai em `camelCase`):
 | `window` | `from`/`to` ecoados, `timeZone: "America/Sao_Paulo"` |
 | `regimes` | mapa: `execution` `2026-09-22T01:21:00-03:00`, `embedding` `2026-09-23T01:18:00-03:00` |
 | `volume` | `executedTaskCount: 0`, `externalOriginTaskCount: 0` — zeros **medidos** |
-| `temporal` | `dailySeries: []`, `byWeekday: []`, `peakWeekday: null` |
+| `temporal` | `dailySeries: []`, `byWeekday: []`, `peakWeekday: null` — **já não é assim; ver a releitura abaixo** |
 | `tokens` | todos os agregados **nulos**; `byAgent`, `byProvider`, `byModel` vazios |
 | `performance` | todas as estatísticas nulas, `sampleCount: 0`; `caveats` com 2 códigos |
 | `errors` | contagens zero; `nonTerminal.neverConsumedCount: 5`; `caveats` com 3 códigos |
@@ -110,14 +110,51 @@ desenho:**
    responsabilidade de quem pergunta.
 3. **A omissão de dia não distingue os dois casos sozinha** — e isso contradiz
    a spec da change A, que exige `0` para o dia medido e vazio. Ver D2, onde a
-   decisão é corrigir a rota.
+   decisão é corrigir a rota. **Resolvido pela #65; ver a releitura abaixo.**
+
+### Releitura de 24/09/2026 — a #65 entrou, e três afirmações acima caducaram
+
+**As três afirmações marcadas eram verdadeiras quando escritas, em 23/09.** Não
+são erro: descrevem a rota que existia antes da #65
+(`serie-diaria-dia-medido-vazio`, `aae444d`, arquivada em
+`openspec/changes/archive/2026-09-24-serie-diaria-dia-medido-vazio/`), e é
+justamente por elas que a **D2 decidiu corrigir a rota em vez de reconstruir a
+distinção no cliente**. A D2 foi escrita contra o comportamento **corrigido**,
+que ainda não existia — e agora existe. A distinção importa: apagar as linhas
+esconderia por que a D2 foi tomada.
+
+**O que a releitura mede**, com `apps/api` local e `TZ=America/Sao_Paulo`, sobre
+`4c33eba`. O regime `execution` começa em `2026-09-22T01:21:00-03:00`, e a
+janela pedida começa **antes** dele de propósito, para ver o corte:
+
+```
+GET /insights/system?from=2026-09-15T00:00:00-03:00&to=2026-09-24T23:59:59-03:00
+→ 200
+```
+
+| o que a D2 assume | o que a rota serve hoje |
+|---|---|
+| dia medido e vazio com `taskCount: 0` e `tokenCount` **nulo** | `{"day":"2026-09-22","taskCount":0,"tokenCount":null}`, e o mesmo para 23 e 24 |
+| nenhum dia anterior ao início do regime | pedidos 10 dias desde 15/09; a série começa em **22/09** |
+| `byWeekday` com `0` no dia coberto, **omitindo** o não coberto | só `2`, `3`, `4` — ter/qua/qui, que são 22, 23 e 24 |
+| `peakWeekday` **nulo** quando não há ocorrência | `null` |
+
+**Os quatro pontos conferem, e a D2 não precisa de revisão.** A tarefa 0.1
+está cumprida por esta releitura, e a 0.2 também: o XML doc de
+`DailyInsightPoint` foi corrigido junto, e registra por escrito o engano
+anterior.
+
+**O que continua valendo da leitura de 23/09:** os fatos 1 e 2, reconferidos —
+`caveats` só em `performance` (2 códigos) e `errors` (3), e os dois limites
+obrigatórios. A #65 mudou **quantas linhas** chegam, não a **forma** da
+resposta, e a tela consome as duas coisas.
 
 ### O que foi lido do código, não da memória (convenção 6)
 
 | fato | evidência |
 |---|---|
-| `dailySeries` sai de `group by` sobre linhas existentes | `GetSystemInsightsQueryHandler.cs`, consulta de M10/M7 — **nenhum `generate_series`** |
-| `byWeekday` idem | mesma consulta, `group by extract(dow …)` |
+| ~~`dailySeries` sai de `group by` sobre linhas existentes~~ **CADUCOU** | era `GetSystemInsightsQueryHandler.cs`, M10/M7, sem `generate_series`. **Hoje a consulta É um `generate_series` sobre o domínio de dias**, com `left join` a `task_executions` — a #65 a reescreveu |
+| ~~`byWeekday` idem~~ **CADUCOU** | mesma reescrita: `extract(dow from d.day)` sobre o **mesmo** domínio denso, com `count(e."TaskId")` e não `count(*)` |
 | `byModel` não tem cache por modelo | `ModelTokenResponse(Provider, Model, TotalTokens, CallCount)` |
 | `byAgent` traz só tokens | `AgentTokenResponse(AgentId, InputTokens, OutputTokens)` — **sem nome, sem tasks, sem duração** |
 | `taskDuration` mede **média**, não mediana | `avg(ms)` + `percentile_cont(0.95)`; não há `percentile_cont(0.5)` |
@@ -127,6 +164,16 @@ desenho:**
 | `request<T>` é duplicado por feature | `agentsApi.ts`, `sessionsApi.ts`, `channelsApi.ts`, `mcpServersApi.ts` |
 | janela rolante calculada dentro do `queryFn`, chave fixa | `activityWindow.ts` + `useSessions.ts` |
 | o travessão com razão ao lado já é idioma | `InventoryPage.tsx`, quatro estados por item |
+
+**As duas linhas marcadas CADUCOU são as que mais custam se forem lidas como
+verdade durante o apply**, e é por isso que ficam com a causa em vez de saírem.
+Elas descrevem a rota **antes** da #65. Quem as ler como estado atual conclui
+que a série vem esburacada e que a tela precisa cruzar `dailySeries` com o mapa
+de regimes para saber se um dia ausente foi medido — **exatamente a
+reconstrução no cliente que a D2 recusou**, e que faria o cliente inventar
+zeros. A série já chega densa: **a ausência de um dia significa uma coisa só —
+ele não foi medido.** As outras dez linhas da tabela foram reconferidas em
+24/09 e continuam valendo.
 
 **Um achado de ambiente, de fora do escopo mas que custa tempo a quem vier:**
 subir `apps/api` nesta máquina exige `TZ=America/Sao_Paulo` no ambiente. Sem a
@@ -393,6 +440,34 @@ que não fosse zero.
 "Nenhuma task neste período", não `0`. O quadro 2 do `Estados.dc.html` desenha
 exatamente esse estado, e a frase é o que o distingue do quadro 3.
 
+**Achado no protótipo, registrado antes do apply (convenção 9): o quadro 4 do
+`Estados.dc.html` se intitula "A gramática dos _três_ estados" e desenha
+QUATRO linhas.** Reaberto o artboard em 24/09 e contado no desenho, as quatro
+são:
+
+| linha do quadro | o que diz |
+|---|---|
+| `12,4 M` | valor medido |
+| célula em branco | há linha, e não há o que dizer — o provedor não faz esse tipo de chamada, ou não reporta |
+| `—` | dado desconhecido: a consulta não respondeu, ou o registro não veio |
+| `0` | contagem que foi feita e deu zero. Reservado a isso, e a mais nada |
+
+**São quatro, e é o desenho que manda — o título é um deslize de contagem.** A
+tabela da D6 acima tem as quatro entradas pela mesma razão.
+
+**O motivo de não deixar passar** é o que o deslize habilita: alguém que leia só
+o título vai **cortar um estado** para fazer a conta fechar, e o que cai é o
+**travessão**. É o menos observado dos quatro hoje — nenhum dos dados de exemplo
+do protótipo o exercita, porque todos supõem consulta que respondeu — e é o mais
+difícil de defender sem o desenho ao lado. Perder o travessão colapsaria "a
+consulta não respondeu" em "não há o que dizer", que é o modo de falha que o
+quadro 3 existe para proibir.
+
+**O protótipo continua sendo a autoridade**, e um título errado não muda isso: a
+nota `estados` do `canvas.json` diz, do próprio autor, que "os estados de exceção
+são metade do protótipo, não um apêndice". O deslize vai para o `02` porque é
+durante o apply que alguém lê o quadro.
+
 ### D7 — A escala do mapa de calor é **variável por esquema** (convenção 15)
 
 O papel troca de ponta da escala entre os esquemas, e esse é precisamente o caso
@@ -427,14 +502,30 @@ aviso.
 
 ### D8 — As cinco lacunas entre o protótipo e a rota
 
-Todas entram no estado de lacuna declarada, todas viram item no `02` com gatilho.
+**REVISADA EM 25/09, pelo dono, na décima rodada de conferência.** A decisão
+original era "todas entram no estado de lacuna declarada" — a moldura tracejada
+do quadro 6 —, e ela **valia para a L2 e falhava para as outras**.
+
+**O que distingue os dois casos é se o protótipo tem um ELEMENTO para carregar a
+declaração.** Na L2 tem: o KPI desenha um subtítulo ("522 de turno · 41 de
+compactação"), e a lacuna ocupa o lugar dele, no mesmo peso. Na L1, L3 e L4 não
+tem: o que sai é uma coluna, e a moldura entrava como **elemento novo**, que o
+`Main.dc.html` não desenha em card nenhum e cujo peso competia com os números.
+
+**Então: subtítulo vira lacuna; coluna sai sem deixar quadro.** O argumento
+original — "elemento ausente é invisível, e ninguém volta para procurar o que não
+aparece" — continua verdadeiro, e a resposta dele é a **issue**, não a tela. É o
+que a convenção 23 garante que sobreviva ao archive, e a razão de cada uma das
+cinco ter issue própria desde o início.
+
+Todas viram item no `02` com gatilho.
 
 | # | o protótipo desenha | a rota serve | tratamento |
 |---|---|---|---|
-| L1 | "Motivos" com linha *"Agente sem provider ou modelo configurado — 5"* | `errors.rejectedCount`, **sem motivo** (`rejection-reason-not-collected`) | as recusas entram no card como **uma linha de lacuna declarada** com a contagem e o texto do caveat; a causa **não** é nomeada |
+| L1 | "Motivos" com linha *"Agente sem provider ou modelo configurado — 5"* | `errors.rejectedCount`, **sem motivo** (`rejection-reason-not-collected`) | a linha **sai**; a contagem de recusas continua no card de Falhas, com o seu próprio caveat. Sem elemento para o motivo, `rejection-reason-not-collected` passa a `not-on-this-page` pela regra da própria spec. Registro: **#51** |
 | L2 | KPI "Chamadas ao provedor" com *"522 de turno · 41 de compactação"* | total derivável; **`Purpose` não é exposto** | o KPI mostra o total; o subtítulo vira a lacuna declarada |
-| L3 | "Modelos de conversa" com coluna **Cache lido** — e o `02:4994` a registra como decisão, não como desenho | `byModel` não tem cache; só existe o total global em `conversation.cachedInputTokens` | a coluna **não entra**; a lacuna é declarada no rodapé do card |
-| L4 | "Consumo por agente" com **Tasks**, **Tokens por task**, **Duração p95** | `byAgent` traz só tokens; `errors.byAgent` traz falhas | as três colunas **não entram**; lacuna declarada no rodapé, e o nome do agente leva ao detalhe dele |
+| L3 | "Modelos de conversa" com coluna **Cache lido** — e o `02:4994` a registra como decisão, não como desenho | `byModel` não tem cache; só existe o total global em `conversation.cachedInputTokens` | a coluna **não entra**, e nada entra no lugar. Registro: **#66** |
+| L4 | "Consumo por agente" com **Tasks**, **Tokens por task**, **Duração p95** | `byAgent` traz só tokens; `errors.byAgent` traz falhas | as três colunas **não entram**, e nada entra no lugar; o nome do agente leva ao detalhe dele. Registro: **#67** |
 | L5 | KPI "Duração da task (p95)" com subtítulo *"mediana 4,1 s"* | `taskDuration.averageMs` — **média**, não mediana | o subtítulo diz **"média"**; ver D9 |
 
 **O total de L2 sai de `sum(byModel[].callCount)`**, e a escolha tem razão: o
@@ -455,6 +546,29 @@ vazia não se perde**: ela continua em "Consumo por provedor", na coluna
 Embedding — que o `Main.dc.html` já desenha vazia para `anthropic` e `gemini`,
 com o mesmo rodapé. O requisito da célula vazia é cumprido pela tabela que tem
 a fonte.
+
+**As cinco não afirmam a mesma coisa, e o texto de cada uma precisa dizer qual
+delas ela é.** Acrescentado em 24/09 depois de o dono pegar a L2 dizendo "não
+coletado" sobre um campo que é gravado:
+
+| lacuna | o que falta de verdade |
+|---|---|
+| L1 | **não coletado** — o dado não existe em lugar nenhum |
+| L2 | gravado (`ProviderCall.Purpose`), **não devolvido** por esta rota |
+| L3 | existe como **total do sistema**, não neste grão |
+| L4 | existem no **escopo do agente** |
+| L5 | a rota calcula **média**; mediana não é calculada |
+
+**Só a L1 é "não coletado".** Nas outras, essa frase manda procurar coleta onde
+falta exposição — e abre change de coleta para campo que já está gravado. O
+qualificador é **prop obrigatória** do componente de lacuna, sem default, para
+que o compilador cobre a escolha onde a diferença é conhecida.
+
+**E o peso segue o elemento substituído, não o estado.** Lacuna que substitui
+**subtítulo** (L2) sai como linha esmaecida; lacuna que substitui **elemento
+próprio** (L3, L4) sai com a moldura tracejada do quadro 6, no rodapé do card. A
+primeira implementação usou a moldura no KPI, e ela ficou maior que o número —
+o que falta passou a pesar mais que o que existe.
 
 **Posições no `02`:**
 
@@ -705,7 +819,7 @@ esquemas**:
 
 A conferência é **iterativa**: cada correção muda o que fica visível.
 
-## Projeção da convenção 18 — décima sexta medição
+## Projeção da convenção 18 — décima nona medição
 
 **Unidade declarada antes:** `#### Scenario:` contados nos arquivos de delta desta
 change — não blocos, não métodos de teste. Modificado por `git diff -w`. Três
@@ -775,6 +889,61 @@ agora seria ajustar a projeção ao resultado. O fechamento mede quanto a
 simplificação valeu, e esse número é o que interessa — é a primeira vez que a
 série tem um caso de decisão de contrato **encolhendo** o lado do cliente.
 
+### Fechamento da décima nona medição — medido em 24/09/2026
+
+**O fechamento só compara.** Nenhum número da projeção acima foi revisado.
+
+| categoria | projetado | medido | erro |
+|---|---|---|---|
+| fonte | 28 arq, 1.520 | **26 arq, 2.764** | **+82%** |
+| teste escrito à mão | 24 arq, 1.210 | **25 arq, 2.883** | **+138%** |
+| **duplo** | 1 arq, 180 | **1 arq, 140** | **−22%** |
+| gerado | 0 | **0** | exato |
+| **total** | ≈53 arq, ≈2.900 | **52 arq, 5.787** | **+100%** |
+| cenários | ≈48 | **51** | +3 |
+
+**Os arquivos acertaram e as linhas erraram por 100%** — o total saiu **fora da
+faixa declarada** de 2.300 a 3.400, que era deliberadamente larga e ainda assim
+não alcançou. É o mesmo padrão da décima segunda medição, e é o padrão da série
+inteira: a decomposição em arquivos é previsível, a densidade de cada um não.
+
+**O duplo foi a única linha que acertou, e acertou para baixo.** Ele tem linha
+própria desde a décima segunda medição justamente porque sem isso a projeção
+erra por baixo — e aqui, com a linha própria, ele foi a categoria mais precisa
+das quatro. **A lição da décima segunda continua valendo, e ganhou o sinal
+oposto: o problema nunca foi o duplo ser imprevisível, foi ele não ter onde ser
+contado.** Um só construtor com sobrescrita por bloco cobriu os 51 cenários, e
+140 linhas bastaram.
+
+**Onde o erro mora: 113 linhas por cenário, contra 22 a 54 das quatro âncoras.**
+Mais que o dobro da âncora mais cara (`frontend-inventario-catalogos`, 54). A
+projeção usou ≈24 linhas por caso de teste, tirado da média das âncoras; o
+medido foi ≈57. **O que a âncora não capturava é que os guardas desta change são
+NEGATIVOS**, e asserção negativa custa mais linha que positiva: cada uma carrega
+por escrito o defeito que ela impede, porque "não há `0` aqui" é ininteligível
+sem dizer que zero seria plausível ali. É a convenção 13 tendo preço, e o preço
+não estava em nenhuma âncora porque nenhuma delas era sobre distinguir nulo de
+zero.
+
+**A contribuição desta medição para a série é essa: quando a change é sobre uma
+distinção, o custo por cenário não se herda de changes sobre funcionalidade.** A
+próxima projeção de tela com gramática de estados deve usar 113, não 38.
+
+**E o efeito da D2, que a projeção mandou medir.** A decisão de corrigir a rota
+em vez de reconstruir no cliente **encolheu** `measuredDays.ts`: ele tem **150
+linhas** e não recebe `regimes` — a versão que cruzaria regime com janela
+precisaria do mapa, da conversão de cada início de regime para dia local, da
+regra de precedência entre os dois regimes e dos casos de teste de cada
+combinação. **Estimado em 60 a 80 linhas de fonte e 3 a 4 cenários a mais**, e
+sobretudo: teria criado uma segunda regra sobre o que é "medido", divergindo em
+silêncio da do servidor.
+
+**É o primeiro caso da série em que uma decisão de contrato ENCOLHE o lado do
+cliente, e o número é modesto** — ~5% do total desta change. A economia real não
+está nas linhas: está em não existir uma segunda definição de "dia medido" para
+sair de sincronia. Isso a medição não captura, e é bom que fique escrito ao lado
+do número para que ninguém conclua que a D2 valeu 70 linhas.
+
 ## Baselines — remedidas, não herdadas
 
 Medidas nesta máquina em 23/09/2026, entre 22:24 e 22:52 -03, sobre `0b189fa`:
@@ -782,7 +951,7 @@ Medidas nesta máquina em 23/09/2026, entre 22:24 e 22:52 -03, sobre `0b189fa`:
 | suíte | resultado | duração |
 |---|---|---|
 | `apps/frontend` | **927/927**, 84 arquivos | 1m54s |
-| `apps/api` | **391/391** | 2m01s |
+| `apps/api` | ~~**391/391**~~ **404/404 hoje** — ver a remedição abaixo | 2m01s |
 | `apps/workers` | **386/386** | 7m10s |
 | `apps/inbox` | **203/203** | 19s |
 
@@ -808,6 +977,38 @@ como zero: três containers de pé —`buteco-agents_postgres_1`,
 `buteco-agents_rabbitmq_1` e `buteco-agents_waha_1`, todos `Up 21 hours`. As
 suítes de backend rodaram com `DOCKER_HOST` do Podman e
 `TESTCONTAINERS_RYUK_DISABLED=true`, e `apps/frontend` não usa Testcontainers.
+
+### Remedição de 24/09/2026, sobre `4c33eba` — e `apps/api` mudou
+
+A baseline acima foi tirada sobre `0b189fa`, **antes** da #65 e da #68. Remedida
+sobre a `main` de hoje, uma suíte por vez, com a API local derrubada:
+
+| suíte | 23/09 (`0b189fa`) | 24/09 (`4c33eba`) | duração |
+|---|---|---|---|
+| `apps/frontend` | 927/927, 84 arquivos | **927/927**, 84 arquivos | 1m15s |
+| `apps/api` | 391/391 | **404/404** | 2m05s |
+| `apps/workers` | 386/386 | **386/386** | 6m48s |
+| `apps/inbox` | 203/203 | **203/203** | 20s |
+
+**Os +13 de `apps/api` não são mistério, e não são desta change:** vêm da #65,
+que os declara no próprio commit (`aae444d` — *"apps/api 404/404, contra
+baseline de 391/391 — comparação por nome: +13, nenhum removido"*), em
+`AgentInsightsEndpointsTests.cs` e `InsightsEndpointsTests.cs`. São os guardas
+da série densa. **É a baseline de 404 que a projeção da convenção 18 usa**, não
+a de 391.
+
+**Estado do `podman ps` na remedição, e ele é DIFERENTE do de 23/09** — a
+convenção 22 pede o estado colado ao número, e mudar o regime sem dizer faria a
+comparação parecer mais limpa do que é. **Dois** containers de pé, não três:
+`buteco-agents_postgres_1` (`Up 15 hours`, healthy) e
+`buteco-agents_rabbitmq_1` (subido no início da sessão para a conferência da
+rota). **`buteco-agents_waha_1` ficou parado**, ao contrário da medição
+anterior. Mesmo `DOCKER_HOST` do Podman e mesmo
+`TESTCONTAINERS_RYUK_DISABLED=true`.
+
+**Nenhuma reprovação, e nenhuma rodada em paralelo** — a contenção que derrubou
+`apps/inbox` para 202/203 em 23/09 não se repetiu, e `apps/inbox` fechou
+203/203 de primeira.
 
 ## Risks / Trade-offs
 

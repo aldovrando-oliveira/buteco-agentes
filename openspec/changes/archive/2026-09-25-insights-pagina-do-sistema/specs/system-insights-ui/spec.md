@@ -426,23 +426,44 @@ um texto de limitação sem o número que ele limita não tem o que qualificar.
   não apresenta
 - **THEN** nenhum texto de limitação aparece solto na página
 
-### Requirement: Métrica aprovada no protótipo e sem fonte entra como lacuna declarada
+### Requirement: Métrica aprovada no protótipo e sem fonte não é inventada, e a lacuna é declarada onde há elemento para declará-la
 
-O sistema SHALL apresentar como **lacuna declarada** toda métrica, coluna ou
-subtítulo que o protótipo aprovado desenha e cuja fonte não existe na rota — um
-elemento visível que nomeia o que falta — e SHALL NOT preenchê-la com zero, com
-valor derivado de outro nível de agregação, nem removê-la em silêncio.
+O sistema SHALL NOT preencher com zero, com valor derivado de outro nível de
+agregação, nem com qualquer valor inventado, métrica que o protótipo aprovado
+desenha e cuja fonte não existe na rota.
 
-Elemento ausente é invisível, e ninguém volta para procurar o que não aparece; a
-lacuna declarada é item aberto que se vê.
+Onde o protótipo desenha um **subtítulo** para essa métrica, o sistema SHALL
+substituí-lo por uma lacuna declarada, no mesmo peso do subtítulo: um texto que
+nomeia o que falta, sem número.
 
-#### Scenario: A lacuna aparece no lugar do elemento sem fonte
+Onde o protótipo desenha **coluna ou conjunto de colunas**, o sistema SHALL
+removê-las e SHALL NOT acrescentar elemento próprio para anunciá-las. A lacuna
+existe na **issue** que a registra, não na tela.
+
+**A razão da assimetria:** declarar na tela vale onde há um elemento do próprio
+protótipo para carregar a declaração — ali a lacuna ocupa um lugar que já
+existia. Criar um quadro novo, que o artboard não tem, acrescenta à tela um
+elemento cuja única função é falar do que ela não mostra, e o peso dele compete
+com os números que ela mostra. **O que sobrevive ao archive é a issue**
+(convenção 23), e é lá que a lacuna precisa estar.
+
+#### Scenario: Métrica sem fonte não recebe valor
 - **WHEN** o operador visualiza uma superfície cujo protótipo previa uma métrica
   que a rota não serve
-- **THEN** um elemento visível nomeia a métrica que falta, e **nenhum** número é
-  apresentado no lugar dela
+- **THEN** **nenhum** número é apresentado no lugar dela, nem zero, nem valor de
+  outro nível de agregação
+
+#### Scenario: Subtítulo sem fonte vira lacuna declarada
+- **WHEN** o protótipo desenha um subtítulo cuja fonte a rota não serve
+- **THEN** o subtítulo apresenta o que falta, no mesmo peso das demais linhas de
+  subtítulo da tela
+
+#### Scenario: Coluna sem fonte sai sem deixar quadro no lugar
+- **WHEN** o protótipo desenha uma coluna cuja fonte a rota não serve
+- **THEN** a coluna não aparece, e **nenhum** elemento novo é acrescentado ao
+  card para anunciá-la
 
 #### Scenario: A lacuna não é confundida com dado desconhecido
 - **WHEN** a lacuna declarada e o travessão aparecem na mesma tela
-- **THEN** os dois têm apresentação distinta, e o texto da lacuna diz que o dado
-  não é coletado, não que a consulta falhou
+- **THEN** os dois têm apresentação distinta, e o texto da lacuna não diz que a
+  consulta falhou
