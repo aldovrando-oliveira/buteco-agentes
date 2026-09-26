@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - defined by change frontend-cadastro-agentes. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Listagem de agentes na interface
 O sistema SHALL prover, em `apps/frontend`, uma página que lista os agentes
 cadastrados consumindo `GET /agents`, exibindo para cada agente o nome com
@@ -464,18 +462,23 @@ enviar a requisição; ativar um agente SHALL NOT exigir confirmação.
 
 ### Requirement: Abas do detalhe do agente
 
-O sistema SHALL organizar o conteúdo da página de detalhe do agente em quatro
-abas — visão geral, ferramentas, conhecimento e delegações, nessa ordem —
-exibindo, nas três últimas, um contador com a quantidade de servidores MCP
-vinculados, de bases de conhecimento vinculadas e de agentes-alvo de delegação,
-oculto quando a quantidade é zero. A aba ativa SHALL ser refletida na URL, de
-forma que o endereço seja compartilhável e sobreviva a um recarregamento da
-página. Apenas o conteúdo da aba ativa SHALL estar presente na página.
+O sistema SHALL organizar o conteúdo da página de detalhe do agente em cinco
+abas — visão geral, ferramentas, conhecimento, delegações e insights, nessa
+ordem — exibindo, na segunda, na terceira e na quarta, um contador com a
+quantidade de servidores MCP vinculados, de bases de conhecimento vinculadas e
+de agentes-alvo de delegação, oculto quando a quantidade é zero.
 
-#### Scenario: Quatro abas exibidas no detalhe do agente
+A aba de insights SHALL NOT exibir contador: ela não representa um vínculo, e um
+número ao lado do rótulo afirmaria uma quantidade que a aba não tem.
+
+A aba ativa SHALL ser refletida na URL, de forma que o endereço seja
+compartilhável e sobreviva a um recarregamento da página. Apenas o conteúdo da
+aba ativa SHALL estar presente na página.
+
+#### Scenario: Cinco abas exibidas no detalhe do agente
 - **WHEN** o usuário acessa a página de detalhe de um agente existente
-- **THEN** a interface exibe as abas de visão geral, ferramentas, conhecimento
-  e delegações, nessa ordem, com a visão geral ativa
+- **THEN** a interface exibe as abas de visão geral, ferramentas, conhecimento,
+  delegações e insights, nessa ordem, com a visão geral ativa
 
 #### Scenario: Contadores refletem os vínculos do agente
 - **WHEN** o agente exibido tem um ou mais servidores MCP em `mcpServers`, uma
@@ -489,9 +492,14 @@ página. Apenas o conteúdo da aba ativa SHALL estar presente na página.
 - **THEN** a interface não exibe contador junto do rótulo da aba
   correspondente
 
+#### Scenario: A aba de insights nunca exibe contador
+- **WHEN** o usuário acessa a página de detalhe de qualquer agente
+- **THEN** **nenhum** contador aparece junto do rótulo da aba de insights,
+  qualquer que seja a quantidade de vínculos ou de métricas do agente
+
 #### Scenario: Aba ativa refletida na URL
-- **WHEN** o usuário aciona a aba de ferramentas, a de conhecimento ou a de
-  delegações
+- **WHEN** o usuário aciona a aba de ferramentas, a de conhecimento, a de
+  delegações ou a de insights
 - **THEN** a URL passa a identificar a aba ativa, e recarregar a página
   nesse endereço reabre a mesma aba
 
@@ -502,7 +510,7 @@ página. Apenas o conteúdo da aba ativa SHALL estar presente na página.
 
 #### Scenario: Identificação de aba desconhecida abre a visão geral
 - **WHEN** o usuário acessa a página de detalhe do agente com uma
-  identificação de aba que não corresponde a nenhuma das quatro
+  identificação de aba que não corresponde a nenhuma das cinco
 - **THEN** a interface exibe a aba de visão geral, sem quebrar a página e
   sem exibir erro
 
@@ -553,3 +561,4 @@ comunica.
   endereços
 - **THEN** a interface informa que o endereço público do servidor não está
   configurado, sem exibir endereço vazio ou parcial
+
