@@ -1,8 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Buteco.Api.Infrastructure;
 using Buteco.Api.Messaging;
+using Buteco.Api.RejectionMetrics;
 using Buteco.Api.Tests.Support;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Buteco.Api.Tests;
 
@@ -121,6 +125,68 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
 
     private IReadOnlyList<TaskJobMessage> PublishedFor(Guid agentId) =>
         fixture.TaskJobPublisher.PublishedMessages.Where(message => message.AgentId == agentId).ToList();
+
+    /// <summary>
+    /// O motivo da recusa por agente inativo (M29, issue #51). O valor, e não "é
+    /// diferente dos outros": escrito como diferença, o guarda ficaria verde com as
+    /// quatro causas gravando o mesmo motivo (convenção 15, quinta forma).
+    /// </summary>
+    [Fact]
+    public async Task SendMessage_ForInactiveAgent_RecordsAgentInactiveReason()
+    {
+        var agentId = await CreateAgentAsync();
+        await DeactivateAgentAsync(agentId);
+
+        var sendBody = await SendMessageAsync(agentId);
+        var taskId = sendBody.GetProperty("result").GetProperty("task").GetProperty("id").GetString()!;
+
+        using var scope = fixture.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var rejection = await dbContext.TaskRejections
+            .AsNoTracking()
+            .SingleOrDefaultAsync(row => row.TaskId == taskId);
+
+        Assert.NotNull(rejection);
+        Assert.Equal(RejectionMetricsValues.Reason.AgentInactive, rejection.Reason);
+        Assert.Equal(agentId, rejection.AgentId);
+    }
+
+    /// <summary>
+    /// <b>O PAR NEGATIVO da coleta de motivo:</b> task aceita não grava linha de
+    /// recusa. Sem ele, um escritor chamado no caminho de sucesso passaria os
+    /// quatro guardas positivos e inventaria recusa para toda task do sistema.
+    ///
+    /// <para>
+    /// <b>Mora aqui, e não em <c>A2ATaskLifecycleTests</c>, como a tarefa 2.4
+    /// previa</b> — divergência registrada (convenção 9). Aquela classe lê a
+    /// mensagem publicada do RabbitMQ REAL, e um caso novo publicando ali faria o
+    /// caso vizinho ler a mensagem errada: flake por ordem, que é a família de
+    /// defeito que o comentário no topo desta classe existe para não repetir. Aqui
+    /// o publisher é duplo e a asserção filtra por <c>AgentId</c>, então o caso é
+    /// independente de ordem POR CONSTRUÇÃO.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task SendMessage_ForActiveAgent_PublishesAndRecordsNoRejection()
+    {
+        var agentId = await CreateAgentAsync();
+
+        var sendBody = await SendMessageAsync(agentId);
+        var taskElement = sendBody.GetProperty("result").GetProperty("task");
+
+        // O par positivo do caminho: a task nasce em submitted e o job é publicado.
+        Assert.Equal("TASK_STATE_SUBMITTED", taskElement.GetProperty("status").GetProperty("state").GetString());
+        Assert.Single(PublishedFor(agentId));
+
+        using var scope = fixture.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        Assert.Empty(
+            await dbContext.TaskRejections.AsNoTracking()
+                .Where(rejection => rejection.AgentId == agentId)
+                .ToListAsync());
+    }
 
     private void AssertNothingPublishedFor(Guid agentId) => Assert.Empty(PublishedFor(agentId));
 

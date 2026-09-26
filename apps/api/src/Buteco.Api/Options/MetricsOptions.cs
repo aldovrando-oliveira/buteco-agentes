@@ -31,11 +31,25 @@ public sealed class MetricsOptions
     /// <summary>
     /// Instante em que cada regime de medição começou, por nome de regime.
     /// <para>
-    /// <b>É um MAPA, e não dois campos, de propósito</b> (design.md, D8): hoje
-    /// são dois regimes com datas diferentes — a coleta de execução e a de
-    /// embedding —, e um "medindo desde" único mentiria sobre um dos dois. A
-    /// etapa 4 da linha acrescenta um terceiro, e o mapa o absorve sem mudar o
-    /// contrato.
+    /// <b>É um MAPA, e não um campo por regime, de propósito</b> (design.md, D8):
+    /// são TRÊS regimes com datas diferentes — a coleta de execução, a de
+    /// embedding e a do motivo da recusa —, e um "medindo desde" único mentiria
+    /// sobre dois deles.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>E o mapa absorveu o terceiro sem mudar de forma</b>, que é para o que ele
+    /// foi feito: a <c>recusa-motivo-coleta</c> acrescentou
+    /// <see cref="RejectionRegime"/> sem tocar no contrato do campo. A previsão
+    /// estava escrita aqui e na spec; ficou cumprida.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Regime declarado por um grupo de métricas e AUSENTE deste mapa reprova o
+    /// boot</b> (<c>MetricsRegimeStartupValidation</c>, convenção 8). Sem essa
+    /// checagem, a ausência não falha: ela DESLIGA o recorte daquele grupo, a
+    /// janela pedida passa a valer inteira, e o período anterior à coleta vira
+    /// contagem <c>0</c> em vez de ausência — número plausível, em silêncio.
     /// </para>
     /// <para>
     /// <b>A fonte é o instante do DEPLOY, não <c>min(StartedAt)</c>.</b> O menor
@@ -47,9 +61,26 @@ public sealed class MetricsOptions
     /// </summary>
     public Dictionary<string, DateTimeOffset> Regimes { get; init; } = [];
 
-    /// <summary>Regime da coleta de execução — M1, M2, M6, M7, M9–M17, M21–M29, M32, M34.</summary>
+    /// <summary>Regime da coleta de execução — M1, M2, M6, M7, M9–M17, M21–M28, M32, M34.</summary>
     public const string ExecutionRegime = "execution";
 
     /// <summary>Regime da coleta de embedding — M19 e M30.</summary>
     public const string EmbeddingRegime = "embedding";
+
+    /// <summary>
+    /// Regime da coleta do motivo da recusa — M29, e a contagem de recusas de
+    /// entrada que a acompanha. Nasce com a <c>recusa-motivo-coleta</c>: antes
+    /// dela o motivo não tinha fonte nenhuma, então não há como recortar por um
+    /// regime que não existia.
+    /// </summary>
+    public const string RejectionRegime = "rejection";
+
+    /// <summary>
+    /// Os regimes que as rotas de agregação declaram, e portanto os que precisam
+    /// de instante em <see cref="Regimes"/>. É esta lista que a checagem de boot
+    /// percorre — quem acrescentar um regime acrescenta aqui, e o boot passa a
+    /// exigir a configuração dele.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DeclaredRegimes =
+        [ExecutionRegime, EmbeddingRegime, RejectionRegime];
 }

@@ -74,9 +74,11 @@ public sealed class GetAgentInsightsQueryHandler(
 
         var executionRegime = RegimeStart(regimes, MetricsOptions.ExecutionRegime);
         var embeddingRegime = RegimeStart(regimes, MetricsOptions.EmbeddingRegime);
+        var rejectionRegime = RegimeStart(regimes, MetricsOptions.RejectionRegime);
 
         var executionFrom = Later(query.From, executionRegime);
         var embeddingFrom = Later(query.From, embeddingRegime);
+        var rejectionFrom = Later(query.From, rejectionRegime);
 
         var window = new InsightsWindowResponse(query.From, query.To, timeZone);
 
@@ -88,7 +90,7 @@ public sealed class GetAgentInsightsQueryHandler(
             await TemporalAsync(query.AgentId, timeZone, executionFrom, SeriesEnd(query.To), cancellationToken),
             await TokensAsync(query.AgentId, executionFrom, embeddingFrom, query.To, cancellationToken),
             await PerformanceAsync(query.AgentId, executionFrom, query.To, cancellationToken),
-            await ErrorsAsync(query.AgentId, executionFrom, query.To, cancellationToken),
+            await ErrorsAsync(query.AgentId, executionFrom, rejectionFrom, query.To, cancellationToken),
             await DelegationAsync(query.AgentId, executionFrom, query.To, cancellationToken));
     }
 
@@ -547,21 +549,27 @@ public sealed class GetAgentInsightsQueryHandler(
 
     private sealed record PhaseRow(string Phase, int Count);
 
+    private sealed record RejectionReasonRow(string Reason, int Count);
+
     private sealed record NonTerminalRow(int OpenExecutionCount, int NeverConsumedCount);
 
     private async Task<AgentErrorInsightsResponse> ErrorsAsync(
-        Guid agentId, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+        Guid agentId,
+        DateTimeOffset from,
+        DateTimeOffset rejectionFrom,
+        DateTimeOffset to,
+        CancellationToken cancellationToken)
     {
-        // M27 — e a parcialidade herdada continua valendo: recusas feitas por
-        // apps/api nunca produzem linha de execução, então esta contagem
-        // SUBCONTA também no escopo do agente.
+        // M27 — este `rejected` conta a recusa que TEM linha de execução, também no
+        // escopo do agente: hoje só a de profundidade de delegação.
         //
-        // Neste escopo a lacuna é QUANTIFICÁVEL — a2a_tasks tem agent_id —, e
-        // mesmo assim NÃO é contada aqui (design.md, D8): a change A não a contou
-        // no escopo do sistema, e contá-la só de um lado faria os dois escopos
-        // medirem coisas diferentes com o mesmo rótulo. Item com gatilho no 02:
-        // quando a change de coleta do motivo fechar, decidir para OS DOIS
-        // escopos ao mesmo tempo.
+        // O GATILHO QUE ESTAVA AQUI FOI CUMPRIDO. Este comentário dizia que a
+        // recusa de entrada não era contada porque contá-la só de um lado faria os
+        // dois escopos medirem coisas diferentes com o mesmo rótulo, e pendurava a
+        // decisão na change de coleta do motivo. Ela fechou (recusa-motivo-coleta),
+        // e a decisão foi tomada para OS DOIS ESCOPOS AO MESMO TEMPO: a recusa de
+        // entrada entra em campo próprio (`rejectedAtEntryCount`), lido da fonte
+        // nova, nas duas rotas, com o mesmo vocabulário de motivo.
         var terminal = await dbContext.Database
             .SqlQuery<TerminalRow>($"""
                 select count(*) filter (where "TerminalState" = 'Failed')::int as "FailedCount",
@@ -587,8 +595,9 @@ public sealed class GetAgentInsightsQueryHandler(
                 """)
             .ToListAsync(cancellationToken);
 
-        // M29 — fase, e não texto de exceção. O motivo das recusas feitas por
-        // apps/api continua sem fonte nenhuma, aqui como no escopo do sistema.
+        // M29, primeira metade — a fase da falha de execução. O motivo da recusa de
+        // entrada chega em lista própria (`rejectionsByReason`), aqui como no escopo
+        // do sistema: vocabulários diferentes, de tabelas diferentes.
         var byPhase = await dbContext.Database
             .SqlQuery<PhaseRow>($"""
                 select "FailurePhase" as "Phase", count(*)::int as "Count"
@@ -596,6 +605,35 @@ public sealed class GetAgentInsightsQueryHandler(
                 where "AgentId" = {agentId}
                   and "StartedAt" >= {from} and "StartedAt" <= {to}
                   and "FailurePhase" is not null
+                group by 1
+                order by 2 desc, 1
+                """)
+            .ToListAsync(cancellationToken);
+
+        // M29 no escopo do agente — o recorte sai da COLUNA DE AGENTE da própria
+        // fonte (task_rejections.AgentId), nunca de junção com a2a_tasks nem com o
+        // catálogo: a linha de recusa carrega o agente a que a task foi endereçada.
+        //
+        // JANELA DO REGIME PRÓPRIO, como no escopo do sistema — e os dois escopos
+        // passaram a contar a recusa de entrada NA MESMA CHANGE, que era o gatilho
+        // pendurado pela rotas-de-agregacao-agente: um escopo que contasse e outro
+        // que não contasse fariam os dois medirem coisas diferentes com o mesmo
+        // rótulo.
+        var rejectedAtEntry = await dbContext.Database
+            .SqlQuery<int>($"""
+                select count(*)::int as "Value"
+                from task_rejections
+                where "AgentId" = {agentId}
+                  and "RejectedAt" >= {rejectionFrom} and "RejectedAt" <= {to}
+                """)
+            .SingleAsync(cancellationToken);
+
+        var byReason = await dbContext.Database
+            .SqlQuery<RejectionReasonRow>($"""
+                select "Reason" as "Reason", count(*)::int as "Count"
+                from task_rejections
+                where "AgentId" = {agentId}
+                  and "RejectedAt" >= {rejectionFrom} and "RejectedAt" <= {to}
                 group by 1
                 order by 2 desc, 1
                 """)
@@ -626,17 +664,22 @@ public sealed class GetAgentInsightsQueryHandler(
 
         return new AgentErrorInsightsResponse(
             MetricsOptions.ExecutionRegime,
+            MetricsOptions.RejectionRegime,
             terminal.FailedCount,
             terminal.RejectedCount,
+            rejectedAtEntry,
             byProviderAndModel
                 .Select(row => new AgentModelFailureResponse(row.Provider, row.Model, row.FailedCount))
                 .ToList(),
             byPhase.Select(row => new FailurePhaseResponse(row.Phase, row.Count)).ToList(),
+            byReason.Select(row => new RejectionReasonResponse(row.Reason, row.Count)).ToList(),
             new AgentNonTerminalTasksResponse(
                 nonTerminal.OpenExecutionCount, nonTerminal.NeverConsumedCount, NonTerminalStates),
             [
+                // O código do motivo sai dos DOIS escopos ao mesmo tempo: mantê-lo
+                // num deles faria a mesma lacuna parecer aberta de um lado e
+                // fechada do outro.
                 InsightsCaveats.RejectionsMissingFromExecutions,
-                InsightsCaveats.RejectionReasonNotCollected,
                 InsightsCaveats.PointInTimeOnly,
             ]);
     }

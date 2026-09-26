@@ -39,19 +39,27 @@ public sealed record InsightsWindowResponse(DateTimeOffset From, DateTimeOffset 
 public static class InsightsCaveats
 {
     /// <summary>
-    /// Recusas feitas por <c>apps/api</c> não produzem linha de execução, então a
-    /// contagem derivada das tabelas de métrica SUBCONTA. A parte que falta só
-    /// existe em <c>a2a_tasks</c> — que tem agente, mas não tem provedor, modelo
-    /// nem motivo. Afeta M27 e M28.
+    /// Recusas feitas por <c>apps/api</c> não produzem linha de execução, então
+    /// <c>RejectedCount</c> — derivado das tabelas de métrica — conta OUTRA
+    /// população: as recusas que uma execução registrou, que hoje são só as de
+    /// profundidade de delegação. Afeta M27 e M28.
+    ///
+    /// <para>
+    /// <b>Este código FICOU depois da change <c>recusa-motivo-coleta</c></b>, e o
+    /// texto dele não mudou, porque continua inteiramente verdadeiro: a recusa de
+    /// entrada segue sem linha de execução e segue fora do percentual de falha —
+    /// nem no numerador, nem no denominador. O que a change acrescentou foi
+    /// <c>RejectedAtEntryCount</c> e os motivos, em campos próprios.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>E M28 continua parcial POR CONSTRUÇÃO:</b> duas das quatro causas de
+    /// recusa são justamente a ausência de provedor ou modelo utilizáveis, então
+    /// não há como agrupar a recusa de entrada por provedor e modelo. Este código
+    /// não cai enquanto esse agrupamento existir.
+    /// </para>
     /// </summary>
     public const string RejectionsMissingFromExecutions = "rejections-missing-from-executions";
-
-    /// <summary>
-    /// O MOTIVO de uma recusa feita por <c>apps/api</c> não tem fonte nenhuma:
-    /// três causas distintas colapsam num único estado, sem coluna de motivo em
-    /// lugar algum. Afeta M29.
-    /// </summary>
-    public const string RejectionReasonNotCollected = "rejection-reason-not-collected";
 
     /// <summary>
     /// Duração e tempo de fila dependem do carimbo de submissão, que é nulo em
@@ -181,13 +189,38 @@ public sealed record DurationStatsResponse(double? AverageMs, double? P95Ms, int
 public sealed record ErrorInsightsResponse(
     string ExecutionRegime,
     string IndexingRegime,
+    string RejectionRegime,
     int FailedCount,
     int RejectedCount,
+    int RejectedAtEntryCount,
     IReadOnlyList<AgentFailureResponse> ByAgent,
     IReadOnlyList<FailurePhaseResponse> ByPhase,
+    IReadOnlyList<RejectionReasonResponse> RejectionsByReason,
     IReadOnlyList<IndexingFailureResponse> IndexingFailures,
     NonTerminalTasksResponse NonTerminal,
     IReadOnlyList<string> Caveats);
+
+/// <summary>
+/// M29 — um valor do vocabulário fechado de motivo de recusa e a contagem dele na
+/// janela, no MESMO formato de <see cref="FailurePhaseResponse"/>, que é o que o
+/// card de Motivos já consome: lista rasa, rótulo e contagem, sem
+/// subcardinalidade.
+///
+/// <para>
+/// <b>Lista PRÓPRIA, e não dentro de <c>ByPhase</c></b>: o vocabulário de
+/// <c>ByPhase</c> é o <c>FailurePhase</c> de <c>task_executions</c>, que a
+/// capability <c>agent-execution-metrics</c> enumera em sete valores. Enfiar um
+/// motivo de recusa ali seria mentir no contrato de outra capability — a tela
+/// concatena as duas listas, que é o que o protótipo desenha.
+/// </para>
+///
+/// <para>
+/// <b>A soma das contagens fecha com <c>RejectedAtEntryCount</c></b> da mesma
+/// janela, porque a coluna de motivo é obrigatória. Um valor que a rota não
+/// conheça chega COMO ESTÁ: omiti-lo faria a soma deixar de fechar, sem sintoma.
+/// </para>
+/// </summary>
+public sealed record RejectionReasonResponse(string Reason, int Count);
 
 public sealed record AgentFailureResponse(Guid AgentId, string? Provider, string? Model, int FailedCount);
 

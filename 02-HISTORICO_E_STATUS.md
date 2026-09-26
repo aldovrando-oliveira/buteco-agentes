@@ -10702,6 +10702,31 @@ segunda definição de "dia medido" para sair de sincronia com a do servidor.**
 
 #### Itens abertos que esta change cria
 
+**Os sete têm número, abertos ou absorvidos em 26/09/2026** — a convenção 23 existe
+porque o artefato da change some no archive e a issue não, e item sem número não é
+alcançável pelo board. **Quatro issues novas** (#75 a #78, todas em `Backlog`) e
+**três absorvidos** em issue existente, porque dois registros sobre o mesmo defeito
+fazem o próximo leitor corrigir metade e dar o assunto por encerrado.
+
+| item | destino | por quê |
+|---|---|---|
+| (a) spec do card de Motivos | **#75** | mesma spec e mesma tela do consumo; quem reescrever o requisito corrige isto de qualquer forma |
+| (b) texto do card de Falhas | **#75** | mesma tela, e a frase só fica errada **quando** os motivos aparecerem nela |
+| (c) razão ao cliente A2A | **#76** (novo) | contrato de protocolo, não métrica |
+| (d) `-32603` de agente apagado | **#77** (novo) | defeito próprio, alcançável no dia em que houver exclusão de agente |
+| (e) flake de `apps/inbox` | **#61** (comentário) | a issue já nomeava um dos três casos, com a mesma assinatura |
+| (f) captura de log em três cópias | **#78** (novo) | gatilho de extração cumprido |
+| (g) instante do regime `rejection` | **#50** (comentário) | é item da janela de deploy, e a issue já é o checklist dela |
+
+**E o que NÃO virou issue, pelo critério do dono — vira issue o que pede trabalho,
+fica no `02` o que é régua ou medição:** a régua de contenção recalibrada para 41
+classes, a quarta causa de desvio da convenção 18 (semeadura de fixture como arranjo
+compartilhado) e a sexta ocorrência da convenção 22. As duas últimas já estão no
+`01`/`02` como texto de convenção, que é onde régua mora. O toque no `01` foi
+**avisado na #60** para que a leitura do histórico do arquivo não conclua que aquela
+issue ficou obsoleta.
+
+
 - **(a) O motivo das recusas — M29, issue #51.** Change de coleta, e a ordem foi
   **invertida de propósito**: nasce **depois** desta, sabendo o formato que o
   card de Motivos pediu. Hoje a recusa entra como lacuna declarada com a contagem
@@ -11611,3 +11636,314 @@ mapa de calor, continua em `dark[6]` sobre card `dark[7]` — **1,126:1**, o mes
 degrau que a décima segunda rodada corrigiu no `--buteco-surface-subtle` e que
 não foi aplicado a este token. Gatilho: o julgamento do dono sobre o mapa de
 calor.
+
+---
+
+## Etapa 5 — `recusa-motivo-coleta` (M29) · 26/09/2026 · issue #51
+
+**A coleta do motivo das recusas de `apps/api`.** Implementada sobre `5f2f6f8`,
+com a **ordem invertida de propósito**: a #51 dizia "antes da #52", e o dono
+inverteu para que a coleta nascesse sabendo o formato que o card de Motivos pediu.
+Funcionou — a D1 do `design.md` saiu da leitura do componente e dos artboards, e
+decidiu três coisas do contrato que uma coleta feita antes teria escolhido por
+suposição: lista própria (não dentro de `byPhase`), um valor por recusa sem
+subcardinalidade, e coluna de motivo **obrigatória**, que é o que faz a soma dos
+motivos fechar com a contagem.
+
+### As três decisões que mudaram por conferência, e não por gosto
+
+**A saída que "parecia mais alinhada" era a pior, e o número é o argumento.** Uma
+linha em `task_executions` tinha precedente (`FailurePhase = DelegationDepthExceeded`
+já é recusa sem chamada ao provedor). A conferência contou **22 consultas por
+rota** lendo aquela tabela com filtro só de janela, e nove métricas que passariam a
+contar a recusa como execução — M1, M2, M6/M7, M21, M22, M24, M25, M26 e M32 —
+todas devolvendo **número plausível**. É o modo de falha que o precedente de
+`embedding_calls` já nomeia em `AppDbContext.cs`: *"quem esquecesse o filtro
+receberia um número maior e plausível, não um erro"*.
+
+**`rejectedCount` não conta o que a tela diz que ele conta.** Medido: existe **um
+único** sítio gravando `TerminalState = 'Rejected'` (`AgentExecutionService.cs:236`,
+profundidade de delegação, em `apps/workers`), então aquele número é feito
+inteiramente de recusas do worker — e a tela o rotula *"Recusadas na entrada"* com
+o texto das causas de `apps/api`, nenhuma das quais está nele. Por isso a contagem
+nova entrou em **campo próprio** (`rejectedAtEntryCount`) em vez de repropósito
+silencioso, e `rejectedCount` ficou com a fonte e o significado que tem, agora
+documentados pelo que ele de fato conta.
+
+**O terceiro regime abriria um defeito silencioso, e a checagem de boot o fecha.**
+`RegimeStart` devolve `null` para regime ausente do mapa e `Later` então não
+recorta nada: a janela pedida valeria inteira e o período anterior à coleta viria
+com `0` — *"medi e não achei recusa nenhuma"* — em vez de ausência. O aviso existia
+em **comentário** no `appsettings.json`, e comentário não reprova nada. Agora
+`apps/api` não sobe com regime declarado e sem instante, e a mensagem nomeia o que
+falta.
+
+### O que o apply descobriu e o `design.md` não previa
+
+**1. `AgentNotFound` é alcançável, e a resposta do protocolo não.** A D4 criou o
+quarto valor do vocabulário porque o `if` de agente inativo recebia também o agente
+inexistente (`FirstOrDefaultAsync` sobre `record struct` devolve `default`, com
+`IsActive = false`). Ao escrever o guarda, a primeira leitura foi que o valor era
+**inalcançável**: com o agente apagado, `a2a_tasks` tem FK para `agents` e a task
+não chega a ser persistida, então a rota responde
+`{"error":{"code":-32603}}`. **O guarda corrigiu a leitura:** a linha de métrica
+**é** gravada, com `AgentNotFound`, porque `task_rejections` **não tem FK** — a D2
+pagando no primeiro caso que a exercita. O que não acontece é a resposta
+`rejected` do protocolo. Dois fatos, e o caso afirma os dois.
+
+**2. A mutação achou um guarda no componente errado, que é para isso que ela
+existe.** Quebrar a atribuição de **uma** causa reprovou **dois** guardas: o da
+causa e o da sobrevivência da linha à exclusão do agente — porque este último
+afirmava o *valor do motivo* como prova de que a linha existia. Corrigido para
+afirmar a **existência**; a mutação repetida reprova exatamente um. É a segunda
+forma da convenção 15 (guarda que reprova pelo defeito de outro não diz onde está
+o defeito).
+
+**3. O par negativo mudou de classe, e a razão é a família de flake que já morde
+esta base.** A tarefa 2.4 previa o caso "task aceita não grava recusa" em
+`A2ATaskLifecycleTests`. Aquela classe lê a mensagem publicada do **RabbitMQ real**,
+e um caso novo publicando ali faria o caso vizinho ler a mensagem errada. Foi para
+`AgentDeactivationTests`, onde o publisher é duplo e a asserção filtra por
+`AgentId` — independente de ordem **por construção**, que é a mesma correção que o
+comentário no topo daquela classe já registra.
+
+**4. A pergunta da décima sétima medição tinha uma resposta que ninguém tinha
+conferido.** *"A asserção dos guardas de `rejectedCount` sobrevive à mudança?"* —
+**não havia guarda nenhum** de `rejectedCount` nas duas rotas antes desta change. A
+projeção registrou "sim, e por decisão"; o correto é "sim, porque não havia nada
+para sobreviver". Agora há um, e ele afirma que os dois campos contam populações
+diferentes.
+
+### Convenção 18 — vigésima medição
+
+**Unidade declarada antes:** cenários de delta por categoria, casos de teste por
+categoria, linhas em quatro níveis (produção à mão, teste à mão, duplos, gerado),
+arquivos criados × modificados **separados**.
+
+| dimensão | projetado | entregue | erro |
+|---|---|---|---|
+| cenários de delta | 27 (21 novos, 1 editado, 5 copiados) | **27** | **exato** |
+| arquivos criados | 7 (4 produção + 3 teste) | **7** | **exato** |
+| arquivos modificados | 11 (6 produção + 5 teste) | **13** (9 + 4) | +18% |
+| casos de teste | 19 novos + 3 adaptados | **35 novos** (contagem do runner) + 3 adaptados | +84% |
+| linhas de produção à mão | ~350 | **629** | +80% |
+| linhas de teste à mão | ~420 | **1010** | +140% |
+| duplos | ~60 | **~69** | +15% |
+| **linhas geradas** | ~800 | **803** | **+0,4%** |
+
+**O terceiro acerto seguido de contagem de arquivos CRIADOS** (depois de 25×25 e
+21×21), e o primeiro acerto de **linha gerada** — projetada ancorando no
+`.Designer.cs` da migração anterior (709 linhas) mais o bloco da entidade nova; o
+real foi 733 + 46 da migração + 24 do snapshot. Ancorar gerado no arquivo gerado
+equivalente **funciona**, e é barato.
+
+**E os três erros têm causas diferentes, que é o que vale carregar:**
+
+- **Arquivos modificados: a projeção contradisse a própria árvore.** O texto disse
+  "6 modificados de produção" enquanto a árvore de pastas do mesmo `design.md`
+  listava **9**. Não foi blast radius mal lido — foi a soma do resumo não conferida
+  contra a lista que estava logo acima. **Régua: a contagem de arquivos sai da
+  árvore, contando as linhas dela, nunca de memória do parágrafo anterior.**
+- **Linhas de produção: o comentário é o produto, e a proporção foi subestimada.**
+  Projetado 1,05:1 de comentário sobre lógica; medido nos quatro arquivos criados:
+  **1,73:1** (157 comentário, 91 lógica), com os dois arquivos de *registro de
+  decisão* em 2,5:1 e 2,78:1 e os dois de *mecanismo* em 1,11:1 e 1,14:1. **A
+  proporção não é uma por change: é uma por TIPO de arquivo.** Arquivo cuja função
+  é registrar uma decisão recusada (por que tabela própria, por que quatro valores)
+  passa de 2:1; arquivo que executa mecanismo fica perto de 1:1. Projetar a média
+  achata os dois.
+- **Linhas de teste: o custo unitário por caso não cobre guarda de ROTA com
+  semeadura.** Os 14 casos das duas rotas custaram ~30 linhas cada mais **~60
+  linhas de semeadura por fixture** — e a semeadura não é caso, é arranjo
+  compartilhado que a projeção não tinha item para contar. É o mesmo formato do
+  refinamento de 25-40 linhas para "cenário que precisa de arranjo próprio", uma
+  ordem acima: **arranjo compartilhado por fixture vira item próprio na tabela**.
+
+### A régua de contenção de `apps/api`, corrigida — e ela nasceu errada
+
+O `02` registrava **31 classes de contêiner**, medidas em 23/09/2026, com gatilho
+de consulta na 32ª. Remedido em 25/09/2026 pelo mesmo critério do registro —
+classes com fixture de contêiner **mais** classes que constroem o seu próprio,
+excluída `Support/`: **40**. E a mesma contagem, repetida **no commit do registro**
+(`2d4bc3c`), também dá **40**.
+
+**Então o número não envelheceu: ele nasceu errado**, por 9 classes, quase
+certamente por ter sido contado sem a subpasta `Knowledge/` (11 classes). É a
+primeira ocorrência desta base em que a correção de uma referência medida é **para
+cima**, e a consequência prática é que **o gatilho da "32ª classe" já estava
+vencido quando foi escrito** — ninguém foi consultado porque o número dizia 31.
+
+**A régua, recalibrada e com o estado colado:** `apps/api` tem **41 classes de
+contêiner** depois desta change (40 antes; a 41ª é
+`RejectionMetricsMigrationTests`, autorizada pelo dono), com a suíte em
+**439 testes / 1m48s**, contêineres **em paralelo** e **um** por classe, medido com
+`postgres` e `rabbitmq` de pé e `waha` parado.
+
+**Para que ela serve ser lida, escrito porque era o que faltava:** hoje, **registra
+o crescimento, e nada mais.** Não há critério, e isso é resultado legítimo — um
+limiar inventado agora seria número sem medição por trás. É consultada em três
+situações: suíte lenta; suíte reprovando **em bloco na inicialização de fixture** (o
+sintoma de contenção, que parece falha de teste); e a decisão de acrescentar mais
+uma classe com contêiner.
+
+**O que a tornaria acionável, nomeado e NÃO decidido:**
+
+| candidato | o que precisaria de medição |
+|---|---|
+| limiar por duração, com a contagem colada | a curva duração × classes em ao menos três pontos; hoje há **dois** (404/3m46s/40 e 439/1m48s/41 — e eles divergem pela carga da máquina, não pela contagem) |
+| rodar por grupos acima de N, no molde da `WorkerHostCollection` | qual N, e se serializar custa mais tempo do que a contenção custa em flake |
+
+**Gatilho de reabertura:** `apps/api` reprovar em bloco na inicialização de
+fixture, **ou** a suíte passar de **6 minutos**.
+
+**Menção cruzada, porque é a mesma família:** `apps/workers` mantém a régua gêmea à
+mão, e ela **já quebrou duas vezes** pelo mesmo mecanismo — limiar de carga medido
+com 7 classes de host, citado depois sobre 11 e sobre 12 (ocorrências 1 e 4 da
+convenção 22). Duas referências do mesmo tipo, mantidas à mão em dois apps, sem
+dono automático. Quem recalibrar uma olha a outra.
+
+### As baselines, com o que explica cada número
+
+Medidas em 25/09/2026 sobre `5f2f6f8`, as quatro **em sequência**, com dois
+contêineres de pé (`buteco-agents_postgres_1`, `buteco-agents_rabbitmq_1`, ambos
+*healthy*) e `waha` parado.
+
+| suíte | 24/09 | 25/09 (baseline desta change) | 26/09 (fechamento) |
+|---|---|---|---|
+| `apps/frontend` | 927 / 84 arquivos | **1218 / 107**, 1m57s | não rodada — nenhuma linha dela no diff |
+| `apps/api` | 404, 2m05s | **404**, 3m46s | **439**, 1m48s |
+| `apps/workers` | 386, 6m48s | **386**, 9m21s | **386**, 8m40s — inalterada, como previsto |
+| `apps/inbox` | 203, 20s | **203 com 3 reprovando**, 1m05s | não rodada |
+
+**O salto de `apps/frontend` é a #52 entrando**, não anomalia de medição: +291 casos
+e +23 arquivos, da página de Insights mergeada no dia anterior. A baseline de
+`apps/frontend` para qualquer change futura é **1218**.
+
+**`apps/workers` fechou em 386/386**, e é resultado, não formalidade: a tabela nova
+não é espelhada lá, o espelho de schema confere tabela a tabela, e nenhuma linha de
+`apps/workers` entrou no diff. Se tivesse mudado, algo do escopo teria escapado.
+
+**As durações de 25/09 são todas maiores que as de 24/09** porque as quatro rodaram
+encadeadas, com contêineres subindo e descendo entre elas — o fechamento de
+`apps/api` rodou sozinho e deu 1m48s com **mais** testes. É o estado colado ao
+número, não medição de desempenho.
+
+### Itens abertos que esta change cria
+
+- **(a) → #75. A spec `system-insights-ui` descreve um card de Motivos que não existe.** O
+  requisito em `openspec/specs/system-insights-ui/spec.md` diz que o card apresenta
+  a contagem de recusas mais o texto de que o motivo não é coletado; a
+  implementação faz o oposto, por decisão do dono na décima rodada da #52, e o
+  guarda afirma que a palavra *recusa* não aparece no card. A spec sincronizada
+  ficou com a versão pré-decisão (convenção 9). **Gatilho:** a change de seguimento
+  da #52, que reescreve o requisito de qualquer forma.
+- **(b) → #75. O texto do card de Falhas enumera duas das quatro causas.** *"Recusa é
+  agente inativo ou sem provider e modelo configurados"* — `ProviderNotConfigured` e
+  `AgentNotFound` não estão nele, e quando os motivos aparecerem na tela a frase
+  vizinha ficará enumerando um subconjunto (convenção 13, na forma "verdadeira
+  quando escrita"). **Gatilho:** a mesma change de seguimento.
+- **(c) → #76. A recusa não leva razão nenhuma ao cliente A2A.**
+  `TaskUpdater.RejectAsync(Message?, CancellationToken)` aceita uma — *"Optional
+  rejection reason"*, conferido no `A2A.xml` do pacote instalado — e nenhum dos
+  quatro sítios a passa. `apps/inbox` e a delegação recebem `rejected` sem razão.
+  **Não é métrica**, é contrato de protocolo com cliente. **Gatilho:** o primeiro
+  pedido de operador para saber por que uma task foi recusada.
+- **(d) → #77. Agente apagado com servidor em cache responde `-32603`.** O
+  `AgentA2AServerRegistry` confere existência uma vez por processo e guarda o
+  servidor; depois disso, a FK de `a2a_tasks` para `agents` derruba a persistência
+  da task e o cliente recebe erro interno onde o protocolo tem resposta própria.
+  Achado ao escrever o guarda de `AgentNotFound`. **Gatilho:** a primeira rota de
+  exclusão de agente — e é ela que também torna `AgentNotFound` alcançável pela
+  porta da frente.
+- **(e) → #61 (comentário). `apps/inbox`: 3 casos reprovando na suíte cheia, e os
+  três NÃO são o mesmo achado.** Medido em 25/09: suíte cheia `203` com 3 reprovando em 1m05s; a classe
+  `DebounceSweepServiceTests` sozinha **10/10 em 7s**. **Dois** são o flake já
+  registrado, com a assinatura que o `02` nomeia (`TimeoutException : Condição não
+  satisfeita a tempo`, do `PollUntil`); **o terceiro é novo** —
+  `MessagesWithinWindow_TriggerSingleSendMessage_…`, com
+  `Assert.Single() Failure: The collection contained 2 items`. **A assinatura antiga
+  não mudou: uma nova apareceu ao lado dela.** Não está classificado: *timeout* sob
+  carga é atraso, **despacho a mais não é** — se a varredura despacha duas vezes
+  porque a janela de debounce venceu duas vezes, é forma de defeito de produção. E
+  "passou isolado" **não discrimina** aqui, porque a classe inteira passa isolada. A
+  discriminação exige as **duas** condições de carga, repetidas. **Gatilho:** o do
+  item antigo continua valendo — a próxima change que tocar `apps/inbox` —, e esta
+  não toca.
+- **(f) → #78. A captura de log de teste está em TRÊS cópias em `apps/api`** —
+  `TimeZoneStartupValidationTests`, `MetricsRegimeStartupValidationTests` e
+  `RejectionMetricsWriterTests`. O terceiro consumidor é o gatilho de extrair
+  (convenção 2), e não foi feito aqui de propósito: mexer nas duas classes
+  existentes alargaria o diff para além do escopo. **Gatilho:** cumprido — é
+  trabalho de uma change de método.
+- **(g) → #50 (comentário). O instante do regime `rejection` no `appsettings.json`
+  é o do merge, não o do deploy.** Está em `2026-09-26T00:00:00-03:00` e **precisa ser corrigido por
+  quem fizer o deploy**. A checagem de boot pega chave ausente; **não** pega chave
+  presente com valor errado, que é o item de fila já aberto para os outros dois
+  regimes, agora com três.
+
+### Archive da `recusa-motivo-coleta` — 26/09/2026 · issue #51
+
+Arquivada em `openspec/changes/archive/2026-09-26-recusa-motivo-coleta/`, **antes do
+push e da abertura do PR**, como a convenção 24 manda.
+
+#### O que foi para as specs principais
+
+| capability | antes | depois |
+|---|---|---|
+| `agent-rejection-metrics` | **não existia** | criada: **4 requisitos, 9 cenários** |
+| `system-insights-aggregation` | 9 requisitos, 24 cenários | **11 e 32** — +2 requisitos, +8 cenários |
+| `agent-insights-aggregation` | 7 requisitos, 25 cenários | **8 e 29** — +1 requisito, +4 cenários |
+
+**A projeção de cenários da sync errou, e o erro é instrutivo.** Projetei 30 e 28;
+saíram **32 e 29**. Não é conteúdo a mais: **cada bloco `MODIFIED` carrega um cenário
+além do que ele substitui** — `"Medindo desde"` ganhou *"Grupo que lê três fontes
+declara os três regimes"*, `Métrica de fonte parcial` ganhou *"Parcialidade que
+deixou de existir sai da resposta"*, e `As parcialidades herdadas` ganhou *"A
+parcialidade do motivo sai dos dois escopos"*. A contagem da delta **já os tinha**
+(os 21 novos incluem estes três); a projeção da SYNC os esqueceu, somando só os
+`ADDED`. **Régua: ao projetar o efeito de uma sync, somar por bloco — cenários do
+`ADDED` mais o DELTA de cada `MODIFIED`, que raramente é zero.**
+
+Os requisitos pré-existentes que nenhuma delta toca foram conferidos por diff contra
+`HEAD`: **intactos**, e o diff só ACRESCENTA cabeçalhos de requisito — nenhuma linha
+`-### Requirement:` aparece, o que prova que nada foi renomeado nem removido. Zero
+cabeçalhos de delta (`## ADDED`/`## MODIFIED`) vazaram para as specs.
+
+**E o `Purpose` da capability nova foi escrito, não deixado como placeholder** — a
+sync gera `TBD - defined by change ... Update Purpose after archive`, e
+`openspec validate --strict` **não** reprova texto placeholder: ele passaria e
+ficaria lá. O texto escrito é o que organiza os quatro requisitos, na ordem em que
+eles decidem: quando a linha nasce, o que o motivo é, o que a coleta não pode custar,
+e o que a linha deliberadamente não carrega.
+
+#### O estado no fechamento
+
+| | |
+|---|---|
+| `apps/api` | **439/439** em 1m48s (baseline 404) — 41 classes de contêiner |
+| `apps/workers` | **386/386** em 8m40s — inalterada, como o escopo previa |
+| migração | aplicada em banco limpo (guarda) e em banco **já migrado** (o de dev): aditiva, 4 colunas `NOT NULL`, PK, 2 índices, **zero FK** |
+| `openspec validate --all` | **60/60** (61 antes do archive, com a change ativa contada) |
+| `openspec validate --specs --strict` | 60/60 |
+| `scripts/check-docs.py` | OK |
+| escopo | nada fora de `apps/api`, dos artefatos, das specs sincronizadas, do `01`, do `02` e do `CHANGELOG` |
+| tarefas | **42/45** |
+
+**As três tarefas abertas são pós-archive por desenho da convenção 24:** abrir o PR
+com `Closes #51` (7.6), mover a #51 para `In review` (7.7) e o registro pós-merge
+(7.8). Elas só podem rodar depois deste archive.
+
+#### O que este archive deixa pendente
+
+**Os sete achados têm número** — #75, #76, #77, #78 novas, e #61, #50, #60 por
+comentário —, então nenhum deles depende deste `02` para sobreviver. É a primeira vez
+na linha que o archive acontece com a fila **inteira** já numerada em vez de depender
+de uma tarefa pós-archive para isso.
+
+**O que continua só aqui, e é decisão:** a régua de contenção recalibrada, a quarta
+causa de desvio da convenção 18 e a sexta ocorrência da convenção 22 — régua e
+medição moram no `01`/`02`, não no board.
+
+**E uma verificação que este archive NÃO pode fechar:** o instante do regime
+`rejection` no `appsettings.json` é o do **merge**. Até o deploy corrigi-lo (#50), a
+rota declara "medindo desde" um instante em que nada estava sendo medido.

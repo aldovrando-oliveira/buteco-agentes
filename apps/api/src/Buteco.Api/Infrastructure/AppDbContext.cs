@@ -10,6 +10,7 @@ using Buteco.Api.KnowledgeBases.Entities;
 using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeFragments.Entities;
 using Buteco.Api.McpServers.Entities;
+using Buteco.Api.RejectionMetrics.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -44,6 +45,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<KnowledgeIndexingAttempt> KnowledgeIndexingAttempts => Set<KnowledgeIndexingAttempt>();
 
     public DbSet<EmbeddingCall> EmbeddingCalls => Set<EmbeddingCall>();
+
+    public DbSet<TaskRejection> TaskRejections => Set<TaskRejection>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -407,6 +410,45 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasForeignKey(call => call.KnowledgeIndexingAttemptId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<TaskExecution>().WithMany()
                 .HasForeignKey(call => call.TaskId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Métrica de recusa (design.md da change recusa-motivo-coleta, D2). É a
+        // única tabela de métrica que apps/api ESCREVE — a recusa acontece aqui,
+        // antes de qualquer publicação de job —, e por isso ela NÃO é espelhada em
+        // apps/workers: ninguém lá a escreve nem a lê.
+        //
+        // TABELA PRÓPRIA, pelo mesmo raciocínio que decidiu embedding_calls acima:
+        // uma linha em task_executions obrigaria as 22 consultas que aquela tabela
+        // tem em CADA rota a filtrar a recusa, e quem esquecesse o filtro receberia
+        // número maior e plausível, não erro. Uma coluna em a2a_tasks precisaria de
+        // um segundo escritor da mesma linha, correndo contra o ITaskStore do SDK.
+        //
+        // SEM FK, e as duas razões são diferentes: para a2a_tasks, a FK viraria a
+        // corrida acima em falha; para agents, a cascade que a2a_tasks já tem
+        // apagaria a história de recusas no dia em que houver exclusão de agente.
+        // Mesma regra das outras cinco: a métrica registra o que aconteceu, e isso
+        // não muda porque o catálogo mudou depois.
+        modelBuilder.Entity<TaskRejection>(entity =>
+        {
+            entity.ToTable("task_rejections");
+
+            // Chave em TaskId, como task_executions: a task recusada é terminal e o
+            // protocolo recusa mensagem nova para task terminal, então não há
+            // segunda recusa da mesma task. Torna dupla escrita um erro visível em
+            // vez de linha duplicada em silêncio.
+            entity.HasKey(rejection => rejection.TaskId);
+
+            // NOT NULL de propósito (convenção 13, do outro lado): a linha só nasce
+            // num dos sítios que decidem a recusa, então não existe recusa sem
+            // motivo — e é isso que faz a soma dos motivos fechar com a contagem.
+            entity.Property(rejection => rejection.Reason).IsRequired();
+
+            // Os dois índices são as duas consultas da agregação, e só elas: janela
+            // (RejectedAt) e recorte por agente (AgentId). Índice composto não
+            // entra sem medição, como os cinco sugeridos pela forma em
+            // task_executions e embedding_calls, que também não entraram.
+            entity.HasIndex(rejection => rejection.RejectedAt);
+            entity.HasIndex(rejection => rejection.AgentId);
         });
     }
 }
