@@ -7,6 +7,7 @@ using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Auth;
 using Buteco.Api.Auth.Endpoints;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Insights;
 using Buteco.Api.Insights.Endpoints;
 using Buteco.Api.Knowledge.Indexing;
 using Buteco.Api.KnowledgeBases.Endpoints;
@@ -20,6 +21,7 @@ using Buteco.Api.Messaging;
 using Buteco.Api.Options;
 using Buteco.Api.Providers;
 using Buteco.Api.Providers.Endpoints;
+using Buteco.Api.RejectionMetrics;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 
@@ -64,6 +66,12 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
 builder.Services.AddSingleton<IKnowledgeIndexingJobPublisher, RabbitMqKnowledgeIndexingJobPublisher>();
 builder.Services.AddSingleton<ProviderCatalogService>();
+
+// Escritor da métrica de recusa (design.md da change recusa-motivo-coleta, D8).
+// Singleton, como o resto do caminho A2A: ele cria o seu próprio escopo para o
+// AppDbContext, porque o EnqueueingAgentHandler que o usa é construído por agente
+// pelo AgentA2AServerRegistry, fora do contêiner de requisição.
+builder.Services.AddSingleton<RejectionMetricsWriter>();
 builder.Services.AddSingleton<IMcpCredentialCipher, AesGcmMcpCredentialCipher>();
 
 // Extratores de conteúdo por SourceType, via DI keyed — mesmo idioma dos
@@ -107,6 +115,16 @@ var app = builder.Build();
 // do Program.cs. Remover esta linha reprova TimeZoneStartupValidationTests
 // .RealComposition_WithDivergentTimeZone_FailsToStart.
 app.ValidateTimeZoneConfiguration();
+
+// Convenção 8, e pelo mesmo motivo da linha acima: regime de medição sem instante
+// configurado NÃO falha por si — ele desliga o recorte daquele grupo e a rota passa
+// a responder 0 para período anterior à coleta, que é o oposto do que ela existe
+// para preservar (design.md da change recusa-motivo-coleta, D7).
+//
+// Também provado por teste, pelo mesmo caminho: a WebApplicationFactory roda esta
+// composição real. Remover esta linha reprova
+// MetricsRegimeStartupValidationTests.RealComposition_WithMissingRegime_FailsToStart.
+app.ValidateMetricsRegimeConfiguration();
 
 // Sem UseHttpsRedirection: no compose de servidor (containerizacao-stack-servidor),
 // apps/api só recebe tráfego HTTP puro do nginx interno do stack — TLS termina

@@ -2,6 +2,7 @@ using global::A2A;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Messaging;
 using Buteco.Api.Providers;
+using Buteco.Api.RejectionMetrics;
 using Microsoft.EntityFrameworkCore;
 
 namespace Buteco.Api.A2A;
@@ -24,9 +25,26 @@ public sealed class EnqueueingAgentHandler(
         // recusada a partir da próxima chamada.
         var agentState = await GetAgentStateAsync(cancellationToken);
 
+        // AUSÊNCIA DE LINHA NÃO É INATIVIDADE (design.md da change
+        // recusa-motivo-coleta, D4). Antes desta change a projeção ia para um
+        // `record struct` e o FirstOrDefaultAsync devolvia `default` — com
+        // IsActive = false — quando o agente não existia, então agente inexistente
+        // caía no mesmo `if` de agente inativo. O comportamento do protocolo é o
+        // mesmo (recusa, sem publicar job) e o MOTIVO gravado não: colapsá-los
+        // afirmaria um estado que ninguém leu (convenção 13), e para quem opera
+        // são problemas diferentes — um se resolve reativando, o outro é cliente
+        // chamando o endereço A2A de um agente que não está lá.
+        if (agentState is null)
+        {
+            await updater.RejectAsync(cancellationToken: cancellationToken);
+            await RecordRejectionAsync(context.TaskId, RejectionMetricsValues.Reason.AgentNotFound, cancellationToken);
+            return;
+        }
+
         if (!agentState.IsActive)
         {
             await updater.RejectAsync(cancellationToken: cancellationToken);
+            await RecordRejectionAsync(context.TaskId, RejectionMetricsValues.Reason.AgentInactive, cancellationToken);
             return;
         }
 
@@ -36,6 +54,8 @@ public sealed class EnqueueingAgentHandler(
         if (agentState.Provider is null || agentState.Model is null)
         {
             await updater.RejectAsync(cancellationToken: cancellationToken);
+            await RecordRejectionAsync(
+                context.TaskId, RejectionMetricsValues.Reason.ProviderOrModelMissing, cancellationToken);
             return;
         }
 
@@ -44,6 +64,8 @@ public sealed class EnqueueingAgentHandler(
         if (!providerCatalogService.IsProviderConfigured(agentState.Provider))
         {
             await updater.RejectAsync(cancellationToken: cancellationToken);
+            await RecordRejectionAsync(
+                context.TaskId, RejectionMetricsValues.Reason.ProviderNotConfigured, cancellationToken);
             return;
         }
 
@@ -61,17 +83,44 @@ public sealed class EnqueueingAgentHandler(
         await taskJobPublisher.PublishAsync(message, cancellationToken);
     }
 
-    private async Task<AgentState> GetAgentStateAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// A métrica M29, gravada SEMPRE depois do <c>RejectAsync</c> (design.md, D8):
+    /// o escritor não lança, e a ordem garante que uma falha de gravação não possa
+    /// alterar o estado em que a task terminou nem fazer o job ser publicado.
+    /// </summary>
+    private async Task RecordRejectionAsync(string taskId, string reason, CancellationToken cancellationToken)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var writer = scope.ServiceProvider.GetRequiredService<RejectionMetricsWriter>();
+
+        await writer.WriteAsync(taskId, agentId, reason, cancellationToken);
+    }
+
+    /// <summary>
+    /// Devolve <c>null</c> quando não existe agente com este id — a distinção que
+    /// o <c>record struct</c> apagava. Ver o comentário do primeiro caminho de
+    /// recusa em <see cref="ExecuteAsync"/>.
+    /// </summary>
+    private async Task<AgentState?> GetAgentStateAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        return await dbContext.Agents
+        var state = await dbContext.Agents
             .AsNoTracking()
             .Where(agent => agent.Id == agentId)
             .Select(agent => new AgentState(agent.IsActive, agent.Provider, agent.Model))
             .FirstOrDefaultAsync(cancellationToken);
+
+        return state;
     }
 
-    private readonly record struct AgentState(bool IsActive, string? Provider, string? Model);
+    /// <summary>
+    /// <b>Record de referência, e não <c>record struct</c></b>: é o tipo que faz o
+    /// <c>FirstOrDefaultAsync</c> devolver <c>null</c> para "não há agente" em vez
+    /// do <c>default</c> com <c>IsActive = false</c>, que é o que colapsava as duas
+    /// causas. A distinção vive no TIPO, não numa checagem que alguém possa
+    /// remover por engano.
+    /// </summary>
+    private sealed record AgentState(bool IsActive, string? Provider, string? Model);
 }

@@ -46,6 +46,14 @@ public class InsightsEndpointsTests : IClassFixture<InsightsEndpointsTests.Insig
 
         public const string EmbeddingRegimeStart = "2026-09-10T00:00:00-03:00";
 
+        /// <summary>
+        /// FIXADO como os outros dois, e por um motivo a mais: herdar o valor do
+        /// `appsettings.json` (o instante do deploy da coleta, posterior às recusas
+        /// semeadas em setembro) cortaria a janela e zeraria os guardas de recusa —
+        /// eles ficariam verdes sem nunca chegar à comparação.
+        /// </summary>
+        public const string RejectionRegimeStart = "2026-09-05T00:00:00-03:00";
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
@@ -56,6 +64,7 @@ public class InsightsEndpointsTests : IClassFixture<InsightsEndpointsTests.Insig
                     ["TZ"] = ZoneId,
                     ["Metrics:Regimes:execution"] = ExecutionRegimeStart,
                     ["Metrics:Regimes:embedding"] = EmbeddingRegimeStart,
+                    ["Metrics:Regimes:rejection"] = RejectionRegimeStart,
                 }));
 
             builder.ConfigureServices(services =>
@@ -257,10 +266,14 @@ public class InsightsEndpointsTests : IClassFixture<InsightsEndpointsTests.Insig
 
         var execution = DateTimeOffset.Parse(regimes.GetProperty("execution").GetString()!);
         var embedding = DateTimeOffset.Parse(regimes.GetProperty("embedding").GetString()!);
+        var rejection = DateTimeOffset.Parse(regimes.GetProperty("rejection").GetString()!);
 
-        Assert.NotEqual(execution, embedding);
+        // OS TRÊS são distintos entre si: é isso que um "medindo desde" único
+        // mentiria sobre dois deles.
+        Assert.Equal(3, new[] { execution, embedding, rejection }.Distinct().Count());
         Assert.Equal(DateTimeOffset.Parse(InsightsFixture.ExecutionRegimeStart), execution);
         Assert.Equal(DateTimeOffset.Parse(InsightsFixture.EmbeddingRegimeStart), embedding);
+        Assert.Equal(DateTimeOffset.Parse(InsightsFixture.RejectionRegimeStart), rejection);
     }
 
     /// <summary>
@@ -463,7 +476,11 @@ public class InsightsEndpointsTests : IClassFixture<InsightsEndpointsTests.Insig
             .EnumerateArray().Select(caveat => caveat.GetString()).ToList();
 
         Assert.Contains("rejections-missing-from-executions", caveats);
-        Assert.Contains("rejection-reason-not-collected", caveats);
+
+        // `rejection-reason-not-collected` SAIU desta lista com a change
+        // recusa-motivo-coleta — o motivo passou a ter fonte. A asserção dele vive
+        // agora em ReasonNotCollectedCaveat_IsGone_WhileTheExecutionLineOneStays,
+        // como negativa, que é o que prova a retirada.
     }
 
     /// <summary>
@@ -503,6 +520,171 @@ public class InsightsEndpointsTests : IClassFixture<InsightsEndpointsTests.Insig
     }
 
     // ------------------------------------------------------------ Apoio
+
+    // ------------------------------------------------ RECUSA DE ENTRADA (M29)
+
+    /// <summary>
+    /// As DUAS contagens de recusa chegam separadas, e nenhum campo traz a soma —
+    /// elas contam populações diferentes: <c>rejectedCount</c> sai de
+    /// <c>task_executions</c> (recusa COM linha de execução, hoje só a de
+    /// profundidade de delegação, feita por <c>apps/workers</c>) e
+    /// <c>rejectedAtEntryCount</c> sai de <c>task_rejections</c>.
+    /// </summary>
+    [Fact]
+    public async Task RejectionCounts_ArriveSeparately_AndAreNeverSummed()
+    {
+        var errors = await ErrorsAsync();
+
+        // Quatro das cinco recusas semeadas: a de 02/09 é anterior ao início do
+        // regime e NÃO é contada.
+        Assert.Equal(4, errors.GetProperty("rejectedAtEntryCount").GetInt32());
+
+        // A semeadura não tem recusa com linha de execução, e o campo antigo
+        // continua lendo a fonte antiga — o que prova que os dois não foram
+        // fundidos.
+        Assert.Equal(0, errors.GetProperty("rejectedCount").GetInt32());
+
+        var somaProibida = errors.EnumerateObject()
+            .Where(field => field.Value.ValueKind == JsonValueKind.Number)
+            .Any(field => field.Value.GetInt32() == 4 && field.Name != "rejectedAtEntryCount");
+
+        Assert.False(somaProibida, "nenhum outro campo numérico pode carregar a soma das duas populações");
+    }
+
+    /// <summary>
+    /// Os motivos chegam como valor e contagem, no mesmo formato de
+    /// <c>byPhase</c> — e a SOMA deles fecha com a contagem de recusas de entrada,
+    /// porque a coluna de motivo é obrigatória.
+    /// </summary>
+    [Fact]
+    public async Task RejectionReasons_ArriveAsValueAndCount_AndSumToTheEntryCount()
+    {
+        var errors = await ErrorsAsync();
+
+        var porMotivo = errors.GetProperty("rejectionsByReason").EnumerateArray()
+            .ToDictionary(row => row.GetProperty("reason").GetString()!, row => row.GetProperty("count").GetInt32());
+
+        Assert.Equal(2, porMotivo["AgentInactive"]);
+        Assert.Equal(1, porMotivo["ProviderOrModelMissing"]);
+
+        Assert.Equal(
+            errors.GetProperty("rejectedAtEntryCount").GetInt32(),
+            porMotivo.Values.Sum());
+    }
+
+    /// <summary>
+    /// Motivo que a rota não conhece chega CRU. Omiti-lo faria a soma dos motivos
+    /// deixar de fechar com a contagem — e sem sintoma, porque ninguém soma à mão.
+    /// É a mesma regra que <c>byPhase</c> já segue para fase desconhecida.
+    /// </summary>
+    [Fact]
+    public async Task UnknownRejectionReason_ArrivesAsIs_NeverDiscarded()
+    {
+        var errors = await ErrorsAsync();
+
+        var motivos = errors.GetProperty("rejectionsByReason").EnumerateArray()
+            .Select(row => row.GetProperty("reason").GetString())
+            .ToList();
+
+        Assert.Contains("MotivoQueATelaNaoConhece", motivos);
+    }
+
+    /// <summary>
+    /// O recorte do regime da recusa: janela que começa ANTES do início da coleta
+    /// não traz a recusa anterior a ele. Sem o recorte a contagem sairia 5, e o
+    /// período sem coleta apareceria como período medido.
+    /// </summary>
+    [Fact]
+    public async Task RejectionBeforeTheRegimeStart_IsNotCounted()
+    {
+        var errors = await ErrorsAsync();
+
+        var motivos = errors.GetProperty("rejectionsByReason").EnumerateArray()
+            .ToDictionary(row => row.GetProperty("reason").GetString()!, row => row.GetProperty("count").GetInt32());
+
+        // Três linhas de `AgentInactive` foram semeadas; a de 02/09 está fora.
+        Assert.Equal(2, motivos["AgentInactive"]);
+    }
+
+    /// <summary>
+    /// Janela DENTRO do regime e sem recusa nenhuma: zero medido e lista vazia —
+    /// e nenhum dos dois é apresentado como ausência de fonte. É o outro lado da
+    /// gramática: aqui o zero é verdade.
+    /// </summary>
+    [Fact]
+    public async Task WindowInsideTheRegimeWithoutRejections_GivesMeasuredZero()
+    {
+        var insights = await GetAsync("2026-09-20T00:00:00-03:00", "2026-09-22T00:00:00-03:00");
+        var errors = insights.GetProperty("errors");
+
+        Assert.Equal(0, errors.GetProperty("rejectedAtEntryCount").GetInt32());
+        Assert.Empty(errors.GetProperty("rejectionsByReason").EnumerateArray());
+    }
+
+    /// <summary>
+    /// O bloco de erros declara os TRÊS regimes, e nenhum é eleito para
+    /// representar os outros: ele lê execução, embedding e recusa.
+    /// </summary>
+    [Fact]
+    public async Task ErrorBlock_DeclaresTheThreeRegimesItReads()
+    {
+        var errors = await ErrorsAsync();
+
+        Assert.Equal("execution", errors.GetProperty("executionRegime").GetString());
+        Assert.Equal("embedding", errors.GetProperty("indexingRegime").GetString());
+        Assert.Equal("rejection", errors.GetProperty("rejectionRegime").GetString());
+    }
+
+    /// <summary>
+    /// O NOME DE FIO dos três campos novos, lido do JSON CRU — round-trip pelo
+    /// mesmo tipo é cego à política de nomes (convenção 12).
+    /// </summary>
+    [Fact]
+    public async Task RejectionFields_HaveTheDeclaredWireNames()
+    {
+        var raw = await RawAsync("2026-09-01T00:00:00-03:00", "2026-09-30T00:00:00-03:00");
+
+        Assert.Contains("\"rejectedAtEntryCount\"", raw, StringComparison.Ordinal);
+        Assert.Contains("\"rejectionsByReason\"", raw, StringComparison.Ordinal);
+        Assert.Contains("\"rejectionRegime\"", raw, StringComparison.Ordinal);
+        Assert.Contains("\"reason\"", raw, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A parcialidade que deixou de existir SAI da resposta. Código de
+    /// parcialidade que sobrevive à lacuna que descrevia afirma uma limitação que
+    /// já não há, e ensina o cliente a ignorar os outros.
+    /// </summary>
+    [Fact]
+    public async Task ReasonNotCollectedCaveat_IsGone_WhileTheExecutionLineOneStays()
+    {
+        var caveats = (await ErrorsAsync()).GetProperty("caveats").EnumerateArray()
+            .Select(caveat => caveat.GetString())
+            .ToList();
+
+        Assert.DoesNotContain("rejection-reason-not-collected", caveats);
+
+        // E o outro FICA: a recusa de entrada continua sem linha de execução e
+        // fora do percentual de falha, e M28 continua parcial por construção.
+        Assert.Contains("rejections-missing-from-executions", caveats);
+    }
+
+    private async Task<JsonElement> ErrorsAsync() =>
+        (await GetAsync("2026-09-01T00:00:00-03:00", "2026-09-30T00:00:00-03:00")).GetProperty("errors");
+
+    /// <summary>
+    /// O JSON CRU, para os guardas de nome de fio: desserializar para o mesmo tipo
+    /// passaria pela mesma política de nomes na ida e na volta e sempre casaria.
+    /// </summary>
+    private async Task<string> RawAsync(string from, string to)
+    {
+        var response = await _fixture.CreateClient()
+            .GetAsync($"/insights/system?from={Uri.EscapeDataString(from)}&to={Uri.EscapeDataString(to)}");
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadAsStringAsync();
+    }
 
     private async Task<JsonElement> GetAsync(string from, string to)
     {
@@ -553,7 +735,7 @@ public class InsightsEndpointsTests : IClassFixture<InsightsEndpointsTests.Insig
     /// ANTES de asserir qualquer agregação. Sem isto, todo cenário deste arquivo
     /// ficaria verde sobre banco vazio.
     /// </summary>
-    private sealed record SeededRowCounts(int Executions, int ProviderCalls, int A2ATasks);
+    private sealed record SeededRowCounts(int Executions, int ProviderCalls, int A2ATasks, int Rejections);
 
     private async Task SeedAsync()
     {
@@ -648,14 +830,42 @@ public class InsightsEndpointsTests : IClassFixture<InsightsEndpointsTests.Insig
                     timestamptz '2020-01-01T00:00:00Z', {emptyPayload}::jsonb);
             """);
 
+        // 6) RECUSAS DE ENTRADA (M29) — a fonte que a change recusa-motivo-coleta
+        //    criou. Cinco linhas, e cada uma existe por um guarda:
+        //
+        //    - DUAS do mesmo motivo, para que a contagem por motivo não seja
+        //      confundível com a contagem de motivos distintos;
+        //    - uma de OUTRO motivo e de OUTRO agente, que é o que o escopo do
+        //      agente precisa para provar recorte;
+        //    - uma com valor FORA do vocabulário, para o guarda de motivo
+        //      desconhecido: omiti-lo faria a soma dos motivos deixar de fechar com
+        //      a contagem, sem sintoma;
+        //    - uma ANTES do início do regime (2026-09-05), que NÃO pode ser
+        //      contada. É ela que torna o recorte de regime verificável: sem o
+        //      recorte, a contagem sairia 5 e o guarda reprovaria.
+        await dbContext.Database.ExecuteSqlAsync($"""
+            insert into task_rejections ("TaskId", "AgentId", "Reason", "RejectedAt")
+            values ('rejected-inactive-1', {AgentId}, 'AgentInactive',
+                    timestamptz '2026-09-16T10:00:00Z'),
+                   ('rejected-inactive-2', {AgentId}, 'AgentInactive',
+                    timestamptz '2026-09-17T10:00:00Z'),
+                   ('rejected-missing-provider', {TargetAgentId}, 'ProviderOrModelMissing',
+                    timestamptz '2026-09-18T10:00:00Z'),
+                   ('rejected-unknown-reason', {AgentId}, 'MotivoQueATelaNaoConhece',
+                    timestamptz '2026-09-19T10:00:00Z'),
+                   ('rejected-before-regime', {AgentId}, 'AgentInactive',
+                    timestamptz '2026-09-02T10:00:00Z');
+            """);
+
         var counts = await dbContext.Database.SqlQuery<SeededRowCounts>($"""
             select (select count(*) from task_executions)::int as "Executions",
                    (select count(*) from provider_calls)::int as "ProviderCalls",
-                   (select count(*) from a2a_tasks)::int as "A2ATasks"
+                   (select count(*) from a2a_tasks)::int as "A2ATasks",
+                   (select count(*) from task_rejections)::int as "Rejections"
             """).SingleAsync();
 
         // A asserção da precondição, e não só a semeadura: é ela que impede
         // todo guarda deste arquivo de ficar verde sobre banco vazio.
-        Assert.Equal(new SeededRowCounts(4, 2, 2), counts);
+        Assert.Equal(new SeededRowCounts(4, 2, 2, 5), counts);
     }
 }

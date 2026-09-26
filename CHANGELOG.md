@@ -485,6 +485,39 @@ o versionamento pretende seguir
 - **Nenhuma biblioteca de gráficos, nenhuma dependência nova** — os gráficos
   saem em SVG inline e CSS.
 
+**Métricas de operação — coleta do motivo da recusa (etapa 5)**
+
+- **O motivo de toda recusa feita por `apps/api` passa a ser gravado** em
+  `task_rejections` (task, agente, motivo e instante) — é a **M29**, a única das 27
+  métricas servidas pelas rotas que não tinha fonte nenhuma. Até aqui as causas
+  colapsavam num único estado `rejected`, sem coluna de motivo em lugar algum.
+- **Tabela própria, e não coluna em `a2a_tasks` nem linha em `task_executions`.**
+  Medido: 22 consultas por rota leem `task_executions` filtrando só pela janela, e
+  uma linha de recusa ali entraria em nove métricas devolvendo número **plausível**
+  — contagem de tasks executadas, série diária, duração média, tempo de fila,
+  chamadas por task, resíduo, profundidade e execuções abertas. É o mesmo
+  raciocínio que já tinha decidido `embedding_calls` como tabela própria.
+- **Vocabulário fechado, gravado como texto e determinado pela causa no código** —
+  `AgentInactive`, `ProviderOrModelMissing`, `ProviderNotConfigured` e
+  `AgentNotFound` —, nunca derivado de texto de mensagem. **O quarto valor é um
+  achado da change**: o caminho de agente inativo recebia também o agente
+  inexistente, porque a leitura de estado projetava para um `record struct` e a
+  ausência de linha chegava como `IsActive = false`. Ausência de leitura não é
+  inatividade.
+- **As duas rotas passam a servir a recusa de entrada em campos próprios** —
+  `rejectedAtEntryCount` e `rejectionsByReason` (valor e contagem, mesma forma das
+  fases de falha) —, nos **dois escopos ao mesmo tempo. `rejectedCount` não muda de
+  fonte nem de significado**: ele conta a recusa **com** linha de execução, que
+  hoje é só a de profundidade de delegação, feita por `apps/workers`.
+- **Terceiro regime de medição (`rejection`)**, que o mapa de regimes absorveu sem
+  mudar de forma — era para isso que ele era um mapa.
+- **Falha ao gravar a métrica não altera a recusa**: a gravação acontece depois do
+  estado terminal e nunca lança. Métrica que muda o resultado do que ela mede não é
+  métrica.
+- **A linha de recusa não tem chave estrangeira**, e sobrevive à exclusão do agente
+  — ao contrário de `a2a_tasks`, que cascateia. A métrica registra o que aconteceu, e
+  isso não muda porque o catálogo mudou depois.
+
 **Documentação e governança**
 
 - Licenciamento sob Apache-2.0, com `LICENSE` e `NOTICE`.
@@ -495,6 +528,20 @@ o versionamento pretende seguir
   `scripts/check-docs.py`.
 
 ### Changed
+
+- **O código de parcialidade `rejection-reason-not-collected` sai das duas rotas de
+  Insights.** A lacuna que ele descrevia deixou de existir com a coleta do motivo
+  (etapa 5), e código de parcialidade que sobrevive à lacuna afirma uma limitação
+  que já não há — e ensina o cliente a ignorar os outros.
+  `rejections-missing-from-executions` **fica, com o texto intacto**: a recusa de
+  entrada continua sem linha de execução, continua fora do percentual de falha, e o
+  agrupamento de falha por provedor e modelo continua parcial **por construção**,
+  porque duas das causas de recusa são justamente a ausência de provedor ou modelo.
+- **Regime de medição declarado e sem instante em configuração passa a reprovar o
+  boot de `apps/api`.** Antes a ausência não falhava: ela desligava o recorte
+  daquele grupo de métricas, e o período anterior à coleta respondia `0` em vez de
+  ausência — número plausível, em silêncio, na rota cujo propósito é preservar essa
+  distinção. O aviso existia em comentário, e comentário não reprova nada.
 
 - **Nível de log de produção passa a viver no repositório.** Cada app ganha
   `appsettings.Production.json` com o log de comando de banco do EF Core em

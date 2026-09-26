@@ -142,7 +142,22 @@ public sealed record AgentPerformanceInsightsResponse(
     IReadOnlyList<string> Caveats);
 
 /// <summary>
-/// M27 a M29 e M32 no escopo do agente. <b>Sem <c>IndexingFailures</c></b> (M30):
+/// M27 a M29 e M32 no escopo do agente, e <b>M29 agora tem fonte</b>: a recusa de
+/// entrada chega com contagem própria (<c>RejectedAtEntryCount</c>) e com os
+/// motivos (<c>RejectionsByReason</c>), no MESMO formato e com o MESMO vocabulário
+/// do escopo do sistema — os dois escopos passaram a contá-la na mesma change, para
+/// que não medissem coisas diferentes com o mesmo rótulo.
+///
+/// <para>
+/// <b><c>RejectedCount</c> não mudou de fonte nem de significado</b>: continua
+/// contando o que as tabelas de métrica contêm, que é a recusa COM linha de
+/// execução — hoje só a de profundidade de delegação, feita por
+/// <c>apps/workers</c>. Somar os dois num número só juntaria duas janelas de
+/// regime diferentes.
+/// </para>
+///
+/// <para>
+/// <b>Sem <c>IndexingFailures</c></b> (M30):
 /// <c>knowledge_indexing_attempts</c> não tem coluna de agente, e atribuí-la pelo
 /// vínculo de base contaria a mesma tentativa em cada agente vinculado.
 ///
@@ -153,10 +168,13 @@ public sealed record AgentPerformanceInsightsResponse(
 /// </summary>
 public sealed record AgentErrorInsightsResponse(
     string Regime,
+    string RejectionRegime,
     int FailedCount,
     int RejectedCount,
+    int RejectedAtEntryCount,
     IReadOnlyList<AgentModelFailureResponse> ByProviderAndModel,
     IReadOnlyList<FailurePhaseResponse> ByPhase,
+    IReadOnlyList<RejectionReasonResponse> RejectionsByReason,
     AgentNonTerminalTasksResponse NonTerminal,
     IReadOnlyList<string> Caveats);
 

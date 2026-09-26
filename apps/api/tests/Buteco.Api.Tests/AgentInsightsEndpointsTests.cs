@@ -59,6 +59,14 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
 
         public const string EmbeddingRegimeStart = "2026-09-10T00:00:00-03:00";
 
+        /// <summary>
+        /// FIXADO como os outros dois, e por um motivo a mais: herdar o valor do
+        /// `appsettings.json` (o instante do deploy da coleta, posterior às recusas
+        /// semeadas em setembro) cortaria a janela e zeraria os guardas de recusa —
+        /// eles ficariam verdes sem nunca chegar à comparação.
+        /// </summary>
+        public const string RejectionRegimeStart = "2026-09-05T00:00:00-03:00";
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
@@ -69,6 +77,7 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
                     ["TZ"] = ZoneId,
                     ["Metrics:Regimes:execution"] = ExecutionRegimeStart,
                     ["Metrics:Regimes:embedding"] = EmbeddingRegimeStart,
+                    ["Metrics:Regimes:rejection"] = RejectionRegimeStart,
                 }));
 
             builder.ConfigureServices(services =>
@@ -586,6 +595,123 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
 
     // ------------------------------------------------------------ Apoio
 
+    // ------------------------------------------------ RECUSA DE ENTRADA (M29)
+
+    /// <summary>
+    /// A contagem e os motivos recortados pelo agente consultado: o outro agente
+    /// tem recusa na mesma janela e não entra. O recorte sai da coluna de agente da
+    /// própria fonte, nunca de junção com <c>a2a_tasks</c> nem com o catálogo.
+    /// </summary>
+    [Fact]
+    public async Task EntryRejections_AreScopedToTheQueriedAgent()
+    {
+        var errors = (await GetAsync(BothAgentId)).GetProperty("errors");
+
+        // Duas das três do agente: a de 02/09 é anterior ao início do regime.
+        Assert.Equal(2, errors.GetProperty("rejectedAtEntryCount").GetInt32());
+
+        var motivos = Reasons(errors);
+
+        Assert.Equal(1, motivos["AgentInactive"]);
+        Assert.Equal(1, motivos["ProviderOrModelMissing"]);
+
+        // O motivo do OUTRO agente não vaza para este recorte.
+        Assert.DoesNotContain("ProviderNotConfigured", motivos.Keys);
+
+        Assert.Equal(errors.GetProperty("rejectedAtEntryCount").GetInt32(), motivos.Values.Sum());
+    }
+
+    /// <summary>
+    /// Agente sem recusa de entrada, com a janela dentro do regime: zero MEDIDO e
+    /// lista vazia — nenhum dos dois é ausência de fonte.
+    /// </summary>
+    [Fact]
+    public async Task AgentWithoutEntryRejections_GetsMeasuredZero()
+    {
+        var errors = (await GetAsync(EmptyAgentId)).GetProperty("errors");
+
+        Assert.Equal(0, errors.GetProperty("rejectedAtEntryCount").GetInt32());
+        Assert.Empty(errors.GetProperty("rejectionsByReason").EnumerateArray());
+    }
+
+    /// <summary>
+    /// <b>Os dois escopos concordam sobre a mesma janela</b>, que é a razão de a
+    /// contagem ter entrado nos dois na MESMA change: contar só de um lado faria os
+    /// dois medirem coisas diferentes com o mesmo rótulo. Aqui a soma dos dois
+    /// agentes com recusa é a contagem do sistema.
+    /// </summary>
+    [Fact]
+    public async Task AgentScopeAndSystemScope_AgreeOnTheSameWindow()
+    {
+        var doAgente = (await GetAsync(BothAgentId)).GetProperty("errors")
+            .GetProperty("rejectedAtEntryCount").GetInt32();
+        var doOutro = (await GetAsync(OnlyDelegatesAgentId)).GetProperty("errors")
+            .GetProperty("rejectedAtEntryCount").GetInt32();
+
+        var response = await _fixture.CreateClient()
+            .GetAsync($"/insights/system?from={WindowFrom}&to={WindowTo}");
+        response.EnsureSuccessStatusCode();
+        var sistema = (await response.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("errors").GetProperty("rejectedAtEntryCount").GetInt32();
+
+        Assert.Equal(sistema, doAgente + doOutro);
+    }
+
+    /// <summary>
+    /// O código de parcialidade do motivo sai do escopo do agente também — mantê-lo
+    /// num dos dois faria a mesma lacuna parecer aberta de um lado e fechada do
+    /// outro. <b>Caso NOVO, não adaptado</b>: esta rota não tinha nenhuma asserção
+    /// sobre os <c>caveats</c> do bloco de erros.
+    /// </summary>
+    [Fact]
+    public async Task ReasonNotCollectedCaveat_IsGoneFromTheAgentScopeToo()
+    {
+        var caveats = (await GetAsync(BothAgentId)).GetProperty("errors")
+            .GetProperty("caveats").EnumerateArray()
+            .Select(caveat => caveat.GetString())
+            .ToList();
+
+        Assert.DoesNotContain("rejection-reason-not-collected", caveats);
+        Assert.Contains("rejections-missing-from-executions", caveats);
+    }
+
+    /// <summary>
+    /// O regime da recusa é declarado no bloco de erros, e o mapa de regimes traz o
+    /// instante dele — o escopo do agente não tem comportamento próprio para isso.
+    /// </summary>
+    [Fact]
+    public async Task ErrorBlock_DeclaresTheRejectionRegime()
+    {
+        var body = await GetAsync(BothAgentId);
+
+        Assert.Equal("rejection", body.GetProperty("errors").GetProperty("rejectionRegime").GetString());
+        Assert.Equal(
+            DateTimeOffset.Parse(AgentInsightsFixture.RejectionRegimeStart),
+            DateTimeOffset.Parse(body.GetProperty("regimes").GetProperty("rejection").GetString()!));
+    }
+
+    /// <summary>
+    /// O nome de fio, lido do JSON CRU nesta rota também: as duas têm consultas
+    /// distintas, então o verde de uma não cobre a outra.
+    /// </summary>
+    [Fact]
+    public async Task RejectionFields_HaveTheDeclaredWireNames()
+    {
+        var response = await _fixture.CreateClient()
+            .GetAsync($"/insights/agents/{BothAgentId}?from={WindowFrom}&to={WindowTo}");
+        response.EnsureSuccessStatusCode();
+
+        var raw = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("\"rejectedAtEntryCount\"", raw, StringComparison.Ordinal);
+        Assert.Contains("\"rejectionsByReason\"", raw, StringComparison.Ordinal);
+        Assert.Contains("\"rejectionRegime\"", raw, StringComparison.Ordinal);
+    }
+
+    private static Dictionary<string, int> Reasons(JsonElement errors) =>
+        errors.GetProperty("rejectionsByReason").EnumerateArray()
+            .ToDictionary(row => row.GetProperty("reason").GetString()!, row => row.GetProperty("count").GetInt32());
+
     private async Task<JsonElement> GetAsync(Guid agentId, string? from = null, string? to = null)
     {
         var response = await _fixture.CreateClient()
@@ -619,7 +745,7 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
                 point => (DayOfWeek)point.GetProperty("weekday").GetInt32(),
                 point => point.GetProperty("taskCount").GetInt32());
 
-    private sealed record SeededRowCounts(int Executions, int Delegations, int EmbeddingCalls, int Bindings);
+    private sealed record SeededRowCounts(int Executions, int Delegations, int EmbeddingCalls, int Bindings, int Rejections);
 
     private async Task SeedAsync()
     {
@@ -774,15 +900,32 @@ public class AgentInsightsEndpointsTests : IClassFixture<AgentInsightsEndpointsT
                     'openai', 'emb-3', 1536, 1, 40.0, 200, false);
             """);
 
+        // RECUSAS DE ENTRADA (M29) no escopo do agente — a mesma fonte do escopo do
+        // sistema, e é o recorte por agente que estes guardas exercitam. Três
+        // linhas: duas do agente que faz tudo, uma de OUTRO agente (que não pode
+        // aparecer no recorte do primeiro), e uma ANTES do regime.
+        await dbContext.Database.ExecuteSqlAsync($"""
+            insert into task_rejections ("TaskId", "AgentId", "Reason", "RejectedAt")
+            values ('tr-both-inactive', {BothAgentId}, 'AgentInactive',
+                    timestamptz '2026-09-16T10:00:00Z'),
+                   ('tr-both-missing', {BothAgentId}, 'ProviderOrModelMissing',
+                    timestamptz '2026-09-17T10:00:00Z'),
+                   ('tr-other-agent', {OnlyDelegatesAgentId}, 'ProviderNotConfigured',
+                    timestamptz '2026-09-18T10:00:00Z'),
+                   ('tr-both-before-regime', {BothAgentId}, 'AgentInactive',
+                    timestamptz '2026-09-02T10:00:00Z');
+            """);
+
         var counts = await dbContext.Database.SqlQuery<SeededRowCounts>($"""
             select (select count(*) from task_executions)::int as "Executions",
                    (select count(*) from delegation_outcomes)::int as "Delegations",
                    (select count(*) from embedding_calls)::int as "EmbeddingCalls",
-                   (select count(*) from agent_knowledge_bases)::int as "Bindings"
+                   (select count(*) from agent_knowledge_bases)::int as "Bindings",
+                   (select count(*) from task_rejections)::int as "Rejections"
             """).SingleAsync();
 
         // A asserção da PRECONDIÇÃO, e não só a semeadura: é ela que impede todo
         // guarda deste arquivo de ficar verde sobre banco vazio.
-        Assert.Equal(new SeededRowCounts(6, 5, 2, 1), counts);
+        Assert.Equal(new SeededRowCounts(6, 5, 2, 1, 4), counts);
     }
 }

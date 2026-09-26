@@ -62,6 +62,7 @@ public sealed class GetSystemInsightsQueryHandler(
 
         var executionRegime = RegimeStart(regimes, MetricsOptions.ExecutionRegime);
         var embeddingRegime = RegimeStart(regimes, MetricsOptions.EmbeddingRegime);
+        var rejectionRegime = RegimeStart(regimes, MetricsOptions.RejectionRegime);
 
         // O início efetivo de cada grupo é o MAIS TARDE entre o pedido e o
         // regime: nada antes do regime é medido, e emitir 0 ali afirmaria
@@ -69,6 +70,7 @@ public sealed class GetSystemInsightsQueryHandler(
         // série (convenção 13).
         var executionFrom = Later(query.From, executionRegime);
         var embeddingFrom = Later(query.From, embeddingRegime);
+        var rejectionFrom = Later(query.From, rejectionRegime);
 
         var window = new InsightsWindowResponse(query.From, query.To, timeZone);
 
@@ -79,7 +81,7 @@ public sealed class GetSystemInsightsQueryHandler(
             await TemporalAsync(timeZone, executionFrom, SeriesEnd(query.To), cancellationToken),
             await TokensAsync(executionFrom, embeddingFrom, query.To, cancellationToken),
             await PerformanceAsync(executionFrom, query.To, cancellationToken),
-            await ErrorsAsync(executionFrom, embeddingFrom, query.To, cancellationToken),
+            await ErrorsAsync(executionFrom, embeddingFrom, rejectionFrom, query.To, cancellationToken),
             await DelegationAsync(executionFrom, query.To, cancellationToken));
     }
 
@@ -542,18 +544,35 @@ public sealed class GetSystemInsightsQueryHandler(
 
     private sealed record PhaseRow(string Phase, int Count);
 
+    private sealed record RejectionReasonRow(string Reason, int Count);
+
     private sealed record IndexingFailureRow(string Outcome, string? FailurePhase, int Count);
 
     private sealed record NonTerminalRow(int OpenExecutionCount, int NeverConsumedCount);
 
     private async Task<ErrorInsightsResponse> ErrorsAsync(
-        DateTimeOffset executionFrom, DateTimeOffset embeddingFrom, DateTimeOffset to, CancellationToken cancellationToken)
+        DateTimeOffset executionFrom,
+        DateTimeOffset embeddingFrom,
+        DateTimeOffset rejectionFrom,
+        DateTimeOffset to,
+        CancellationToken cancellationToken)
     {
-        // M27 — failed e rejected SEPARADOS, e a contagem é PARCIAL: as recusas
-        // feitas por apps/api (agente inativo, provider/model nulos, provedor
-        // não configurado) nunca produzem linha de execução, então subcontam
-        // aqui. A parte que falta só existe em a2a_tasks. O caveat é como isso
-        // chega ao cliente, em vez de o número passar por completo.
+        // M27 — failed e rejected SEPARADOS, e este `rejected` conta uma população
+        // ESPECÍFICA: a recusa que TEM linha de execução, que hoje é só a de
+        // profundidade de delegação (AgentExecutionService, único sítio que grava
+        // TerminalState = 'Rejected').
+        //
+        // A recusa de entrada, feita por apps/api, continua sem linha de execução —
+        // e desde a change recusa-motivo-coleta ela tem FONTE PRÓPRIA
+        // (`task_rejections`), servida abaixo em `rejectedAtEntryCount`. Este
+        // comentário dizia "a parte que falta só existe em a2a_tasks", e era
+        // verdade quando foi escrito: a etapa 5 o tornou falso, e corrigi-lo aqui é
+        // a convenção 13 aplicada a comentário.
+        //
+        // O caveat `rejections-missing-from-executions` FICA, porque o que ele diz
+        // continua valendo: esta contagem não inclui a recusa de entrada, e ela
+        // também não entra no percentual de falha — nem no numerador, nem no
+        // denominador.
         var terminal = await dbContext.Database
             .SqlQuery<TerminalRow>($"""
                 select count(*) filter (where "TerminalState" = 'Failed')::int as "FailedCount",
@@ -576,15 +595,54 @@ public sealed class GetSystemInsightsQueryHandler(
                 """)
             .ToListAsync(cancellationToken);
 
-        // M29 — fase, e não texto de exceção. O motivo das recusas feitas por
-        // apps/api NÃO tem fonte nenhuma: três causas distintas colapsam num
-        // único Rejected, sem coluna de motivo em lugar algum.
+        // M29, primeira metade — a FASE da falha de execução, e não texto de
+        // exceção. O vocabulário aqui é o `FailurePhase` de task_executions, com
+        // sete valores que a capability agent-execution-metrics enumera.
+        //
+        // A outra metade de M29 — o motivo da RECUSA DE ENTRADA — chega em lista
+        // própria (`rejectionsByReason`), e não aqui: são vocabulários diferentes,
+        // de tabelas diferentes, e misturá-los faria este campo afirmar valores que
+        // o contrato dele não tem. É a tela que concatena as duas listas, que é o
+        // que o protótipo desenha.
         var byPhase = await dbContext.Database
             .SqlQuery<PhaseRow>($"""
                 select "FailurePhase" as "Phase", count(*)::int as "Count"
                 from task_executions
                 where "StartedAt" >= {executionFrom} and "StartedAt" <= {to}
                   and "FailurePhase" is not null
+                group by 1
+                order by 2 desc, 1
+                """)
+            .ToListAsync(cancellationToken);
+
+        // M29 — O MOTIVO DA RECUSA DE ENTRADA, que até a change
+        // recusa-motivo-coleta não tinha fonte nenhuma (era o caveat
+        // `rejection-reason-not-collected`, que sai desta lista).
+        //
+        // JANELA DO REGIME PRÓPRIO: `rejectionFrom`, e não `executionFrom`. A
+        // coleta começou depois das outras duas, e usar a janela de execução
+        // devolveria 0 para período em que a coluna não existia — "medi e não achei"
+        // onde a verdade é ausência de medição (convenção 13).
+        //
+        // A CONTAGEM E OS MOTIVOS SAEM DA MESMA JANELA, e é isso que faz a soma dos
+        // motivos fechar com a contagem: a coluna de motivo é obrigatória, então
+        // toda linha contada aqui tem um motivo contado ali.
+        var rejectedAtEntry = await dbContext.Database
+            .SqlQuery<int>($"""
+                select count(*)::int as "Value"
+                from task_rejections
+                where "RejectedAt" >= {rejectionFrom} and "RejectedAt" <= {to}
+                """)
+            .SingleAsync(cancellationToken);
+
+        // Desempate por "Reason" depois da contagem: sem ele, duas causas com a
+        // mesma contagem sairiam em ordem que o plano decide (convenção 15, quinta
+        // forma — ordem que o banco às vezes já produz sozinho).
+        var byReason = await dbContext.Database
+            .SqlQuery<RejectionReasonRow>($"""
+                select "Reason" as "Reason", count(*)::int as "Count"
+                from task_rejections
+                where "RejectedAt" >= {rejectionFrom} and "RejectedAt" <= {to}
                 group by 1
                 order by 2 desc, 1
                 """)
@@ -618,18 +676,26 @@ public sealed class GetSystemInsightsQueryHandler(
                 """)
             .SingleAsync(cancellationToken);
 
+        // OS TRÊS REGIMES, e nenhum eleito para representar o grupo: este bloco lê
+        // task_executions (execução), knowledge_indexing_attempts (embedding) e
+        // task_rejections (recusa). Um nome só daria a três coletas a data de uma.
         return new ErrorInsightsResponse(
             MetricsOptions.ExecutionRegime,
             MetricsOptions.EmbeddingRegime,
+            MetricsOptions.RejectionRegime,
             terminal.FailedCount,
             terminal.RejectedCount,
+            rejectedAtEntry,
             byAgent.Select(row => new AgentFailureResponse(row.AgentId, row.Provider, row.Model, row.FailedCount)).ToList(),
             byPhase.Select(row => new FailurePhaseResponse(row.Phase, row.Count)).ToList(),
+            byReason.Select(row => new RejectionReasonResponse(row.Reason, row.Count)).ToList(),
             indexingFailures.Select(row => new IndexingFailureResponse(row.Outcome, row.FailurePhase, row.Count)).ToList(),
             new NonTerminalTasksResponse(nonTerminal.OpenExecutionCount, nonTerminal.NeverConsumedCount, NonTerminalStates),
             [
+                // `rejection-reason-not-collected` SAIU aqui: a lacuna que ele
+                // descrevia deixou de existir, e código de parcialidade que
+                // sobrevive à lacuna afirma limitação que não há.
                 InsightsCaveats.RejectionsMissingFromExecutions,
-                InsightsCaveats.RejectionReasonNotCollected,
                 InsightsCaveats.PointInTimeOnly,
             ]);
     }

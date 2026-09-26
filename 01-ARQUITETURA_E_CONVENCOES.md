@@ -1466,6 +1466,28 @@ de propor algo nesta base:
     é justamente o tipo de coincidência que faz um número migrar de pergunta sem
     ninguém notar.
 
+    **A sexta ocorrência é de um tipo novo, e ela quebra uma suposição que as
+    cinco anteriores compartilhavam: a de que a referência estava CERTA quando foi
+    escrita e envelheceu depois.** A régua de contenção de `apps/api` foi
+    registrada como **31 classes de contêiner** em 23/09/2026. Remedida em
+    25/09/2026 pelo mesmo critério: **40**. E remedida **no próprio commit do
+    registro** (`2d4bc3c`): **40 também**.
+
+    Não envelheceu — **nasceu errada**, por 9 classes, quase certamente por ter
+    sido contada sem uma subpasta (`Knowledge/`, 11 classes). A consequência é a
+    que interessa: o gatilho pendurado nela — *consultar ao acrescentar a 32ª
+    classe* — **já estava vencido no dia em que foi escrito**, e ninguém foi
+    consultado, porque o número dizia 31.
+
+    **O que isto acrescenta à prática:** escrever o estado ao lado do número não
+    basta se o número não for **reproduzível**. Junto do valor vai **o critério de
+    contagem**, com detalhe suficiente para alguém recontar — *"classes com fixture
+    de contêiner mais classes que constroem o seu próprio, excluída `Support/`,
+    contadas em todas as subpastas"* —, e a primeira recalibração **reconta no
+    commit original** antes de concluir que houve crescimento. Distinguir "cresceu"
+    de "foi contado errado" muda a leitura: no primeiro caso o gatilho está no
+    futuro, no segundo ele já passou.
+
 23. **Toda change nasce de uma issue, e toda change e todo PR referenciam a
     que os originou.** Demanda nova **cria issue antes** de virar change — a
     issue é onde o problema é descrito antes de alguém decidir a forma da
