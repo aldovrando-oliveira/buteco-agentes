@@ -18,7 +18,12 @@ import { Box, Text } from '@mantine/core';
 // cache apenas como total do sistema; reparti-lo por modelo inventaria a
 // distribuição"). **O porquê pertence à ISSUE**, e a convenção 23 existe
 // exatamente para isso: é a issue que sobrevive ao archive, não o `design.md`
-// nem um parágrafo de tela. Quem precisa da causa vai à #51, à #66 ou à #67.
+// nem um parágrafo de tela. Quem precisa da causa vai à #51 ou à #66.
+//
+// A #67 SAIU desta lista: ela foi decidida (caminho 2) e as três colunas dela
+// deixaram de ser lacuna — não há `DeclaredGap` nenhum falando delas em tela
+// nenhuma, então o ponteiro mandaria procurar a causa de um quadro que não
+// existe.
 //
 // **E ela não fala a língua do backend.** O qualificador foi
 // `"não servido por esta rota"`, que é vocabulário de quem escreve o servidor
@@ -41,9 +46,14 @@ import { Box, Text } from '@mantine/core';
 //
 // ------------------------------------------------------------------ VARIANTE
 //
-// `block` é a moldura tracejada, e vale onde a lacuna substitui um ELEMENTO
-// PRÓPRIO do protótipo — uma coluna, um grupo de colunas. Entra no RODAPÉ do
-// card, como a D8 especifica para a L3 e a L4.
+// `block` é a moldura tracejada, e nasceu para o rodapé de card, onde a lacuna
+// substituía um grupo de COLUNAS.
+//
+// **ELA NÃO TEM MAIS CONSUMIDOR.** A décima rodada de conferência da #52 removeu
+// os três rodapés, e os dois sítios que usam este componente passam hoje
+// `variant="inline"`. Pior: `block` continua sendo o `variant` DEFAULT, então um
+// `<DeclaredGap>` novo sem a prop renderiza exatamente o quadro que a spec
+// proíbe para coluna. **É defeito, e está na #83 — não mexer nele aqui.**
 //
 // `inline` é uma linha esmaecida, sem moldura, onde a lacuna substitui um
 // SUBTÍTULO. É a L2, e a D8 diz exatamente isso: "o KPI mostra o total; o

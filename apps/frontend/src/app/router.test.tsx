@@ -17,8 +17,12 @@ import {
   listKnowledgeBases,
 } from '../features/knowledge-bases/api/knowledgeBasesApi';
 import { getMessagesSummary, getSessionsSummary } from '../features/sessions/api/sessionsApi';
-import { getSystemInsights } from '../features/insights/api/insightsApi';
-import { systemInsightsFixture } from '../features/insights/test/systemInsightsFixture';
+import { getAgentInsights, getSystemInsights } from '../features/insights/api/insightsApi';
+import {
+  systemInsightsFixture,
+  tokensFixture,
+} from '../features/insights/test/systemInsightsFixture';
+import { agentInsightsFixture } from '../features/insights/test/agentInsightsFixture';
 import { clearToken, setToken } from '../auth/token';
 
 // importOriginal preserva ApiError: o detalhe do agente faz `instanceof
@@ -75,7 +79,11 @@ vi.mock('../features/sessions/api/sessionsApi', async (importOriginal) => {
 // Mesmo motivo do de cima: sem este mock a rota /insights escaparia para a rede.
 vi.mock('../features/insights/api/insightsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../features/insights/api/insightsApi')>();
-  return { ...actual, getSystemInsights: vi.fn() };
+  // `getAgentInsights` ENTRA AQUI porque a aba de Insights do agente é
+  // alcançável pela árvore de rotas — pelo link do card "Consumo por agente" —,
+  // e o aviso acima vale para ela: função de rota que falta escapa para a rede,
+  // e quem reprova é o caso SEGUINTE, na tela de login.
+  return { ...actual, getSystemInsights: vi.fn(), getAgentInsights: vi.fn() };
 });
 
 const agent: Agent = {
@@ -138,6 +146,8 @@ describe('appRoutes', () => {
     vi.mocked(getMessagesSummary).mockResolvedValue({ inboundCount: 0 });
     vi.mocked(getSystemInsights).mockReset();
     vi.mocked(getSystemInsights).mockResolvedValue(systemInsightsFixture());
+    vi.mocked(getAgentInsights).mockReset();
+    vi.mocked(getAgentInsights).mockResolvedValue(agentInsightsFixture({ agentId: agent.id }));
     setToken('token-de-teste');
   });
 
@@ -230,6 +240,44 @@ describe('appRoutes', () => {
       'true',
     );
     expect(await screen.findByText(/nenhum servidor mcp cadastrado/i)).toBeInTheDocument();
+  });
+
+  // A TRAVESSIA DO RANKING ATÉ O DIAGNÓSTICO, E POR QUE ELA PRECISA DE CASO
+  // PRÓPRIO (#67, caminho 2).
+  //
+  // Existem dois guardas nas duas pontas desta costura, e NENHUM dos dois prova
+  // o caminho inteiro:
+  //
+  //   - `AgentConsumptionCard.test.tsx` afirma o **href** do link;
+  //   - `AgentDetailPage.test.tsx` afirma que `?tab=insights` **abre o painel**.
+  //
+  // Os dois podem estar verdes com a travessia quebrada, porque nenhum deles
+  // NAVEGA. É a régua que esta base já encontrou duas vezes — **guarda que
+  // afirma o meio do caminho não prova o fim dele** —, e o custo de não a ter
+  // aqui é direto: a decisão da #67 se apoia em a profundidade estar a UM
+  // clique, então o clique é o comportamento, não o atributo.
+  it('do ranking do sistema, o nome do agente leva DIRETO à aba de Insights dele', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listAgents).mockResolvedValue([agent]);
+    vi.mocked(getSystemInsights).mockResolvedValue(
+      systemInsightsFixture({
+        tokens: tokensFixture({
+          byAgent: [{ agentId: agent.id, inputTokens: 1000, outputTokens: 500 }],
+        }),
+      }),
+    );
+
+    renderRoutesFrom('/insights');
+
+    await user.click(await screen.findByTestId(`agente-${agent.id}-nome`));
+
+    // A aba ATIVA, e não só a URL: o episódio de 26/09 foi exatamente o endereço
+    // certo com a aba errada, e é isso que esta asserção pega.
+    expect(await screen.findByRole('tab', { name: /insights/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByTestId('aba-insights-do-agente')).toBeInTheDocument();
   });
 
   it('monta a partir de uma rota interna, com o mesmo layout e a mesma proteção', async () => {

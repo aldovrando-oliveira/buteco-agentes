@@ -64,13 +64,32 @@ describe('AgentConsumptionCard', () => {
     expect(screen.getByTestId(`agente-${FANTASMA}-tokens`)).toHaveTextContent('1 M');
   });
 
-  it('o nome leva ao detalhe do agente', () => {
+  it('o nome leva DIRETO à aba de Insights do agente, não à visão geral', () => {
+    // A #67 fechou pelo caminho (2): tasks, tokens por task e duração p95 por
+    // agente ficam SÓ na aba. O argumento que sustenta a decisão é que elas
+    // estão a UM clique — então o link tem de abrir a aba, e não o detalhe.
+    //
+    // Sem o parâmetro, `parseTab(null)` cai em "Visão geral" por contrato
+    // declarado (AgentDetailPage), e o clique vira dois.
     renderCard();
 
     expect(screen.getByTestId(`agente-${ATENDENTE}-nome`)).toHaveAttribute(
       'href',
-      `/agents/${ATENDENTE}`,
+      `/agents/${ATENDENTE}?tab=insights`,
     );
+  });
+
+  it('NEGATIVO: o destino NÃO é o detalhe sem aba, e a aba é a de Insights', () => {
+    // O par do caso acima, e ele pega dois defeitos diferentes: o parâmetro
+    // sumir (volta a ser dois cliques) e o parâmetro passar a valer OUTRA aba
+    // reconhecida por `parseTab` — "ferramentas" abriria uma tela válida, com
+    // o link parecendo certo.
+    renderCard();
+
+    const href = screen.getByTestId(`agente-${ATENDENTE}-nome`).getAttribute('href') ?? '';
+
+    expect(href).not.toBe(`/agents/${ATENDENTE}`);
+    expect(new URL(href, 'http://localhost').searchParams.get('tab')).toBe('insights');
   });
 
   it('agente sem falhas registradas tem ZERO MEDIDO, e a razão está no código', () => {
@@ -188,8 +207,17 @@ describe('AgentConsumptionCard', () => {
     // não por taxa. Aqui o Atendente tem 9 falhas e o outro tem 3 — o
     // destaque vai para o Atendente, mesmo que a taxa dele possa ser menor.
     //
-    // A taxa exigiria tasks por agente, que é a coluna que a rota não serve
-    // (L4, #67). Quando a #67 fechar, este caso é o lugar de mudar o critério.
+    // A taxa exigiria tasks por agente, que a rota do sistema não serve — e a
+    // #67 decidiu que ela NÃO vai entrar. O critério fica como está de
+    // propósito: destaque por taxa com a taxa fora da tela seria critério
+    // invisível.
+    //
+    // O cenário do "pior que não leva o destaque" é HIPÓTESE: no dado de 26/09
+    // ele não ocorre. O que ocorre é outra coisa, e tem issue — agente sem
+    // chamada de provedor não tem linha nenhuma aqui (#84).
+    //
+    // GATILHO para este caso mudar: o primeiro pedido do dono por taxa de falha
+    // no ranking — e aí o que muda primeiro é a POPULAÇÃO da tabela.
     renderCard({
       failuresByAgent: [
         { agentId: ATENDENTE, provider: 'anthropic', model: 'claude-opus-5', failedCount: 9 },
@@ -202,7 +230,11 @@ describe('AgentConsumptionCard', () => {
     });
   });
 
-  // ------------------------------------------------------------ L4 (#67)
+  // ------------- AS TRÊS COLUNAS FICAM FORA POR DECISÃO (#67, fechada)
+  //
+  // Não é lacuna: as três têm fonte, e vivem na aba de Insights do agente. Os
+  // guardas abaixo afirmam que a tela não as inventa E que não ganha elemento
+  // nenhum para falar da ausência delas.
 
   it('NEGATIVO: as três colunas saem, e NADA entra no lugar delas', () => {
     renderCard();

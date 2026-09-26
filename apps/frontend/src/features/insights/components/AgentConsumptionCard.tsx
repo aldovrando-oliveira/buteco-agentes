@@ -15,12 +15,27 @@ import { formatCount, formatTokens, sumKnown, type QueryState } from '../utils/m
 // o consumo dele é real, e o que falta é o rótulo, não o número. Sumir com a
 // linha faria o total da tabela não fechar com o KPI, sem sintoma.
 //
-// L4 — TASKS, TOKENS POR TASK E DURAÇÃO P95 NÃO ENTRAM (#67).
+// TASKS, TOKENS POR TASK E DURAÇÃO P95 FICAM FORA POR DECISÃO (#67, fechada).
 //
-// O protótipo desenha as três colunas. `byAgent` traz só tokens; as tasks por
-// agente e a duração por agente existem na rota do AGENTE, que é outro nível de
-// agregação. Preenchê-las com o número de lá seria misturar escopos; com zero,
-// seria inventar. As três saem, e a lacuna é declarada no rodapé.
+// O protótipo desenha as três colunas. Elas NÃO são lacuna: têm fonte, são
+// servidas por `GET /insights/agents/{id}` e são apresentadas na aba de Insights
+// do agente — a um clique daqui, pelo nome. A decisão foi deixá-las só lá.
+//
+// A RAZÃO É ARITMÉTICA, e é o que impede de reabrir isto por gosto: as três têm
+// DENOMINADORES DIFERENTES. `Tokens` soma sobre as chamadas de provedor;
+// `Tokens por task` (M17) divide pelas tasks QUE TÊM chamada; `Tasks` seriam
+// todas as execuções; e `Duração p95` (M21) exclui execução com `SubmittedAt`
+// nulo. Numa linha de seis colunas o operador multiplica e divide entre elas —
+// e nenhuma dessas contas fecha. Medido em 26/09: para um mesmo agente, a aba
+// diz 59.468,1 tokens por task e a divisão da linha daria 39.645,4.
+//
+// Nos cards da aba cada número vem com o `sampleCount` e o subtítulo que dizem
+// de que população ele fala. Uma célula de tabela não tem onde carregar isso.
+//
+// NADA ENTRA NO LUGAR DELAS. O rodapé com a lacuna declarada foi removido na
+// décima rodada de conferência da #52 — o quadro tracejado não existe no
+// protótipo — e não volta: declarar na tela uma ausência ESCOLHIDA pede desculpa
+// por uma decisão. A explicação vive na #67 fechada e no `02`.
 //
 // O que a rota SERVE por agente além de tokens é `errors.byAgent`, então a
 // coluna Falhas entra — ela tem fonte.
@@ -74,12 +89,25 @@ export function AgentConsumptionCard({
   //
   // **A ressalva está escrita porque ela é real, não para cobrir a escolha:**
   // isto ordena por contagem ABSOLUTA, não por taxa. Um agente com 9 falhas em
-  // 1.000 tasks fica marcado, e um com 3 em 5 não — e o segundo é o que está
-  // pior. A taxa seria a medida certa, e ela depende de tasks por agente, que
-  // é justamente a coluna que a rota não serve (L4, #67).
+  // 1.000 tasks fica marcado e um com 3 em 5 não, e o segundo é o que está pior.
+  // A taxa seria a medida certa, e depende de tasks por agente, que a rota do
+  // sistema não serve.
   //
-  // **Então o destaque melhora quando a #67 fechar**, e o gatilho fica escrito:
-  // com tasks por agente disponível, esta linha passa a ranquear por taxa.
+  // **É HIPÓTESE, e não medição:** no dado de 26/09 esse cenário não ocorre —
+  // os dois agentes com falha estão ambos em 100%, e o que tem linha é o
+  // destacado. Fica escrito como raciocínio, que é o que é.
+  //
+  // **E o critério fica assim MESMO SABENDO DISSO** (#67, fechada): um destaque
+  // por taxa com a taxa FORA da tela é pior que este. Hoje o vermelho é
+  // verificável pelo olho — é o maior número da coluna. Ranqueando por taxa, o
+  // operador veria o 7 marcado e o 2 não, sem nenhum número na tela que
+  // explicasse a escolha, e critério invisível é pior que critério grosseiro.
+  //
+  // **GATILHO para mudar:** o primeiro pedido do dono por TAXA de falha no
+  // ranking. E o trabalho começa pela POPULAÇÃO da tabela, não por uma coluna:
+  // as linhas nascem de `tokens.byAgent`, então agente que executou e não chamou
+  // provedor não tem linha nenhuma aqui — **observado** no dado de 26/09, onde
+  // um agente com 2 falhas em 2 tasks não aparece na tabela (#84).
   //
   // Empate destaca todos os empatados: escolher um seria arbitrário.
   const maiorFalha = Math.max(0, ...byAgent.map((a) => failedCountOf(a.agentId)));
@@ -128,7 +156,12 @@ export function AgentConsumptionCard({
                       ) : (
                         <Anchor
                           component={Link}
-                          to={`/agents/${linha.agentId}`}
+                          // A ABA, E NÃO O DETALHE — e o parâmetro é o que faz
+                          // a diferença entre um clique e dois. `parseTab(null)`
+                          // cai em "Visão geral" por contrato declarado, então
+                          // sem `?tab=insights` o operador que veio do ranking
+                          // ainda precisa escolher a aba (#67, caminho 2).
+                          to={`/agents/${linha.agentId}?tab=insights`}
                           size="sm"
                           data-testid={`agente-${linha.agentId}-nome`}
                           // Fora do catálogo: o identificador abreviado no lugar

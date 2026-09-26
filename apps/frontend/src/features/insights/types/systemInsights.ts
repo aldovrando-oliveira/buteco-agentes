@@ -70,7 +70,12 @@ export interface TokenTotals {
   cachedInputTokens: number | null;
 }
 
-/** Só tokens. Sem nome, sem tasks, sem duração — é a lacuna L4 (#67). */
+/**
+ * Só tokens, por agente. Sem nome — ele vem do catálogo — e sem tasks, tokens
+ * por task ou duração: essas três **não são lacuna**, são ausência decidida
+ * (#67, fechada). Elas têm fonte em `GET /insights/agents/{id}` e aparecem na
+ * aba de Insights do agente, que é para onde o nome desta tabela leva.
+ */
 export interface AgentTokens {
   agentId: string;
   inputTokens: number | null;
