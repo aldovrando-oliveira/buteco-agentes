@@ -12397,8 +12397,15 @@ só pôde ser descartada porque a baseline foi rodada (convenção 19).
   por task e duração p95 **no escopo do agente**, e a decisão de levar ou não as
   três colunas ao ranking do sistema é do dono. Se o caminho for "só na aba", a
   #67 fecha sem código.
+  **RESOLVIDO em 26/09/2026:** o dono decidiu pelo caminho **(2)** — só na aba. A
+  #67 fechou **quase** sem código: sobraram o link com `?tab=insights` e as
+  afirmações que a decisão tornou falsas. Ver *"Resíduo de decisão —
+  `fechamento-da-l4`"*, no fim deste documento.
 - **(e) Período na URL** — herdado da #52, sem mudança. Gatilho: primeiro pedido
   de compartilhar link da aba.
+  **ABSORVIDO em 26/09/2026 pela #85**, com gatilho novo e mais forte: a decisão
+  da #67 passou a depender da passagem entre as duas telas, e o período não
+  viaja. Ver *"Resíduo de decisão — `fechamento-da-l4`"*, item (c).
 - **(f) A proporção comentário:lógica por linguagem** — régua nova da convenção
   18, registrada acima. Sem gatilho: vale na próxima projeção de frontend.
 - **(g) A conferência visual dos quatro cenários de delegação não aconteceu.**
@@ -12436,3 +12443,301 @@ só pôde ser descartada porque a baseline foi rodada (convenção 19).
   sai: **medir no primeiro verde é medir antes do julgamento do dono**, e numa
   change de tela isso muda contagem em todas as dimensões. Sem gatilho: vale na
   próxima medição de change de tela.
+
+---
+
+## Resíduo de decisão — `fechamento-da-l4` · 26/09/2026 · issue #67
+
+Fecha a **#67** (L4) pelo caminho **(2)**: as três colunas que o protótipo
+desenha no ranking do sistema — **Tasks**, **Tokens por task**, **Duração p95** —
+ficam **só na aba do agente**. Change pequena, toda em `apps/frontend` mais
+registro, **sem uma linha em `apps/api`**.
+
+Não é etapa: a linha `metricas-de-operacao` entregou as cinco. **É o resíduo da
+decisão que a #53 tornou possível.**
+
+### Os três argumentos que decidiram, e eles são medidos
+
+Medidos em 26/09/2026 sobre `3580599`, no banco de dev.
+
+**1. As seis colunas na mesma linha convidam a uma divisão que não fecha.**
+
+| agente | Tasks | Tokens | `Tokens por task` da aba | `Tokens ÷ Tasks` da linha |
+|---|---|---|---|---|
+| Triagem | 15 | 594.681 | **59.468,1** | **39.645,4** |
+| Gestor de Reservas | 3 | 5.550 | **2.775,0** | **1.850,0** |
+
+Os denominadores são outros: a aba (M17) divide pelas tasks **com chamada de
+provedor** — 10 das 15 —, e a linha dividiria por todas. **50% de diferença sobre
+o mesmo agente, na mesma janela.**
+
+**2. Uma célula de `p95` não carrega o desconto dela.** Na aba, `Duração p95` vem
+com a média e o `sampleCount`, porque execução com `SubmittedAt` nulo sai do
+cálculo (M21). Numa célula o número vai sozinho, com a exclusão invisível.
+
+**3. O caminho (1) não era "+3 agregações": mudava o que é uma linha.** As linhas
+nascem de `tokens.byAgent` (M13), que é `provider_calls join task_executions` —
+agente que executou e não chamou provedor **não tem linha**. Medido: **4 de 5
+agentes têm linha, e as linhas cobrem 25 das 27 execuções**. Uma coluna `Tasks`
+somaria **25 contra o KPI de 27** da própria página.
+
+### O custo NÃO foi a razão, e é por isso que está escrito
+
+A rota já faz **~24 idas ao banco** — 20 `SqlQuery` mais quatro `StatsAsync`.
+Três agregações a mais seriam **~+12%**. A D4 da `rotas-de-agregacao-sistema`
+nomeou o custo **sem projeção**, e a projeção é modesta.
+
+> **O (1) perdeu na aritmética das colunas, não na conta de consultas.**
+
+Sem este parágrafo, a #67 seria citada depois como *"recusada porque a rota já era
+pesada"*, e a próxima pessoa que precisar de uma agregação por agente acreditaria
+que o caminho está fechado por custo. **Ele não está.**
+
+### O gatilho de reabertura
+
+**O primeiro pedido do dono pelas colunas no ranking.** E a ordem está fixada:
+**primeiro a população da tabela, depois a coluna** — quem começar pela agregação
+reintroduz o argumento 3. Vale inclusive para a versão mais barata do (1), trazer
+**só `Tasks`** (uma agregação, +4%), recusada pelo mesmo argumento e escrita na D3
+para não ser redescoberta como nova.
+
+### A spec se contradizia, e ninguém tinha pegado
+
+| requisito | o que mandava, para **coluna** |
+|---|---|
+| *"Consumo por agente … e declara o que não tem fonte"* | *"SHALL declarar, junto da tabela, quais colunas não têm fonte"* |
+| *"Métrica aprovada no protótipo e sem fonte…"* | *"SHALL removê-las e SHALL NOT acrescentar elemento próprio para anunciá-las"* |
+
+A implementação seguia o segundo desde a décima rodada da #52, e o guarda negativo
+afirmava isso. **A spec ficou com a versão pré-decisão** — mesma família do defeito
+que a #75 registra para o card de Motivos, **segunda ocorrência**. O requisito foi
+**renomeado**: o título prometia a declaração que saiu.
+
+**Confirmado depois da sincronia** (que é quando isso passa a ser verificável): a
+frase `SHALL declarar, junto da tabela` não existe mais em
+`openspec/specs/system-insights-ui/spec.md`, os dois requisitos ficaram com cinco
+cenários cada, e os outros doze requisitos da capability seguem byte a byte
+iguais. **A contradição deixou de existir na spec que sobrevive ao archive**, que
+é o único lugar onde ela importava.
+
+### A distinção que a régua ganhou: lacuna × ausência decidida
+
+- **Lacuna** — não tem fonte em lugar nenhum. A explicação mora na **issue aberta**.
+- **Ausência decidida** — tem fonte, é servida e é apresentada em **outra**
+  superfície. A explicação mora aqui e na **issue fechada**, com o gatilho.
+
+**As duas somem da tela do mesmo jeito.** Declarar em tela uma ausência escolhida é
+a convenção 13 ao contrário: o texto pede desculpa por uma decisão.
+
+### A conferência de escopo parou a change, e o achado é de método
+
+A varredura esperava **7 sítios**; achou **9 ocorrências, 8 sítios**. O extra foi
+`DeclaredGap.tsx:21`, e a causa é o que vale:
+
+> **A varredura da proposta VIU as duas linhas do `DeclaredGap` e carregou só uma
+> para a tabela. O erro não foi de busca, foi de transcrição.**
+
+Lista fechada com transcrição incompleta é **pior que nenhuma lista**, por afirmar
+cobertura que não tem. **Régua: a lista fechada se monta colando a saída da
+varredura, nunca redigitando-a.**
+
+### O destaque de falhas: a primeira medição estava errada, e a correção fica escrita
+
+**O que este registro afirmava, e a conferência do dono derrubou:** *"Triagem leva
+o vermelho com 7 falhas (46,7%); Especialista, com 2 em 2 (100%), não leva."* **A
+tela mostra o contrário** — Triagem com *"Nenhuma"*, Especialista com **2 em
+vermelho**.
+
+**A causa: a medição ignorou o recorte de regime.** A consulta foi feita direto em
+`task_executions`, sem o `Later(from, executionRegime)` que a rota aplica. O regime
+de execução começa em `2026-09-22T04:21:00Z` (`01:21-03:00` no `appsettings.json`),
+e as sete falhas da Triagem são de `03:03`–`03:21Z` — **anteriores ao regime**.
+
+> **É a convenção 6 cobrando o preço de sempre: o número saiu de uma consulta que
+> QUASE era a da rota, e o "quase" não aparece no resultado.**
+
+**O dado, agora sob o regime e conferido contra a resposta da rota:**
+
+| agente | tasks | falhas | taxa | tem linha | destacado |
+|---|---|---|---|---|---|
+| **Atendente Sênior** | 2 | **2** | **100%** | **não** | — invisível |
+| Especialista Técnico Ambiente | 2 | 2 | 100% | sim | **sim** |
+| Atendente Ambiente Software | 5 | 0 | 0% | sim | não |
+| Triagem | 3 | 0 | 0% | sim | não |
+| Gestor de Reservas | 2 | 0 | 0% | sim | não |
+
+**O cenário do "pior que não leva o destaque" não existe no dado de hoje**, e passou
+a **hipótese declarada** — no código, no caso de teste e no `design.md`. Nunca
+medição.
+
+**E a medição corrigida achou algo mais forte:** `Atendente Sênior` tem 2 falhas em
+2 tasks e **nenhuma linha** — não chamou provedor, não está em `tokens.byAgent`.
+**Não é "deixa de ser destacado": é invisível**, e o agente invisível é justamente o
+de `provider` e `model` nulos, o recusado por falta de configuração. **O defeito
+esconde preferencialmente a falha de configuração.** Isso tornou a **#84 observada,
+e não latente**.
+
+**Open Question 2 respondida pelo dono:** o critério fica; o gatilho reescrito basta.
+
+### O episódio da navegação, com a causa NÃO determinada
+
+Na conferência, numa primeira tentativa a página do agente abriu na **Visão geral**
+com a URL mostrando `/agents/{id}?tab=insights` **na barra de endereço**. Depois de
+parar e subir o serviço de desenvolvimento, **não reproduziu**.
+
+**A causa não foi determinada** (convenção 19). Não se escreve "era cache do Vite":
+isso explicaria o **link antigo**, não a **URL certa com a aba errada** — e inventar
+a explicação que quase serve é pior que registrar a ausência dela.
+
+**Gatilho:** se voltar, é defeito de leitura de aba, e a #53 precisa saber.
+
+### O guarda que faltava era o da costura, e ele é de defeito
+
+O episódio expôs o buraco ao vivo: **por um momento o guarda estava verde e a tela
+não fazia o que ele prometia.**
+
+| guarda | o que afirma |
+|---|---|
+| `AgentConsumptionCard.test.tsx` | o **`href`** do link |
+| `AgentDetailPage.test.tsx:600` (da #53) | que `?tab=insights` **abre o painel** |
+
+O segundo é **exatamente** o guarda que a conferência pediu — **ele já existia**, e é
+de **regressão**: passa no `HEAD` e não foi verificado por esta change. Um gêmeo
+dele daria ilusão de cobertura nova.
+
+**O que faltava é a travessia**, escrita em `src/app/router.test.tsx`: parte de
+`/insights`, **clica** no nome do agente, e afirma a aba `aria-selected` e o painel
+presente. **Classificação: guarda de DEFEITO, verificado** — com o `to` revertido
+ele reprova; restaurado, passa.
+
+> **Régua, terceira ocorrência da mesma forma: guarda que afirma o meio do caminho
+> não prova o fim dele.**
+>
+> As três: o `Assert.All` sobre lista vazia da **#65**; o branch morto com teste
+> verde da **#83**; e os dois guardas nas pontas da travessia, com a travessia
+> descoberta.
+
+### O quinto arquivo, e por que a varredura não podia tê-lo achado
+
+`src/app/router.test.tsx` **não estava na lista fechada**, e não poderia estar: a
+varredura foi por `#67|L4`, e esse arquivo nunca menciona nenhum dos dois.
+
+> **Varredura por texto acha o que FALA do assunto, não o que o EXECUTA.**
+
+O desvio de arquivos mudou **de causa** no meio do caminho:
+
+| de → para | causa |
+|---|---|
+| 2 → 4 | a projeção enumerou o que **muda de comportamento** numa change que muda **afirmações** |
+| 4 → 5 | a varredura é por texto, e o que **executa** o caminho não fala do assunto |
+
+**A régua de escopo para change de registro sai das duas:** enumerar por
+**afirmação** cobre o que declara, e ainda falta perguntar *"quem atravessa este
+caminho?"* — que varredura nenhuma responde.
+
+**E veio junto um buraco latente do próprio arquivo:** `getAgentInsights` não estava
+mockada em `router.test.tsx`, embora a aba seja alcançável pela árvore de rotas. É o
+modo de falha que o comentário daquele arquivo descreve — função de rota que falta
+**escapa para a rede**, e quem reprova é o caso **seguinte**, na tela de login.
+
+### A conferência visual do ranking não aconteceu, e isso vai declarado
+
+Na primeira tentativa, o login pelo navegador **não passou em quatro tentativas** —
+campos preenchem, submit não dispara, sem erro no console e sem requisição saindo.
+**O que a decisão dependia foi medido direto no banco**, que para esta pergunta é
+evidência mais forte que um screenshot. A conferência do dono, depois, cobriu a tela
+(convenção 6).
+
+### Baseline, e a divergência com o registro da #53 — hipótese REFUTADA
+
+Medida em 26/09/2026 sobre `3580599`, árvore limpa, com `buteco-agents_postgres_1`
+(pgvector:pg18) e `buteco-agents_rabbitmq_1` (rabbitmq:4.3-management) *healthy*,
+`waha` parado.
+
+| suíte | baseline | fechamento |
+|---|---|---|
+| `apps/frontend` | **1372 / 117 arquivos**, 2m15s | **1374 / 117**, 2m17s |
+| `apps/api`, `apps/workers`, `apps/inbox` | não rodadas — nenhuma linha delas no diff | — |
+
+O `+2` são os dois guardas novos: o negativo do destino e o da travessia.
+
+**A divergência:** o fechamento da #53 registrou **1383 / 118**; o `HEAD` dá **1372
+/ 117**.
+
+**A hipótese testada** era que o registro tivesse nomeado o commit das baselines
+(`5792ec8`) em vez do de fechamento. **Refutada:** a suíte no commit de fechamento
+da #53 (`f7a819f`, worktree separada) dá **1372 / 117** — o mesmo do `HEAD`. E
+nenhum arquivo de teste foi apagado no merge.
+
+**O número não reproduz em nenhum dos dois commits, e a causa não foi
+determinada.** Fica assim escrito, com os dois números e os dois commits.
+
+> **Régua: registro de baseline precisa do commit DO FECHAMENTO colado, não do
+> commit em que a baseline foi medida.**
+
+É a convenção 22 cobrando o que ela pede.
+
+### Convenção 18 — vigésima segunda medição, fechamento
+
+Feita **depois** da conferência do dono. Erro = `(projetado − medido) / medido`.
+
+| dimensão | projetado | **fechamento** | erro |
+|---|---|---|---|
+| cenários de delta | 9 (1 novo, 2 reescritos, 6 copiados) | **10** (2, 2, 6) | −10% |
+| arquivos criados | 0 | **0** | **exato** |
+| arquivos modificados (produção + teste) | 2 (1+1) | **5** (3+2) | **−60%** |
+| casos de teste novos | 1 | **2** | −50% |
+| casos adaptados | 2 | **1** | +100% |
+| linhas de produção à mão | ~25 | **64** | **−61%** |
+| linhas de teste à mão | ~12 | **81** | **−85%** |
+| duplos | 0 | **1** | −100% |
+| **linhas geradas** | **0** | **0** | **exato** |
+
+**A projeção não foi corrigida** — corrigi-la depois de aprender apagaria a medição.
+
+**A proporção comentário:lógica, e ela é a razão de as linhas errarem mais que os
+arquivos:**
+
+| tipo | adicionadas | comentário | lógica | proporção |
+|---|---|---|---|---|
+| produção | 64 | 63 | **1** | **63:1** |
+| teste | 81 | 46 | 35 | 1,31:1 |
+
+**Uma linha de lógica em produção** — o `to` do `Anchor`.
+
+> **E esta proporção NÃO SERVE DE ÂNCORA para projetar nada.** A razão é de regime,
+> não de estilo: numa change de registro ela não mede disciplina de comentário, mede
+> **que não há lógica no denominador**.
+
+**A régua da vigésima primeira ganha a terceira condição, com evidência:** ancorar
+em arquivo do **mesmo tipo**, da **mesma linguagem** *e* do **mesmo regime**. A 21ª
+mediu TSX de tela (0,78:1 e 0,41:1) e a 22ª mede TSX de registro (63:1) — mesma
+linguagem, mesmo tipo de arquivo, **duas ordens de grandeza de diferença**.
+
+### Itens abertos que esta change cria
+
+- **(a) A variante `block` do `DeclaredGap` é branch morto E é o `variant`
+  default** — **#83**. Os dois consumidores passam `inline`; ficou órfã quando a #52
+  removeu os três rodapés. Como é o default, `<DeclaredGap>` sem a prop renderiza o
+  quadro que a spec proíbe para coluna. **E o branch morto tem teste verde**
+  (`DeclaredGap.test.tsx:97`): um guarda que cobre código sem consumidor mantém o
+  código vivo e esconde que ele está morto.
+- **(b) Agente que falhou sem chamar o provedor não tem linha em "Consumo por
+  agente"** — **#84**. **Não é latente: está acontecendo.** `Atendente Sênior` tem 2
+  falhas em 2 tasks, zero chamadas, e nenhuma linha. A issue foi corrigida — o corpo
+  dela dizia "coincidência de população", e isso saiu de uma medição **sem o recorte
+  de regime**.
+- **(b2) Falhas por agente colapsadas num `Map` por `agentId`** — **#86**. A rota
+  agrupa por `(AgentId, Provider, Model)`, a tela monta
+  `new Map(lista.map(f => [f.agentId, f.failedCount]))` e **guarda a última** — e o
+  `order by 4 desc, 1` garante que a última é **a de menor contagem**. Medido sem o
+  recorte: `Triagem` tem `gemini → 5` e `openai → 2`, são **7**, e a tela mostraria
+  **2**. **Vizinha da #84 e não a mesma:** uma é a linha que falta, a outra é o
+  número da linha que existe.
+- **(c) O período não viaja entre as duas telas** — **#85**, que absorve o item
+  **(e)** da etapa 5. O clique virou um; a janela, não. **É limitação conhecida desta
+  change.**
+- **(d) A #80 foi dobrada na #75**, com o conteúdo exclusivo movido **antes** do
+  fechamento.
+- **(e) A régua da proporção comentário:lógica ganhou a terceira condição** — mesmo
+  tipo, mesma linguagem **e mesmo regime**. Sem gatilho.

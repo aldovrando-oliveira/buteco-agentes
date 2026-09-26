@@ -595,6 +595,21 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **O nome do agente no ranking "Consumo por agente" passa a abrir direto a aba
+  de Insights do agente** (`?tab=insights`), e não o detalhe dele. Eram dois
+  cliques — sem o parâmetro a página cai em "Visão geral" por contrato — e o que
+  sustenta a decisão da **#67** é a profundidade estar a um.
+- **As três colunas que o protótipo desenha no ranking do sistema — Tasks,
+  Tokens por task e Duração p95 — deixam de ser lacuna e passam a ser ausência
+  decidida** (#67, fechada pelo caminho "só na aba"). Elas têm fonte, são
+  servidas por `GET /insights/agents/{id}` e aparecem na aba do agente. **A razão
+  de não entrarem é aritmética**, não custo: as três têm denominadores
+  diferentes, e numa linha de seis colunas as contas que o operador faz entre
+  elas não fecham — medido, 50% de diferença sobre o mesmo agente. A spec deixou
+  de exigir a declaração das colunas junto da tabela, que o requisito vizinho já
+  proibia; e a régua de lacunas passou a distinguir **lacuna** (sem fonte, a
+  explicação mora na issue aberta) de **ausência decidida** (com fonte em outra
+  superfície, a explicação mora no registro e na issue fechada).
 - **O código de parcialidade `rejection-reason-not-collected` sai das duas rotas de
   Insights.** A lacuna que ele descrevia deixou de existir com a coleta do motivo
   (etapa 5), e código de parcialidade que sobrevive à lacuna afirma uma limitação
