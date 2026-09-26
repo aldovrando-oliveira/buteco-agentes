@@ -10,6 +10,8 @@ import { AgentDetailPage } from './AgentDetailPage';
 import { ApiError, activateAgent, deactivateAgent, getAgent, listAgents } from '../api/agentsApi';
 import { listMcpServers, listMcpServerTools } from '../../mcp-servers/api/mcpServersApi';
 import { listKnowledgeBases } from '../../knowledge-bases/api/knowledgeBasesApi';
+import { getAgentInsights } from '../../insights/api/insightsApi';
+import { agentInsightsFixture } from '../../insights/test/agentInsightsFixture';
 import type { KnowledgeBase } from '../../knowledge-bases/types/knowledgeBase';
 import type { Agent } from '../types/agent';
 import type { McpServer } from '../../mcp-servers/types/mcpServer';
@@ -34,6 +36,11 @@ vi.mock('../../knowledge-bases/api/knowledgeBasesApi', async (importOriginal) =>
   const actual =
     await importOriginal<typeof import('../../knowledge-bases/api/knowledgeBasesApi')>();
   return { ...actual, listKnowledgeBases: vi.fn() };
+});
+
+vi.mock('../../insights/api/insightsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../insights/api/insightsApi')>();
+  return { ...actual, getAgentInsights: vi.fn() };
 });
 
 vi.mock('@mantine/notifications', async (importOriginal) => {
@@ -129,6 +136,10 @@ describe('AgentDetailPage', () => {
       failureReason: null,
       message: null,
     });
+    vi.mocked(getAgentInsights).mockReset();
+    vi.mocked(getAgentInsights).mockResolvedValue(
+      agentInsightsFixture({ agentId: activeAgent.id }),
+    );
     vi.mocked(activateAgent).mockReset();
     vi.mocked(deactivateAgent).mockReset();
     vi.mocked(notifications.show).mockReset();
@@ -168,7 +179,7 @@ describe('AgentDetailPage', () => {
     expect(await screen.findByText('Sem descrição.')).toBeInTheDocument();
   });
 
-  it('exibe as quatro abas na ordem certa, com a visão geral ativa por padrão', async () => {
+  it('exibe as cinco abas na ordem certa, com a visão geral ativa por padrão', async () => {
     vi.mocked(getAgent).mockResolvedValue(activeAgent);
 
     renderPage(activeAgent.id);
@@ -180,12 +191,15 @@ describe('AgentDetailPage', () => {
     expect(tab(/ferramentas/i)).toBeInTheDocument();
     expect(tab(/conhecimento/i)).toBeInTheDocument();
     expect(tab(/delegações/i)).toBeInTheDocument();
-    // Conhecimento é a terceira, entre Ferramentas e Delegações.
+    expect(tab(/insights/i)).toBeInTheDocument();
+    // Conhecimento é a terceira, entre Ferramentas e Delegações, e Insights
+    // fecha a lista.
     expect(screen.getAllByRole('tab').map((element) => element.textContent)).toEqual([
       'Visão geral',
       'Ferramentas',
       'Conhecimento',
       'Delegações',
+      'Insights',
     ]);
     expect(screen.getByText(activeAgent.instructions)).toBeInTheDocument();
   });
@@ -537,5 +551,91 @@ describe('AgentDetailPage — aba Conhecimento', () => {
     await screen.findByRole('heading', { name: activeAgent.name });
     expect(screen.queryByTestId('knowledge-summary')).not.toBeInTheDocument();
     expect(screen.queryByText('Bases vinculadas')).not.toBeInTheDocument();
+  });
+
+  describe('a aba de Insights', () => {
+    it('NUNCA exibe contador, por mais vínculos que o agente tenha', async () => {
+      // As outras três contam ITENS VINCULADOS. Esta mede, e um número ao lado
+      // do rótulo afirmaria uma quantidade que ela não tem.
+      vi.mocked(getAgent).mockResolvedValue({
+        ...activeAgent,
+        mcpServers: [{ id: mcpServer.id, name: mcpServer.name, allowedTools: [] }],
+        knowledgeBases: [{ id: knowledgeBase.id, name: knowledgeBase.name }],
+        delegatesTo: [{ id: '99999999-9999-9999-9999-999999999999', name: 'Cobrança' }],
+      });
+
+      renderPage(activeAgent.id);
+
+      await screen.findByRole('heading', { name: activeAgent.name });
+      expect(tab(/insights/i).textContent).toBe('Insights');
+      expect(within(tab(/insights/i)).queryByText(/^\d+$/)).not.toBeInTheDocument();
+    });
+
+    it('NÃO consulta as métricas enquanto a aba não está ativa', async () => {
+      // O carregamento tardio sai do `keepMounted={false}`, não de um
+      // `enabled:` — e é comportamento que se perde em silêncio se alguém
+      // trocar `keepMounted`. A rota agregada é cara: a da página do sistema
+      // levou 2,24 s contra o banco de dev.
+      vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+      renderPage(activeAgent.id);
+
+      await screen.findByRole('heading', { name: activeAgent.name });
+      expect(getAgentInsights).not.toHaveBeenCalled();
+    });
+
+    it('consulta as métricas ao abrir a aba', async () => {
+      vi.mocked(getAgent).mockResolvedValue(activeAgent);
+      const user = userEvent.setup();
+
+      renderPage(activeAgent.id);
+
+      await screen.findByRole('heading', { name: activeAgent.name });
+      await user.click(tab(/insights/i));
+
+      await waitFor(() => expect(getAgentInsights).toHaveBeenCalled());
+      expect(vi.mocked(getAgentInsights).mock.calls[0][0]).toBe(activeAgent.id);
+    });
+
+    it('?tab=insights reabre a aba direto, e o conteúdo dela aparece', async () => {
+      vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+      renderPage(activeAgent.id, '?tab=insights');
+
+      expect(await screen.findByTestId('aba-insights-do-agente')).toBeInTheDocument();
+      expect(await screen.findByTestId('kpis-do-agente')).toBeInTheDocument();
+    });
+
+    it('acionar a aba escreve o endereço', async () => {
+      vi.mocked(getAgent).mockResolvedValue(activeAgent);
+      const user = userEvent.setup();
+
+      const router = renderPage(activeAgent.id);
+
+      await screen.findByRole('heading', { name: activeAgent.name });
+      await user.click(tab(/insights/i));
+
+      await waitFor(() => expect(router.state.location.search).toBe('?tab=insights'));
+    });
+
+    it('o conteúdo NÃO está na página enquanto a aba não é a ativa', async () => {
+      vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+      renderPage(activeAgent.id);
+
+      await screen.findByRole('heading', { name: activeAgent.name });
+      expect(screen.queryByTestId('aba-insights-do-agente')).not.toBeInTheDocument();
+    });
+
+    it('agente INATIVO abre a aba normalmente', async () => {
+      // Inatividade é estado de cadastro, não ausência de sujeito: a rota
+      // responde 200, e o que ele executou enquanto ativo continua medido.
+      vi.mocked(getAgent).mockResolvedValue({ ...activeAgent, isActive: false });
+
+      renderPage(activeAgent.id, '?tab=insights');
+
+      expect(await screen.findByTestId('aba-insights-do-agente')).toBeInTheDocument();
+      expect(screen.getByText('Inativo')).toBeInTheDocument();
+    });
   });
 });

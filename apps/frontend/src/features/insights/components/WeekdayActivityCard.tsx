@@ -16,6 +16,23 @@ import { formatCount, type QueryState } from '../utils/metricState';
 //
 // É a única reconstrução que sobra no cliente, e está registrada como item
 // aberto no `02` (D2) — a fonte dela continua sendo a série, nunca o regime.
+//
+// ------------------------------------------------- O CARD NÃO TEM NOTA DE RODAPÉ
+//
+// Ele teve duas, e as duas saíram por decisão do dono na conferência manual de
+// 26/09/2026: *"os gráficos em si são autoexplicativos"*.
+//
+//   - "Dia da semana sem célula preenchida não ocorreu na faixa medida" — a
+//     distinção continua VISÍVEL sem ela: o dia medido e vazio mostra `0`, e o
+//     não medido mostra célula vazia. O texto nomeava o que o desenho já separa;
+//   - a nota de cenário da aba do agente, que dizia se o padrão semanal era
+//     próprio ou de quem aciona. Ela veio dos artboards e saiu junto — a prop
+//     `note` que a carregava foi REMOVIDA em vez de ficar sem uso.
+//
+// **O COMPORTAMENTO NÃO MUDOU**, e é o que os guardas continuam afirmando: dia
+// coberto e sem ocorrência sai `0`, dia não coberto sai vazio e **nunca** `0`.
+// O que saiu foi texto, não regra — a `system-insights-ui` exige a distinção,
+// não a frase.
 
 const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -106,10 +123,7 @@ export function WeekdayActivityCard({
             </Group>
           );
         })}
-        <Text size="xs" c="dimmed">
-          Dia da semana sem célula preenchida não ocorreu na faixa medida — não é ausência de
-          atividade.
-        </Text>
+
       </Stack>
     </Card>
   );
