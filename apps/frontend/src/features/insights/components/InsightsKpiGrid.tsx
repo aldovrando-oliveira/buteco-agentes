@@ -1,15 +1,13 @@
-import { Card, SimpleGrid, Stack, Text } from '@mantine/core';
-import type { ReactNode } from 'react';
+import { SimpleGrid, Text } from '@mantine/core';
 import type { SystemInsights } from '../types/systemInsights';
 import { MetricValue } from './MetricValue';
 import { DeclaredGap } from './DeclaredGap';
+import { KpiCard, Part } from './KpiCard';
 import {
-  EM_DASH,
   METRIC_SIZE,
   formatCount,
   formatDurationMs,
   formatTokens,
-  readMetric,
   sumKnown,
   type QueryState,
 } from '../utils/metricState';
@@ -38,50 +36,12 @@ import { caveatsFor } from '../utils/caveatLabels';
 //
 // O SUBTÍTULO OBEDECE À MESMA GRAMÁTICA DO NÚMERO. Um `?? '—'` nos subtítulos
 // colapsaria célula vazia em travessão, que são dois estados diferentes: o
-// travessão diz "não sei", o vazio diz "não há o que dizer". `Part` abaixo é o
-// que mantém a distinção fora do card principal também.
-
-interface KpiCardProps {
-  label: string;
-  children: ReactNode;
-  footer?: ReactNode;
-  testId: string;
-}
-
-function KpiCard({ label, children, footer, testId }: KpiCardProps) {
-  return (
-    <Card withBorder padding="md" data-testid={testId}>
-      <Stack gap={6}>
-        <Text size="xs" c="dimmed">
-          {label}
-        </Text>
-        {children}
-        {footer}
-      </Stack>
-    </Card>
-  );
-}
-
-/**
- * Um número dentro de um subtítulo, com os quatro estados preservados: valor e
- * zero saem escritos, vazio sai VAZIO (não travessão), e travessão só quando a
- * consulta não respondeu.
- */
-function Part({
-  value,
-  queryState,
-  format,
-}: {
-  value: number | null | undefined;
-  queryState: QueryState;
-  format?: (n: number) => string;
-}) {
-  const { state, text } = readMetric(value, queryState, format);
-  if (state === 'empty') {
-    return null;
-  }
-  return <>{state === 'unknown' ? EM_DASH : text}</>;
-}
+// travessão diz "não sei", o vazio diz "não há o que dizer". `Part`, em
+// `KpiCard.tsx`, é o que mantém a distinção fora do card principal também.
+//
+// `KpiCard` e `Part` SAÍRAM DAQUI para módulo próprio quando a aba do agente
+// virou o segundo consumidor real (convenção 2). A extração foi mecânica:
+// estes 19 casos passaram sem alteração nenhuma.
 
 export interface InsightsKpiGridProps {
   insights: SystemInsights;

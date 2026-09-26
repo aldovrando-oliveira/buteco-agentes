@@ -136,11 +136,31 @@ describe('WeekdayActivityCard', () => {
     expect(screen.getByTestId('card-dias-da-semana').textContent).not.toContain('26');
   });
 
-  it('declara em texto o que a célula vazia significa', () => {
-    renderCard(temporalFixture(), tresDias);
+});
 
-    expect(screen.getByTestId('card-dias-da-semana')).toHaveTextContent(
-      /não ocorreu na faixa medida/i,
-    );
+describe('WeekdayActivityCard — sem nota de rodapé', () => {
+  it('o card NÃO tem parágrafo explicativo nenhum', () => {
+    // Saíram na conferência manual de 26/09: "os gráficos em si são
+    // autoexplicativos". Este caso é o que impede um texto novo de voltar por
+    // descuido — e a distinção que eles nomeavam continua afirmada pelos casos
+    // acima, em `data-metric-state`.
+    renderCard(temporalFixture({ byWeekday: [{ weekday: 2, taskCount: 26 }] }), tresDias);
+
+    const card = screen.getByTestId('card-dias-da-semana');
+    expect(card).not.toHaveTextContent(/não ocorreu na faixa medida/i);
+    expect(card).not.toHaveTextContent(/padrão semanal/i);
+    expect(screen.queryByTestId('dias-da-semana-nota')).not.toBeInTheDocument();
+  });
+
+  it('a distinção entre zero medido e não medido continua VISÍVEL sem texto', () => {
+    // O que substitui a frase é o desenho: o dia coberto e vazio mostra `0`, o
+    // não coberto mostra célula vazia. Se um dia isso colapsar, este caso cai
+    // junto com os outros — mas ele é o que diz por que a frase pôde sair.
+    renderCard(temporalFixture({ byWeekday: [{ weekday: 2, taskCount: 26 }] }), tresDias);
+
+    expect(valor(3)).toHaveAttribute('data-metric-state', 'zero');
+    expect(valor(3)).toHaveTextContent('0');
+    expect(valor(1)).toHaveAttribute('data-metric-state', 'empty');
+    expect(valor(1)).not.toHaveTextContent('0');
   });
 });

@@ -101,12 +101,11 @@ export function errorsFixture(overrides: Partial<ErrorInsights> = {}): ErrorInsi
     byPhase: [],
     indexingFailures: [],
     nonTerminal: { openExecutionCount: 0, neverConsumedCount: 0, observedStates: [] },
-    // Os três códigos que a rota real serve neste bloco, conferidos em 24/09.
-    caveats: [
-      'rejections-missing-from-executions',
-      'rejection-reason-not-collected',
-      'point-in-time-only',
-    ],
+    // DOIS códigos, não três. Eram três até a change `recusa-motivo-coleta`
+    // (#51): `rejection-reason-not-collected` saiu do handler quando o motivo
+    // passou a ter fonte, e esta fixture ficou para trás. Reconferido contra o
+    // corpo real em 26/09 — `GET /insights/system` serve exatamente estes dois.
+    caveats: ['rejections-missing-from-executions', 'point-in-time-only'],
     ...overrides,
   };
 }

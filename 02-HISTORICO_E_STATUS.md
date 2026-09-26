@@ -10700,7 +10700,220 @@ segunda definição de "dia medido" para sair de sincronia com a do servidor.**
   foi exercitada. E a tela **não** se apoia nele: `measuredDays.ts` lê a série, e
   a divergência entre regime declarado e medição real não muda nenhuma célula.
 
-#### Itens abertos que esta change cria
+#### Primeira rodada da conferência manual — a prosa sai dos dois quadros
+
+**Achado do dono, 26/09/2026:** *"nos quadros `Dias da semana com mais atividade`
+e `Delegação` há parágrafos explicativos que ficaram difíceis de entender; os
+gráficos em si são autoexplicativos."*
+
+Eram **quatro** parágrafos, e eles **não eram a mesma coisa** — a distinção é o
+que vale registrar:
+
+| parágrafo | o que era | o que aconteceu |
+|---|---|---|
+| "Dia da semana sem célula preenchida não ocorreu na faixa medida" | texto de apoio escrito pela tela | **removido** |
+| "Este agente não é acionado diretamente: o padrão semanal dele é o de quem o aciona" | nota de cenário, vinda dos artboards (D8) | **removida**, e a prop `note` que a carregava foi **removida junto** em vez de ficar sem uso |
+| "As duas seções existem em todo agente. 'Sem delegação cadastrada' não é o mesmo que…" | nota do próprio artboard | **removida** |
+| "Os dois lados têm fontes diferentes: um conta tentativa, o outro conta execução…" | **o `caveat` `delegation-sides-are-not-mirrors`**, que a ROTA manda | **virou ícone com tooltip** no cabeçalho do card |
+
+**Os três primeiros puderam sair porque o DESENHO faz a distinção que eles
+nomeavam**, e é isso que os guardas continuam afirmando:
+
+- dia medido e vazio mostra `0`; dia não medido mostra célula vazia — a régua
+  está em `data-metric-state`, não na frase;
+- vínculo ocioso é uma **linha com `0`**; ausência de cadastro é o **quadro
+  tracejado**, sem número. Duas formas, não duas frases.
+
+**O quarto não podia simplesmente sumir, e a diferença é de natureza.** Os três
+eram texto que a tela escreveu; este é um código de parcialidade que a rota
+emite, e a spec proíbe descartar em silêncio um código cujo número está na
+superfície — os dois números que ele limita estão logo acima dele. Sumir com o
+parágrafo teria transformado um requisito em omissão sem sintoma.
+
+**A forma escolhida pelo dono cumpre os dois lados:** ícone **visível** no
+cabeçalho, junto dos dois conjuntos; texto **inteiro** no tooltip e no `title`,
+que é o que sobrevive à leitura por leitor de tela — mesmo idioma que
+`MetricValue` usa para a razão ao lado do travessão.
+
+**A spec foi ajustada junto, e não afrouxada:** o requisito passou de *"apresentar
+o texto"* para *"tornar o texto disponível junto do número, diretamente ou atrás
+de um recurso de leitura visível no mesmo lugar"*, com cenário próprio exigindo
+que o texto chegue completo e sem depender da interação para o leitor de tela. O
+que continua proibido é o que sempre esteve: o código chegar e não haver, junto
+do número, nem o texto nem um recurso visível que o dê.
+
+**A régua que sai daqui, e ela é nova:** *numa tela desta família, nem todo
+parágrafo é texto de tela.* Antes de remover um, conferir se ele é prosa que a
+implementação escreveu ou se é **conteúdo que a rota manda** — o segundo tem
+contrato, e sair dele é mudança de spec, não de acabamento.
+
+**Consequência fora do escopo, declarada:** `WeekdayActivityCard` é
+**compartilhado** com a página do sistema, então a primeira remoção alcança as
+duas telas. O dono foi informado; o comportamento não mudou em nenhuma das duas,
+só o texto.
+
+### Segunda rodada — o caveat estava DUPLICADO, e o KPI não era o lugar dele
+
+**Achado do dono, 26/09/2026:** o card `Taxa de falha` tinha, no rodapé, um texto
+que o artboard não desenha. O artboard tem três linhas — rótulo, número,
+subtítulo — e nada mais.
+
+O texto era `rejections-missing-from-executions`, e a rodada anterior tinha
+acabado de estabelecer a régua de conferir se um parágrafo é prosa da tela ou
+conteúdo que a rota manda. **Aplicada, ela apontou para outra coisa:** o código
+estava sendo renderizado em **dois** lugares da mesma aba — no KPI e no card de
+Falhas.
+
+**Não era o caveat no lugar errado; era o caveat em um lugar a mais.** E a
+página do sistema já tinha a resposta: lá ele é renderizado **uma vez**, no
+`FailuresCard`, ao lado das contagens de recusa. Era duplicação introduzida por
+esta change, não requisito.
+
+**Saiu do KPI, continua no card de Falhas**, junto do número que limita.
+Nenhuma mudança de spec foi necessária — diferente da rodada anterior, em que a
+forma do requisito precisou ser ajustada. Os dois guardas juntos é que dizem o
+que aconteceu: um afirma a **ausência** no KPI, o outro afirma a **presença** no
+card de falhas.
+
+**Efeito colateral que vale registrar:** os quatro KPIs voltaram a ter a mesma
+altura. O rodapé extra esticava só o quarto card, e isso não tinha aparecido em
+nenhum guarda — jsdom não faz layout. É a terceira vez nesta linha de trabalho
+que **lacuna ou texto declarado tem consequência mensurável em outro elemento da
+tela**, e as três só foram vistas por olho humano (convenção 14).
+
+**A régua da rodada anterior continua valendo e ganhou um segundo passo:** antes
+de remover um parágrafo, conferir se é prosa da tela ou conteúdo da rota — e, se
+for da rota, conferir **quantas vezes ele já aparece na mesma superfície** antes
+de concluir que removê-lo custa contrato.
+
+### Terceira rodada — duas divergências revertidas pelo dono, e a régua vira padrão
+
+**Três quadros apontados de uma vez, 26/09/2026**, e os três tinham a mesma
+forma de achado: texto ou elemento que o artboard não desenha.
+
+| quadro | o que o dono pediu | o que era |
+|---|---|---|
+| `Duração da task` | tirar os dois rodapés | um era prosa da tela; o outro, o `caveat` `submitted-at-missing-on-redelivery` |
+| `Onde o tempo foi` | pôr a régua e o total, voltar o nome "Ferramentas", deixar **uma** explicação | reverte a **D5** e a **D4**; um dos dois rodapés era o `caveat` do resíduo |
+| `Modelos que este agente usou` | duas linhas viram uma | a nota + a lacuna declarada, empilhadas |
+
+**As duas reversões são decisão informada, e é isso que as torna legítimas
+(convenção 17):**
+
+- **D5, a barra empilhada.** Foi recusada porque as três parcelas medem
+  populações diferentes e a do provedor é **por chamada** — a soma não é a
+  duração média da task. O dono devolveu a barra **com a medição na mesa**:
+  *"entendo que as medições são independentes e por isso somar não representa a
+  média da task, mas não tem problema"*. A medição continua válida e continua
+  na **issue #81**; o que mudou foi o julgamento sobre o custo de mostrar a
+  soma enquanto a rota não serve o tempo de provedor por task;
+- **D4, o nome "Fora do provedor".** Volta a ser "Ferramentas", como o artboard.
+
+**O que a implementação preservou nas duas, e não era negociável:**
+
+- o rótulo do total é **"total das três"** — não "mediana por task" nem "média
+  por task". O número é a soma de três médias sobre populações diferentes, e o
+  rótulo diz isso. A régua da D3 vale para a **palavra**, e ela não foi
+  revertida;
+- **a barra só é desenhada com as três parcelas conhecidas**, e o total fica
+  vazio se alguma for nula. Isso **não** é a recusa da D5 disfarçada: é o
+  requisito *"proporção desenhada não é composta a partir de conhecimento
+  parcial"*, que continua na spec e continua com guarda. Faixa de largura zero
+  no lugar do desconhecido afirmaria que aquela etapa não levou tempo nenhum;
+- com "Ferramentas" de volta, `residual-is-not-only-tools` ficou **mais**
+  necessário, não menos — ele é o único aviso na tela de que o resíduo inclui
+  espera de lock, MCP e busca vetorial.
+
+**A régua das rodadas anteriores virou padrão, e agora tem três passos.** Ela
+foi aplicada aos três quadros desta rodada e resolveu os três sem precisar
+perguntar de novo:
+
+1. o parágrafo é **prosa da tela** ou **conteúdo que a rota manda**? Prosa sai;
+2. se é da rota, ele já aparece **em outro lugar da mesma superfície**? Se sim,
+   sai daqui — era duplicação (foi o caso do KPI `Taxa de falha`);
+3. se é da rota e é único, vira **ícone com tooltip no cabeçalho do card** — a
+   forma que o dono escolheu na primeira rodada. Três cards já a usam:
+   `Delegação`, `Duração da task` e `Onde o tempo foi`.
+
+**O que saiu sem substituto, e está declarado:** a exibição de `sampleCount` por
+parcela e a frase sobre as populações diferentes. Eram o meu jeito de tornar a
+assimetria visível, e o dono aceitou a soma sabendo dela. O registro vive aqui e
+na **#81**, não mais na tela.
+
+**Uma linha, e não duas, no card de modelos.** A nota de configuração e a lacuna
+declarada passaram a dividir a mesma linha, como a frase única do artboard, que
+carrega as duas informações. A lacuna continua com `data-declared-gap` e com o
+qualificador correto — *"não devolvida por esta rota"*, porque
+`ProviderCall.Purpose` **é gravado**.
+
+### Quarta rodada — a D6 contradizia a D10, e dez guardas verdes não viram
+
+**Achado do dono, 26/09/2026,** no card de falhas: o rodapé tinha informação que
+o artboard não desenha, e *"isso está deixando o quadro confuso"*.
+
+**Duas perguntas numa só, e a primeira não era defeito:**
+
+*"O quadro chama `Falhas`, no protótipo chama `Por que as N falhas
+aconteceram`."* — **o protótipo tem os DOIS títulos.**
+`Agente-Insights.dc.html`, com 5 falhas, escreve *"Por que as 5 falhas
+aconteceram"*; `Agente-Delegado.dc.html`, sem falha, escreve *"Falhas"*. A
+implementação seguia os dois estados, e o que o dono viu foi o estado vazio.
+**A pergunta expôs uma lacuna do registro, não do código:** a existência de dois
+títulos não estava escrita em lugar nenhum, e quem lesse só um artboard
+concluiria divergência.
+
+*"As informações do rodapé estão confusas."* — **essa era defeito, e de
+princípio.**
+
+### A contradição, e por que ela sobreviveu a tudo
+
+A **D6** mandou pôr `rejectedAtEntryCount` e `rejectionsByReason` num grupo
+próprio do card de falhas. A **D10 da mesma change** diz, por escrito:
+
+> *"Acrescentar elemento que o artboard não tem é divergência tanto quanto
+> removê-lo. Criar um quadro novo acrescenta à tela um elemento cuja única
+> função é falar do que ela não mostra, e o peso dele compete com os números
+> que ela mostra."*
+
+As duas decisões estão no mesmo `design.md`, a três seções de distância, e se
+contradizem. **A contradição passou pela redação, pela implementação, por dez
+guardas verdes e por três rodadas de conferência.** Quem a viu foi o dono, na
+tela, e pelo sintoma exato que a D10 previu: o rodapé pesava mais que a tabela
+de falhas, que é o card inteiro.
+
+**A régua que sai daqui é sobre o `design.md`, não sobre a tela:** uma decisão
+que cria elemento novo precisa ser conferida contra a decisão que governa o que
+pode virar elemento — e a conferência não acontece sozinha porque as duas são
+escritas em momentos diferentes do mesmo documento. **Nenhum guarda pega
+contradição entre duas decisões**; os dez que cobriam o grupo afirmavam que ele
+funcionava, e ele funcionava. O que estava errado era ele existir.
+
+### O que mudou, e o que não
+
+- a recusa de entrada passa para **servido e não desenhado**, com gatilho — a
+  lista onde já estavam o embedding, a profundidade e as tasks sem estado
+  terminal;
+- **a contagem de recusa não sumiu da aba:** `rejectedCount` continua no
+  subtítulo do KPI `Taxa de falha`, que é onde o artboard a desenha
+  (*"5 falhas · nenhuma recusa"*);
+- o `caveat` `rejections-missing-from-executions` **voltou para o KPI**, como
+  ícone. Ele limita `rejectedCount`, e agora aquele é o único lugar da aba onde
+  esse número aparece. É a terceira posição dele em quatro rodadas, e cada
+  mudança teve causa distinta: duplicação, depois o grupo que o hospedava
+  sumindo, depois o número ficando só no KPI;
+- **o que fica da D6 é o raciocínio:** não somar as duas recusas, que continua
+  sendo o motivo de `rejectedCount` e `rejectedAtEntryCount` serem campos
+  separados no tipo. Caiu o elemento, não a razão;
+- a contagem de falhas saiu do título e foi para a **direita do cabeçalho**,
+  na mesma posição do total em "Onde o tempo foi". Os dois cabeçalhos da aba
+  passam a se ler igual;
+- **`rejectionReasonLabels.ts` foi REMOVIDO**, com o teste. Ficou com zero
+  consumidores, e manter módulo sem consumidor porque uma issue futura pode
+  querê-lo é a abstração prematura que a convenção 2 proíbe. A tradução dos
+  quatro motivos volta a existir quando a **#80** a pedir — o histórico do git a
+  tem.
+
+### Itens abertos que esta change cria
 
 **Os sete têm número, abertos ou absorvidos em 26/09/2026** — a convenção 23 existe
 porque o artefato da change some no archive e a issue não, e item sem número não é
@@ -11947,3 +12160,279 @@ medição moram no `01`/`02`, não no board.
 **E uma verificação que este archive NÃO pode fechar:** o instante do regime
 `rejection` no `appsettings.json` é o do **merge**. Até o deploy corrigi-lo (#50), a
 rota declara "medindo desde" um instante em que nada estava sendo medido.
+
+## Etapa 5 (última) — `insights-aba-do-agente` · 26/09/2026 · issue #53
+
+A aba Insights no detalhe do agente, em `apps/frontend`, consumindo
+`GET /insights/agents/{id}`. Fecha a linha `metricas-de-operacao`.
+
+### A leitura dos artboards foi a tarefa 0, e ela mudou o escopo antes do primeiro componente
+
+Lidos pela ferramenta `Artifact` — o MCP `claude-design` recusa a conexão com
+`FIRST_PARTY_AUTH_REJECTED` —, versão `1790386152-b562` do canvas. **Duas coisas
+só existem no `canvas.json`:** o quarto cenário de delegação, que não tem
+artboard e a nota `cenarios` define como *"o mesmo card com as duas seções
+tracejadas"*, e a autoridade da regra de divergência na nota `estados`, nas
+palavras do autor.
+
+**O achado que mudou o escopo:** os três artboards do agente **não têm mapa de
+calor nem série diária**. O `Insights-Claro.dc.html` é a página do **sistema** no
+tema claro, não esta aba — quem ler só a lista de arquivos conclui o contrário.
+`PeriodHeatmapCard` e `DailyTasksCard` ficaram de fora, e a inversão da escala de
+calor, já contratada em `frontend-visual-theme`, não é exercitada aqui.
+
+### As sete divergências com o protótipo (convenções 9 e 17)
+
+Todas decididas no `design.md` antes do primeiro componente, e nenhuma
+implementada em silêncio.
+
+| # | o que o artboard desenha | o que a aba faz | causa | gatilho para voltar |
+|---|---|---|---|---|
+| D2 | uma barra por destino, um número | a barra **mais** o resultado discriminado sob ela | é o resultado que explica a divergência entre os dois lados; sem ele o `caveat` não se liga a número nenhum | conferência do dono, se engordar o card |
+| D3 | "Mediana 4,4 s" | **"Média"** | a rota serve `avg(ms)`; não existe `percentile_cont(0.5)` | L5, **#66** |
+| D4 | "Ferramentas" | **"Fora do provedor"** | o resíduo inclui espera de lock, MCP e busca vetorial — o próprio `caveat` diz isso | nenhum: o rótulo está certo |
+| D5 | barra empilhada de três faixas | **sem barra**, três parcelas com número e `sampleCount` | as três medem populações diferentes e a do provedor é **por chamada**; o tempo de provedor por task não é servido | issue nova em `apps/api` |
+| D6 | "nenhuma recusa" no subtítulo do KPI | `rejectedCount` no KPI; `rejectedAtEntryCount` e motivos no card de falhas, com regime próprio | são duas recusas de **regimes diferentes**; somá-las juntaria duas janelas num rótulo só | nenhum |
+| D9 | uma tabela juntando fase, modelo e servidor MCP | **grupos separados** por fase e por provedor/modelo | nenhum campo junta fase a provedor/modelo, e **nenhum** traz servidor MCP | rota servir a junção |
+| D14 | "Nenhum agente aciona este. Ele recebe pedidos externos." | a segunda frase vira **condicional** | no quarto cenário ela afirmaria uma origem externa que não houve | nenhum |
+
+### A D5 é a mais cara, e ela só apareceu lendo o SQL
+
+O artboard soma três faixas num total. Para desenhar área proporcional as três
+parcelas precisam ser partes da mesma quantidade sobre a mesma população.
+**Não são:**
+
+| parcela | o que a rota mede | população |
+|---|---|---|
+| Fila | `avg(StartedAt − SubmittedAt)`, por execução | sem `SubmittedAt` nulo |
+| Chamadas ao provedor | `avg(DurationMs)` **por CHAMADA** | todas as chamadas |
+| Resíduo | `avg((EndedAt − StartedAt) − Σ chamadas)`, por **task** | sem `EndedAt` nulo |
+| Total | `avg(EndedAt − SubmittedAt)`, por execução | sem `SubmittedAt` nulo |
+
+O tempo de provedor **por task** não é servido, e os dois caminhos de derivação
+não existem: `providerCallDuration.averageMs × providerCallsPerTask` é o produto
+de duas médias, que não é a média do produto; `total − fila − resíduo` subtrai
+médias de **três populações diferentes**. Os dois produzem um número plausível
+que não é média de coisa nenhuma — **é a forma da convenção 6 que a própria
+convenção nomeia como a mais difícil de pegar**, porque o resultado tem toda a
+aparência de evidência.
+
+Uma área desenhada **afirma** uma proporção. A barra saiu, as três parcelas
+ficaram com o seu `sampleCount`, e o cabeçalho deixou de afirmar um total.
+
+### A armadilha de `maxDepthAtWhichAgentRan`, escrita para a próxima leitura
+
+O campo é servido e **não é desenhado** (o artboard não tem elemento para ele).
+Se algum dia for, o rótulo diz **"a maior profundidade em que este agente
+executou"** — posição na cadeia, nunca tamanho dela, nunca o rótulo do escopo do
+sistema. O nome do campo já carrega a diferença
+(`MaxDepthAtWhichAgentRan`, não `MaxObservedDelegationDepth`), e o requisito na
+spec cobre o rótulo **caso** ele seja apresentado.
+
+### Servido e não desenhado, com gatilho
+
+| servido | por que fica fora | gatilho |
+|---|---|---|
+| `tokens.searchEmbeddingInputTokens` e `tokens.byProvider` | nenhum artboard do agente tem card de embedding nem de provedor | primeiro pedido do dono |
+| `performance.maxDepthAtWhichAgentRan` | sem elemento no artboard | idem, com o rótulo já escrito acima |
+| `errors.nonTerminal` | a aba não tem o banner que a página do sistema tem | primeira tela de tasks |
+
+Consequência direta: `embedding-covers-search-only` e `point-in-time-only` são
+`not-on-this-page` **nesta** superfície. Classificados, não esquecidos.
+
+### A posição do `caveat` passou a ser por superfície, e o par que obriga isso
+
+O mesmo código limita elementos diferentes nas duas telas, **nos dois sentidos**:
+
+- `residual-is-not-only-tools` é `not-on-this-page` na página do sistema, que não
+  desenha o resíduo, e **tem posição** na aba, que o desenha;
+- `point-in-time-only` **tem posição** na página do sistema, que tem o banner de
+  não-terminais, e é `not-on-this-page` na aba, que não o tem.
+
+Um mapa único de posição obrigaria uma das duas a mentir. O **texto** continua
+único: o que o código diz sobre a medição não muda de tela para tela.
+
+### Três guardas verificados por mutação (convenção 15)
+
+| mutação | guarda que reprovou |
+|---|---|
+| o lado de entrada passa a ser derivado do de saída | "os dois lados divergem, e nenhum é corrigido pelo outro" (util **e** componente) |
+| o cadastro ocioso deixa de virar linha com `0` | "vínculo cadastrado e ocioso vira linha com 0, NÃO tracejado" (4 casos) |
+| `ok` sai de `!isError` em vez de `isSuccess` | "a consulta em curso NÃO produz 0 em lugar nenhum" (4 casos) |
+
+A terceira é o defeito exato que a página do sistema levou **doze rodadas** de
+conferência manual para achar, e aqui ele tem guarda antes de valer.
+
+### Convenção 18 — vigésima primeira medição
+
+**Unidade declarada antes:** cenários de delta separados em novos e copiados;
+arquivos criados × modificados separados, contados da árvore do `design.md`;
+casos em quatro categorias, com **arranjo compartilhado por fixture** como item
+próprio; linhas em três níveis, com gerado em 0.
+
+| dimensão | projetado | 1ª medição | **fechamento** | erro final |
+|---|---|---|---|---|
+| cenários de delta | 53 (46 novos, 7 copiados) | 53 | **58** (51, 7) | +9% |
+| arquivos criados | 26 (13 produção + 13 teste) | 25 | **23** (12 + 11) | −12% |
+| arquivos modificados | 10 (5 + 5) | 10 | **10** (5 + 5) | **exato** |
+| casos de teste novos | ~155 | 165 | **154** | **−0,6%** |
+| casos adaptados | ~10 | 9 | **9** | −10% |
+| linhas de produção à mão | ~1.700 | 2.311 | **2.365** | **+39%** |
+| linhas de teste à mão | ~1.900 | 2.112 | **2.118** | +11% |
+| duplos | ~170 | 198 | **198** | +16% |
+| **linhas geradas** | **0** | **0** | **0** | **exato** |
+
+**As duas medições existem porque as quatro rodadas de conferência manual
+ficaram ENTRE elas**, e a diferença entre as colunas é o custo delas — medido, e
+não estimado. O que a conferência fez:
+
+- **+5 cenários de delta.** Quatro rodadas produziram comportamento novo o
+  bastante para virar requisito: os dois títulos do card de falhas, o rótulo do
+  total da composição, o total ausente com parcela nula, a distinção do dia da
+  semana sem depender de prosa, e a regra que pegou a contradição D6×D10;
+- **−2 arquivos criados.** `rejectionReasonLabels.ts` e o teste dele foram
+  **removidos** ao ficarem sem consumidor (convenção 2);
+- **−11 casos.** Saíram mais casos do que entraram: as três notas de rodapé, a
+  nota de cenário e o grupo de recusa de entrada levaram junto os guardas que os
+  afirmavam;
+- **+54 linhas de produção.** A régua empilhada e os três ícones de `caveat`
+  custaram mais do que as quatro notas removidas devolveram.
+
+**A lição da segunda coluna é de método, e vale para a convenção 18:** medir no
+primeiro verde é medir **antes** da conferência manual, e numa change de tela a
+conferência ainda muda contagem em todas as dimensões. **A medição de fechamento
+é depois do julgamento do dono, não depois da suíte passar.**
+
+**Quarto acerto seguido de contagem de arquivos criados** (depois de 25×25, 21×21
+e 7×7) — e desta vez a contagem saiu da **árvore de pastas do `design.md`**,
+linha a linha, que foi a régua que a vigésima medição produziu depois de errar
+somando de memória. O único desvio é de um arquivo: a projeção contava um teste
+para `KpiCard`, e a extração foi coberta pelos testes dos dois grids, que é
+justamente o que prova que ela foi mecânica.
+
+**O erro que vale carregar, e ele é NOVO na série:**
+
+> **A proporção comentário:lógica medida em C# não transfere para TSX**, e a
+> projeção errou por usá-la assim.
+
+Projetado 2,5:1 nos arquivos de registro de decisão e 1,15:1 nos de mecanismo,
+ancorando na vigésima medição, que mediu **C#**. Medido aqui:
+
+| tipo | arquivos | comentário | lógica | proporção |
+|---|---|---|---|---|
+| registro de decisão | 4 | 411 | 528 | **0,78:1** |
+| mecanismo | 9 | 364 | 895 | **0,41:1** |
+
+**A causa é estrutural, não de disciplina de comentário:** em TSX, a maior parte
+das linhas que o contador chama de "lógica" é **JSX**, que é marcação de layout e
+não lógica. Um card de 150 linhas tem ~90 de árvore de elementos, e nenhuma delas
+pede comentário. A proporção continua **maior nos arquivos de registro** — 0,78
+contra 0,41, quase o dobro, que é a mesma direção que a vigésima mediu —, mas o
+**nível** é outro.
+
+**Régua para a próxima projeção de frontend:** ancorar a proporção em arquivo do
+MESMO tipo E da MESMA linguagem. A #52 estava disponível como âncora de TSX e não
+foi usada para esta dimensão — a projeção pegou o número mais recente em vez do
+número comparável, que é a mesma família do erro de medir um nome quando a
+mudança age sobre um mecanismo.
+
+**E a projeção de linhas de produção errou para baixo pelo mesmo motivo:** ~1.700
+projetadas contra 2.311 entregues. Aplicando a proporção medida, e não a
+importada, o número teria caído perto.
+
+### As baselines, com o regime colado
+
+Medidas em 26/09/2026 sobre `5792ec8`, com `buteco-agents_postgres_1`
+(pgvector:pg18) e `buteco-agents_rabbitmq_1` (rabbitmq:4.3-management) de pé e
+*healthy*, `waha` parado.
+
+| suíte | baseline (árvore limpa) | fechamento |
+|---|---|---|
+| `apps/frontend` | **1218 / 107 arquivos**, 2m09s | **1383 / 118**, 2m25s |
+| `apps/api` | **439**, 2m29s | não rodada — nenhuma linha dela no diff |
+| `apps/workers` | **386**, 8m51s | não rodada — idem |
+| `apps/inbox` | **203/203**, 24s | não rodada — idem |
+
+**`apps/inbox` deu 203/203**, contra os três flakes nomeados na #61. Uma rodada
+verde **não fecha** a #61: flake que não reproduz numa rodada continua flake, e o
+valor deste número é ser baseline de comparação, não veredito sobre a issue.
+
+### O regime de Testcontainers nesta máquina, e o item de memória que enganou
+
+As três suítes de backend exigem **duas** variáveis, não uma:
+
+```
+export DOCKER_HOST="unix://$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}')"
+export TESTCONTAINERS_RYUK_DISABLED=true
+```
+
+Com só a primeira, e com o caminho **de dentro da VM**
+(`/run/user/501/podman/podman.sock`, que não existe no host), as três reprovaram
+em bloco na inicialização de fixture — 369/439, 250/386, 131/203, todas em menos
+de 10 s. **É o sintoma que a régua de contenção de `apps/api` descreve, e ele
+aparece igual por causa ambiental**: quem o vir primeiro vai suspeitar de
+contenção de contêiner, que é a hipótese errada. A conclusão de "pré-existente"
+só pôde ser descartada porque a baseline foi rodada (convenção 19).
+
+### Itens abertos que esta change cria
+
+- **(a) A página do sistema não conhece o que a #51 entregou.** `apps/api` serve
+  `errors.rejectedAtEntryCount`, `errors.rejectionsByReason` e
+  `errors.rejectionRegime` desde 26/09, e
+  `src/features/insights/types/systemInsights.ts` não tem nenhum dos três — a
+  contagem e os motivos de recusa de entrada **não chegam à tela do sistema**,
+  que é a lacuna L1 que a #51 existia para fechar. **App: `apps/frontend`.
+  Gatilho: imediato.** Issue a abrir.
+- **(b) O tempo de provedor por task não é servido** (D5). Sem ele a barra
+  empilhada de "Onde o tempo foi" não pode ser composta: a rota precisaria de
+  `avg(Σ DurationMs por task)` e das três parcelas sobre a **mesma** população.
+  **App: `apps/api`. Gatilho: primeiro pedido de ver a repartição do tempo.**
+  Issue a abrir.
+- **(c) A entrada morta `rejection-reason-not-collected`** saiu do mapa fechado
+  de `caveatLabels.ts` nesta change, junto com o terceiro código da
+  `systemInsightsFixture`, porque a rota não os emite mais desde a #51. É a mesma
+  causa do item (a) e vai na mesma issue. **Feito**, em tarefa própria e
+  descartável.
+- **(d) A #67 (L4) tem o gatilho cumprido.** Esta change entregou tasks, tokens
+  por task e duração p95 **no escopo do agente**, e a decisão de levar ou não as
+  três colunas ao ranking do sistema é do dono. Se o caminho for "só na aba", a
+  #67 fecha sem código.
+- **(e) Período na URL** — herdado da #52, sem mudança. Gatilho: primeiro pedido
+  de compartilhar link da aba.
+- **(f) A proporção comentário:lógica por linguagem** — régua nova da convenção
+  18, registrada acima. Sem gatilho: vale na próxima projeção de frontend.
+- **(g) A conferência visual dos quatro cenários de delegação não aconteceu.**
+  O banco de dev não tem `delegation_outcomes`, e semeá-lo é decisão do dono. O
+  que ficou sem olho humano: os quatro cenários lado a lado, e sobretudo **o
+  cenário em que os dois lados divergem** — que é o que a D2 mais queria ver
+  julgado, porque a linha de resultado discriminado é acréscimo ao artboard.
+  Os guardas cobrem o comportamento; o layout, não. **Gatilho: a primeira vez
+  que houver delegação no ambiente de conferência.**
+- **(h) O `404` e o estado de consulta sem resposta DA ABA não são alcançáveis
+  pela navegação.** A página falha antes, em `useAgentQuery`, e o que aparece é
+  "Não foi possível carregar o agente". Os dois têm guarda; a captura pede
+  intercepção de requisição. Sem gatilho — é propriedade da tela, não dívida.
+- **(j) `npx tsc --noEmit` em `apps/frontend` NÃO CHECA NADA, e isso enganou a
+  change inteira.** O `tsconfig.json` da raiz do app é um arquivo de
+  **referências** — `"files": []` mais três `references` —, então um `tsc
+  --noEmit` avulso compila zero arquivo e sai com sucesso. Ele foi rodado como
+  verificação a cada etapa desta change e passou **sempre**, inclusive com dois
+  erros de tipo reais na árvore: `<Grid gutter="sm">`, prop que o Mantine desta
+  versão não tem, e um `Partial<Record<…>>` cujo `Object.values` devolve
+  `| undefined`. Os dois só apareceram no `npm run build`, que roda `tsc -b` e
+  respeita as referências.
+  **Régua: em `apps/frontend`, a verificação de tipos é `npm run build`.**
+  `--noEmit` avulso é ruído verde — a pior forma de verificação, porque tem
+  aparência de evidência. Mesma família do que a convenção 6 nomeia: medição
+  correta respondendo à pergunta errada. **Sem gatilho: vale sempre.**
+- **(k) `npm run format:check` já estava vermelho no `main`.** Dos 52 arquivos
+  que reprovam, **27 não foram tocados por esta change** — entre eles a feature
+  inteira da página de Insights, mergeada na #52. Não foi mascarado nem
+  corrigido em massa aqui: formatar 27 arquivos alheios num PR de tela é diff
+  que ninguém revisa. **Gatilho: a primeira vez que alguém quiser o
+  `format:check` verde — e aí é change própria, só de formatação.**
+- **(i) A medição da convenção 18 foi feita DUAS vezes nesta change**, e a
+  diferença entre elas é o custo das quatro rodadas de conferência. A régua que
+  sai: **medir no primeiro verde é medir antes do julgamento do dono**, e numa
+  change de tela isso muda contagem em todas as dimensões. Sem gatilho: vale na
+  próxima medição de change de tela.

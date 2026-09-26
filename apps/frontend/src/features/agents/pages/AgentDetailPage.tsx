@@ -15,22 +15,31 @@ import { AgentDelegationsTab } from '../components/AgentDelegationsTab';
 import { AgentKnowledgeTab } from '../components/AgentKnowledgeTab';
 import { AgentOverviewTab } from '../components/AgentOverviewTab';
 import { AgentToolsTab } from '../components/AgentToolsTab';
+import { AgentInsightsTab } from '../../insights/components/AgentInsightsTab';
 import { ApiError } from '../api/agentsApi';
 
 const OVERVIEW_TAB = 'visao-geral';
 const TOOLS_TAB = 'ferramentas';
 const KNOWLEDGE_TAB = 'conhecimento';
 const DELEGATIONS_TAB = 'delegacoes';
+const INSIGHTS_TAB = 'insights';
 
 type AgentDetailTab =
-  typeof OVERVIEW_TAB | typeof TOOLS_TAB | typeof KNOWLEDGE_TAB | typeof DELEGATIONS_TAB;
+  | typeof OVERVIEW_TAB
+  | typeof TOOLS_TAB
+  | typeof KNOWLEDGE_TAB
+  | typeof DELEGATIONS_TAB
+  | typeof INSIGHTS_TAB;
 
 // Ausência do parâmetro é a forma canônica da visão geral, e valor
 // desconhecido cai nela também — sem reescrever o endereço, que só poluiria
 // o histórico (Decision 1 do design.md da change
 // frontend-agente-detalhe-abas).
 function parseTab(value: string | null): AgentDetailTab {
-  return value === TOOLS_TAB || value === KNOWLEDGE_TAB || value === DELEGATIONS_TAB
+  return value === TOOLS_TAB ||
+    value === KNOWLEDGE_TAB ||
+    value === DELEGATIONS_TAB ||
+    value === INSIGHTS_TAB
     ? value
     : OVERVIEW_TAB;
 }
@@ -185,6 +194,10 @@ export function AgentDetailPage() {
           >
             Delegações
           </Tabs.Tab>
+          {/* SEM CONTADOR, e é decisão: a aba não representa um vínculo, e um
+              número ao lado do rótulo afirmaria uma quantidade que ela não
+              tem. As outras três contam itens vinculados; esta mede. */}
+          <Tabs.Tab value={INSIGHTS_TAB}>Insights</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value={OVERVIEW_TAB} pt="md">
@@ -228,6 +241,30 @@ export function AgentDetailPage() {
           ) : (
             <AgentDelegationsTab agent={data} agentsCatalog={agentsQuery.data ?? []} />
           )}
+        </Tabs.Panel>
+
+        {/* A ABA DE INSIGHTS NÃO TEM GUARDA DE CARREGAMENTO NEM DE ERRO AQUI, e
+            é diferente das três acima de propósito. As outras dependem de um
+            catálogo SEM o qual não conseguem renderizar a lista; esta consulta
+            os próprios números, e o catálogo serve só para dar NOME aos
+            agentes das duas seções de delegação. Segurar a aba inteira pelo
+            catálogo faria uma consulta lenta esconder números que já
+            chegaram — e a falha dele derrubaria a aba toda por causa de uma
+            etiqueta.
+
+            `agentsQuery.data` entra como `undefined` quando ainda não
+            respondeu ou falhou, e o cruzamento trata os dois: as linhas
+            continuam todas, com o identificador no lugar do nome.
+
+            E a consulta de métricas só dispara aqui porque
+            `keepMounted={false}` desmonta as abas inativas — não há `enabled:`
+            a declarar. */}
+        <Tabs.Panel value={INSIGHTS_TAB} pt="md">
+          <AgentInsightsTab
+            agentId={data.id}
+            registeredTargets={data.delegatesTo}
+            agentsCatalog={agentsQuery.data}
+          />
         </Tabs.Panel>
       </Tabs>
 

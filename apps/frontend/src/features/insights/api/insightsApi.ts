@@ -1,3 +1,4 @@
+import type { AgentInsights } from '../types/agentInsights';
 import type { SystemInsights } from '../types/systemInsights';
 import { clearToken, getToken } from '../../../auth/token';
 
@@ -75,4 +76,29 @@ function periodQuery(from: string, to: string): string {
 
 export function getSystemInsights(from: string, to: string): Promise<SystemInsights> {
   return request<SystemInsights>(`/insights/system?${periodQuery(from, to)}`);
+}
+
+// UMA ROTA POR ESCOPO, E NÃO A DO SISTEMA COM UM FILTRO.
+//
+// O escopo do agente é OUTRO conjunto de consultas: nove das 27 métricas não
+// transferem — duas não existem, quatro são outra consulta, e quatro mudam de
+// significado. É por isso que o tipo de retorno é `AgentInsights` e não
+// `SystemInsights`.
+//
+// O `404` CHEGA COMO `ApiError` COM `status` 404, E ISSO É O CONTRATO QUE A ABA
+// CONSOME. `request<T>` já o produz sem tratamento especial aqui — o que
+// importa é que ele NÃO seja convertido em erro genérico no caminho, porque
+// "este agente não existe" e "a consulta não respondeu" são respostas
+// diferentes e a aba as apresenta diferentes.
+//
+// A ORDEM DE VALIDAÇÃO DA ROTA É CONTRATO, e conferida contra o servidor real:
+// janela inválida responde `400` **mesmo quando o id não existe**. Quem
+// escrever o tratamento de erro na tela não pode supor que todo erro com id
+// desconhecido é `404`.
+export function getAgentInsights(
+  agentId: string,
+  from: string,
+  to: string,
+): Promise<AgentInsights> {
+  return request<AgentInsights>(`/insights/agents/${agentId}?${periodQuery(from, to)}`);
 }

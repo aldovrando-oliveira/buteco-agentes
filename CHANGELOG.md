@@ -518,6 +518,72 @@ o versionamento pretende seguir
   — ao contrário de `a2a_tasks`, que cascateia. A métrica registra o que aconteceu, e
   isso não muda porque o catálogo mudou depois.
 
+**Métricas de operação — aba Insights no detalhe do agente (etapa 5, última)**
+
+- **Aba `Insights` no detalhe do agente** (`/agents/{id}?tab=insights`), em
+  `apps/frontend`, servida por **uma única** requisição a
+  `GET /insights/agents/{id}`. A quinta aba é a única sem contador: ela não
+  representa um vínculo, e um número ao lado do rótulo afirmaria uma quantidade
+  que ela não tem. A consulta só dispara com a aba ativa.
+- **Os dois lados da delegação são apresentados como conjuntos SEPARADOS, e a
+  tela afirma a divergência em vez de escondê-la.** "Delega para" conta o que o
+  agente **tentou**; "Acionado por" conta o que de fato **rodou** nele. Fontes
+  diferentes, e os dois lados da mesma relação **podem mostrar números
+  diferentes** — por resultado que não produz execução, e porque as duas janelas
+  são situadas por **relógios diferentes**. Nenhum total soma os dois, nenhum
+  lado é derivado do outro, e a diferença **não** é sinalizada como erro. O
+  guarda **afirma a divergência**: um que afirmasse igualdade reprovaria o
+  comportamento correto.
+- **O resultado de cada delegação é discriminado na linha** — `Concluída`,
+  `Destino não concluiu`, `Expirou`, `Não iniciada` —, e é isso que dá causa
+  visível à divergência entre os dois lados. Resultado desconhecido aparece cru.
+- **Cadastro e uso são fatos diferentes nas duas seções.** Vínculo cadastrado e
+  não usado no período aparece como linha com **`0`** — contagem feita sobre um
+  vínculo que existe; ausência de cadastro aparece como quadro tracejado, **sem
+  número**. Ocorrência medida cujo vínculo saiu do cadastro continua visível.
+- **Os quatro cenários de delegação têm a MESMA estrutura** — só delega, só é
+  delegado, os dois, nenhum dos dois. As duas seções existem sempre; o lado sem
+  vínculo recebe o quadro tracejado em vez de sumir.
+- **`404`, `200` zerado e agente inativo são três respostas distintas, e nenhuma
+  colapsa no travessão.** O `404` tem estado próprio, sem número na tela e **sem
+  nova tentativa** — é resposta, não falha de comunicação. Agente sem dado mostra
+  os `0` como contagem feita. Agente **inativo** abre a aba normalmente:
+  inatividade é estado de cadastro, não ausência de sujeito.
+- **Os rótulos das métricas que mudam de significado neste escopo foram
+  reescritos**, nunca copiados da página do sistema: mais de um modelo na
+  distribuição é **o agente que mudou de configuração** dentro da janela, jamais
+  comparação entre agentes.
+- **O que este escopo não sustenta não aparece, nem como lista vazia** — falhas
+  de indexação e tokens de embedding de indexação não têm agente em fonte
+  alguma, e distribuí-los pelo vínculo de base contaria a mesma medição em cada
+  agente vinculado. Também não há agrupamento "por agente": o recorte já é o
+  agente.
+- **A posição dos códigos de parcialidade passou a ser por superfície.** O mesmo
+  código limita elementos diferentes nas duas telas, nos dois sentidos: o resíduo
+  não é desenhado na página do sistema e é desenhado na aba; o instantâneo é
+  desenhado lá e não é aqui. O **texto** de cada código continua único.
+- **As divergências com o protótipo entram REGISTRADAS, com causa e gatilho**
+  (convenções 9 e 17), e **duas foram revertidas pelo dono na conferência
+  manual**, com a medição na mesa. O que ficou:
+  "mediana" é **média**, porque a rota calcula `avg` e a palavra é o contrato; a
+  tabela única de falhas vira **dois grupos**, porque nenhum campo junta fase a
+  provedor/modelo; e o **total da composição de tempo se chama "total das
+  três"** — ele soma médias medidas sobre populações diferentes, e chamá-lo de
+  média ou mediana da task afirmaria o que a soma não produz. A barra empilhada
+  **é desenhada**, mas só com as três parcelas conhecidas: compor área a partir
+  de parcela nula afirmaria que aquela etapa não levou tempo nenhum.
+- **Métrica que a rota serve e o protótipo não desenha não ganha elemento** — e
+  a regra pegou uma contradição dentro da própria change: a recusa de entrada
+  tinha ganhado um grupo próprio no card de falhas, contra a regra escrita três
+  seções antes no mesmo documento. O grupo saiu; a contagem de recusa continua
+  onde o protótipo a desenha, no subtítulo do KPI de taxa de falha.
+- **Código de parcialidade cujo número está na tela é apresentado por um recurso
+  visível**, e nunca descartado em silêncio: onde o protótipo não tem espaço
+  para o texto, ele vive num ícone de informação no cabeçalho do card, com o
+  texto inteiro acessível também a leitor de tela.
+- **Nenhuma mudança de backend e nenhuma dependência nova.** A rota já servia
+  tudo deste escopo desde a etapa 3.
+
 **Documentação e governança**
 
 - Licenciamento sob Apache-2.0, com `LICENSE` e `NOTICE`.
