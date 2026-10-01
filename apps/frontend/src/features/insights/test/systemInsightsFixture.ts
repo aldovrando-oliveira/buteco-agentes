@@ -95,10 +95,17 @@ export function errorsFixture(overrides: Partial<ErrorInsights> = {}): ErrorInsi
   return {
     executionRegime: 'execution',
     indexingRegime: 'embedding',
+    rejectionRegime: 'rejection',
     failedCount: 0,
+    // AS DUAS POPULAÇÕES DE RECUSA, e o duplo as separa porque a rota as separa.
+    // Quem escrever caso sobre uma delas declara a DELA — um caso que passe as
+    // duas com o MESMO valor passa igual com o campo certo e com o errado, e por
+    // isso não prova nada (convenção 11 na forma mais barata de acontecer).
     rejectedCount: 0,
+    rejectedAtEntryCount: 0,
     byAgent: [],
     byPhase: [],
+    rejectionsByReason: [],
     indexingFailures: [],
     nonTerminal: { openExecutionCount: 0, neverConsumedCount: 0, observedStates: [] },
     // DOIS códigos, não três. Eram três até a change `recusa-motivo-coleta`
@@ -116,10 +123,20 @@ export function delegationFixture(
   return { regime: 'execution', pairs: [], ...overrides };
 }
 
-/** Os dois regimes que a rota declara hoje. A tela não depende de serem dois. */
+/**
+ * Os TRÊS regimes que a rota declara. A tela não depende de serem três.
+ *
+ * *(Declarava DOIS — `execution` e `embedding` — e a rota serve três desde a #51:
+ * `MetricsOptions.All` é `[execution, embedding, rejection]`, e a validação de
+ * startup o exige. **É por isso que o cenário "regime novo é absorvido sem mudança
+ * de estrutura" passava: por ausência de caso, não por funcionar.** O duplo
+ * montado pelo teste combinava com o teste e não com a rota, que é exatamente o
+ * que a convenção 11 diz não provar nada.)*
+ */
 export const REGIMES_FIXTURE: Record<string, string> = {
   execution: '2026-09-22T01:21:00-03:00',
   embedding: '2026-09-23T01:18:00-03:00',
+  rejection: '2026-09-26T16:04:00-03:00',
 };
 
 export function systemInsightsFixture(

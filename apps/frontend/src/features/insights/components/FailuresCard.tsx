@@ -13,10 +13,45 @@ import { caveatsFor } from '../utils/caveatLabels';
 
 // "Falhas" — DOIS NÚMEROS SEPARADOS, E SÓ UM DELES TEM PERCENTUAL (D10).
 //
-// A separação é do protótipo, e o texto dele é literal: "Recusa é agente
-// inativo ou sem provider e modelo configurados: nunca chega a processar. Falha
-// é execução que começou e quebrou. Somar os dois esconde qual dos dois
-// problemas existe."
+// A separação é do protótipo, e o texto dele é quase literal — ver a divergência
+// da frase mais abaixo.
+//
+// ===========================================================================
+// SÃO DUAS RECUSAS, E ESTE CARD APRESENTA A DE ENTRADA (#75, D3)
+// ===========================================================================
+//
+// `rejectedAtEntryCount` — recusa feita por `apps/api` ANTES de qualquer
+// execução, com regime de medição próprio — é a que casa com o rótulo
+// "Recusadas na entrada" que o artboard escreve aqui. O `Main.dc.html` põe `5`
+// neste quadro e `5` na linha "Agente sem provider ou modelo configurado" do card
+// de Motivos: é o mesmo fato, desenhado duas vezes.
+//
+// **Até a #75 este quadro lia `rejectedCount`, que é OUTRA população** — a recusa
+// COM linha de execução, hoje só a de profundidade de delegação, feita por
+// `apps/workers` (`AgentExecutionService.cs:236` é o único sítio que grava
+// `TerminalState = 'Rejected'`). Enquanto era o único número de recusa da tela, o
+// rótulo era impreciso; com os dois medidos e servidos, ele nomeava um como se
+// fosse o outro.
+//
+// **E `rejectedCount` SAI DA PÁGINA — decisão registrada, não esquecimento.** O
+// `Main.dc.html` tem seis KPIs e NENHUM de taxa de falha, então não existe nesta
+// tela o elemento que na aba do agente hospeda esse número (lá ele vive no
+// subtítulo do KPI `Taxa de falha`, "5 falhas · nenhuma recusa", que o artboard do
+// agente desenha). Criar um terceiro quadro seria a D10 outra vez — elemento que o
+// artboard não tem — e faria a frase abaixo explicar dois números entre três.
+// Ela vai para *servido e não desenhado*, com issue e gatilho.
+//
+// ===========================================================================
+// O CAVEAT NÃO MUDA DE LUGAR, E É POR NÃO PERDER O NÚMERO
+// ===========================================================================
+//
+// `rejections-missing-from-executions` diz "Recusas não geram linha de execução,
+// então não entram no percentual de falha". Ele limita o PERCENTUAL DE FALHA, que
+// continua na tela — e continua verdadeiro sobre a recusa de entrada, que também
+// não gera linha de execução. A posição `rejection-count` fica onde estava.
+//
+// Na aba do agente o mesmo código andou por três posições em três rodadas; aqui
+// não anda, e a razão é essa: o número que ele qualifica não saiu.
 //
 // O PERCENTUAL SÓ VALE ONDE NUMERADOR E DENOMINADOR CONTAM A MESMA POPULAÇÃO.
 //
@@ -35,6 +70,14 @@ export interface FailuresCardProps {
   executedTaskCount: number;
   queryState: QueryState;
   reason?: string;
+  /**
+   * Início do regime da RECUSA, só quando ele difere do que governa a página.
+   *
+   * Prop e não derivação interna: o card não conhece o mapa `regimes` nem qual
+   * regime governa a página, e é a página que sabe as duas coisas — o mesmo
+   * contrato de `regimeNote` no card de Motivos.
+   */
+  rejectionRegimeNote?: string;
 }
 
 export function FailuresCard({
@@ -42,6 +85,7 @@ export function FailuresCard({
   executedTaskCount,
   queryState,
   reason,
+  rejectionRegimeNote,
 }: FailuresCardProps) {
   const percentualFalha = ratio(errors.failedCount, executedTaskCount);
   const leituraPercentual = readMetric(percentualFalha, queryState, formatRatio);
@@ -113,7 +157,7 @@ export function FailuresCard({
                 Recusadas na entrada
               </Text>
               <MetricValue
-                value={errors.rejectedCount}
+                value={errors.rejectedAtEntryCount}
                 queryState={queryState}
                 reason={reason}
                 format={formatCount}
@@ -132,15 +176,47 @@ export function FailuresCard({
                   {c.text}
                 </Text>
               ))}
+              {/* O REGIME DELA, e ele fica DENTRO do quadro — não no cabeçalho do
+                  card, que qualificaria os dois quadros, e um deles é de outro
+                  regime. É a régua já escrita em `caveatLabels.ts` — texto de
+                  limitação junto do número limitado — aplicada a regime.
+
+                  A recusa de entrada é o TERCEIRO regime da resposta, e o único
+                  número desta página que o declara. */}
+              {rejectionRegimeNote === undefined ? null : (
+                <Text size="xs" c="dimmed" data-testid="nota-de-regime-rejection">
+                  {rejectionRegimeNote}
+                </Text>
+              )}
             </Stack>
           </Box>
         </Group>
 
-        {/* Literal do protótipo. */}
+        {/* DIVERGÊNCIA DO LITERAL DO PROTÓTIPO, NA PRIMEIRA ORAÇÃO SÓ.
+
+            O artboard escreve "Recusa é agente inativo ou sem provider e modelo
+            configurados", e são DUAS das QUATRO causas do vocabulário —
+            `AgentInactive` e `ProviderOrModelMissing`. Faltam
+            `ProviderNotConfigured` (provedor sem chave no ambiente) e
+            `AgentNotFound` (nenhum agente naquele id).
+
+            Era verdade quando foi escrito: o protótipo é de 19/09 e a #51, que
+            coletou o motivo e achou o quarto valor, mergeou em 26/09. É a
+            convenção 13 na forma "verdadeira quando escrita, e outra etapa tornou
+            falsa" — e com os quatro motivos na lista ao lado a frase passaria a
+            enumerar um subconjunto do que a tela mostra, na frente do leitor.
+
+            A ORAÇÃO NÃO ENUMERA AS QUATRO, ELA PARA DE ENUMERAR. Listar as quatro
+            aqui duplicaria o card de Motivos, que é onde elas estão com contagem;
+            a frase existe para dizer o que SEPARA as duas populações, e é isso que
+            ela passa a dizer. As outras duas orações são literais do protótipo.
+
+            Gatilho de volta: o `Main.dc.html` ser atualizado com a frase corrigida
+            — aí o literal volta a valer e esta divergência cai. */}
         <Text size="xs" c="dimmed" data-testid="nota-falha-versus-recusa">
-          Recusa é agente inativo ou sem provider e modelo configurados: nunca chega a processar.
-          Falha é execução que começou e quebrou. Somar os dois esconde qual dos dois problemas
-          existe.
+          Recusa é task barrada na entrada: nunca chega a processar, e os motivos dela estão ao
+          lado. Falha é execução que começou e quebrou. Somar os dois esconde qual dos dois
+          problemas existe.
         </Text>
       </Stack>
     </Card>

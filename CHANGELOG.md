@@ -610,6 +610,39 @@ o versionamento pretende seguir
   proibia; e a régua de lacunas passou a distinguir **lacuna** (sem fonte, a
   explicação mora na issue aberta) de **ausência decidida** (com fonte em outra
   superfície, a explicação mora no registro e na issue fechada).
+- **A página de Insights do sistema passa a consumir o motivo da recusa, e o bloco
+  "Recusadas na entrada" deixa de apresentar a população errada.** Ele lia
+  `errors.rejectedCount` — a recusa **com** linha de execução, hoje só a de
+  profundidade de delegação — sob um rótulo que é da recusa **de entrada**. Enquanto
+  era o único número de recusa da tela, o rótulo era impreciso; com os dois medidos e
+  servidos desde a etapa 5, ele nomeava um como se fosse o outro. Passa a apresentar
+  `rejectedAtEntryCount`, com **o regime de medição próprio dela declarado junto do
+  número** — é o terceiro regime da resposta, e o primeiro que a tela rotula.
+- **Os motivos da recusa aparecem no card de Motivos, em grupo separado das fases de
+  falha.** São duas populações de medição, e o card do protótipo as desenha numa
+  lista rasa única — ele é anterior à separação, e uma lista em que a linha 1 é fase
+  de execução e a linha 2 é motivo de recusa convida à soma que o card vizinho proíbe
+  em texto. **Divergência do protótipo registrada, com gatilho de volta.** Motivo
+  desconhecido aparece **cru**, nunca omitido: a soma dos motivos fecha com a
+  contagem de recusa de entrada, e omitir um a quebraria sem sintoma na tela.
+- **O card de Motivos deixa de declarar regime de medição.** Ele exibia *"embedding
+  medido desde…"* na barra de título, e passou a mostrar **três populações de três
+  regimes** — fase de falha de execução, falha de indexação e, agora, motivo de
+  recusa de entrada. Nomear um deles afirma que tudo ali é daquele, quando dois
+  terços não são. **Nota ausente é melhor que nota errada**, e a informação não se
+  perde: o card de Falhas declara o regime da recusa no quadro dela, e a página
+  declara o de execução no cabeçalho. A nota por grupo fica como saída registrada,
+  com issue e gatilho.
+- **A contagem de recusa com linha de execução deixa de ser apresentada na página do
+  sistema.** O protótipo não tem elemento para ela — não há KPI de taxa de falha
+  nesta tela —, e criar um seria anunciar na tela o que se escolheu não mostrar.
+  *Servido e não desenhado*, com issue e gatilho (#88).
+- **O texto que distingue falha de recusa deixa de enumerar duas das quatro causas.**
+  O literal do protótipo cita agente inativo e provedor ou modelo ausentes, e o
+  vocabulário coletado tem quatro — faltam provedor sem chave no ambiente e agente
+  não encontrado. Era verdade quando foi escrito, e a coleta do motivo tornou falso:
+  com os quatro motivos listados ao lado, a frase enumeraria um subconjunto do que a
+  tela mostra.
 - **O código de parcialidade `rejection-reason-not-collected` sai das duas rotas de
   Insights.** A lacuna que ele descrevia deixou de existir com a coleta do motivo
   (etapa 5), e código de parcialidade que sobrevive à lacuna afirma uma limitação

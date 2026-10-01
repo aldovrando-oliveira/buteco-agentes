@@ -121,6 +121,16 @@ arquivada; mergeada na `main` (#25). *(Correção de status em 18/09/2026: dizia
 874/874. Ver "Atividade na tela de entrada"
 abaixo.
 
+**A linha de `metricas-de-operacao` fechou o consumo da coleta de recusa** com
+`insights-sistema-motivo-da-recusa` (30/09/2026, issue #75), aplicada, sincronizada
+(`system-insights-ui`) e **arquivada** em
+`openspec/changes/archive/2026-09-30-insights-sistema-motivo-da-recusa/`. Ela trouxe à página do sistema os três
+campos que a #51 servia desde o deploy e a tela não consumia — e corrigiu o bloco
+*"Recusadas na entrada"*, que apresentava `rejectedCount`, **a outra população**.
+`apps/frontend` em **1402 / 118**, contra baseline de 1374 / 117. **Não commitada,
+não mergeada** — o push e o PR são do dono. Ver o fechamento dela abaixo, e as
+issues **#88**, **#89** e **#90** que ela abriu.
+
 ## Changes aplicadas, por linha de trabalho
 
 ### Fundação (backend + frontend básico)
@@ -10239,6 +10249,30 @@ mudar `Status`, reposicionar, e apagar e recriar o item, as três com sucesso e
 nenhuma registrada na listagem.
 **Gatilho:** `project.items` devolver mais de 20.
 
+> **RECALIBRAÇÃO DE 27/09/2026 — O GATILHO DE C2 VENCEU, E O ÍNDICE DESTRAVOU.**
+> Medido ao organizar a coluna `Ready` para a #75: `project.items` devolve
+> **`totalCount: 35`**, e os 35 nós vêm com `content.number` e `Status` corretos —
+> `#45`–`#86`, sem os arquivados. O lado de leitura do projeto voltou a funcionar,
+> e **não foi por intervenção nenhuma desta base**: nada foi apagado, recriado nem
+> reindexado entre 24/09 e 27/09. O critério de contagem, para quem recontar:
+> `node(id:"PVT_kwHOAVZBpM4Bkfu8"){ ... on ProjectV2 { items(first:100){ totalCount nodes{…} } } }`,
+> itens **não** arquivados, projeto `3`.
+>
+> **O que isso muda, e o que não muda.** Muda uma coisa: **a ordem manual gravada
+> agora é legível por API** — `project.items` devolve os nós **na ordem do board**,
+> e foi assim que a ordem da coluna `Ready` da #75 foi conferida depois de gravada
+> (ver *"A coluna `Ready` em ordem de execução"* no fim deste arquivo). **Não** muda
+> onde a fila mora: a convenção 24 continua valendo, e o `02` continua sendo a
+> cópia viva, por dois motivos — (1) o **C1 não venceu**, `Priority` e `Iteration`
+> seguem vazios nos **35** itens, então a ordem continua não aparecendo em view
+> nenhuma da interface, e (2) uma ordem que só se lê por GraphQL não é fila que
+> alguém consulta.
+>
+> **Gatilho novo, no lugar do vencido:** `project.items` voltar a travar — isto é,
+> devolver menos itens não arquivados do que `issue(…){projectItems}` confirma.
+> **E o C1 mantém o gatilho dele intacto:** alguém preencher `Priority` ou
+> `Iteration` em qualquer item.
+
 **C3 — sete workflows habilitados, e a configuração de nenhum é exposta.**
 `Item added to project`, `Item closed`, `Pull request merged`, `Pull request
 linked to issue`, `Auto-close issue`, `Auto-add to project`, `Auto-add
@@ -12741,3 +12775,606 @@ linguagem, mesmo tipo de arquivo, **duas ordens de grandeza de diferença**.
   fechamento.
 - **(e) A régua da proporção comentário:lógica ganhou a terceira condição** — mesmo
   tipo, mesma linguagem **e mesmo regime**. Sem gatilho.
+
+## A coluna `Ready` em ordem de execução — 27/09/2026
+
+**A ordem na coluna é a ordem de execução (convenção 24), e esta seção é a cópia
+viva dela.** A #67 fechou com o merge do #87, e `Ready` tinha só a #75; quatro
+issues subiram do `Backlog`, nesta ordem:
+
+```
+1  #75  consumir o motivo da recusa na página do sistema     ← In progress (change aberta)
+2  #84  agente sem chamada de provedor não tem linha, e as falhas somem
+3  #86  o Map por agentId guarda a contagem MENOR
+4  #83  a variante block do DeclaredGap é branch morto E é o default
+5  #85  o período não viaja entre as telas
+```
+
+**A #84 e a #86 são adjacentes de propósito, e serão uma change só.** As duas
+fazem falha sumir da **mesma** coluna por caminhos diferentes — uma é a linha que
+falta (`AgentConsumptionCard.tsx:108`: as linhas nascem de `tokens.byAgent`, então
+agente que falhou sem chamar o provedor não tem linha), a outra é o número da
+linha que existe (`:65`: `new Map(lista.map(f => [f.agentId, f.failedCount]))`
+guarda a última, e o `order by 4 desc, 1` da rota garante que a última é a de
+**menor** contagem). **Corrigir uma deixa o número errado de outro jeito**, e é
+por isso que separá-las em duas changes seria pior que a fila sugere.
+
+**Por que a #75 vem primeiro:** é a única da fila em que algo **já medido está
+invisível**. O dado está sendo coletado em produção desde o deploy da #51, a rota
+serve os três campos, e a tela não os tem. As outras quatro são número errado
+(#84, #86), armadilha latente (#83) ou ausência (#85).
+
+**A #66 fica no `Backlog`.** Ela está `aguardando gatilho`, e o gatilho é o pedido
+do dono: se ele quiser fechar também as três lacunas declaradas da tela (L2, L3 e
+L5), ela sobe. **Decisão dele, e não foi tomada aqui.**
+
+### Onde a ordem mora, conferido em vez de suposto
+
+**A ordem foi gravada no board** por `updateProjectV2ItemPosition`, uma chamada
+por item, `afterId` apontando para o anterior — as quatro retornaram sem erro. E
+**foi lida de volta**: `project.items` devolve os nós na ordem do board, e a
+primeira dezena sai `75 84 86 83 85 67 65 52 51 53`, com `Status` `In progress`
+na primeira e `Ready` nas quatro seguintes.
+
+**Mas isso não move a fila para o board**, e a convenção 24 continua valendo por
+dois motivos medidos no mesmo dia:
+
+- **o C1 não venceu** — `Priority` e `Iteration` seguem **vazios nos 35 itens**,
+  remedido em 27/09, e `Current iteration`/`Next iteration` continuam filtrando por
+  `Iteration` (`filter: "iteration:@current"` e `"iteration:@next"`, lidos das
+  views). A ordenação da `Prioritized backlog` por `Priority` **não foi
+  remedida** — `ProjectV2View` não expõe `sortBy`, e o que se sabe dela é a
+  medição de 24/09. O que está remedido é o que decide: os campos por que as views
+  filtram estão vazios, então a ordem gravada **não aparece em view nenhuma** da
+  interface;
+- **ordem que só se lê por GraphQL não é fila que alguém consulta.**
+
+**O que mudou em relação a 24/09 é o índice, não a vista:** o gatilho do C2
+venceu — `project.items` saiu de 20 para **35** —, e é por isso que a leitura de
+volta foi possível. Ver a recalibração registrada na seção
+`fluxo-de-trabalho-no-board`, acima.
+
+**Nenhuma relação `blocked-by` entre as cinco**, conferido por
+`issue(…){ blockedBy, blocking }` nas cinco mais a #66: todas vazias. A ordem
+acima é de sequenciamento, não de bloqueio — então não há bloqueante a subir de
+coluna (a régua de *"a bloqueante mora na mesma coluna, acima da bloqueada"* não
+tem caso aqui).
+
+
+## `insights-sistema-motivo-da-recusa` — 27-30/09/2026 · issue #75 · aplicada, sincronizada e **arquivada**
+
+**Etapa de consumo da #51 na página do sistema, e a única da fila em que algo já
+medido estava invisível.** A rota serve `rejectionRegime`, `rejectedAtEntryCount` e
+`rejectionsByReason` desde o deploy da #51; a tela não tinha nenhum dos três. E
+não estava só incompleta: o bloco *"Recusadas na entrada"* apresentava
+`rejectedCount`, que é **a outra população**.
+
+**Arquivada em 30/09/2026**, depois da conferência do dono — e ela achou um defeito
+que a suíte inteira verde não pegou (ver abaixo). Delta sincronizado em
+`system-insights-ui`: dois requisitos renomeados e reescritos, **7 cenários viram
+16**.
+
+**Nada commitado, nenhum push, nenhum PR** — os dois são do dono, e é por isso que a
+#75 continua em `In progress` e não em `In review`: a convenção 24 pede as **três**
+condições, e só a primeira está cumprida. Branch
+`feat/75-motivo-da-recusa-no-sistema` a partir de `8f646c0`.
+
+### O que a reconferência derrubou, antes de escrever uma linha
+
+Três premissas da issue não valiam no `HEAD`, e a mais caras das três é de
+convenção:
+
+**`utils/rejectionReasonLabels.ts` não existia.** A #80 dizia que a #53 o tinha
+escrito e que esta seria a **segunda** superfície a usá-lo — *"nenhum código novo é
+necessário"*. A #53 **removeu** a recusa de entrada e os motivos do
+`AgentFailuresCard` em vez de traduzi-los, por decisão do dono na tela. Então esta é
+a **primeira** superfície, **o gatilho da convenção 2 NÃO foi atingido**, e o módulo
+que nasce aqui não é extração de repetição observada — é onde o código mora. A
+convenção 2 governa *extrair código compartilhado*; ela não manda escrever a
+primeira cópia dentro do consumidor.
+
+**E a issue #75 foi corrigida no corpo**, com o item já cumprido marcado (o
+`caveat` morto já tinha saído de `caveatLabels.ts`) em vez de refeito.
+
+### A decisão que mais vale registrar: a mesma régua, respostas opostas
+
+A `insights-aba-do-agente` tirou os motivos do card do agente pela D10 — *"métrica
+servida e não desenhada não ganha elemento novo"* —, porque **o artboard do agente
+não tem elemento** para eles. Nesta tela o `Main.dc.html` **tem**: o card de Motivos
+desenha a linha *"Agente sem provider ou modelo configurado — 5"*, com o mesmo `5`
+que o card de Falhas mostra em *"Recusadas na entrada"*.
+
+**Nada é criado aqui: se preenche o que o artboard tem e estava vazio por falta de
+fonte.** As duas decisões opostas saindo da mesma condição é o que torna a D10 uma
+régua e não um gosto — se fosse gosto, teria dado a mesma resposta nas duas telas.
+
+### A divergência do artboard (convenção 17, com gatilho de volta)
+
+O card do `Main.dc.html` é **uma lista rasa única** ordenada por contagem, com a
+linha 2 sendo o motivo da recusa misturado às fases de execução. **Ele foi desenhado
+antes de as duas populações existirem separadas** — é de 19/09, e a #51 mergeou em
+26/09. O card **vizinho** carrega um literal do próprio protótipo dizendo *"somar os
+dois esconde qual dos dois problemas existe"*, e a lista rasa é o convite exato a
+somar.
+
+Entregue: **um card, dois grupos** — *"Por que as execuções falharam"* e *"Por que
+as tasks foram recusadas na entrada"*. Fases de execução e falhas de indexação
+seguem na lista concatenada que já existia: são a mesma população.
+
+**A forma é idioma da casa com precedente do mesmo tipo** — o `AgentFailuresCard`
+divide em dois grupos contra uma tabela única do artboard do agente (D9). Aqui o
+argumento é mais forte: lá eram duas agregações sobre a **mesma** população.
+
+**Gatilho de volta:** o dono preferir a lista rasa na conferência. Aí a divergência
+cai, e o que muda com ela é o texto do card de Falhas, que passa a ser o que
+contradiz a tela.
+
+### As rodadas de guarda, uma a uma (convenção 15)
+
+**Quatro rodadas, nove defeitos reintroduzidos, e duas descobertas que valem mais
+que as sete confirmações.**
+
+| rodada | defeito reintroduzido | mensagem da reprovação |
+|---|---|---|
+| A | desconhecido cai no rótulo de outro | `expected [ 'Agente não encontrado', …(3) ] to not include 'Agente inativo'` |
+| A | desconhecido sai com texto vazio | `expected '' not to be ''` |
+| B | o campo volta a `rejectedCount` | `expected 'FalhasFalharam na execução122,5% das …' not to contain '333'` |
+| B | a nota de regime perde a guarda do `undefined` | `expected <p …(4)></p> to be null` |
+| B | o card soma as duas populações | `expected … not to contain '21'` |
+| C | **com recusa e sem motivo, a tela nomeia a causa plausível** | `expected 'MotivosPor que as tasks foram recusad…' not to contain 'Agente sem provider ou modelo configu…'` |
+| C | o motivo desconhecido é omitido | `Unable to find an element by: [data-testid="motivo-recusa-QuotaExceeded"]` |
+| C | volta a lista rasa única do artboard | `Unable to find an element by: [data-testid="grupo-motivos-de-recusa"]` |
+| D | o rótulo volta ao ternário, e o regime conhecido sai cru | `expected 'Insights15/09/2026 a 24/09/2026 · hor…' not to contain 'rejection'` |
+
+**Os dois guardas invertidos, e por que a inversão não os enfraquece.** Eram
+`NEGATIVO: a recusa NÃO vira quadro no card de Motivos` — `card.textContent` não
+casar com `/recusa/i` — e `NEGATIVO: NENHUMA causa é nomeada para as recusas`, que
+proibia `/sem provider/i`, `/agente inativo/i` e `/modelo configurado/i`. **As três
+expressões do segundo são exactamente dois dos rótulos que a tela agora apresenta
+COM fonte.**
+
+A garantia — *"a tela não nomeia causa que ninguém mediu"* — sobrevive inteira. A
+**forma** não, porque ela funcionava só enquanto ausência de palavra e ausência de
+medição coincidiam, e a #51 as separou. O substituto afirma a **procedência**, e a
+linha C da tabela é a prova de que ele cobre o defeito que os dois antigos existiam
+para impedir.
+
+E `sem recusa, não há lacuna de recusa` saiu com eles: `motivos-lacuna-recusa` não
+existe em caminho nenhum do componente, e **guarda que afirma a ausência de um
+testid que ninguém pode produzir não cobre nada.**
+
+#### Achado 1 — um guarda meu passou contra o defeito presente, e a causa é a formatação
+
+O `NEGATIVO: o valor da recusa COM linha de execução não aparece` foi escrito com
+`rejectedCount: 7777` e `not.toContain('7777')`. **Passou verde com o defeito
+presente**: `formatCount` é `pt-BR`, então 7777 sai na tela como `7.777` e a
+asserção nunca casava. Corrigido para `333`, que não é formatado com separador.
+
+**É a mesma forma do varredor de tons dentro de ternário** — a asserção não cobria a
+forma do caso real —, e é a quinta ocorrência da série de guardas que passaram verdes
+com o defeito presente. **Régua nova, específica e barata:** guarda que varre
+**texto renderizado** por um número escolhe o número **abaixo do primeiro separador
+de milhar**, ou compara contra o valor já formatado. Nunca contra o literal.
+
+#### Achado 2 — e um arranjo que não montava o estado que o caso dizia montar
+
+O guarda `sem regime declarado, nenhuma nota aparece` reprovou, e **a causa não era o
+componente**: o helper do teste era
+`rejectionRegimeNote: string | undefined = 'recusa medida desde…'`, e o caso passava
+`undefined` — que é exactamente o valor que dispara o **default do parâmetro**. O
+caso nunca renderizou o estado "sem nota".
+
+Corrigido com `string | null` no helper e `?? undefined` na passagem. **Régua:**
+parâmetro opcional com default não serve para um caso cujo assunto **é** a ausência
+do valor; o sentinela tem de ser um valor que o default não capture.
+
+### O terceiro regime, e a correção da D6 com a causa real (convenção 9)
+
+A D6 dizia que a queda para o nome cru do regime era acidente. **Era deliberada, e já
+tinha guarda** desde a #52: o caso `regime NOVO é absorvido sem mudança de estrutura`
+passa `indexing` e afirma o nome cru, com o comentário escrito — *"o NOME sai cru
+quando a tela não o conhece, pelo mesmo critério da fase de falha desconhecida"*.
+
+**E corrigir a fixture NÃO fez nenhum caso reprovar.** Os 21 da página seguiram verdes
+com os três regimes no mapa e `regimeNoteFor` intocado. **O motivo não é guarda
+fraco: é que não havia caso a reprovar.** Acrescentar `rejection` ao mapa não faz a
+tela renderizar nota nenhuma para ele — `regimeNoteFor` só era chamado para
+`embeddingRegime` e `temporal.regime`. **O terceiro regime estava no mapa e sem
+consumidor na tela**, e é esta change que lhe dá o primeiro.
+
+**O que o guarda existente não cobre, e não pode cobrir:** ele passa um nome que a
+tela **genuinamente não conhece**, e para esse o cru é o certo. `rejection` é o
+oposto — **regime que a tela conhece** caindo no caminho do desconhecido. Nenhum
+arranjo do guarda antigo separa os dois, porque ele nunca passa um
+conhecido-sem-rótulo. O guarda novo é `regime CONHECIDO não sai cru`.
+
+**E o rótulo carrega a concordância, não o substantivo:** *"execução medid**a**"* e
+*"recusa medid**a**"* são femininas, *"embedding medid**o**"* é masculino. Um mapa de
+substantivo obrigaria um segundo mapa de gênero, ou escreveria *"recusa medido"*.
+Havia **dois** sítios traduzindo regime, cada um com regra própria, e nenhum dos dois
+cobria o terceiro.
+
+### A correção da D7, também com a causa (convenção 9)
+
+A D7 mandava declarar o regime da recusa em **dois** lugares — no grupo de motivos e
+no quadro do card de Falhas. **É a mesma data em dois cards vizinhos**, e a casa já
+rejeitou exactamente isso uma vez: o `caveat` de recusa da aba do agente estava *"no
+rodapé **e também** no card de falhas"*, e *"a régua mostrou que era DUPLICAÇÃO"*.
+
+Pior: o guarda de página `NEGATIVO: a nota de regime não se repete fora do cabeçalho
+do card` afirma que **nenhuma data se repete entre as notas** — ele reprovaria contra
+a D7 como estava escrita. **A D7 contradizia um guarda existente, e o guarda tinha
+razão.** Declarado uma vez, no quadro onde está a **contagem**.
+
+Da D7 fica a descida da nota de **indexação** do cabeçalho do card para o grupo, e o
+motivo ficou mais forte: o card passa a ter duas populações, e a nota no cabeçalho
+qualificaria as duas dizendo a data de uma.
+
+### O `5` que migrou, e os dois sítios corrigidos juntos (convenção 22, sexta forma)
+
+`caveatLabels.ts:44` dizia *"5 códigos em 2 blocos — `performance` (2), `errors`
+(2)"*, e 2 + 2 são **4**. A causa não é distração, e é a mais barata de acontecer:
+
+- `types/systemInsights.ts` escrevia *"`performance` (2 códigos) e `errors` (3) … os
+  cinco códigos"*, **conferido em 23/09 e reconferido em 24/09** — e estava **certo
+  nas duas datas**;
+- a #51 tirou `rejection-reason-not-collected`, e `caveatLabels.ts` **recalibrou a
+  decomposição** para (2) e (2) **mantendo o total 5**.
+
+**Recalibrar as partes e citar o headline antigo** é a forma que a convenção 18 já
+nomeia do outro lado: headline não serve para nada, só a decomposição é verificável.
+Os dois sítios foram corrigidos juntos, com o **critério de contagem** escrito ao
+lado — os literais `InsightsCaveats.*` passados a construtor de resposta,
+`GetSystemInsightsQueryHandler.cs:529` e `:698-699`.
+
+### Conferência de escopo — a contagem acertou e a composição não
+
+Montada colando a saída de `git status --porcelain`, não redigitada.
+
+**Criados: 2 projetados, 2 entregues — exato.**
+
+**Modificados: 10 projetados, 10 entregues, e NÃO os mesmos 10.** Um projetado não
+foi necessário, um não projetado entrou:
+
+- **`utils/caveatLabels.test.ts` NÃO foi tocado.** A projeção supôs que remover um
+  membro de união mexeria no teste dele. Não mexeu, porque **nenhum caso afirmava
+  aquela posição** — o membro estava morto nos testes também. É o mesmo fato que o
+  fez sobreviver, visto do outro lado: **declaração sem consumidor não tem teste, e é
+  por isso que nada a pega.** Reforça a forma da #83, agora com issue própria (#89).
+- **`types/agentInsights.ts` ENTROU.** `RejectionReasonCount` já existia lá, declarada
+  pela #53 **com o gatilho escrito apontando para esta change**: *"quando ela fechar,
+  esta interface sobe para o módulo neutro."* Subiu, e `agentInsights.ts` passa a
+  importá-la e reexportá-la como já faz com as outras sete formas neutras.
+
+**A régua reusável, e ela é sobre o método de projetar, não sobre o número:** a
+projeção listou *"acrescentar `RejectionReasonCount` a `systemInsights.ts`"* **sem
+grepar o nome antes**. O gatilho estava escrito num módulo que a projeção não
+esperava tocar, e nenhuma varredura do lado do sistema o mostraria. **Antes de
+projetar a declaração de um tipo novo, grepar o nome dele** — é o que acha a
+declaração que já existe e o gatilho pendurado nela.
+
+### O blast radius do campo obrigatório, medido — e pequeno pelo motivo OPOSTO ao da quarta medição
+
+A quarta medição achou **21** arquivos de fixture ao tornar um campo obrigatório num
+tipo de domínio compartilhado. Aqui, três campos obrigatórios em `ErrorInsights`
+arrastam **2**, e o `tsc -b` os enumerou de graça:
+`SystemInsightsPage.tsx:86` e `systemInsightsFixture.ts:95`.
+
+**A causa é estrutural:** o blast radius de campo obrigatório é o número de sítios que
+constroem o tipo **inteiro**, não o de arquivos que o usam. Os **26** sítios de
+`errorsFixture({ … })` nos testes passam `Partial<ErrorInsights>` e o compilador não
+os toca. **Um tipo com construtor de duplo único tem blast radius 2 por construção;
+um tipo montado em literal em cada teste tem blast radius igual ao número de testes.**
+
+**Régua para projetar:** contar sítios de **construção completa** — `grep` por um
+campo obrigatório que já exista —, não arquivos que importam o tipo.
+
+Dos 26, **16** declaravam `rejectedCount` e foram re-semeados à mão: não porque o
+compilador obrigasse, mas porque **o campo que o caso afirma mudou de nome**. É a
+linha de *semeadura de fixture como arranjo compartilhado* da vigésima medição, e
+aqui ela não é zero.
+
+### Achado de ferramenta: `tsc --noEmit` não confere nada neste repositório
+
+`apps/frontend/tsconfig.json` é `{"files": [], "references": [...]}`. **`npx tsc
+--noEmit` sai com 0 sem compilar um arquivo** — foi o que aconteceu na primeira
+conferência desta change, com dois erros reais na árvore. O comando que confere é
+**`npx tsc -b`**, que é o que o `npm run build` usa.
+
+É a convenção 21 na letra — *comando de varredura que falha em silêncio produz a
+mesma saída que um sistema sadio*. A tarefa 9.1 dizia `--noEmit` e foi corrigida.
+
+### Suíte — e a medição ainda NÃO fecha, por causa do ambiente
+
+**Baseline, remedida em árvore limpa sobre `8f646c0` em 27/09 às 18:58: `apps/frontend`
+1374 / 117, todos verdes, 232 s.** `podman ps` declarado: `pgvector/pgvector:pg18` e
+`rabbitmq:4.3-management`, os dois `Up 3 days (healthy)`; `DOCKER_HOST` vazio, e a
+suíte do frontend não usa Testcontainers.
+
+**As três execuções depois da implementação não são comparáveis com ela**, e o motivo
+foi medido, não suposto:
+
+| execução | workers | resultado | duração |
+|---|---|---|---|
+| baseline, 18:58 | default | **1374 / 117**, 0 falhas | **232 s** |
+| 1ª pós-implementação, 19:56 | default | 1063 / 89, 38 falhas, **29 erros** | 5985 s |
+| 2ª, `--maxWorkers=4` | 4 | 1320 / 112, 12 falhas, **6 erros** | 4564 s |
+| 3ª, `--maxWorkers=4` | 4 | **abortada** — `load average` em **26,88** ao iniciar | — |
+| **4ª, `--maxWorkers=4`, VM quieta** | 4 | **1402 / 118, ZERO falhas** | **301 s** |
+
+A terceira foi abortada de propósito: insistir produziria a terceira medição
+inválida em vez de um número, e **medição inválida citada depois vale menos que
+medição ausente** — é a convenção 22 pelo avesso.
+
+**A quarta fechou**, com a VM do Podman fora do topo de `ps` e o `load average` em
+**5,24** ao iniciar: **1402 testes / 118 arquivos, todos verdes, 301 s** contra a
+baseline de 1374 / 117 em 232 s. **+28 casos e +1 arquivo**, exatamente a contagem
+que a decomposição por arquivo projetou.
+
+**E é isto que fecha a leitura ambiental pelo quarto lado**, o único que faltava: a
+suíte inteira passa quando a contenção sai. As três execuções sujas não tinham defeito
+nenhum dentro.
+
+**A causa:** `ps -Ao %cpu -r` mostrou
+`com.apple.Virtualization.VirtualMachine` — a VM do Podman — em **485% de CPU**, com
+`load average` chegando a **21,35** numa máquina de 12 núcleos. As falhas são todas
+de teste de interação (`userEvent`), que é o que estoura sob inanição de CPU, e
+**nenhuma está em arquivo que esta change toca**: `AppShell`, quatro páginas de
+canais, `AgentInsightsTab` (troca de período), três de bases de conhecimento e
+`McpServerForm`.
+
+**A conclusão "ambiental" ESTÁ fechada, e com as três pernas que a convenção 19
+exige:**
+
+1. **a baseline existe** — 1374 / 117 verdes sobre `8f646c0`, em árvore limpa;
+2. **as nove classes reprovadas passam isoladas** — rodadas juntas com
+   `--maxWorkers=2`: **163 / 163, 9 arquivos, 102 s**, zero falhas;
+3. **nenhuma falha está em arquivo que a change toca**, conferido contra a lista
+   fechada de escopo.
+
+Uma reprovação que desaparece ao tirar a contenção, sobre arquivos que a change não
+abriu, com a causa de carga medida em `ps`, é ambiental — e as três pernas juntas é
+o que distingue isso de *"reprovou quando eu conferi"*.
+
+**E o número fechou na quarta execução: 1402 / 118, zero falhas.** A medição da
+convenção 18 foi feita depois da conferência do dono, como a régua da vigésima
+primeira manda — e ela mudou o resultado: a conferência acrescentou um caso, removeu
+um elemento e reescreveu duas decisões.
+
+**Por arquivo, contra a baseline:** `rejectionReasonLabels` **0 → 10** (novo),
+`FailuresCard` **13 → 19**, `FailureReasonsCard` **10 → 19**, `SystemInsightsPage`
+**21 → 24**, `caveatLabels` **23 → 23**. São **+28**, e a feature inteira de insights
+fecha **449 / 449 em 32 s**.
+
+**E a suíte do frontend não deveria depender daquela VM** — ela não usa
+Testcontainers. Que a carga dela derrube nove classes de teste de UI é achado de
+ambiente, e encosta no item de memória `testcontainers-podman`.
+
+### As duas issues de achado, abertas antes do archive (convenção 23)
+
+- **#88** — `rejectedCount` saiu da tela do sistema. *Servido e não desenhado*, com
+  gatilho de duas alternativas: o dono pedir o número, ou o `Main.dc.html` ganhar
+  elemento para ele.
+- **#89** — a forma da #83 se repetiu, e **uma união de tipo não é varrível em tempo
+  de execução**. As duas ocorrências sobrevivem por motivos opostos — a da #83 tem
+  teste verde que mantém o código morto vivo, esta não tem teste nenhum — e o efeito
+  é o mesmo. A decisão pendente é de custo: derivar a união de um `const` array para
+  poder varrer.
+
+### A subida para validação manual, e o que ela achou
+
+**Subida em 30/09/2026** com `apps/api` (`TZ=America/Sao_Paulo dotnet run`, porta
+5017) e o Vite (5173), contra o Postgres e o RabbitMQ do compose de dev. A VM do
+Podman estava quieta — `load average` em **3,11**, contra os 26,88 que invalidaram
+as execuções de suíte.
+
+**O dev não tinha recusa de entrada nenhuma** (`rejectedAtEntryCount: 0`,
+`rejectionsByReason: []`), e sem ela a change não aparece na tela. Produzidas **pela
+API real**, não por escrita no banco: cinco `SendMessage` A2A contra os dois agentes
+inativos do catálogo (`Atendente Sênior`, `Especialista Técnico Ambiente`).
+
+**Dos quatro valores do vocabulário, só UM é alcançável de fora neste ambiente**, e
+isso é achado:
+
+| motivo | alcançável? | por quê |
+|---|---|---|
+| `AgentInactive` | **sim** | basta chamar o A2A de um agente inativo |
+| `AgentNotFound` | **não** | id inexistente é recusado no roteamento com `-32600`, **antes** do `EnqueueingAgentHandler` — nenhuma linha em `task_rejections` |
+| `ProviderOrModelMissing` | **não** | `POST /agents` exige os dois (`400`: *"O provedor de LLM do agente é obrigatório"*) |
+| `ProviderNotConfigured` | **não** | os três provedores do catálogo têm chave no ambiente de dev |
+
+Não é defeito desta change e não foi investigado além disto — mas quem for conferir
+a tela com os quatro motivos precisa saber que **três deles exigem semeadura
+direta**, e que o caminho de `AgentNotFound` tem cheiro de parente da #77.
+
+**A tela, conferida nos dois esquemas de cor:**
+
+- o bloco *"Recusadas na entrada"* mostra **5**, e `rejectedCount` vale **2** na
+  mesma janela — **os dois números são diferentes**, que é o caso discriminante: a
+  tela antiga mostraria 2 ali;
+- o regime sai em português — ***"recusa medida desde 26/09/2026"*** —, e não
+  `rejection medido desde`;
+- os dois grupos aparecem: *"Por que as execuções falharam"* (`Execução do agente` 1
+  e `FaseQueATelaNaoConhece` 1, esta **crua e monoespaçada** — o dev já tinha uma
+  fase desconhecida, e ela exercita a régua do desconhecido de graça) e *"Por que as
+  tasks foram recusadas na entrada"* (`Agente inativo` 5);
+- a soma dos motivos de recusa **fecha** com os 5 do card vizinho, e **7 não aparece
+  em lugar nenhum**;
+- a frase não enumera causa nenhuma.
+
+#### O defeito que a conferência visual achou, e que nenhum guarda pegou
+
+**A nota *"embedding medido desde 23/09/2026"* está no cabeçalho do grupo de falha,
+e naquele grupo não há UMA linha de indexação** — `indexingFailures` está vazio, e as
+duas linhas visíveis são de fase de execução. A nota qualifica linhas com que ela não
+tem relação.
+
+É a régua já escrita em `caveatLabels.ts` — *"um código sem número naquela superfície
+não é renderizado, porque um texto de limitação sem o número que ele limita não tem o
+que qualificar"* — violada pela **nota de regime**, que a D7 moveu para aquele grupo
+sem condicionar à existência de linhas daquele regime. **A correção é condicionar a
+nota a `indexingFailures.length > 0`.**
+
+**E nenhum guarda pegou**: o caso que afirma a descida da nota passa
+`indexingFailures` com uma linha, que é justamente o estado em que a nota está certa.
+Faltava o caso do grupo **sem** linha de indexação — a mesma forma de *"o guarda não
+cobre a forma do caso real"* que já apareceu duas vezes nesta change. **É a convenção
+14 ganhando o caso que a suíte não tinha**, e é por isso que ela existe: a suíte
+inteira verde, e o olho achou em quinze segundos.
+
+**Não corrigido**, porque a change está pausada para o julgamento do dono e esta é a
+primeira coisa que ele vai ver na tela.
+
+### O segundo achado da conferência do dono, e a nota de regime que SAIU
+
+**A primeira pré-conferência achou o lugar errado; o dono achou o erro real.** Eu
+tinha registrado que a nota *"embedding medido desde 23/09/2026"* aparecia sobre um
+grupo sem linha de indexação, e proposto condicioná-la a `indexingFailures.length > 0`.
+**Era conserto de sintoma.** O dono viu o que estava embaixo:
+
+> **O lugar sempre esteve certo — o texto é que mente.** O card mostra **três
+> populações de três regimes**: fase de falha de execução (`execution`, 22/09),
+> falha de indexação (`embedding`, 23/09) e motivo de recusa de entrada
+> (`rejection`, 26/09). Nomear um deles afirma que tudo ali é daquele, e dois terços
+> não são.
+
+**É a mesma família do defeito que esta change corrige no card vizinho** — declarar o
+regime de uma população como se fosse de outra. A change passou a tarde corrigindo
+isso nas contagens e reproduziu a forma na nota, dois cards adiante.
+
+**Decisão: remover. Nota ausente é melhor que nota errada**, e a informação não se
+perde: o card de Falhas declara `"recusa medida desde…"` no quadro dela, a página
+declara o de execução, e o mapa de regimes chega inteiro na resposta. As duas
+alternativas recusadas — a data mais antiga sem nomear o regime, e a nota por grupo —
+estão no `design.md` com o motivo de cada uma, e a segunda virou a **#90**, com
+gatilho.
+
+**Isto é a segunda vez nesta linha de trabalho que a conferência manual pega o que
+nenhum guarda pediria**, e as duas vezes o achado não era de lógica: a primeira foi
+a `frontend-mensagem-recusa-ciclo`. **A suíte inteira estava verde das duas vezes.**
+
+#### A terceira ocorrência da mesma forma de guarda fraco, e ela foi minha, duas vezes seguidas
+
+O guarda de ausência da nota **passou verde contra o defeito em DUAS versões
+seguidas**, e por motivos diferentes:
+
+1. **no componente** — tirei a prop do helper no mesmo passo em que escrevi o guarda,
+   então o componente não tinha como renderizar a nota e o caso passava por
+   construção. **O guarda de componente não podia discriminar**: o defeito morava na
+   **fiação**, não no componente, e a convenção 15 pede que o guarda reprove no
+   componente que a correção toca;
+2. **na página**, já com o par certo — a precondição que afirmei era *"o mapa de
+   regimes tem `embedding`"*, e a fixture padrão não traz `byPhase` nem
+   `indexingFailures`. **Sem linha de falha não há grupo, e sem grupo não havia nota
+   a negar.** A precondição certa é a **linha que produz o elemento**, não o dado que
+   o alimenta.
+
+Com a precondição corrigida o guarda reprovou — `expected <p …> to be null` — e os
+dois lados do par foram verificados: reintroduzir a nota reprova o negativo
+(`not to contain 'medido desde'`, pego mesmo com o defeito injetado pelo **título** e
+não pelo `testid`), e tirar a nota de **todos** os cards reprova o positivo
+(`expected null not to be null`), que é a regressão fácil de cometer ao mexer num
+argumento compartilhado.
+
+**A régua, e ela generaliza as três ocorrências desta change:** um guarda de ausência
+afirma primeiro **a precondição que produz o elemento negado**, e a precondição é o
+estado observável mais próximo do elemento — não o dado de origem, não a configuração.
+
+#### Achado registrado, não corrigido
+
+**`ProviderConsumptionCard` tem a mesma forma**: declara *"embedding medido desde…"*
+no cabeçalho, e a tabela tem colunas **Conversa** (`execution`) e **Embedding**
+(`embedding`). **Materialmente mais fraco** — ali o regime nomeado tem uma coluna com
+o próprio nome logo abaixo, e o leitor amarra a nota à coluna; no card de Motivos não
+havia amarração nenhuma. Registrado na **#90**, porque quem implementar a nota por
+grupo decide os dois juntos.
+
+### Vigésima terceira medição da convenção 18 — feita DEPOIS da conferência do dono
+
+**A régua da vigésima primeira aplicada, e ela mudou o resultado:** a conferência
+acrescentou um caso, removeu um elemento e reescreveu duas decisões. Medir no
+primeiro verde teria registrado outro número.
+
+**Baseline: `apps/frontend` 1374 / 117**, remedida em árvore limpa sobre `8f646c0`.
+
+#### Casos de teste
+
+| categoria | projetado | entregue | erro |
+|---|---|---|---|
+| **novos** | 14 | **29** | **+107%** |
+| adaptados | 6 | 5 | −17% |
+| **removidos** | **não projetado** | **4** | — |
+| reforçados | 3 | 0 | — |
+| **semeadura de fixture** (sítios) | 16 | **16** | **exato** |
+| **negativas** | 8 | **12** | +50% |
+
+**Saldo: 67 → 95 casos nos cinco arquivos, +28.** Suíte projetada em ~1388 / 118;
+**entregue 1402 / 118** — erro de **−1,0%**, o melhor da série em contagem de suíte.
+
+**E o total acertar com as categorias erradas é o achado.** Os novos erraram +107% e
+o total errou 1%: os erros se cancelaram porque a projeção **inventou 3 reforçados
+que não existiram** e **esqueceu a categoria de removidos**, que existiu com 4. Uma
+projeção que só olhasse o total diria que o método está calibrado.
+
+**Duas causas, as duas reusáveis:**
+
+- **`it.each` expande, e a projeção conta blocos.** `rejectionReasonLabels.test.ts`
+  tem **7** blocos `it()` e executa **10** casos — o `it.each` sobre os quatro valores
+  do vocabulário vira quatro. Projetei 4 para o arquivo e ele entregou 10. **Régua:
+  ao projetar um arquivo de vocabulário fechado, contar o vocabulário, não o bloco.**
+- **A categoria "removidos" não estava na projeção**, e a change removeu 4 — os dois
+  guardas invertidos, um guarda órfão (`sem recusa, não há lacuna de recusa`, que
+  afirmava a ausência de um `testid` que nenhum caminho do componente produzia) e um
+  renomeado. **Numa change que inverte guarda, "removidos" é categoria própria**, e
+  sem ela os adaptados absorvem o número e escondem que houve subtração.
+
+#### Linhas — e aqui o erro é grande, com a causa isolada
+
+| | projetado | entregue |
+|---|---|---|
+| criados | ~125 | **158** |
+| modificados (produção) | ~160 | **486** |
+| modificados (teste) | ~180 | **476** |
+| **total à mão** | **~465** | **1120** |
+
+**Errou 2,4× para baixo.** A causa **não** é escopo novo — os arquivos são os mesmos
+(ver conferência de escopo). É densidade de comentário, e a decomposição mostra onde:
+
+| | adicionadas | comentário | lógica | proporção |
+|---|---|---|---|---|
+| produção modificada | 486 | 323 | 163 | **1,98:1** |
+| teste modificado | 476 | 214 | 262 | 0,82:1 |
+| `rejectionReasonLabels.ts` (criado) | 100 | 85 | 15 | **5,67:1** |
+| `rejectionReasonLabels.test.ts` (criado) | 58 | 18 | 40 | 0,45:1 |
+
+**A PROPORÇÃO DE PRODUÇÃO ACERTOU: 1,98:1 entregue contra 2,0:1 projetado.** É o
+**segundo** acerto seguido dessa dimensão — a terceira medição da tabela da convenção
+18 acertou 1,32:1 contra 1,4:1 — e os dois saíram do mesmo método: **contar quantos
+registros de mecanismo a change entrega** antes de escrever o código. Projetei três;
+foram três, mais um quarto que a conferência do dono acrescentou.
+
+**O que errou foi o VOLUME de lógica, não a mistura.** Projetei ~55 linhas de lógica
+em produção e saíram **163**. Causa: a projeção contou a troca de campo, o mapa de
+regime e o grupo — e não contou que **o grupo obrigaria a extrair dois componentes**
+(`Grupo` e `Linha`) de JSX que estava inline, nem que o `Linha` precisaria de um
+parâmetro para distinguir o marcador de desconhecido entre as duas populações.
+**Régua: dividir uma lista renderizada em grupos é extração de componente, não
+acréscimo de bloco** — e extração de componente custa a assinatura mais os sítios de
+chamada, não as linhas movidas.
+
+**E o arquivo criado é regime de registro puro — 5,67:1 — e NÃO serve de âncora**,
+pela mesma razão que a 22ª registrou para os 63:1: numa change em que o produto é a
+razão escrita, a proporção não mede disciplina de comentário, mede que não há lógica
+no denominador. O módulo tem **15 linhas de lógica**: um dicionário de quatro
+entradas, um `lookup` e dois exports.
+
+**A projeção não foi corrigida** — corrigi-la depois de aprender apagaria a medição.
+
+### Testes NÃO rodados, e por quê
+
+**`apps/api`, `apps/workers` e `apps/inbox` não foram rodados.** A change não toca
+uma linha de nenhum dos três — os três campos já eram servidos desde a #51, e a
+conferência de escopo confirma que toda a árvore alterada está em
+`apps/frontend/src/features/insights/`. Rodar suíte de integração com
+Testcontainers contra a VM do Podman naquele estado também não produziria número
+utilizável.
