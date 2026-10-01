@@ -86,16 +86,52 @@ const CORPO_AUSENTE: SystemInsights = {
   errors: {
     executionRegime: 'execution',
     indexingRegime: 'embedding',
+    rejectionRegime: 'rejection',
     failedCount: 0,
     rejectedCount: 0,
+    rejectedAtEntryCount: 0,
     byAgent: [],
     byPhase: [],
+    rejectionsByReason: [],
     indexingFailures: [],
     nonTerminal: { openExecutionCount: 0, neverConsumedCount: 0, observedStates: [] },
     caveats: [],
   },
   delegation: { regime: 'execution', pairs: [] },
 };
+
+// O NOME DO REGIME → RÓTULO DE OPERADOR, E ELE CARREGA A CONCORDÂNCIA.
+//
+// Os nomes são chaves de contrato de `MetricsOptions.All` (`execution`,
+// `embedding`, `rejection`), nunca texto de operador — e a tela tinha DOIS sítios
+// traduzindo, cada um com a sua regra própria: o cabeçalho da página fazia
+// `regime === 'execution' ? 'execução medida' : `${regime} medido`` e o
+// `regimeNoteFor` fazia `name === embeddingRegime ? 'embedding' : name`. Dois
+// sítios, duas regras, e nenhum dos dois cobria o terceiro regime.
+//
+// **A CONCORDÂNCIA É O MOTIVO DE O MAPA GUARDAR A FRASE E NÃO O SUBSTANTIVO:**
+// "execução medid**a**" e "recusa medid**a**" são femininas, "embedding medid**o**"
+// é masculino. Um mapa de substantivo obrigaria um segundo mapa de gênero, ou o
+// masculino por omissão — que escreveria "recusa medido".
+//
+// **`embedding` fica em inglês de propósito**, e isso é decisão do dono na tela da
+// #52: é o termo que quem opera usa. Não é tradução esquecida, e o guarda negativo
+// da página declara a exceção por escrito.
+//
+// A QUEDA PARA O NOME CRU PERMANECE, e ela é a régua do desconhecido da casa —
+// valor não reconhecido aparece, visível, nunca com o rótulo de outro. Ela já
+// tinha guarda antes desta change (`regime NOVO é absorvido`, escrito pela #52), e
+// continua tendo. O que esta change acrescenta é o guarda do caso OPOSTO: regime
+// que a tela CONHECE não sai cru.
+const REGIME_LABELS: Record<string, string> = {
+  execution: 'execução medida',
+  embedding: 'embedding medido',
+  rejection: 'recusa medida',
+};
+
+function regimeLabel(name: string): string {
+  return REGIME_LABELS[name] ?? `${name} medido`;
+}
 
 function formatarInstante(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat('pt-BR', {
@@ -165,7 +201,7 @@ export function SystemInsightsPage() {
     if (inicio === undefined || name === insights.volume.regime) {
       return undefined;
     }
-    return `${name === insights.tokens.embeddingRegime ? 'embedding' : name} medido desde ${formatarInstante(inicio, janela.timeZone)}`;
+    return `${regimeLabel(name)} desde ${formatarInstante(inicio, janela.timeZone)}`;
   };
 
   const agentNames = useMemo(
@@ -208,8 +244,8 @@ export function SystemInsightsPage() {
             {regimeStartOfPage === null ? null : (
               <Text span data-testid={`medindo-desde-${insights.volume.regime}`}>
                 {' '}
-                · {insights.volume.regime === 'execution' ? 'execução medida' : `${insights.volume.regime} medido`}{' '}
-                desde {formatarInstante(regimeStartOfPage, janela.timeZone)}
+                · {regimeLabel(insights.volume.regime)} desde{' '}
+                {formatarInstante(regimeStartOfPage, janela.timeZone)}
               </Text>
             )}
           </Text>
@@ -313,14 +349,25 @@ export function SystemInsightsPage() {
               executedTaskCount={insights.volume.executedTaskCount}
               queryState={queryState}
               reason={razao}
+              // O TERCEIRO REGIME DA RESPOSTA, e o único número desta página que o
+              // declara. Vai para o quadro da recusa, junto da CONTAGEM; o card de
+              // Motivos, que decompõe esse mesmo número, não o repete.
+              rejectionRegimeNote={regimeNoteFor(insights.errors.rejectionRegime)}
             />
         </Grid.Col>
         <Grid.Col span={{ base: 12, lg: 6 }}>
+            {/* SEM NOTA DE REGIME, e é decisão do dono na conferência: o card
+                mostra três populações de três regimes, e nomear um deles no
+                cabeçalho afirma que tudo ali é daquele. Ver o cabeçalho do
+                componente para as duas alternativas recusadas.
+
+                `regimeNoteFor` continua servindo o card de consumo por provedor e
+                o quadro de recusa do card de Falhas — o caminho é comum, e só
+                este consumidor sai. */}
             <FailureReasonsCard
               errors={insights.errors}
               queryState={queryState}
               reason={razao}
-              regimeNote={regimeNoteFor(insights.errors.indexingRegime)}
             />
         </Grid.Col>
       </Grid>

@@ -9,6 +9,8 @@ import { SystemInsightsPage } from './SystemInsightsPage';
 import { getSystemInsights } from '../api/insightsApi';
 import { listAgents } from '../../agents/api/agentsApi';
 import {
+  REGIMES_FIXTURE,
+  errorsFixture,
   systemInsightsFixture,
   tokensFixture,
   volumeFixture,
@@ -166,7 +168,11 @@ describe('SystemInsightsPage', () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId('kpi-tasks-valor')).toHaveTextContent('476'));
 
-    for (const nota of screen.getAllByTestId(/^medindo-desde-|^nota-de-regime$/)) {
+    // A EXPRESSÃO FOI ALARGADA DE `^nota-de-regime$` PARA `^nota-de-regime`: a
+    // nota do regime de recusa chega com sufixo (`nota-de-regime-rejection`), e a
+    // âncora de fim a deixava de fora da varredura. Guarda que não varre o
+    // elemento novo dá impressão de cobertura sem ter.
+    for (const nota of screen.getAllByTestId(/^medindo-desde-|^nota-de-regime/)) {
       const dentroDoCabecalhoDaPagina = screen
         .getByTestId('janela-do-periodo')
         .contains(nota);
@@ -199,6 +205,88 @@ describe('SystemInsightsPage', () => {
         'indexing medido desde 24/09/2026',
       ),
     );
+  });
+
+  it('regime CONHECIDO não sai cru — a recusa aparece com rótulo de operador', async () => {
+    // O DISCRIMINANTE DESTA CHANGE, e ele não é o caso de cima.
+    //
+    // O caso `regime NOVO é absorvido` passa um nome que a tela GENUINAMENTE não
+    // conhece, e para ele o cru é o certo. `rejection` é o oposto: regime que a
+    // tela conhece — a rota o exige em `MetricsOptions.All`, o contrato o declara
+    // em campo próprio, e esta página o apresenta — caindo no caminho do
+    // desconhecido. **Nenhum arranjo daquele caso separa os dois**, porque ele
+    // nunca passa um conhecido-sem-rótulo.
+    //
+    // Sem este guarda, a tela escreveria "rejection medido desde 26/09/2026", em
+    // inglês, em português.
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('kpi-tasks-valor')).toHaveTextContent('476'));
+
+    const nota = screen.getByTestId('nota-de-regime-rejection');
+    expect(nota).toHaveTextContent('recusa medida desde 26/09/2026');
+    expect(nota.textContent).not.toContain('rejection');
+  });
+
+  it('o card de Motivos NÃO recebe nota de regime, e o de provedor CONTINUA recebendo', async () => {
+    // O PAR, e é ele que prova a correção do achado da conferência do dono.
+    //
+    // O defeito morava na fiação: a página passava `regimeNote` ao card de
+    // Motivos, que mostra TRÊS populações de três regimes — fase de execução,
+    // falha de indexação e motivo de recusa. Um nome de regime no cabeçalho
+    // afirma que tudo ali é daquele, quando dois terços não são.
+    //
+    // O NEGATIVO SOZINHO NÃO BASTARIA: ele passaria se a página parasse de passar
+    // a nota a TODOS os cards, que é a regressão fácil de cometer ao mexer num
+    // argumento compartilhado. Por isso o positivo vem no mesmo caso.
+    // A PRECONDIÇÃO É A QUE PRODUZ A NOTA, E A PRIMEIRA VERSÃO ERROU ISSO.
+    //
+    // Ela afirmava só que `REGIMES_FIXTURE` tem `embedding` — e passou verde
+    // contra o defeito, porque a fixture padrão não traz `byPhase` nem
+    // `indexingFailures`: sem linha de falha não há grupo, e sem grupo não havia
+    // nota a negar. **Terceira vez nesta change que um guarda de ausência passa
+    // por falta do estado que ele nega.** A precondição certa é a linha de falha,
+    // não o regime no mapa.
+    vi.mocked(getSystemInsights).mockResolvedValue({
+      ...corpo,
+      errors: errorsFixture({
+        byPhase: [{ phase: 'AgentRun', count: 6 }],
+        indexingFailures: [{ outcome: 'Failed', failurePhase: 'Chunking', count: 2 }],
+        rejectedAtEntryCount: 5,
+        rejectionsByReason: [{ reason: 'AgentInactive', count: 5 }],
+      }),
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('kpi-tasks-valor')).toHaveTextContent('476'));
+
+    // Precondição: o grupo que CARREGAVA a nota está na tela, e o regime dele
+    // está na resposta — é exatamente o estado em que a nota apareceria.
+    expect(screen.getByTestId('grupo-motivos-de-falha')).toBeInTheDocument();
+    expect(Object.keys(REGIMES_FIXTURE)).toContain('embedding');
+
+    // O positivo: o card de consumo por provedor continua declarando o dele.
+    const provedor = screen.getByTestId('card-consumo-por-provedor');
+    expect(provedor.querySelector('[data-testid="nota-de-regime"]')).not.toBeNull();
+
+    // O negativo: o de Motivos não declara nenhum.
+    const motivos = screen.getByTestId('card-motivos');
+    expect(motivos.querySelector('[data-testid="nota-de-regime"]')).toBeNull();
+    expect(motivos.textContent ?? '').not.toContain('medido desde');
+  });
+
+  it('NEGATIVO: nenhum nome de regime do FIO aparece na página', async () => {
+    // A varredura, e não só o caso do rótulo: os três nomes de
+    // `MetricsOptions.All` são chaves de contrato, nunca texto de operador. Um
+    // quarto sítio de tradução esquecido reprova aqui, e não no caso de cima.
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('kpi-tasks-valor')).toHaveTextContent('476'));
+
+    const pagina = screen.getByTestId('pagina-insights').textContent ?? '';
+    for (const doFio of ['execution', 'rejection']) {
+      expect(pagina).not.toContain(doFio);
+    }
+    // `embedding` é a exceção declarada: é o nome que o dono aprovou na tela,
+    // porque é o termo que quem opera usa. Ele aparece, e é de propósito.
+    expect(pagina).toContain('embedding medido desde');
   });
 
   // ---------------------------- AS DUAS CONSULTAS SÃO INDEPENDENTES (spec)

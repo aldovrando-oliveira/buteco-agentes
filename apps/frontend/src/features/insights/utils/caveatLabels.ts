@@ -41,10 +41,24 @@
 // O QUE A ROTA REAL SERVE — CONFERIDO EM 26/09/2026 CONTRA O `HEAD`
 // ===========================================================================
 //
-//   escopo do sistema: 5 códigos em 2 blocos — `performance` (2), `errors` (2)
+//   escopo do sistema: **4** códigos em 2 blocos — `performance` (2), `errors` (2)
 //                      … e `residual-is-not-only-tools` vem em `performance`;
 //   escopo do agente : 6 códigos em 4 blocos — `tokens` (1), `performance` (2),
 //                      `errors` (2), `delegation` (1).
+//
+// CRITÉRIO DE CONTAGEM, para quem recontar: os literais `InsightsCaveats.*`
+// passados a construtor de resposta nos handlers. No sistema são
+// `GetSystemInsightsQueryHandler.cs:529` (dois) e `:698-699` (dois). Recontado em
+// 27/09/2026 sobre a `main` em `8f646c0`.
+//
+// *(Dizia **5** no escopo do sistema, com a decomposição (2) e (2), que soma 4. O
+// `5` estava CERTO antes da #51, quando `errors` trazia três — e veio de
+// `types/systemInsights.ts`, que o escrevia como "`performance` (2) e `errors`
+// (3) … os cinco códigos". Quando a #51 tirou `rejection-reason-not-collected`, a
+// DECOMPOSIÇÃO foi recalibrada aqui para (2) e (2) e **o total continuou 5**. É a
+// convenção 22 na forma mais barata de acontecer — recalibrar as partes e citar o
+// headline antigo —, e a 18 dizendo por que headline não serve para nada: só a
+// decomposição é verificável. Os dois sítios foram corrigidos juntos.)*
 //
 // `rejection-reason-not-collected` NÃO CHEGA EM NENHUM DOS DOIS. Ele caiu dos
 // dois handlers com a change `recusa-motivo-coleta` (#51), que passou a servir
@@ -59,14 +73,23 @@
  *
  * A união é a de TODAS as superfícies. Uma posição que só existe numa tela é
  * inofensiva na outra, porque o mapa daquela tela simplesmente não a usa.
+ *
+ * **`'rejection-reason'` SAIU DA UNIÃO na #75.** Ela existia para
+ * `rejection-reason-not-collected`, que a #51 tirou dos dois handlers — e desde
+ * então **nenhum dos dois mapas de posição a usava**: membro de união sem nenhum
+ * consumidor, que o compilador não acusa porque uma união a menos nunca quebra
+ * quem não a menciona.
+ *
+ * Saiu nesta change porque era ESTA que teria sido a consumidora dela e não é: o
+ * motivo da recusa deixou de ser um `caveat` e passou a ser dado, em
+ * `rejectionsByReason`. A **forma** é a da #83 — declaração viva sem consumidor,
+ * mantida por não custar nada a ninguém —, e ela se repete.
  */
 export type CaveatPlacement =
   /** Junto da duração da task. Nas duas superfícies. */
   | 'task-duration'
   /** Junto da contagem de recusas. Nas duas superfícies. */
   | 'rejection-count'
-  /** Junto do motivo da recusa. Só na página do sistema. */
-  | 'rejection-reason'
   /** Junto das tasks sem estado terminal. Só na página do sistema. */
   | 'non-terminal'
   /** Junto da parcela de tempo fora do provedor. Só na aba do agente. */

@@ -65,6 +65,13 @@ import type {
   TokenTotals,
   TokensPerTask,
   FailurePhaseCount,
+  // SUBIU PARA O MÓDULO NEUTRO NESTA CHANGE, pelo gatilho que estava escrito
+  // aqui: `RejectionReasonCount` era declarada neste arquivo *"porque a página do
+  // sistema ainda não conhece estes campos… quando ela fechar, esta interface
+  // sobe para o módulo neutro"*. A issue era a #75, e é esta change. A forma é
+  // neutra de escopo — significa a mesma coisa nas duas rotas —, e o `.cs` a
+  // reusa pelo mesmo motivo.
+  RejectionReasonCount,
 } from './systemInsights';
 
 export type {
@@ -76,6 +83,7 @@ export type {
   TokenTotals,
   TokensPerTask,
   FailurePhaseCount,
+  RejectionReasonCount,
 };
 
 /**
@@ -169,19 +177,6 @@ export interface AgentModelFailures {
   provider: string | null;
   model: string | null;
   failedCount: number;
-}
-
-/**
- * M29 — um valor do vocabulário fechado de motivo de recusa e a contagem dele.
- *
- * Declarada AQUI e não em `systemInsights.ts` porque a página do sistema ainda
- * não conhece estes campos: `apps/api` passou a servi-los na change
- * `recusa-motivo-coleta` (#51) e o painel não acompanhou. É achado com issue
- * própria; quando ela fechar, esta interface sobe para o módulo neutro.
- */
-export interface RejectionReasonCount {
-  reason: string;
-  count: number;
 }
 
 /**

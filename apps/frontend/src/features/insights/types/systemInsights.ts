@@ -147,6 +147,34 @@ export interface FailurePhaseCount {
   count: number;
 }
 
+/**
+ * M29 — um valor do vocabulário fechado de motivo de recusa e a contagem dele na
+ * janela.
+ *
+ * **MESMO FORMATO de `FailurePhaseCount`, e a rota escolheu assim de propósito**
+ * — lista rasa, rótulo e contagem, sem subcardinalidade —, lendo o que o card de
+ * Motivos já fazia. Mas **lista própria, e não dentro de `byPhase`**: o
+ * vocabulário de `byPhase` é o `FailurePhase` de `task_executions`, que a
+ * capability `agent-execution-metrics` enumera em sete valores. Um motivo de
+ * recusa ali seria mentir no contrato de outra capability.
+ *
+ * **Ela MUDOU DE ARQUIVO nesta change, e o gatilho estava escrito.** A #53 a
+ * declarou em `agentInsights.ts` com a razão e a condição de volta: *"Declarada
+ * AQUI e não em `systemInsights.ts` porque a página do sistema ainda não conhece
+ * estes campos… quando ela fechar, esta interface sobe para o módulo neutro."* A
+ * issue é a #75, e é esta change. `agentInsights.ts` passa a importá-la daqui e a
+ * reexportá-la, como já faz com as outras sete formas neutras de escopo.
+ *
+ * **A soma das contagens fecha com `rejectedAtEntryCount`** da mesma janela,
+ * porque a coluna de motivo é obrigatória na fonte. Um valor que a tela não
+ * conheça é apresentado COMO ESTÁ: omiti-lo faria a soma deixar de fechar, sem
+ * sintoma.
+ */
+export interface RejectionReasonCount {
+  reason: string;
+  count: number;
+}
+
 export interface IndexingFailure {
   outcome: string;
   failurePhase: string | null;
@@ -159,14 +187,58 @@ export interface NonTerminalTasks {
   observedStates: string[];
 }
 
+/**
+ * M27 a M30 e M32.
+ *
+ * **TRÊS REGIMES DE MEDIÇÃO NUM BLOCO SÓ**, e nenhum eleito para representá-lo: o
+ * handler lê `task_executions` (execução), `knowledge_indexing_attempts`
+ * (embedding) e `task_rejections` (recusa). É por isso que há três campos de
+ * regime e não um.
+ *
+ * **E DUAS POPULAÇÕES DE RECUSA QUE NÃO SE SOMAM.** O campo separado é o que
+ * impede a soma:
+ *
+ *   - `rejectedCount` — recusa **com** linha de execução, derivada das tabelas de
+ *     métrica. Hoje só a de profundidade de delegação, feita por `apps/workers`
+ *     (medido: `AgentExecutionService.cs:236` é o único sítio que grava
+ *     `TerminalState = 'Rejected'`). Regime de **execução**;
+ *   - `rejectedAtEntryCount` — recusa **antes** de qualquer execução, feita por
+ *     `apps/api`. Regime **próprio** (`rejectionRegime`). Somá-la com a de cima
+ *     juntaria duas janelas de regimes diferentes num rótulo só.
+ *
+ * As duas ficam fora do percentual de falha, no numerador e no denominador, e é
+ * isso que `rejections-missing-from-executions` declara.
+ */
 export interface ErrorInsights {
   executionRegime: string;
   indexingRegime: string;
+  /**
+   * O regime de `task_rejections`. **Terceiro do mapa `regimes`**, e o primeiro
+   * que obriga a tela a rotular regime por nome em vez de por ternário.
+   */
+  rejectionRegime: string;
   failedCount: number;
-  /** Sem motivo — é a lacuna L1 (#51). */
+  /**
+   * Recusa **com** linha de execução — ver o cabeçalho do bloco.
+   *
+   * *(Dizia "Sem motivo — é a lacuna L1 (#51)". Duas coisas erradas, e a correção
+   * vai com a causa, convenção 9: a L1 **fechou** com a #51, que passou a servir o
+   * motivo em `rejectionsByReason`; e o motivo que ela coletou não é desta
+   * contagem — é da recusa de entrada. Este campo nunca teve motivo porque é
+   * outra população, não porque a fonte faltava.)*
+   *
+   * **Não é apresentada na página do sistema**: o `Main.dc.html` não tem elemento
+   * para ela — não há KPI de taxa de falha nesta tela —, e o rótulo "Recusadas na
+   * entrada" que ela ocupava é da outra população. *Servido e não desenhado*, com
+   * issue e gatilho (#75, design.md D3).
+   */
   rejectedCount: number;
+  /** Recusa de ENTRADA. Contagem medida, e o zero dela é verdade. */
+  rejectedAtEntryCount: number;
   byAgent: AgentFailures[];
   byPhase: FailurePhaseCount[];
+  /** Ordenada por contagem pela rota. A soma fecha com `rejectedAtEntryCount`. */
+  rejectionsByReason: RejectionReasonCount[];
   indexingFailures: IndexingFailure[];
   nonTerminal: NonTerminalTasks;
   caveats: string[];
@@ -188,10 +260,23 @@ export interface DelegationInsights {
  * O corpo de `GET /insights/system`.
  *
  * `caveats` existe em DOIS blocos só — `performance` (2 códigos) e `errors`
- * (3) —, e não em todos. Conferido no corpo real e no `SystemInsightsResponse.cs`
- * em 23/09, reconferido em 24/09. Os cinco códigos chegam por esses dois, e a
- * tela precisa saber a qual NÚMERO cada um se aplica, porque o bloco que o
- * carrega não é o único que ele limita (D12).
+ * (2) —, e não em todos. **QUATRO códigos** chegam por esses dois, e a tela
+ * precisa saber a qual NÚMERO cada um se aplica, porque o bloco que o carrega não
+ * é o único que ele limita (D12).
+ *
+ * **Critério de contagem, para quem recontar** (convenção 22 — o número vai com o
+ * critério, não só com o estado): os literais `InsightsCaveats.*` passados a
+ * construtor de resposta em `GetSystemInsightsQueryHandler.cs`, que são `:529`
+ * (`performance`, dois) e `:698-699` (`errors`, dois). Recontado em 27/09/2026
+ * sobre a `main` em `8f646c0`.
+ *
+ * *(Dizia `errors` **(3)** e "os cinco códigos", conferido em 23/09 e reconferido
+ * em 24/09. **Estava certo nas duas datas** e envelheceu com a #51, que tirou
+ * `rejection-reason-not-collected` dos dois handlers. E ESTE É O SÍTIO DE ORIGEM
+ * DO `5` QUE `caveatLabels.ts` carregou errado: lá a decomposição foi recalibrada
+ * para (2) e (2) e **o total continuou 5**, somando 4. É a convenção 22 na forma
+ * mais barata de acontecer — recalibrar as partes e citar o headline antigo — e a
+ * 18 dizendo por que headline não serve: só a decomposição é verificável.)*
  */
 export interface SystemInsights {
   window: InsightsWindow;
