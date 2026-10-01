@@ -39,6 +39,18 @@ import { formatCount, formatTokens, sumKnown, type QueryState } from '../utils/m
 //
 // O que a rota SERVE por agente além de tokens é `errors.byAgent`, então a
 // coluna Falhas entra — ela tem fonte.
+//
+// **E ESTA COLUNA NÃO SOMA O MESMO QUE O KPI "Falharam na execução" da mesma
+// página — #92.** `errors.byAgent` agrupa `TerminalState in ('Failed','Rejected')`
+// e o KPI conta `'Failed'` só; `rejectedCount` saiu da página na #75. No dado de
+// dev a coluna soma 4 e o KPI diz 2, na mesma rolagem. **Não corrigir aqui tirando
+// `Rejected` da coluna:** isso desfaz a #84, porque as falhas do agente que ela
+// recupera são todas `Rejected`. A saída é de vocabulário da tela e está na #92.
+//
+// E DESDE A #84 ELA É FONTE DE LINHA, NÃO SÓ DE COLUNA: a população da tabela é a
+// união das duas listas. O parágrafo acima dizia "A TABELA QUE CRUZA DOIS
+// CONTRATOS" sobre o cruzamento com o CATÁLOGO; agora há um segundo cruzamento, e
+// ele é entre as duas agregações da própria rota.
 
 export interface AgentConsumptionCardProps {
   byAgent: AgentTokens[];
@@ -62,7 +74,18 @@ export function AgentConsumptionCard({
   queryState,
   reason,
 }: AgentConsumptionCardProps) {
-  const failures = new Map(failuresByAgent.map((f) => [f.agentId, f.failedCount]));
+  // A SOMA, E NÃO A ÚLTIMA (#86).
+  //
+  // `errors.byAgent` é agrupada por `(AgentId, Provider, Model)` — TRÊS colunas —,
+  // então um agente que trocou de provedor ou de modelo dentro da janela chega em
+  // mais de uma linha. `new Map(lista.map(…))` guardava a ÚLTIMA e descartava as
+  // outras em silêncio; e como a rota ordena `count desc`, a última de um mesmo
+  // agente é a de MENOR contagem. Não era erro aleatório: era viés para baixo,
+  // sempre, com número que continua plausível.
+  const failures = failuresByAgent.reduce(
+    (acc, f) => acc.set(f.agentId, (acc.get(f.agentId) ?? 0) + f.failedCount),
+    new Map<string, number>(),
+  );
 
   // A ÚNICA AUSÊNCIA QUE VIRA ZERO NESTA PÁGINA, E ELA É JUSTIFICADA — não um
   // `?? 0` de conveniência, que a D6 proíbe por nome.
@@ -73,13 +96,55 @@ export function AgentConsumptionCard({
   // o mesmo raciocínio que a rota aplica ao dia medido e vazio.
   //
   // A diferença com as outras ausências da tela: aqui a população do
-  // denominador é conhecida — o agente está na agregação de tokens. Um agente
+  // denominador é conhecida — o agente está em uma das duas agregações. Um agente
   // que não está em NENHUMA das duas listas simplesmente não tem linha, e é
   // isso que impede o zero de se espalhar para quem não foi medido.
+  //
+  // **A #84 TORNOU ESTE RACIOCÍNIO MAIS EXATO, não menos:** a frase acima já
+  // falava em "nenhuma das duas listas", e antes dela a população era só UMA —
+  // então a justificativa descrevia um desenho que o código não tinha. Agora a
+  // população É a união das duas, e a condição que o texto sempre afirmou é a que
+  // o código executa.
+  //
+  // O que mudou junto, e precisa ficar dito: um agente que entra pela lista de
+  // FALHAS está, por definição, em `errors.byAgent` — então ele nunca cai neste
+  // ramo. Quem cai aqui continua sendo só quem tem consumo medido e nenhuma
+  // falha contada.
   const failedCountOf = (agentId: string): number => {
     const contado = failures.get(agentId);
     return contado === undefined ? 0 : contado;
   };
+
+  // A POPULAÇÃO DA TABELA É A UNIÃO DAS DUAS LISTAS (#84).
+  //
+  // Antes as linhas nasciam só de `tokens.byAgent`, que é `provider_calls join
+  // task_executions` — então AGENTE QUE FALHOU SEM CHAMAR O PROVEDOR não tinha
+  // linha, e as falhas dele sumiam da tela junto com ela. Observado no banco de
+  // dev em 30/09: um agente com 2 execuções, as 2 recusadas, nenhuma chamada de
+  // provedor, e `(null)`/`(null)` em provedor e modelo — o defeito escondia
+  // preferencialmente a falha de CONFIGURAÇÃO.
+  //
+  // A união resolve POR CONSTRUÇÃO, e não por sorte do dado: `errors.byAgent`
+  // (M28) consulta `task_executions` SOZINHA, sem junção a `provider_calls`, então
+  // toda execução terminal em `Failed` ou `Rejected` tem linha ali sempre.
+  //
+  // O QUE A UNIÃO DEIXA DE FORA, DE PROPÓSITO: agente que executou, não chamou
+  // provedor e não falhou. A tabela não teria o que mostrar dele — Tokens vazio,
+  // Falhas "Nenhuma", e um nome. A coluna que daria sentido a essa linha é
+  // `Tasks`, e ela ficou fora por decisão (#67, fechada). GATILHO para reabrir: a
+  // primeira coluna de população que entre nesta tabela — e é aí que o campo novo
+  // em `GET /insights/system` se justifica, não antes.
+  //
+  // Agente que entra só pela lista de falhas vem com as parcelas de token NULAS,
+  // para que a célula caia no estado VAZIO — ele não teve chamada de provedor, e
+  // `0` ali afirmaria que a chamada houve e reportou zero.
+  const semConsumoMedido: AgentTokens[] = failuresByAgent
+    .map((f) => f.agentId)
+    .filter((agentId, i, todos) => todos.indexOf(agentId) === i)
+    .filter((agentId) => !byAgent.some((a) => a.agentId === agentId))
+    .map((agentId) => ({ agentId, inputTokens: null, outputTokens: null }));
+
+  const populacao = [...byAgent, ...semConsumoMedido];
 
   // O DESTAQUE DA COLUNA FALHAS — a linha de MAIOR contagem, em vermelho.
   //
@@ -104,15 +169,25 @@ export function AgentConsumptionCard({
   // explicasse a escolha, e critério invisível é pior que critério grosseiro.
   //
   // **GATILHO para mudar:** o primeiro pedido do dono por TAXA de falha no
-  // ranking. E o trabalho começa pela POPULAÇÃO da tabela, não por uma coluna:
-  // as linhas nascem de `tokens.byAgent`, então agente que executou e não chamou
-  // provedor não tem linha nenhuma aqui — **observado** no dado de 26/09, onde
-  // um agente com 2 falhas em 2 tasks não aparece na tabela (#84).
+  // ranking.
+  //
+  // *(Este bloco dizia que "o trabalho começa pela POPULAÇÃO da tabela, não por
+  // uma coluna: as linhas nascem de `tokens.byAgent`, então agente que executou e
+  // não chamou provedor não tem linha nenhuma aqui (#84)". **Era verdade quando
+  // foi escrito, e a #84 fez exatamente o que ele mandava fazer primeiro:** a
+  // população veio antes da coluna. A frase fica corrigida com a causa, e não
+  // apagada — a ORDEM que ela defende continua valendo para quem reabrir o
+  // ranking por taxa.)*
+  //
+  // **E o destaque é calculado sobre a população INTEIRA.** Calculá-lo sobre
+  // `byAgent` depois da #84 seria defeito novo: a linha que entrou por falha
+  // poderia ter a maior contagem da coluna e não sair em vermelho. No dado de dev
+  // isso EMPATA, então o banco não reprovaria — o guarda é de fixture.
   //
   // Empate destaca todos os empatados: escolher um seria arbitrário.
-  const maiorFalha = Math.max(0, ...byAgent.map((a) => failedCountOf(a.agentId)));
+  const maiorFalha = Math.max(0, ...populacao.map((a) => failedCountOf(a.agentId)));
 
-  const linhas = byAgent
+  const linhas = populacao
     .map((linha) => ({
       ...linha,
       total: sumKnown([linha.inputTokens, linha.outputTokens]),

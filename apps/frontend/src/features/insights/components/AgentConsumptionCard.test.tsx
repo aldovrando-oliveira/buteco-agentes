@@ -20,6 +20,44 @@ const falhas: AgentFailures[] = [
   { agentId: ATENDENTE, provider: 'anthropic', model: 'claude-opus-5', failedCount: 5 },
 ];
 
+// ===========================================================================
+// ARRANJO DAS DUAS POPULAÇÕES QUE A TABELA CRUZA (#84 e #86)
+// ===========================================================================
+//
+// TODA CONTAGEM FICA ABAIXO DE 1.000, de propósito: `formatCount` é
+// `Intl.NumberFormat('pt-BR')` e o separador de milhar é o PONTO. Um `1.234` no
+// texto renderizado quebraria a asserção por formatação, e não por defeito — e o
+// guarda passaria a falar de outra coisa.
+
+/**
+ * O agente da **#84**: falhou e NÃO chamou o provedor, então não tem linha em
+ * `tokens.byAgent`. No banco de dev é o `4ab9739f`, com provedor e modelo nulos —
+ * o defeito esconde preferencialmente a falha de CONFIGURAÇÃO.
+ */
+const SEM_CONSUMO = '77777777-7777-7777-7777-777777777777';
+
+/**
+ * O caso da **#86**: o MESMO agente em duas linhas, porque a rota agrupa por
+ * `(AgentId, Provider, Model)` — três colunas, não uma.
+ *
+ * **A ordem é a da rota, e ela importa:** `order by 4 desc, 1` põe a de MAIOR
+ * contagem primeiro, então a de MENOR é a ÚLTIMA — e `new Map` com chave repetida
+ * guarda a última. É por isso que o defeito é viés para baixo, sempre.
+ *
+ * As duas contagens são as medidas na `Triagem` (5 + 2 = 7), que o recorte de
+ * regime remove do banco de dev. Daí o caso ser de fixture: ele não é
+ * reproduzível contra o dado atual, e o defeito é.
+ */
+const falhasEmDuasLinhas: AgentFailures[] = [
+  { agentId: ATENDENTE, provider: 'gemini', model: 'gemini-3.6-flash', failedCount: 5 },
+  { agentId: ATENDENTE, provider: 'openai', model: 'llama3.2:3b', failedCount: 2 },
+];
+
+/** A **#84**: a falha existe e o agente não está na agregação de consumo. */
+const falhasSemConsumo: AgentFailures[] = [
+  { agentId: SEM_CONSUMO, provider: null, model: null, failedCount: 2 },
+];
+
 function renderCard(
   overrides: Partial<Parameters<typeof AgentConsumptionCard>[0]> = {},
   queryState: QueryState = 'ok',
@@ -145,6 +183,86 @@ describe('AgentConsumptionCard', () => {
     expect(linhas[0]).toHaveAttribute('data-testid', `agente-${ATENDENTE}`);
   });
 
+  // ====================================================================
+  // A POPULAÇÃO DA TABELA E A SOMA DAS FALHAS (#84 e #86)
+  // ====================================================================
+  //
+  // Os dois defeitos moram na costura entre as duas listas: as LINHAS nasciam só
+  // de `tokens.byAgent`, e a COLUNA era lida de `errors.byAgent` por um `Map`.
+  // Um perdia a linha inteira; o outro perdia as linhas repetidas do agente.
+
+  it('a contagem de falhas de um agente é a SOMA das linhas que a rota serve para ele', () => {
+    // #86. A rota agrupa por (AgentId, Provider, Model), então trocar de provedor
+    // dentro da janela faz o agente chegar em mais de uma linha. Somar é a única
+    // leitura que não descarta medição.
+    renderCard({ failuresByAgent: falhasEmDuasLinhas });
+
+    expect(screen.getByTestId(`agente-${ATENDENTE}-falhas`)).toHaveTextContent('7');
+  });
+
+  it('NEGATIVO: NÃO é a contagem de uma das linhas — nem a última, nem a primeira', () => {
+    // O defeito guardava a ÚLTIMA, que pela ordenação da rota é a de MENOR
+    // contagem. Afirmar só o 7 deixaria passar uma correção que trocasse o viés
+    // de lado; estes dois fecham as duas saídas erradas.
+    renderCard({ failuresByAgent: falhasEmDuasLinhas });
+
+    const texto = screen.getByTestId(`agente-${ATENDENTE}-falhas`).textContent;
+    expect(texto).not.toContain('2');
+    expect(texto).not.toContain('5');
+  });
+
+  it('agente que falhou SEM chamar o provedor TEM linha, e as falhas dele aparecem', () => {
+    // #84. A linha não nasce mais da agregação de tokens: ela nasce da UNIÃO.
+    // Ausência de linha é o sintoma mais difícil de notar — ninguém repara numa
+    // linha que não existe.
+    renderCard({ failuresByAgent: falhasSemConsumo });
+
+    expect(screen.getByTestId(`agente-${SEM_CONSUMO}`)).toBeInTheDocument();
+    expect(screen.getByTestId(`agente-${SEM_CONSUMO}-falhas`)).toHaveTextContent('2');
+  });
+
+  it('NEGATIVO: a célula de Tokens desse agente fica VAZIA, e não em zero', () => {
+    // A PRECONDIÇÃO DO GUARDA É O ESTADO OBSERVÁVEL MAIS PRÓXIMO do que se nega,
+    // e não o dado de origem: o que se afirma aqui é "não há consumo MEDIDO para
+    // ele", e o observável disso é o estado da célula — `empty`, nunca `zero`.
+    //
+    // `0` ali afirmaria que o provedor foi chamado e reportou zero token, que é
+    // outra coisa; "Nenhuma" é palavra reservada ao zero CONTADO da coluna
+    // Falhas.
+    renderCard({ failuresByAgent: falhasSemConsumo });
+
+    const tokens = screen.getByTestId(`agente-${SEM_CONSUMO}-tokens`);
+    expect(tokens).toHaveAttribute('data-metric-state', 'empty');
+    expect(tokens).not.toHaveAttribute('data-metric-state', 'zero');
+    expect(tokens.textContent).not.toContain('0');
+    expect(tokens.textContent).not.toContain('Nenhuma');
+  });
+
+  it('sem consumo nenhum, mas COM falha, a tabela NÃO diz que não há nada no período', () => {
+    // O par do guarda do vazio: a tabela só está vazia quando as DUAS listas
+    // estão. Com falha medida e consumo nenhum, dizer "Nenhum consumo por agente
+    // neste período" esconderia a falha atrás de uma frase correta sobre a outra
+    // população.
+    renderCard({ byAgent: [], failuresByAgent: falhasSemConsumo });
+
+    expect(screen.queryByTestId('consumo-por-agente-vazio')).toBeNull();
+    expect(screen.getByTestId(`agente-${SEM_CONSUMO}-falhas`)).toHaveTextContent('2');
+  });
+
+  it('a união não duplica quem está nas duas listas, nem perde quem está só numa', () => {
+    // VACUIDADE: a fixture é povoada e a precondição está afirmada — dois agentes
+    // na agregação de consumo (um deles também nas falhas) e um só nas falhas.
+    // São TRÊS agentes distintos, logo três linhas; quatro significaria chave
+    // duplicada, duas significaria população perdida.
+    expect(byAgent).toHaveLength(2);
+    expect(falhas.map((f) => f.agentId)).toContain(ATENDENTE);
+    expect(byAgent.map((a) => a.agentId)).not.toContain(SEM_CONSUMO);
+
+    renderCard({ failuresByAgent: [...falhas, ...falhasSemConsumo] });
+
+    expect(screen.getAllByTestId(/^agente-[0-9a-f-]+$/)).toHaveLength(3);
+  });
+
   // ------------------------------------------- O DESTAQUE DA COLUNA FALHAS
 
   it('a linha de MAIOR contagem de falhas sai em vermelho', () => {
@@ -213,11 +331,15 @@ describe('AgentConsumptionCard', () => {
     // invisível.
     //
     // O cenário do "pior que não leva o destaque" é HIPÓTESE: no dado de 26/09
-    // ele não ocorre. O que ocorre é outra coisa, e tem issue — agente sem
-    // chamada de provedor não tem linha nenhuma aqui (#84).
+    // ele não ocorre.
+    //
+    // *(Dizia a seguir: "O que ocorre é outra coisa, e tem issue — agente sem
+    // chamada de provedor não tem linha nenhuma aqui (#84)". Era verdade quando
+    // foi escrito; a #84 FOI CORRIGIDA nesta change, e agora esse agente tem
+    // linha. Corrigido com a causa, não apagado.)*
     //
     // GATILHO para este caso mudar: o primeiro pedido do dono por taxa de falha
-    // no ranking — e aí o que muda primeiro é a POPULAÇÃO da tabela.
+    // no ranking. A POPULAÇÃO já foi feita — era o que vinha primeiro.
     renderCard({
       failuresByAgent: [
         { agentId: ATENDENTE, provider: 'anthropic', model: 'claude-opus-5', failedCount: 9 },
@@ -226,6 +348,35 @@ describe('AgentConsumptionCard', () => {
     });
 
     expect(screen.getByTestId(`agente-${ATENDENTE}-falhas`)).toHaveStyle({
+      color: 'var(--mantine-color-red-filled)',
+    });
+  });
+
+  it('o destaque segue a POPULAÇÃO: a linha que entrou por falha pode ser a maior', () => {
+    // A correção da população sem esta é defeito NOVO, que o HEAD não tem: a
+    // linha que a #84 traz pode ter a maior contagem da coluna e não sair
+    // destacada, porque `maiorFalha` era calculado sobre a lista de TOKENS.
+    //
+    // No dado de dev isto EMPATA (2 contra 2), e o empate destaca todos — então o
+    // banco não reprovaria. Daí o guarda ser de fixture, com contagens diferentes.
+    renderCard({
+      failuresByAgent: [...falhas, { agentId: SEM_CONSUMO, provider: null, model: null, failedCount: 9 }],
+    });
+
+    expect(screen.getByTestId(`agente-${SEM_CONSUMO}-falhas`)).toHaveStyle({
+      color: 'var(--mantine-color-red-filled)',
+    });
+  });
+
+  it('NEGATIVO: e a linha de consumo com contagem MENOR não sai em vermelho', () => {
+    // Sem este, o guarda acima passaria com a coluna inteira em vermelho — e é
+    // exatamente o que a correção PARCIAL produz: `maiorFalha` sobre a lista de
+    // tokens daria 5, destacando o Atendente e deixando o 9 em branco.
+    renderCard({
+      failuresByAgent: [...falhas, { agentId: SEM_CONSUMO, provider: null, model: null, failedCount: 9 }],
+    });
+
+    expect(screen.getByTestId(`agente-${ATENDENTE}-falhas`)).not.toHaveStyle({
       color: 'var(--mantine-color-red-filled)',
     });
   });
@@ -291,7 +442,15 @@ describe('AgentConsumptionCard', () => {
   });
 
   it('sem nenhum agente, diz o zero medido por extenso', () => {
-    renderCard({ byAgent: [] });
+    // AS DUAS LISTAS VAZIAS, e não só a de consumo: desde a #84 a população da
+    // tabela é a UNIÃO delas, então `byAgent: []` sozinho descreve uma tabela que
+    // AINDA TEM linha — a do agente que falhou sem chamar o provedor.
+    //
+    // A frase "Nenhum consumo por agente neste período" só é verdadeira quando
+    // nenhuma das duas mediu nada. O caso complementar — consumo vazio e falha
+    // medida — tem guarda próprio, e é ele que cobre a semântica que esta
+    // adaptação deixa de afirmar.
+    renderCard({ byAgent: [], failuresByAgent: [] });
 
     expect(screen.getByTestId('consumo-por-agente-vazio')).toHaveTextContent(
       'Nenhum consumo por agente neste período.',
