@@ -127,9 +127,75 @@ abaixo.
 `openspec/changes/archive/2026-09-30-insights-sistema-motivo-da-recusa/`. Ela trouxe à página do sistema os três
 campos que a #51 servia desde o deploy e a tela não consumia — e corrigiu o bloco
 *"Recusadas na entrada"*, que apresentava `rejectedCount`, **a outra população**.
-`apps/frontend` em **1402 / 118**, contra baseline de 1374 / 117. **Não commitada,
-não mergeada** — o push e o PR são do dono. Ver o fechamento dela abaixo, e as
-issues **#88**, **#89** e **#90** que ela abriu.
+`apps/frontend` em **1402 / 118**, contra baseline de 1374 / 117.
+
+*(Dizia **"Não commitada, não mergeada — o push e o PR são do dono"**. **Era
+verdade quando foi escrito**, e o estado mudou: o dono publicou, e o **PR #91**
+mergeou em **01/10/2026** no commit **`c32f09c`**, a partir de
+`feat/75-motivo-da-recusa-no-sistema`. Corrigido com a causa na change
+`consumo-por-agente-falhas`, que é a primeira a rodar depois do merge —
+convenção 9, e não apagamento: o texto descrevia o estado do momento.)*
+
+Ver o fechamento dela abaixo, e as issues **#88**, **#89** e **#90** que ela
+abriu.
+
+**A mesma linha seguiu com `consumo-por-agente-falhas`** (01/10/2026, issues **#84**
+e **#86** juntas), aplicada, sincronizada (`system-insights-ui`) e **arquivada** em
+`openspec/changes/archive/2026-10-01-consumo-por-agente-falhas/`. Ela corrige **os
+dois caminhos pelos quais falha sumia da coluna "Falhas"** da tabela *"Consumo por
+agente"*: a linha que não nascia e a contagem que era sobrescrita. `apps/frontend` em **1411 / 118**, contra baseline de
+1402 / 118 remedida em árvore limpa.
+
+**É change de `apps/frontend` só, e isso foi medido antes de decidir.** A #84
+avisava que podia exigir campo novo em `GET /insights/system`; não exige.
+`errors.byAgent` (M28) consulta `task_executions` **sozinha**, sem junção a
+`provider_calls`, então toda execução terminal em `Failed` ou `Rejected` tem linha
+ali **sempre** — e a união das duas listas no cliente fecha o dano **por
+construção**. **A convenção 1 não foi dispensada: ela não se aplica**, porque não
+há trabalho de backend para ordenar.
+
+**O que ficou de fora, com motivo:** a população *"todo agente com execução"*, que
+é a leitura literal do corpo da #84. Ela exigiria o campo novo e acrescentaria
+linha que **nenhuma das três colunas da tabela preencheria** — `Tasks` ficou fora
+por decisão na #67. Gatilho para reabrir: a primeira coluna de população que entre
+na tabela.
+
+**O achado, e ele abriu a #92:** a coluna *"Falhas"* conta `Failed` **+**
+`Rejected` (é o `group by` de M28) e o KPI *"Falharam na execução"* da **mesma
+página** conta `Failed` só — **4 contra 2 no dado de dev, na mesma rolagem**.
+Antes desta change a coluna somava 2 e fechava com o KPI **por coincidência**: as
+2 recusas do `Atendente Sênior` eram justamente as que a #84 escondia. **A change
+não cria o desencontro; para de escondê-lo.** Não foi corrigido aqui porque a
+saída óbvia — tirar `Rejected` da coluna — **desfaz a #84**, já que as falhas
+desse agente são todas `Rejected`; as saídas que sobram são de vocabulário da
+tela e pedem o artboard. É a classe de defeito que a #75 corrigiu em *"Recusadas
+na entrada"*: **um rótulo nomeando a população de outro**.
+
+**A varredura foi por FORMA, e fechou a lista:** seis sítios de
+`new Map(lista.map(…))` em `apps/frontend/src`, **cinco seguros com a razão
+conferida na fonte** (a chave é o próprio `group by`, ou PK de catálogo) e um é o
+defeito. **A premissa que mandou varrer não se confirmou** — a #90 não registra
+essa forma no `ProviderConsumptionCard`; o que ela chama ali de *"mesma forma"* é
+**declaração de regime**, e aquele componente não tem `new Map(` nenhum. Vale como
+régua: varredura por número de issue acha o que **fala** do assunto, não o que o
+**executa**.
+
+**A régua da fiação achou buraco de verdade.** Com os oito guardas de componente
+verdes, trocar `failuresByAgent={insights.errors.byAgent}` por `{[]}` na página —
+mutação que **esvaziaria a coluna inteira no app real** — deixava os **457** testes
+de `insights` passando. A página garantia `byAgent` e **nunca** afirmou
+`agente-…-falhas`. Fechado com um nono guarda, na página, que afirma o caso da #84
+ponta a ponta.
+
+**Convenção 18, vigésima quarta medição:** por categoria, **novos +8 projetado /
++9 medido**, adaptados **1 / 1 exato**, reforçados e removidos **0 / 0**. O +1 é o
+guarda de fiação, que não era previsível por leitura — só apareceu ao **rodar** a
+mutação. **Linhas erraram +53%** (projetado ~170 de código, medido 260), e **o
+motivo que a projeção dava para esperar erro menor estava errado**: atribuí o erro
+da medição anterior a duplo de teste e aqui não há duplo nenhum, mas **metade do
+delta é comentário** — 62 das 76 linhas do componente. A régua para a próxima:
+projetar linhas em duas parcelas, e projetar comentário por **quantos blocos a
+change torna falsos**.
 
 ## Changes aplicadas, por linha de trabalho
 
@@ -12515,6 +12581,14 @@ agente que executou e não chamou provedor **não tem linha**. Medido: **4 de 5
 agentes têm linha, e as linhas cobrem 25 das 27 execuções**. Uma coluna `Tasks`
 somaria **25 contra o KPI de 27** da própria página.
 
+> **Corrigido depois, e a ordem que este parágrafo defende foi a que se cumpriu:**
+> a change `consumo-por-agente-falhas` (#84) trocou a população da tabela pela
+> **união** de `tokens.byAgent` com `errors.byAgent`, então agente que falhou sem
+> chamar o provedor **passou a ter linha**. O parágrafo fica porque o raciocínio
+> dele continua inteiro — e porque a conclusão *"a população vem antes da coluna"*
+> é exatamente o que a #84 executou. O que **não** mudou: a coluna `Tasks`
+> continua fora, e seria ela, não a população, a exigir campo novo na rota.
+
 ### O custo NÃO foi a razão, e é por isso que está escrito
 
 A rota já faz **~24 idas ao banco** — 20 `SqlQuery` mais quatro `StatsAsync`.
@@ -12758,7 +12832,8 @@ linguagem, mesmo tipo de arquivo, **duas ordens de grandeza de diferença**.
   código vivo e esconde que ele está morto.
 - **(b) Agente que falhou sem chamar o provedor não tem linha em "Consumo por
   agente"** — **#84**. **Não é latente: está acontecendo.** `Atendente Sênior` tem 2
-  falhas em 2 tasks, zero chamadas, e nenhuma linha. A issue foi corrigida — o corpo
+  falhas em 2 tasks, zero chamadas, e nenhuma linha. *(**Corrigido** na change
+  `consumo-por-agente-falhas`: o `Atendente Sênior` tem linha, conferido na tela.)* A issue foi corrigida — o corpo
   dela dizia "coincidência de população", e isso saiu de uma medição **sem o recorte
   de regime**.
 - **(b2) Falhas por agente colapsadas num `Map` por `agentId`** — **#86**. A rota
@@ -12854,10 +12929,15 @@ que a suíte inteira verde não pegou (ver abaixo). Delta sincronizado em
 `system-insights-ui`: dois requisitos renomeados e reescritos, **7 cenários viram
 16**.
 
-**Nada commitado, nenhum push, nenhum PR** — os dois são do dono, e é por isso que a
-#75 continua em `In progress` e não em `In review`: a convenção 24 pede as **três**
-condições, e só a primeira está cumprida. Branch
-`feat/75-motivo-da-recusa-no-sistema` a partir de `8f646c0`.
+Branch `feat/75-motivo-da-recusa-no-sistema` a partir de `8f646c0`.
+
+*(Dizia **"Nada commitado, nenhum push, nenhum PR — os dois são do dono, e é por
+isso que a #75 continua em `In progress` e não em `In review`: a convenção 24 pede
+as três condições, e só a primeira está cumprida"**. **Era verdade quando foi
+escrito.** O dono cumpriu as três: **PR #91**, mergeado em **01/10/2026** em
+`c32f09c`; a issue **#75 está `CLOSED`**; e o item dela no projeto está em
+**`Done`** — os três conferidos via `gh` na change `consumo-por-agente-falhas`.
+Corrigido com a causa, não apagado.)*
 
 ### O que a reconferência derrubou, antes de escrever uma linha
 

@@ -703,6 +703,26 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Falha de agente sumia da coluna "Falhas" do ranking "Consumo por agente", por
+  dois caminhos independentes.** *(1)* As linhas da tabela nasciam só da agregação
+  de **tokens**, que depende de chamada ao provedor — então **agente que falhou
+  antes de chamar o provedor não tinha linha nenhuma**, e as falhas dele não
+  apareciam em lugar nenhum da página. Era a ausência pura: ninguém repara numa
+  linha que não existe, e a população escondida é justamente a da falha de
+  **configuração**. No dado de dev um agente com 2 falhas em 2 tasks, com provedor
+  e modelo nulos, estava invisível. *(2)* As contagens de falha eram colapsadas
+  num mapa por agente, e **a entrada que sobrevivia era a de MENOR contagem** —
+  a resposta agrupa a falha por agente, provedor e modelo e ordena por contagem
+  decrescente, então um agente que trocou de provedor dentro do período aparecia
+  com um pedaço do total, com cara de total. Não era erro aleatório: era viés para
+  baixo, sempre, e com número que continua plausível. A população da tabela passa a
+  ser a **união** de quem consumiu com quem falhou, e a contagem passa a ser a
+  **soma** das linhas do agente. Agente que falhou sem consumo medido entra com a
+  célula de Tokens **vazia** — nunca `0`, que afirmaria que o provedor foi chamado
+  e reportou zero. O destaque em vermelho passa a ser calculado sobre a população
+  inteira, sem o que a linha recuperada poderia ser a maior da coluna e não sair
+  destacada.
+
 - **A série diária de Insights não distinguia "dia não medido" de "dia medido e
   sem uso" — as duas metades da distinção que a linha de métricas existe para
   preservar.** A spec exigia omitir o dia anterior ao início do regime **e**

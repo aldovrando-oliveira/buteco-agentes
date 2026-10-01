@@ -315,6 +315,39 @@ describe('SystemInsightsPage', () => {
     expect(screen.queryByTestId('erro-da-consulta')).toBeNull();
   });
 
+  it('a coluna Falhas da tabela está LIGADA a `errors.byAgent`, e a #84 fecha pela fiação', async () => {
+    // A RÉGUA DA FIAÇÃO, e ela achou buraco de verdade nesta change.
+    //
+    // Os guardas da #84 e da #86 vivem em `AgentConsumptionCard.test.tsx` e provam
+    // o COMPONENTE. Trocando `failuresByAgent={insights.errors.byAgent}` por `{[]}`
+    // aqui na página — que esvaziaria a coluna Falhas inteira no app real e faria a
+    // linha da #84 desaparecer de novo — os 457 testes de `insights` passavam
+    // TODOS. O defeito morava na fiação, e nenhum guarda o via.
+    //
+    // Este guarda afirma a ligação pelo caso mais forte que ela sustenta: um
+    // agente presente SÓ em `errors.byAgent`, ausente de `tokens.byAgent`,
+    // chegando à tela pela página de verdade.
+    const SEM_CONSUMO = '77777777-7777-7777-7777-777777777777';
+    vi.mocked(getSystemInsights).mockResolvedValue({
+      ...corpo,
+      errors: errorsFixture({
+        failedCount: 2,
+        byAgent: [{ agentId: SEM_CONSUMO, provider: null, model: null, failedCount: 2 }],
+      }),
+    });
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`agente-${SEM_CONSUMO}-falhas`)).toHaveTextContent('2'),
+    );
+
+    // E o consumo dele fica VAZIO, não em zero: ele não chamou o provedor.
+    expect(screen.getByTestId(`agente-${SEM_CONSUMO}-tokens`)).toHaveAttribute(
+      'data-metric-state',
+      'empty',
+    );
+  });
+
   it('o nome do agente cruza com o catálogo quando ele responde', async () => {
     renderPage();
 

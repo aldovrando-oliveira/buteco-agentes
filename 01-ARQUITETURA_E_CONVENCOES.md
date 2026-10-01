@@ -1103,6 +1103,26 @@ de propor algo nesta base:
     | 1 | `dedupe-global-nome-de-tool` | `ToolOrigin`/`RenamedAIFunction` | documentação de decisão |
     | 2 | `lock-de-contexto-falha-terminal` | **48 : 111** (2,3:1), em `apps/workers/src/Buteco.Workers/Agents/` | três registros de mecanismo |
     | 3 | `delegacao-ciclo-no-cadastro` | **92 : 121** (1,3:1), em `apps/api/src/Buteco.Api/AgentDelegations/` | um registro de mecanismo, e a proporção foi **projetada em 1,4:1 antes de escrever o código** |
+    | 4 | `consumo-por-agente-falhas` | **14 : 62** (1 : 4,4), em `apps/frontend/src/features/insights/components/AgentConsumptionCard.tsx` | quatro blocos corrigidos com a causa, e a proporção **não foi projetada** — ver abaixo |
+
+    **A 4 é a primeira ocorrência de SINAL CONTRÁRIO AO DA 3: a regra existia e
+    não foi aplicada.** A projeção escreveu "~170 linhas de código" e declarou
+    esperar erro MENOR que o da medição anterior, atribuindo aquele erro a duplo
+    de teste — um fator que de fato não existia aqui, já que o componente é de
+    apresentação pura. Entregou **260**, erro de **+53%**, quase o mesmo da
+    anterior. **A causa era esta regra**, que estava escrita neste item desde a
+    terceira ocorrência e não foi consultada: metade do delta total é comentário,
+    e na produção são **quatro linhas de comentário para cada uma de lógica** — a
+    proporção mais extrema das quatro, porque a change corrige quatro blocos de
+    registro que ela própria tornou falsos.
+
+    **O que isso acrescenta à regra:** a contagem que a projeta não é só "quantos
+    registros de mecanismo a change ENTREGA" — é também **quantos registros
+    existentes a change TORNA FALSOS**, porque corrigir um bloco com a causa
+    (convenção 9) custa mais linhas do que escrevê-lo pela primeira vez: o texto
+    novo carrega o antigo, mais o motivo da mudança. Em change que corrige defeito
+    documentado, essa é a parcela dominante, e é previsível por leitura — basta
+    contar os blocos que afirmam o comportamento que vai mudar.
 
     Na 3 a regra foi aplicada preventivamente e **a dimensão de comentário veio
     certa** — 1,32:1 entregue contra 1,4:1 projetado. O volume total ainda errou
