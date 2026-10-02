@@ -261,6 +261,31 @@ opaco para o cliente.
 
 Cursor malformado responde `400` com `ValidationProblem` na chave `cursor`.
 
+**A comparação do cursor no SQL, verificada (tarefa 1.1).** O filtro é
+`EF.Functions.LessThan(ValueTuple.Create(e.OccurredAt, e.Id), ValueTuple.Create(at, id))`,
+que o `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 traduz para a comparação de
+row value do Postgres. A verificação foi de duas formas:
+
+- **Na fonte:** `NpgsqlRowValueTranslator`, decompilado da 10.0.3, mapeia
+  `NpgsqlDbFunctionsExtensions.LessThan(ITuple, ITuple)` para
+  `ExpressionType.LessThan` e transforma cada `ValueTuple.Create` em
+  `PgRowValueExpression`.
+- **No SQL gerado** (`ToQueryString()` num console com o mesmo pacote e a mesma
+  versão):
+
+  ```sql
+  WHERE e."BaseId" = @baseId AND (e."OccurredAt", e."Id") < (@at, @id)
+  ORDER BY e."OccurredAt" DESC, e."Id" DESC
+  LIMIT @p
+  ```
+
+A forma expandida (`OccurredAt < at OR (OccurredAt = at AND Id.CompareTo(id) < 0)`)
+também traduz no servidor (`e."Id" < @id`), mas fica descartada: são duas
+expressões para manter coerentes com o `ORDER BY`, contra uma, e a row value é a
+forma que o Postgres casa com o índice composto. Os dois lados comparam `uuid`
+pelo mesmo operador do banco, então a ordem do cursor e a do `ORDER BY` são a
+mesma, como `api-response-ordering` exige.
+
 **Por que cursor e não `page`/`offset`.** O histórico cresce **no topo**, e é o
 caso normal, não a exceção: o operador abre a aba e uma escrita acontece antes de
 "Carregar mais". Com offset, cada evento novo empurra a página seguinte uma
@@ -528,11 +553,16 @@ dos dois.
   registra as escritas como aconteceram, e a última vence no documento como já
   vence hoje. Corrigir isso exigiria token de concorrência em
   `KnowledgeDocument`, que é mudança de `knowledge-document-catalog`.
-- **[Um caminho de recusa novo criado depois desta change, mas depois do `Add` do
-  evento]** → Mitigação: os cenários negativos cobrem cada recusa que existe hoje,
-  e a D2 fixa a ordem "valida, toca a entidade, adiciona o evento, salva". Recusa
-  futura que entrar depois do `Add` aparece como evento sem escrita no cenário
-  dela, desde que o cenário afirme também a ausência de evento.
+- **[O evento ser gravado fora da transação da escrita]** O defeito que a D2
+  previne **não** é um `Add` do evento antes de uma recusa: o `Add` só registra no
+  `ChangeTracker`, e todo caminho de recusa retorna sem chamar `SaveChangesAsync`,
+  então o evento morre com o contexto. *Corrigido na implementação:* a primeira
+  redação deste risco descrevia esse caso, e o guarda montado sobre ele (tarefa
+  7.10a) não teria reprovado. O defeito real é um `SaveChangesAsync` **a mais**:
+  o evento salvo antes da validação, ou numa chamada própria, separado da escrita
+  do documento. → Mitigação: a D2 fixa **um** `SaveChangesAsync` por handler, e o
+  guarda 7.10a reintroduz exatamente o salvamento antes da validação. Os cenários
+  de recusa (conteúdo inválido, acima do teto) reprovam com ele.
 - **[A cascata só é exercida por SQL]** Sem rota de exclusão de base, o cenário
   apaga a linha diretamente. → Aceito: é o que existe para ser verificado. O
   teste afirma a cascata do **banco**, que é onde ela mora.

@@ -287,6 +287,15 @@ o versionamento pretende seguir
   Base inativa continua vinculável, e agente inativo continua configurável.
 - As respostas de agente passam a incluir `knowledgeBases`, com id e nome de
   cada base vinculada, ordenados por nome e desempatados por identificador.
+- Histórico de mudanças nos documentos de uma base, em `apps/api`
+  (`GET /knowledge-bases/{id}/document-events`). Cadastro, atualização e
+  exclusão de documento gravam um evento na mesma transação da escrita, com o
+  autor, que é o subject do token. Os eventos vêm do mais recente para o mais
+  antigo, em páginas de 50 por cursor. "Atualizado" só existe quando o texto ou
+  o título mudou de fato, e o evento diz qual dos dois. Reindexar não gera
+  evento, e escrita recusada também não. O evento de exclusão sobrevive ao
+  documento. O histórico começa vazio na implantação: documentos que já
+  existiam não ganham evento retroativo (#98).
 
 **Entrega containerizada**
 
