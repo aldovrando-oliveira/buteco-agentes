@@ -778,10 +778,13 @@ de propor algo nesta base:
    consome um item aberto reconfere as afirmações dele contra a árvore
    antes de decidir qualquer coisa — a verificação da convenção 6 vale
    para o registro interno, não só para dependência externa.
+
    **E o prefixo `Try` não garante que a chamada não lance.**
    `System.Buffers.Text.Base64Url.TryDecodeFromChars` devolve `false` só para
    destino pequeno demais, e **lança `FormatException`** para entrada com
-   comprimento ou caractere inválido. Isso foi pego pelo cenário de cursor
+   comprimento ou caractere inválido, **e também para bits finais não canônicos**
+   (`"nao-e-um-cursor"`: 15 caracteres, e os 2 bits sem uso de `r` não são zero).
+   Isso foi pego pelo cenário de cursor
    malformado de `historico-documentos-base` (#98), que respondia **500** em vez
    de 400 com o `Try` usado como se fosse total. Na fronteira de entrada do
    cliente, o contrato de "não lança" se verifica com o cenário negativo, não com

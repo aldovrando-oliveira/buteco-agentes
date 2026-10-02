@@ -13874,14 +13874,19 @@ contêiner continuam 41. E nenhuma das duas colunas diz quantos contêineres sob
 enquanto as 4 classes da #110 sobem um por caso. A forma durável disto está na
 nona ocorrência da convenção 22 do `01`.
 
-**Suíte de `apps/api`:** **486/486 em 1 min 25 s** (91 s de relógio), mesmo
-estado da máquina acima. A change acrescenta **47 casos** (44 `[Fact]` + 3
-`[InlineData]`), contados no diff contra a `main`, sem remover nenhum. A baseline
-**não foi medida nesta change**: a tentativa num `git worktree` limpo da `main`
-foi interrompida no limite de 15 minutos **sem chegar a executar teste nenhum**
-(a saída parou antes do build, provavelmente no `restore` tentando a rede, o que
-não foi verificado). O 439 que sai de 486 − 47 coincide com o 439/439
-registrado na etapa 5 (`recusa-motivo-coleta`), mas é **derivado, não medido**.
+**Suíte de `apps/api`:** **501/501 em 1 min 18 s** (84 s de relógio, `load
+average` 5,4), depois do complemento do teste de cursor pedido na revisão. Antes
+dele, **486/486 em 1 min 25 s**, com **47 casos** novos (44 `[Fact]` + 3
+`[InlineData]`, contados no diff contra a `main`, sem remover nenhum). O
+complemento acrescentou mais 15 (ver abaixo), e a change soma **62** sobre a
+baseline.
+**Baseline medida num `git worktree` limpo da `main` (`1cae600`): 439/439 em
+1 min 17 s** (82 s de relógio, `load average` 2,5), e 486 − 439 = 47 fecha com a
+contagem do diff. A primeira tentativa de baseline foi interrompida no limite de
+15 minutos sem executar teste nenhum, com a saída escondida por um `grep`. A
+segunda, com `restore` (3 s), build (12 s) e teste separados e o log inteiro em
+arquivo, rodou sem travar. **A causa do travamento da primeira não foi
+identificada**, e a hipótese da rede no `restore` ficou descartada.
 
 ### Guardas contra o defeito real (convenção 15)
 
@@ -13895,6 +13900,7 @@ Cada um reintroduzido de propósito, visto reprovando e desfeito.
 | 7.10c | sem filtro por base | 8 de `KnowledgeDocumentCatalogTests`, entre eles `DocumentEvents_ReturnOnlyEventsOfTheRequestedBase` e `DocumentEvents_CursorFromAnotherBase_ReturnsOnlyEventsOfTheRequestedBase` |
 | 7.10d | sem a `CHECK` na migração | `DocumentEventsTable_RejectsUpdatedWithoutAnyChange` (só ele) |
 | 8.5 | backfill de `Created` no `Up` | `KnowledgeDocumentEventsMigrationTests.Migration_CreatesNoEventForDocumentsThatAlreadyExisted` (esperado 0, real 2) |
+| 7.10e (revisão) | sem a verificação de faixa de ticks no cursor | `DocumentEvents_WithMalformedCursor_ReturnValidationProblemOnCursor` nos dois casos de faixa, com `InternalServerError`, e os dois de `KnowledgeDocumentEventCursorTests.TicksOutsideTheDateTimeOffsetRange_AreRefusedByTheCursor` |
 
 **O guarda 7.10a nasceu no lugar errado e foi corrigido antes de rodar.** A
 redação aprovada dizia "adicionar o evento antes da validação". Lido o handler, o
@@ -13916,6 +13922,24 @@ corrigidos no `design.md` e no `tasks.md`, com a causa.
    cursor malformado pegou isso: respondia 500. Corrigido no
    `KnowledgeDocumentEventCursor` com captura e comentário; registrado na
    convenção 6 do `01`.
+
+### Complemento da revisão: um caso por ramo de recusa do cursor
+
+A revisão pediu que o cenário de cursor malformado exercitasse **cada** ramo de
+`TryDecode`. Os três casos originais (`"nao-e-um-cursor"`, `""`, `"AAAA"`) não
+cobriam a faixa de ticks. Os valores novos foram conferidos por
+`KnowledgeDocumentEventCursorTests` (sem contêiner) **contra a BCL**: cada caso
+afirma o ramo que atinge, e não só o `false`.
+
+**A premissa do pedido sobre `"nao-e-um-cursor"` estava errada, e a medição
+corrigiu.** Ele foi pedido como caso do ramo de tamanho ("decodifica para 11
+bytes sem lançar"). No .NET 10 ele **lança** `FormatException`: 15 caracteres
+deixam 2 bits sem uso no último, e em `r` (`101011`) esses bits não são zero. O
+decodificador recusa a forma não canônica. Era esse, aliás, o caso que
+respondia 500 antes da captura. Ele ficou no teste, comentado como captura, e o
+ramo de tamanho ganhou `"nao-e-um-cursoo"` (`o` = `101000`), que decodifica para
+os 11 bytes do pedido. Os dois valores de faixa decodificaram para 24 bytes com
+ticks −1 e `MaxValue.UtcTicks + 1`, exatamente como informados.
 
 Nenhuma mudança de comportamento especificado; a `spec.md` não foi alterada na
 implementação.

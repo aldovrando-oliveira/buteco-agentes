@@ -135,6 +135,15 @@ atualizada, sem commits à frente).
   `design.md`); (b) remover o desempate por `Id`; (c) retirar o filtro por base da
   consulta; (d) remover a `CHECK`. Registrar no `02-HISTORICO_E_STATUS.md` qual
   teste reprovou em cada um.
+  **(e), acrescentado na revisão:** retirar a verificação de faixa de ticks de
+  `KnowledgeDocumentEventCursor.TryDecode`. **Reprovou como esperado:**
+  `DocumentEvents_WithMalformedCursor_ReturnValidationProblemOnCursor` com
+  `"__________8RERERIiIzM0REVVVVVVVV"` (ticks = −1) e
+  `"K8oodfQ3QAARERERIiIzM0REVVVVVVVV"` (ticks = `MaxValue.UtcTicks + 1`), os dois
+  com `InternalServerError`, e os dois casos de
+  `KnowledgeDocumentEventCursorTests.TicksOutsideTheDateTimeOffsetRange_AreRefusedByTheCursor`.
+  Os outros 14 casos dos dois testes passaram, então nenhum deles dependia da
+  faixa. Desfeito.
 
 ## 8. Migração sem retroativos
 
@@ -190,12 +199,15 @@ atualizada, sem commits à frente).
 - [x] 10.1 [`apps/api`] `dotnet test apps/api/Api.sln` com Podman exposto em
   `DOCKER_HOST`, e o número de testes **medido** e colado aqui. Falha classificada
   como pré-existente só depois de rodar a baseline num `git worktree` limpo.
-  **Medido:** 486/486, `Duração: 1 m 25 s` (91 s de relógio), `load average`
-  2,3 em 12 núcleos, `postgres` e `rabbitmq` do compose de pé. A change acrescenta
-  47 casos (contados no diff contra a `main`). Nenhuma falha, então nenhuma
-  classificação dependeu de baseline. A tentativa de baseline num worktree limpo
-  não executou teste nenhum (interrompida em 15 min antes do build), e está
-  registrada no `02`.
+  **Medido:** 501/501, `Duração: 1 m 18 s` (84 s de relógio), `load average`
+  5,4 em 12 núcleos, `postgres` e `rabbitmq` do compose de pé, depois do
+  complemento do teste de cursor da revisão. Antes do complemento: 486/486 em
+  1 m 25 s. O complemento acrescentou 15 casos (10 em
+  `KnowledgeDocumentEventCursorTests`, 5 `InlineData` no cenário HTTP). Baseline
+  num worktree limpo da `main` (`1cae600`): **439/439 em 1 min 17 s**, e a change
+  acrescenta 62 casos ao todo (501 − 439). Nenhuma
+  falha nas duas. A primeira tentativa de baseline travou sem causa
+  identificada, e está registrada no `02`.
 - [x] 10.2 [docs] `python3 scripts/check-docs.py` sem violação.
   **Medido:** `Integridade da documentação: OK`.
 - [x] 10.3 [`apps/api`] `openspec validate historico-documentos-base`.
