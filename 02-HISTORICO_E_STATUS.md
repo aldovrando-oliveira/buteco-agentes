@@ -13563,3 +13563,249 @@ conferência de escopo confirma que toda a árvore alterada está em
 `apps/frontend/src/features/insights/`. Rodar suíte de integração com
 Testcontainers contra a VM do Podman naquele estado também não produziria número
 utilizável.
+
+---
+
+## `insights-periodo-entre-telas` — o período viaja entre as duas telas (#85)
+
+**Change aberta e implementada; a conferência visual do dono não aconteceu, e o
+archive não foi feito.** Nada aqui afirma estado de publicação: não há push, não há
+PR, não há merge.
+
+### O que era, e por que importava mais depois da #67
+
+As duas telas de Insights guardavam o período em `useState` semeado com o mesmo
+`DEFAULT_INSIGHTS_PERIOD` — `SystemInsightsPage.tsx:146` e
+`AgentInsightsTab.tsx:150`, conferidos no `HEAD`. Quem comparava agentes em 90 dias
+no ranking do sistema e clicava num nome **abria a aba na janela de 30, sem nada na
+tela dizendo que a janela mudou**.
+
+**Era o item (e) da etapa 5, herdado da #52, e a #85 o absorveu com gatilho mais
+forte:** a `fechamento-da-l4` comprou o clique único (`?tab=insights`), e o argumento
+que decidiu a #67 é *"a profundidade está a um clique"*. Um clique que troca a janela
+de medição em silêncio não é a mesma passagem — **os dois números existem, os dois
+estão certos, e não falam do mesmo período**. A D7 daquela change registrou isto como
+limitação conhecida dela, com o ponteiro para cá. **O item (c) do "Resíduo de decisão
+— `fechamento-da-l4`" fecha aqui.**
+
+### As decisões, e a que mais precisava do motivo escrito
+
+**O período no endereço** (`/insights?period=90d`,
+`/agents/{id}?tab=insights&period=90d`), nas duas superfícies, com o link do ranking
+o levando. Das três formas na mesa, **a URL é a única que resolve as duas metades** —
+estado compartilhado e link-só resolvem a travessia e perdem o refresh.
+
+**O endereço carrega o NOME da janela, não os limites**, e as duas formas significam
+coisas diferentes: instantes **congelam**, o nome **desliza**. Três razões escolheram
+o nome, e a primeira é dirimente: **a janela rolante é requisito vivo**, com cenário
+próprio (*"nova tentativa consulta a janela atualizada"*), e instantes no endereço o
+contradiriam. As outras duas: o seletor de três opções **não produz nem lê de volta**
+um limite arbitrário, e o preset é **exatamente o que a chave de cache já carrega**,
+então a arquitetura de cache não mudou uma linha.
+
+**Ausência e valor não reconhecido caem no padrão sem reescrever o endereço** — o
+mesmo contrato de `parseTab`, por simetria: duas chaves do mesmo endereço com
+disciplinas opostas seriam duas regras sobre a mesma barra de endereços.
+
+### O que a verificação acrescentou ao escopo, e não estava no enunciado
+
+**`AgentDetailPage.tsx:76` substituía a busca inteira a cada troca de aba** —
+`setSearchParams(next === OVERVIEW_TAB ? {} : { tab: next })`, e **as duas pernas**.
+Não tinha sintoma, porque `tab` era a única chave. Com o período lá, trocar de aba e
+voltar o perderia em silêncio: **o mesmo defeito que a change existe para fechar, por
+outro caminho.** Virou pré-requisito, feito **antes** de o período chegar ao endereço,
+e `agent-catalog-ui` entrou nas capacidades modificadas por causa dele.
+
+**A irmã dele é a #96**, aberta antes do apply: `KnowledgeBaseDetailPage.tsx:98` tem a
+mesma forma e **não é defeito hoje** — aquele endereço tem uma chave só. Armadilha
+latente da família da convenção 25, com **gatilho observável: o primeiro parâmetro de
+consulta além de `tab` naquela página**. A classe tem nome: `setSearchParams`
+escrevendo o objeto inteiro, com sintoma de **perda silenciosa de escolha do
+operador**. A varredura `grep -rn "setSearchParams" src/` devolve **2 arquivos / 4
+linhas** — o universo inteiro do painel, e os dois estão nomeados.
+
+### Três premissas do enunciado e da issue que a leitura corrigiu (convenção 6)
+
+1. **Não existe `TimeProvider` em `apps/frontend`.** O enunciado pedia para conferir
+   como a tela obtém o "agora" e se há duplo de teste. Medido: **zero** sítios de
+   `TimeProvider`/`useNow`/`nowProvider`; o "agora" é `new Date()` em quatro lugares;
+   o duplo da casa é `vi.setSystemTime`, com precedente em `useSessions.test.ts:129` e
+   `InventoryPage.test.tsx:525`, e **nenhum teste da feature `insights` o usa**.
+   **Consequência de desenho:** os guardas afirmam a **largura** da janela
+   (`(to − from) / DAY_MS`), que é determinística com relógio livre — e isso é
+   consequência direta de o endereço levar o preset. Com instantes, o guarda precisaria
+   de relógio fixo.
+2. **A linha que a issue cita para a página do sistema estava defasada** — `:110`
+   contra `:146` hoje, porque o arquivo cresceu na `insights-sistema-motivo-da-recusa`.
+   A outra (`AgentInsightsTab.tsx:150`) estava **exata**, e o fato que as duas
+   sustentam continuava verdadeiro, conferido nas duas.
+3. **Dois números da minha própria varredura nasceram errados**, e a correção virou a
+   oitava ocorrência da convenção 22 — ver abaixo.
+
+### A convenção 22 ganhou a OITAVA ocorrência: o critério largo erra para CIMA
+
+A sétima diz que o critério estreito esconde buraco, e prescreve rodar os dois e
+comparar — o que levava a tratar o resultado largo como o universo verdadeiro. Medido
+aqui: `grep -rln "InsightsPeriod" src/` devolveu **10** arquivos, e **dois são falso
+positivo** — citam **`InsightsPeriod.MissingBoundMessage`**, um tipo do `apps/api`,
+**dentro de comentário**. Os consumidores reais do tipo são **8**. E a varredura da
+passagem, que eu havia escrito como "5 arquivos", são **4 arquivos / 8 linhas / 1 de
+produção**.
+
+**Por que não é a sétima com outro sinal:** lá faltava item que o critério não via, e
+alargar resolvia. Aqui alargar **acrescenta item que não existe**, e a comparação entre
+critérios não o remove — os dois concordam e os dois erram. **O que remove é abrir as
+linhas.** A régua passou a ser: citar o número do critério **conferido item a item**, e
+a comparação diz *o que cada um errou*, não qual está certo.
+
+### Convenção 18 — vigésima sexta medição
+
+**Baseline remedida em árvore limpa, não herdada: `apps/frontend` 1413 / 118, zero
+falhas, 131,22 s**, em `515883d`, `load average` **4,42** em 12 núcleos na largada, VM
+do Podman a 23,6%, porta 9222 livre, zero `Unhandled Error` de pool.
+**Fechamento: 1431 / 118, zero falhas, 156,20 s**, load **3,88** na largada, zero
+`Unhandled Error`. As saídas completas das quatro rodadas estão em
+`~/.cache/buteco-agents/issue-85/`, **sem `grep` e sem `tail`**.
+
+#### Casos — erro de +12,5%, e são TRÊS desvios que se somam
+
+| categoria | projetado | medido | erro |
+|---|---|---|---|
+| **novos** | 16 | **18** | **+12,5%** |
+| negativas novas (por afirmação negada) | 3 | **3** | exato |
+| **reforçados** | 2 | **1** | −50% |
+| adaptados — casos | 0 | **0** | exato |
+| **adaptados — helpers de arranjo** | 3 | **4** | +33% |
+| removidos | 0 | **0** | exato |
+| **de fiação acrescentados** | **0** | **0** | **exato** |
+| saldo | +16 → 1429 | **+18 → 1431** | +12,5% |
+| arquivos de teste | 118 | **118** | exato |
+| **arquivos tocados** | **11 modificados, 0 criados** | **11 / 0** | **exato** |
+
+Os três desvios, e **eles alargam a régua da vigésima quinta**: **−1** cenário de spec
+que virou **reforço** (a afirmação já tinha dono); **+1** cláusula `AND` negativa que
+virou `it()` próprio; **+2** guardas do **mecanismo**, que não têm cenário de spec
+nenhum — os que afirmam que a aba *recebe* o período em vez de o possuir. A 25ª havia
+achado que *nem toda negativa tem cenário de spec*; **esta é mais larga: nem todo
+guarda tem cenário de spec, negativa ou não.**
+
+#### Linhas — a mistura ACERTOU e o desvio MUDOU DE LADO
+
+| | projetado | medido | erro |
+|---|---|---|---|
+| criados | 0 / 0 | **0 / 0** | exato |
+| **produção — total** | ~108 | **211** (50 lógica + 161 comentário) | **+95%** |
+| **produção — mistura** | ~3,5 : 1 | **3,22 : 1** | **−8%** |
+| **teste — total** | ~464 | **412** (233 lógica + 179 comentário) | **−11%** |
+| **teste — mistura** | 1,5 : 1 | **0,77 : 1** | −49% |
+| total adicionado (não vazio) | ~572 | **623** | **+9%** |
+| removidas | ~10 | **25** | +150% |
+
+#### O veredito das duas hipóteses declaradas antes de medir
+
+**(a) A mistura de produção: CONFIRMADA.** Declarada ~3,5:1, falsa abaixo de 2,0:1.
+Medida **3,22:1** — dentro da faixa, erro de **−8%**, **o melhor acerto de mistura da
+série**. A contagem de cinco registros de mecanismo sustentou a projeção, e o valor
+caiu entre a 23ª (1,98:1, menos registros) e a 24ª (4,4:1, correção de registros
+tornados falsos), exatamente onde a leitura previa.
+
+**(b) O lugar do desvio: FALSIFICADA.** Declarei que o desvio estaria no **teste** e
+seria menor que +43%. **O teste errou −11%; a produção errou +95%.** A magnitude se
+cumpre no lado previsto, mas a previsão de **lugar** está errada — e pela régua da
+própria 25ª, separar direção de magnitude, isso é falsificação e não acerto parcial.
+
+**As duas causas, por leitura e reusáveis, e as duas entraram na convenção 18:**
+
+- **registro de mecanismo que é ARGUMENTO custa o dobro do que é AFIRMAÇÃO, e a
+  unidade não é o registro — é a RAZÃO CITADA.** `insightsWindow.ts` entregou **57
+  linhas de comentário para 5 de lógica (11,4:1)**, porque a decisão não é uma frase:
+  são três razões numeradas mais uma recusa que carrega o caso que a motivou. **Custo
+  medido: ~26 linhas por razão citada** — o mesmo número que a 5a-4 mediu, agora
+  confirmado em outra change;
+- **a mistura do TESTE não é a da produção.** Projetei 1,5:1 (o número da 25ª) e saiu
+  **0,77:1**, porque *guarda com arranjo próprio custa o dobro* **e o arranjo é lógica
+  sem comentário**. **Régua: ~1,5:1 para guarda de classe de defeito, ~0,5:1 para
+  guarda com arranjo.**
+
+**E as 25 linhas removidas contra ~10 projetadas:** a projeção contou os dois
+`useState` e a linha do escritor, e esqueceu que **trocar um invólucro de teste remove
+o antigo** — o `MemoryRouter` e o bloco de montagem de `renderTab` saíram inteiros.
+
+**A projeção não foi corrigida.**
+
+### A régua da fiação — duas operações, respostas OPOSTAS, e só a distribuição as separa
+
+**A previsão se cumpriu: nenhum guarda extra foi preciso.** As duas operações rodaram
+a suíte inteira, com zero `Unhandled Error`.
+
+| operação | reprovações | onde | é fiação? |
+|---|---|---|---|
+| tirar `period` do `to=` do link | **4**, em **2 arquivos** | 2 no próprio **+ 2 em `router.test.tsx`** | **SIM** |
+| tirar a preservação de `handleTabChange` | **2**, em **1 arquivo** | 2 no próprio | **NÃO** |
+
+**A previsão para a segunda era CONDICIONAL e a condição era falsa** — ela dizia
+*"reprova fora, **se** a travessia passar por troca de aba"*. A travessia não passa:
+chega com o período já no endereço. Então **distribuição local é o resultado certo**, e
+não lacuna: a preservação é mesmo local àquela página.
+
+**O que a oposição ensina:** a mesma change tem uma costura de fiação (o link → a aba,
+atravessando duas features) e uma de disciplina local (o escritor de `tab`). A contagem
+diria "4 contra 2" e não diria nada; **o que decide é 2 arquivos contra 1.**
+
+### Os guardas contra o defeito real (convenção 15), com a mensagem de cada um
+
+| guarda | defeito reintroduzido | mensagem |
+|---|---|---|
+| trocar de aba preserva os parâmetros | o escritor original, com segundo parâmetro semeado | `expected null to be '90d'` |
+| voltar à visão geral remove só a aba | idem | `expected null to be '7d'` |
+| a janela atravessa até a aba | `period` fora do `to=` | `expected [ 30 ] to include 90` |
+| NEGATIVO: a travessia não usa a janela padrão | idem | `expected [ 30 ] to not include 30` |
+| endereço SEM período não é reescrito | `useEffect` normalizando o endereço | `expected '?period=30d' to be ''` |
+| período inválido não reescreve o endereço | idem | `expected '?period=30d' to be '?period=180d'` |
+
+**Os dois de "não reescrito" foram escritos ANTES de a reescrita ser retirada**, contra
+uma normalização deliberada — sem isso passariam por construção (quarta forma da
+convenção 15). **E os dois da troca de aba semeiam o segundo parâmetro no arranjo**, que
+é o que os torna guardas do defeito em vez de guardas da forma: sem semeá-lo não há nada
+a perder, e eles ficariam verdes contra o escritor velho.
+
+**Uma reprovação não prevista, e é registro de armadilha, não de defeito:** o guarda
+`o endereço decide o período da aba` reprovou com **`expected 30 to be 90` com a
+produção correta** — o `beforeEach` do bloco `aba Conhecimento` não resetava
+`getAgentInsights`, e `mock.calls[0]` trouxe a janela de um teste anterior. O arquivo
+**já documentava o acúmulo** na linha 520, num espião que a lista de resets não cobria.
+Corrigido ali, com a causa escrita.
+
+### A varredura de `docs/` — resultado NEGATIVO, e varrida pela forma
+
+Varrido pela **forma** (afirmação de que o período é escolha local da tela; de que o
+endereço das telas de Insights não carrega parâmetro; menção a `searchParams` ou a
+parâmetro de consulta), nunca por `#85`. **`docs/` não menciona Insights uma única
+vez**, e não há nada a corrigir. O único *"sem seletor de período"* do `CHANGELOG`
+(`:340`) é sobre a tela de **inventário** e continua verdadeiro.
+
+### O que NÃO foi feito, e é decisão do dono
+
+- **A conferência visual FOI FEITA**, com `apps/api` e `apps/frontend` no ar contra o
+  banco de dev, **nos dois esquemas de cor** — oito quadros, todos conforme: o endereço
+  sem parâmetro abre em 30d e **não é reescrito**; `?period=90d` leva o cabeçalho a
+  04/07→02/10 e o aviso a "91 dias pedidos, 80 não existem"; a **travessia** do ranking
+  em 90d abre a aba **ativa e em 90d, com a mesma janela e o mesmo aviso**; ir para
+  "Visão geral" deixa o endereço em **`?period=90d`** (o `tab` sai, o período fica) e
+  voltar reabre **em 90d**; o refresh preserva; o link antigo `?tab=insights` abre em
+  30d sem reescrever; e período inválido cai no padrão nas duas superfícies, sem erro e
+  sem reescrever. **A change segue pausada antes do archive, que é decisão do dono.**
+
+  **Uma ressalva do DADO, não do código:** o último dado de execução do banco de dev é
+  de **24/09** e a conferência foi em **02/10**, então **7d está vazio** (ranking sem
+  linha) e **30d e 90d produzem números idênticos** — 14 tasks, 3,8 M tokens, 4 agentes.
+  A travessia foi conferida pela **janela ecoada** e pelo **aviso de medição parcial**
+  (31/20 contra 91/80), que diferem, e não pelos números, que coincidem por causa do
+  dado. **Semear o banco para que os três períodos difiram em número é decisão do
+  dono** — é a mesma situação do item (g) da etapa 5, com `delegation_outcomes`.
+- **`apps/api`, `apps/workers` e `apps/inbox` não foram rodados**, e não foram tocados:
+  a lista fechada de 11 arquivos está inteira em `apps/frontend/src/`. As duas rotas
+  agregadas continuam recebendo `from` e `to` absolutos, calculados no instante da
+  consulta como antes.
+- **A #92 não foi corrigida** (a coluna Falhas contra o KPI é decisão de vocabulário e
+  pede o artboard), nem a **#94**, nem a nota por grupo da **#90**.

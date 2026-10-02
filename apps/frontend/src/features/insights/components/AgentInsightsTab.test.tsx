@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
@@ -21,6 +21,7 @@ import {
   divergentDelegationFixture,
 } from '../test/agentInsightsFixture';
 import type { DelegationCatalogAgent } from '../utils/delegationRows';
+import { DEFAULT_INSIGHTS_PERIOD, type InsightsPeriod } from '../utils/insightsWindow';
 
 vi.mock('../api/insightsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/insightsApi')>();
@@ -49,6 +50,48 @@ function Wrapper({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * O ARRANJO É CONTROLADO, E ISSO É CONSEQUÊNCIA DA #85.
+ *
+ * O período deixou de ser estado desta aba e passou a ser prop da página (D4).
+ * Um `vi.fn()` em `onPeriodChange` deixaria o seletor sem efeito — clicar em "7d"
+ * chamaria o espião e a prop continuaria a mesma —, e o caso "trocar o período
+ * consulta de novo" passaria a medir nada. Este invólucro mínimo devolve à aba o
+ * comportamento que a página real lhe dá, sem trazer router nem endereço para
+ * dentro de um teste de componente.
+ *
+ * O PERÍODO INICIAL É `90d`, e não o padrão do sistema: se fosse `30d`, um
+ * `DEFAULT_INSIGHTS_PERIOD` fixado à mão dentro da aba passaria por todos os casos
+ * deste arquivo.
+ */
+const PERIODO_DO_ARRANJO: InsightsPeriod = '90d';
+
+function TabControlada({
+  registeredTargets,
+  agentsCatalog,
+  periodoInicial,
+  onPeriodChange,
+}: {
+  registeredTargets: { id: string; name: string }[];
+  agentsCatalog: DelegationCatalogAgent[] | undefined;
+  periodoInicial: InsightsPeriod;
+  onPeriodChange?: (period: InsightsPeriod) => void;
+}) {
+  const [period, setPeriod] = useState<InsightsPeriod>(periodoInicial);
+  return (
+    <AgentInsightsTab
+      agentId={AGENT_ID}
+      registeredTargets={registeredTargets}
+      agentsCatalog={agentsCatalog}
+      period={period}
+      onPeriodChange={(next) => {
+        onPeriodChange?.(next);
+        setPeriod(next);
+      }}
+    />
+  );
+}
+
 function renderTab({
   registeredTargets = [] as { id: string; name: string }[],
   agentsCatalog = CATALOGO as DelegationCatalogAgent[] | undefined,
@@ -57,13 +100,16 @@ function renderTab({
   // o caso "sem catálogo" testaria o contrário do que diz. É a mesma armadilha
   // que `AgentDelegationCard.test.tsx` já documenta.
   semCatalogo = false,
+  periodoInicial = PERIODO_DO_ARRANJO as InsightsPeriod,
+  onPeriodChange = undefined as ((period: InsightsPeriod) => void) | undefined,
 } = {}) {
   return render(
     <Wrapper>
-      <AgentInsightsTab
-        agentId={AGENT_ID}
+      <TabControlada
         registeredTargets={registeredTargets}
         agentsCatalog={semCatalogo ? undefined : agentsCatalog}
+        periodoInicial={periodoInicial}
+        onPeriodChange={onPeriodChange}
       />
     </Wrapper>,
   );
@@ -141,6 +187,41 @@ describe('AgentInsightsTab — a consulta', () => {
     await userEvent.click(screen.getByRole('radio', { name: '7d' }));
 
     await waitFor(() => expect(getAgentInsights).toHaveBeenCalledTimes(2));
+  });
+
+  it('a aba consulta a janela do período RECEBIDO, não a do padrão', async () => {
+    // O defeito que a #85 fecha, visto do lado de dentro: a aba mantinha o período
+    // em `useState(DEFAULT_INSIGHTS_PERIOD)`, então quem chegava aqui pelo ranking
+    // em 90 dias era medido em 30 — e os dois números estavam certos, sobre
+    // períodos diferentes.
+    //
+    // A LARGURA, e não os instantes (D8): `(to - from)` não depende de quando o
+    // teste roda, então não há relógio a controlar. A feature não tem `TimeProvider`
+    // nem usa `vi.setSystemTime` em teste nenhum, e esta decisão é o que a mantém
+    // assim.
+    renderTab({ periodoInicial: '7d' });
+
+    await aguardarResposta();
+
+    const [, from, to] = vi.mocked(getAgentInsights).mock.calls[0];
+    const dias = (new Date(to).getTime() - new Date(from).getTime()) / (24 * 60 * 60 * 1000);
+    expect(dias).toBe(7);
+    expect(screen.getByRole('radio', { name: '7d' })).toBeChecked();
+  });
+
+  it('a troca de período é ENTREGUE à página, que é quem escreve o endereço', async () => {
+    // A aba não escreve o endereço — ela avisa quem o possui (D4). Sem este
+    // guarda, a aba poderia voltar a guardar o período em estado local e os casos
+    // acima continuariam verdes, porque o invólucro deste arquivo faz o papel da
+    // página.
+    const onPeriodChange = vi.fn();
+    renderTab({ periodoInicial: '90d', onPeriodChange });
+    await screen.findByTestId('kpis-do-agente');
+
+    await userEvent.click(screen.getByRole('radio', { name: '7d' }));
+
+    expect(onPeriodChange).toHaveBeenCalledWith('7d');
+    expect(onPeriodChange).not.toHaveBeenCalledWith(DEFAULT_INSIGHTS_PERIOD);
   });
 
   it('a janela do cabeçalho é a que a RESPOSTA ecoa', async () => {

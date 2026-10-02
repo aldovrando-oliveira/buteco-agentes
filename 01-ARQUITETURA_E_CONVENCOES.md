@@ -1105,6 +1105,47 @@ de propor algo nesta base:
     | 3 | `delegacao-ciclo-no-cadastro` | **92 : 121** (1,3:1), em `apps/api/src/Buteco.Api/AgentDelegations/` | um registro de mecanismo, e a proporção foi **projetada em 1,4:1 antes de escrever o código** |
     | 4 | `consumo-por-agente-falhas` | **14 : 62** (1 : 4,4), em `apps/frontend/src/features/insights/components/AgentConsumptionCard.tsx` | quatro blocos corrigidos com a causa, e a proporção **não foi projetada** — ver abaixo |
     | 5 | `declared-gap-variante-morta` | **8 : 40** (1 : 5,0), em `apps/frontend/src/features/insights/components/DeclaredGap.tsx` | a primeira change de **REMOÇÃO** da série, e a proporção foi **projetada em 6:1 antes de escrever o código**, com falsificação declarada |
+    | 6 | `insights-periodo-entre-telas` | **50 : 161** (1 : 3,22), em cinco arquivos de `apps/frontend/src/features/` | **cinco** registros de mecanismo, e a proporção foi **projetada em 3,5:1 com falsificação declarada em 2,0:1** — o melhor acerto de mistura da série (erro de −8%) |
+
+    **A 6 é a primeira em que a MISTURA foi projetada e acertou, e a primeira em que o
+    desvio de volume MUDOU DE LADO — da 4 e da 5 ele estava no teste; aqui está na
+    produção, com +95%.** As duas causas são por leitura, e as duas corrigem um custo
+    unitário que esta convenção vinha citando sem escopo (convenção 22):
+
+    - **registro de mecanismo que é ARGUMENTO custa o dobro do que é AFIRMAÇÃO, e a
+      unidade de projeção não é o registro — é a RAZÃO CITADA.** A projeção usou ~17
+      linhas por registro e entregou `insightsWindow.ts` com **57 linhas de comentário
+      para 5 de lógica — 11,4 : 1**, porque a decisão que ele carrega não é uma frase:
+      são **três razões numeradas**, uma delas citando o requisito vivo que ela não pode
+      contradizer, mais uma **recusa** que precisa carregar o caso que a motivou para não
+      ser reaberta. **Custo medido: ~26 linhas por razão citada** — exatamente o número
+      que a 5a-4 já havia medido para uma recusa de três razões, agora confirmado de
+      forma independente e em outra change. Contar registros é grosso demais;
+    - **a mistura do TESTE não é a da produção, e aplicar uma só superestima o
+      comentário.** Projetado 1,5:1 (o número da 5), medido **0,77:1** — menos da
+      metade, e o volume de teste errou **−11%** por isso. A causa é a própria régua da
+      5 vista por outro ângulo: *guarda com arranjo próprio custa o dobro* — e **o
+      arranjo é lógica SEM comentário**. Um invólucro controlado, um
+      `createMemoryRouter` e um cálculo de largura de janela são encanamento, não
+      registro. A 5 mediu 1,53:1 em guardas cuja razão de existir **era** uma classe de
+      defeito; numa change de fiação metade das linhas é montagem. **Régua: projetar a
+      mistura do teste SEPARADA por tipo de guarda — ~1,5:1 para guarda de classe de
+      defeito, ~0,5:1 para guarda com arranjo.**
+
+    **E a 6 acrescenta uma terceira coisa, sobre a CONTAGEM DE CASOS, que alarga a régua
+    da 5.** A 5 havia descoberto que *nem toda negativa tem cenário de spec*. Aqui a
+    contagem errou +12,5% (16 projetados, **18** entregues) por **três** desvios que se
+    somam e que não são o mesmo:
+
+    - **−1: cenário de spec que virou REFORÇO, não caso novo** — a afirmação já tinha
+      dono num guarda existente, e duplicá-la seria dois casos dizendo a mesma coisa.
+      **Cenário de delta não implica `it()` novo;**
+    - **+1: cláusula `AND` que é negativa virou `it()` próprio**, pela régua de que cada
+      negativa é um caso;
+    - **+2: guardas do MECANISMO, sem cenário de spec nenhum** — os que afirmam que um
+      componente recebe a escolha em vez de a possuir. Não é comportamento de tela, é a
+      decisão de arquitetura. **A régua da 5 era sobre negativa; esta é mais larga: nem
+      todo guarda tem cenário de spec, negativa ou não.**
 
     **A 5 responde a pergunta que a régua deixava em aberto: numa change de REMOÇÃO a
     régua INVERTE?** Não — **ela se agrava**, por dois efeitos que somam e que são
@@ -1588,6 +1629,29 @@ de propor algo nesta base:
     **atributo que ele emite** acrescentou 2 — *varredura por nome perde quem toca só
     a marca*, que é a mesma forma da régua da #84/#86 (*varredura por número de issue
     acha o que fala do assunto, não o que o executa*).
+
+    **A oitava ocorrência fecha a régua pelo outro lado, e é a direção que a sétima
+    não previa: o critério largo erra para CIMA.** A sétima diz que o estreito
+    esconde buraco, e a saída que ela prescreve — rodar os dois e comparar — levava
+    a tratar o resultado largo como o universo verdadeiro. Medido em
+    `insights-periodo-entre-telas`: `grep -rln "InsightsPeriod" src/` devolveu
+    **10** arquivos, e **dois são falso positivo** — `insightsApi.ts:69` e
+    `insightsApi.test.ts:32` casam porque citam **`InsightsPeriod.MissingBoundMessage`**,
+    o nome de um tipo do `apps/api`, **dentro de um comentário**. Os consumidores
+    reais do tipo TypeScript são **8**.
+
+    **Por que isto não é a sétima com outro sinal:** lá o que faltava era um item que
+    o critério não via, e o remédio era alargar. Aqui alargar **acrescenta item que
+    não existe**, e nenhuma comparação entre critérios o remove — os dois critérios
+    concordam, e os dois estão errados sobre aqueles dois arquivos. **O que remove é
+    abrir as linhas.**
+
+    **Régua, e ela substitui "usar o critério largo":** rodar os dois critérios,
+    comparar, e **citar o número do critério CONFERIDO item a item** — nunca o do
+    estreito (que esconde) nem o do largo (que inclui menção, homônimo e comentário).
+    A comparação entre os dois diz **o que cada um errou**; ela não produz, sozinha, o
+    número certo. Em varredura cujo resultado vai para spec ou para projeção, o
+    `-l` dá a lista e o `-n` dá a prova, e é o `-n` que se lê.
 
 23. **Toda change nasce de uma issue, e toda change e todo PR referenciam a
     que os originou.** Demanda nova **cria issue antes** de virar change — a

@@ -16,6 +16,7 @@ import { AgentKnowledgeTab } from '../components/AgentKnowledgeTab';
 import { AgentOverviewTab } from '../components/AgentOverviewTab';
 import { AgentToolsTab } from '../components/AgentToolsTab';
 import { AgentInsightsTab } from '../../insights/components/AgentInsightsTab';
+import { parsePeriod, type InsightsPeriod } from '../../insights/utils/insightsWindow';
 import { ApiError } from '../api/agentsApi';
 
 const OVERVIEW_TAB = 'visao-geral';
@@ -60,6 +61,23 @@ export function AgentDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = parseTab(searchParams.get('tab'));
 
+  // O PERÍODO DA ABA DE INSIGHTS É LIDO AQUI, E NÃO LÁ DENTRO (#85, D4).
+  //
+  // Esta página é quem o router monta, então o endereço é dela — e com UM leitor e
+  // UM escritor por busca, o `handleTabChange` abaixo não precisa conhecer a chave
+  // do período para não a apagar: ele mexe só em `tab`.
+  //
+  // `parsePeriod` carrega o mesmo contrato de `parseTab`: ausência é a forma
+  // canônica, desconhecido cai nela, e o endereço NÃO é reescrito em nenhum dos
+  // dois casos. As duas chaves deste endereço têm a mesma disciplina de propósito —
+  // uma tolerante e uma que grita seriam duas regras sobre a mesma barra de
+  // endereços.
+  //
+  // LIDO SEM `enabled` NEM CONDIÇÃO DE ABA: `parsePeriod` é puro e barato, e a
+  // consulta que consome isto só existe quando a aba está montada
+  // (`keepMounted={false}`).
+  const insightsPeriod = parsePeriod(searchParams.get('period'));
+
   const { data, isLoading, error } = useAgentQuery(id!);
   const agentsQuery = useAgentsQuery();
   const mcpServersQuery = useMcpServersQuery({ enabled: activeTab === TOOLS_TAB });
@@ -71,9 +89,51 @@ export function AgentDetailPage() {
   const deactivateMutation = useDeactivateAgentMutation();
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
 
+  // O ESCRITOR MEXE SÓ NA CHAVE QUE LHE PERTENCE.
+  //
+  // Era `setSearchParams(next === OVERVIEW_TAB ? {} : { tab: next })`, e AS DUAS
+  // PERNAS substituíam a busca inteira: `{}` esvazia, `{ tab: next }` descarta
+  // tudo que não seja `tab`. Enquanto `tab` fosse a única chave daquele endereço
+  // isso era equivalente a atualizar — e deixou de ser no instante em que o
+  // período entrou (D5 do design.md da change insights-periodo-entre-telas).
+  //
+  // O QUE SE PERDIA: quem chegava à aba em 90 dias pelo ranking, ia para outra
+  // aba e voltava, voltava em 30 — o MESMO sintoma que a #85 existe para fechar,
+  // reintroduzido por outro caminho. E ele é silencioso: nada quebra, nada
+  // reprova, e o número passa a responder outra pergunta.
+  //
+  // `prev` É COPIADO, NUNCA MUTADO: é a instância que o router entrega, e escrever
+  // nela seria mexer em estado que não é nosso. A forma de atualizador funcional
+  // foi conferida no pacote instalado — `react-router@8.3.0`,
+  // `node_modules/react-router/dist/development/lib/dom/lib.d.ts:1567` —, não
+  // suposta de memória (convenção 6).
+  //
+  // A VISÃO GERAL CONTINUA SENDO A AUSÊNCIA DE `tab`, não `tab=visao-geral`: o
+  // contrato de `parseTab` acima fica intacto, e é por isso que esta perna é
+  // `delete` e não `set`.
   const handleTabChange = (value: string | null) => {
     const next = parseTab(value);
-    setSearchParams(next === OVERVIEW_TAB ? {} : { tab: next });
+    setSearchParams((prev) => {
+      const proximo = new URLSearchParams(prev);
+      if (next === OVERVIEW_TAB) {
+        proximo.delete('tab');
+      } else {
+        proximo.set('tab', next);
+      }
+      return proximo;
+    });
+  };
+
+  // A MESMA DISCIPLINA DO ESCRITOR DE `tab`: copiar a busca e mexer só na chave
+  // própria. Aqui ela já é obrigatória, não preventiva — `setSearchParams({ period })`
+  // apagaria `tab` e jogaria o operador de volta na visão geral a cada troca de
+  // período, com a aba de Insights desaparecendo debaixo do clique.
+  const handlePeriodChange = (next: InsightsPeriod) => {
+    setSearchParams((prev) => {
+      const proximo = new URLSearchParams(prev);
+      proximo.set('period', next);
+      return proximo;
+    });
   };
 
   const handleActivate = () => {
@@ -264,6 +324,8 @@ export function AgentDetailPage() {
             agentId={data.id}
             registeredTargets={data.delegatesTo}
             agentsCatalog={agentsQuery.data}
+            period={insightsPeriod}
+            onPeriodChange={handlePeriodChange}
           />
         </Tabs.Panel>
       </Tabs>

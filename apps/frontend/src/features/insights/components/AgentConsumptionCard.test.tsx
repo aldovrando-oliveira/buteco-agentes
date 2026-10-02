@@ -7,6 +7,7 @@ import { theme } from '../../../theme';
 import { AgentConsumptionCard } from './AgentConsumptionCard';
 import type { AgentFailures, AgentTokens } from '../types/systemInsights';
 import type { QueryState } from '../utils/metricState';
+import { DEFAULT_INSIGHTS_PERIOD, type InsightsPeriod } from '../utils/insightsWindow';
 
 const ATENDENTE = '55555555-5555-5555-5555-555555555555';
 const FANTASMA = '99999999-9999-9999-9999-999999999999';
@@ -58,6 +59,17 @@ const falhasSemConsumo: AgentFailures[] = [
   { agentId: SEM_CONSUMO, provider: null, model: null, failedCount: 2 },
 ];
 
+/**
+ * O PERÍODO PADRÃO DESTE ARRANJO É `90d`, E NÃO O PADRÃO DO SISTEMA — de propósito.
+ *
+ * `DEFAULT_INSIGHTS_PERIOD` é `30d`. Se o arranjo usasse ele, um `30d` fixado à mão
+ * na produção passaria por TODAS as asserções de `href` deste arquivo, e o defeito
+ * que a #85 fecha — o link levando a janela errada — ficaria invisível aqui.
+ *
+ * Com `90d`, qualquer período que não venha da prop reprova.
+ */
+const PERIODO_DO_ARRANJO: InsightsPeriod = '90d';
+
 function renderCard(
   overrides: Partial<Parameters<typeof AgentConsumptionCard>[0]> = {},
   queryState: QueryState = 'ok',
@@ -73,6 +85,7 @@ function renderCard(
           catalogLoading={false}
           catalogFailed={false}
           onRetryCatalog={onRetryCatalog}
+          period={PERIODO_DO_ARRANJO}
           queryState={queryState}
           reason="A consulta não respondeu."
           {...overrides}
@@ -102,18 +115,23 @@ describe('AgentConsumptionCard', () => {
     expect(screen.getByTestId(`agente-${FANTASMA}-tokens`)).toHaveTextContent('1 M');
   });
 
-  it('o nome leva DIRETO à aba de Insights do agente, não à visão geral', () => {
+  it('o nome leva DIRETO à aba de Insights do agente, não à visão geral — e com o período', () => {
     // A #67 fechou pelo caminho (2): tasks, tokens por task e duração p95 por
     // agente ficam SÓ na aba. O argumento que sustenta a decisão é que elas
     // estão a UM clique — então o link tem de abrir a aba, e não o detalhe.
     //
     // Sem o parâmetro, `parseTab(null)` cai em "Visão geral" por contrato
     // declarado (AgentDetailPage), e o clique vira dois.
+    //
+    // E DESDE A #85 O LINK CARREGA O PERÍODO. O clique já era um; a janela, não —
+    // a aba abria no padrão, e comparar o número dela com o do ranking passava a
+    // ser errado sem que nada avisasse. Era a limitação declarada na D7 da
+    // `fechamento-da-l4`.
     renderCard();
 
     expect(screen.getByTestId(`agente-${ATENDENTE}-nome`)).toHaveAttribute(
       'href',
-      `/agents/${ATENDENTE}?tab=insights`,
+      `/agents/${ATENDENTE}?tab=insights&period=${PERIODO_DO_ARRANJO}`,
     );
   });
 
@@ -128,6 +146,25 @@ describe('AgentConsumptionCard', () => {
 
     expect(href).not.toBe(`/agents/${ATENDENTE}`);
     expect(new URL(href, 'http://localhost').searchParams.get('tab')).toBe('insights');
+  });
+
+  it('NEGATIVO: o link NÃO carrega o período padrão quando o período em vigor é outro', () => {
+    // O modo de falha mais silencioso desta linha, e o único que a asserção
+    // positiva acima não pega: `30d` FIXADO à mão na produção faria o link
+    // parecer certo — ele tem `tab=insights`, tem `period=`, e aponta para o
+    // agente certo — e desfaria a travessia exatamente quando o operador
+    // escolheu outra janela.
+    //
+    // `7d` escolhido no arranjo, e `DEFAULT_INSIGHTS_PERIOD` LIDO em vez de
+    // escrito `'30d'` à mão: fixar o número aqui faria este guarda mentir no dia
+    // em que o padrão do sistema mudar.
+    renderCard({ period: '7d' });
+
+    const href = screen.getByTestId(`agente-${ATENDENTE}-nome`).getAttribute('href') ?? '';
+    const period = new URL(href, 'http://localhost').searchParams.get('period');
+
+    expect(period).toBe('7d');
+    expect(period).not.toBe(DEFAULT_INSIGHTS_PERIOD);
   });
 
   it('agente sem falhas registradas tem ZERO MEDIDO, e a razão está no código', () => {
