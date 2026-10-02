@@ -54,9 +54,11 @@ public readonly record struct KnowledgeDocumentEventCursor(DateTimeOffset Occurr
         catch (FormatException)
         {
             // Apesar do "Try", TryDecodeFromChars LANÇA para entrada com
-            // comprimento ou caractere inválido em base64url — o false fica só
-            // para destino pequeno demais. Medido pelo cenário de cursor
-            // malformado, que respondia 500 antes desta captura.
+            // comprimento ou caractere inválido em base64url, e para bits finais
+            // não canônicos — o false fica só para destino pequeno demais. Cada
+            // forma tem caso em KnowledgeDocumentEventCursorTests. Medido pelo
+            // cenário de cursor malformado, que respondia 500 antes desta
+            // captura.
             return false;
         }
 

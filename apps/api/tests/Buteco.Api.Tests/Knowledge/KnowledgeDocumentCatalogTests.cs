@@ -626,10 +626,18 @@ public class KnowledgeDocumentCatalogTests(ApiFactoryFixture factory) : IClassFi
         Assert.Single(events);
     }
 
+    // Um caso por ramo de recusa de KnowledgeDocumentEventCursor.TryDecode. Qual
+    // ramo cada valor atinge é conferido contra a BCL em
+    // KnowledgeDocumentEventCursorTests, e não só pelo comentário.
     [Theory]
-    [InlineData("nao-e-um-cursor")]
-    [InlineData("")]
-    [InlineData("AAAA")]
+    [InlineData("abc$")]                             // captura: caractere fora do alfabeto base64url
+    [InlineData("abcde")]                            // captura: resto 1 por 4, comprimento inválido
+    [InlineData("nao-e-um-cursor")]                  // captura: bits finais de "r" não canônicos
+    [InlineData("nao-e-um-cursoo")]                  // tamanho: decodifica para 11 bytes
+    [InlineData("AAAA")]                             // tamanho: decodifica para 3 bytes
+    [InlineData("")]                                 // tamanho: query vazia, 0 bytes
+    [InlineData("__________8RERERIiIzM0REVVVVVVVV")] // faixa: 24 bytes, ticks = -1
+    [InlineData("K8oodfQ3QAARERERIiIzM0REVVVVVVVV")] // faixa: 24 bytes, ticks = MaxValue.UtcTicks + 1
     public async Task DocumentEvents_WithMalformedCursor_ReturnValidationProblemOnCursor(string cursor)
     {
         var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Cursor Inválido");
