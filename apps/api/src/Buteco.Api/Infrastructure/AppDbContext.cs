@@ -32,6 +32,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
 
+    public DbSet<KnowledgeDocumentEvent> KnowledgeDocumentEvents => Set<KnowledgeDocumentEvent>();
+
     public DbSet<AgentKnowledgeBase> AgentKnowledgeBases => Set<AgentKnowledgeBase>();
 
     public DbSet<KnowledgeFragment> KnowledgeFragments => Set<KnowledgeFragment>();
@@ -223,6 +225,53 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(document => document.KnowledgeBaseId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Histórico de documentos (design.md da change historico-documentos-base).
+        // Só apps/api escreve e lê; apps/workers não espelha esta tabela, no
+        // mesmo molde de task_rejections.
+        modelBuilder.Entity<KnowledgeDocumentEvent>(entity =>
+        {
+            entity.ToTable("knowledge_document_events", table =>
+                // O formato do detalhe garantido pelo banco (D5): Updated sem
+                // nenhuma mudança é impossível, não só improvável — e Created e
+                // Deleted não afirmam "não mudou" com um false.
+                table.HasCheckConstraint(
+                    "CK_knowledge_document_events_change_detail",
+                    "(\"Type\" = 'Updated' AND \"ContentChanged\" IS NOT NULL AND \"TitleChanged\" IS NOT NULL " +
+                    "AND (\"ContentChanged\" OR \"TitleChanged\")) " +
+                    "OR (\"Type\" <> 'Updated' AND \"ContentChanged\" IS NULL AND \"TitleChanged\" IS NULL)"));
+            entity.HasKey(documentEvent => documentEvent.Id);
+            entity.Property(documentEvent => documentEvent.DocumentTitle).IsRequired();
+            entity.Property(documentEvent => documentEvent.Type).IsRequired().HasConversion<string>();
+            entity.Property(documentEvent => documentEvent.ContentChanged).IsRequired(false);
+            entity.Property(documentEvent => documentEvent.TitleChanged).IsRequired(false);
+            entity.Property(documentEvent => documentEvent.Author).IsRequired();
+            entity.Property(documentEvent => documentEvent.OccurredAt).IsRequired();
+
+            // O filtro por base e a ordem da rota (D1, D7): o Postgres percorre o
+            // B-tree de trás para frente para o ORDER BY descendente.
+            entity.HasIndex(documentEvent => new
+            {
+                documentEvent.KnowledgeBaseId,
+                documentEvent.OccurredAt,
+                documentEvent.Id,
+            });
+
+            // Cascade, ao lado do Restrict que KnowledgeDocument usa para a mesma
+            // base (D3), e as duas escolhas não se contradizem. O Restrict do
+            // documento obriga quem criar a exclusão de base (#108) a decidir o
+            // destino do CONTEÚDO; o histórico não pede decisão nenhuma — é a
+            // auditoria da base, e sem a base não há onde lê-lo. Hoje a cascata é
+            // inerte: a base não tem rota de exclusão, e com documento vivo nem o
+            // SQL direto passa pelo Restrict.
+            //
+            // E NENHUMA FK para knowledge_documents (D1): o evento de exclusão
+            // precisa sobreviver ao documento. DocumentId é coluna solta.
+            entity.HasOne<KnowledgeBase>()
+                .WithMany()
+                .HasForeignKey(documentEvent => documentEvent.KnowledgeBaseId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // O provider InMemory não sabe representar `vector` — nenhum tipo do CLR

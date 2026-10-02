@@ -35,7 +35,11 @@ public sealed class CreateKnowledgeDocumentCommandHandler(
         var document = new KnowledgeDocument(
             command.KnowledgeBaseId, command.Title, command.SourceType, content.ExtractedText!);
 
+        // O evento entra no MESMO SaveChanges do documento (historico-documentos-base,
+        // D2): os dois são gravados juntos ou nenhum. As recusas acima retornam
+        // antes daqui, e por isso cadastro recusado não deixa evento.
         dbContext.KnowledgeDocuments.Add(document);
+        dbContext.KnowledgeDocumentEvents.Add(KnowledgeDocumentEvent.Created(document, command.Author));
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Publica DEPOIS do SaveChanges, nunca antes: uma mensagem publicada

@@ -214,4 +214,44 @@ public class KnowledgeDocumentIndexingContractTests(ApiFactoryFixture fixture) :
         Assert.False(await verification.KnowledgeDocuments.AnyAsync(d => d.Id == document.Id));
         Assert.False(await verification.KnowledgeFragments.AnyAsync(f => f.KnowledgeDocumentId == document.Id));
     }
+
+    // ----------------------------------------- histórico de documentos ----
+
+    /// <summary>
+    /// A divergência que a D4 da change historico-documentos-base existe para
+    /// tratar: na linha legada o hash nulo manda reindexar o MESMO conteúdo — e
+    /// isso continua valendo, afirmado aqui de novo —, mas o documento não mudou,
+    /// e o histórico não pode dizer que mudou.
+    /// </summary>
+    [Fact]
+    public async Task LegacyDocumentWithNullHash_IdenticalContent_IsEnqueuedButRecordsNoEvent()
+    {
+        var client = fixture.CreateClient();
+        var knowledgeBase = await client.CreateBaseAsync();
+        var document = await client.CreateDocumentAsync(knowledgeBase.Id);
+
+        using (var scope = fixture.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE knowledge_documents SET "ContentHash" = NULL WHERE "Id" = {document.Id};
+                """);
+        }
+
+        var publishedBefore = fixture.IndexingPublisher.PublishedFor(document.Id).Count;
+
+        var response = await client.PutAsJsonAsync(
+            $"/knowledge-bases/{knowledgeBase.Id}/documents/{document.Id}",
+            new UpdateKnowledgeDocumentRequest("Documento", "markdown", KnowledgeTestClient.SampleMarkdown));
+
+        response.EnsureSuccessStatusCode();
+        var updated = (await response.Content.ReadFromJsonAsync<KnowledgeDocumentResponse>())!;
+        Assert.Equal(KnowledgeIndexingStatus.Pending, updated.IndexingStatus);
+        Assert.Equal(publishedBefore + 1, fixture.IndexingPublisher.PublishedFor(document.Id).Count);
+
+        var events = await client.GetAllDocumentEventsAsync(knowledgeBase.Id);
+        var only = Assert.Single(events);
+        Assert.Equal(KnowledgeDocumentEventType.Created, only.Type);
+        Assert.DoesNotContain(events, documentEvent => documentEvent.ContentChanged == true);
+    }
 }

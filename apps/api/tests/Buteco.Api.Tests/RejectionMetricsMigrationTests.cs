@@ -2,7 +2,6 @@ using Buteco.Api.Infrastructure;
 using Buteco.Api.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Testcontainers.PostgreSql;
 
 namespace Buteco.Api.Tests;
 
@@ -14,37 +13,36 @@ namespace Buteco.Api.Tests;
 /// de testes que as outras cinco têm aqui não existe.
 ///
 /// <para>
-/// <b>Contêiner próprio</b>, como as outras três classes de migração. É a 41ª
-/// classe de contêiner de <c>apps/api</c> — a régua estava registrada como 31 e o
-/// real, medido em 25/09/2026 sobre <c>5f2f6f8</c>, era <b>40</b> (a contagem
-/// original não incluiu a subpasta <c>Knowledge/</c>). Autorizada pelo dono.
+/// <b>Contêiner da <see cref="MigrationPostgresCollection"/></b>, dividido com
+/// <c>KnowledgeDocumentEventsMigrationTests</c>, e um banco próprio por teste
+/// (design.md da change historico-documentos-base, D12). Até essa change a classe
+/// construía o próprio contêiner no <c>IAsyncLifetime</c> — e, como o xUnit cria
+/// uma instância por teste, subia um contêiner por <b>caso</b>, sete ao todo
+/// (#110). Só a fonte do contêiner mudou; nenhuma asserção.
 /// </para>
 /// </summary>
-public class RejectionMetricsMigrationTests : IAsyncLifetime
+[Collection(MigrationPostgresCollection.Name)]
+public class RejectionMetricsMigrationTests(MigrationPostgresFixture postgres) : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
-        .WithDatabase("buteco_agents_rejection_metrics_test")
-        .WithUsername("buteco")
-        .WithPassword("buteco_test_password")
-        .Build();
+    private string _connectionString = null!;
 
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        _connectionString = await postgres.CreateDatabaseAsync();
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseButecoAgentsNpgsql(_postgres.GetConnectionString())
+            .UseButecoAgentsNpgsql(_connectionString)
             .Options;
 
         await using var dbContext = new AppDbContext(options);
         await dbContext.Database.MigrateAsync();
     }
 
-    public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
+    public Task DisposeAsync() => Task.CompletedTask;
 
     private async Task<T?> ScalarAsync<T>(string sql)
     {
-        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
+        await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(sql, connection);
         var value = await command.ExecuteScalarAsync();

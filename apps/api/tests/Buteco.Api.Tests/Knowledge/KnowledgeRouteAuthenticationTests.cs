@@ -1,8 +1,11 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Buteco.Api.Auth;
 using Buteco.Api.KnowledgeBases.Requests;
 using Buteco.Api.KnowledgeDocuments.Requests;
 using Buteco.Api.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Buteco.Api.Tests.Knowledge;
 
@@ -116,5 +119,38 @@ public class KnowledgeRouteAuthenticationTests(ApiFactoryFixture factory) : ICla
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Equal(before, factory.IndexingPublisher.PublishedFor(document.Id).Count);
+    }
+
+    [Fact]
+    public async Task ListDocumentEvents_WithoutToken_ReturnsUnauthorized()
+    {
+        var knowledgeBase = await factory.CreateClient().CreateBaseAsync("Base do histórico");
+
+        var response = await UnauthenticatedClient().GetAsync(KnowledgeTestClient.DocumentEventsPath(knowledgeBase.Id));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Hoje o 403 vem de graça — a rota não está na lista de
+    /// <see cref="ServiceScopeAuthorizationHandler"/>. Está afirmado porque a #102
+    /// vai mexer nesse escopo para acrescentar <c>service:connectors</c>, e é ali
+    /// que uma liberação ampla demais escaparia sem teste (design.md da change
+    /// historico-documentos-base, D8). Token emitido pelo mesmo
+    /// <see cref="ITokenService"/> real, no molde de
+    /// <c>ServiceScopeAuthorizationTests</c>.
+    /// </summary>
+    [Fact]
+    public async Task ListDocumentEvents_WithServiceToken_ReturnsForbidden()
+    {
+        var knowledgeBase = await factory.CreateClient().CreateBaseAsync("Base do histórico");
+        var client = factory.CreateClient();
+        var tokenService = factory.Services.GetRequiredService<ITokenService>();
+        var (token, _) = tokenService.Issue(ServiceScopeAuthorizationHandler.ServiceSubject, TimeSpan.FromMinutes(5));
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync(KnowledgeTestClient.DocumentEventsPath(knowledgeBase.Id));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 }
