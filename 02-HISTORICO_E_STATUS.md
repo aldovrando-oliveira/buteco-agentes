@@ -13809,3 +13809,146 @@ vez**, e não há nada a corrigir. O único *"sem seletor de período"* do `CHAN
   consulta como antes.
 - **A #92 não foi corrigida** (a coluna Falhas contra o KPI é decisão de vocabulário e
   pede o artboard), nem a **#94**, nem a nota por grupo da **#90**.
+
+## `historico-documentos-base` — histórico de mudanças nos documentos da base (#98)
+
+**Change aberta e implementada, com commits locais; não sincronizada, não
+arquivada, sem push e sem PR** (convenção 24: o archive vem antes do push, e a
+implementação passa por revisão antes dele). A #98 está em `In progress`.
+
+### O que entrou
+
+Tabela `knowledge_document_events` em `apps/api`, gravada pelos handlers de
+cadastro, atualização e exclusão de documento **no mesmo `SaveChangesAsync`** da
+escrita, e lida por `GET /knowledge-bases/{id}/document-events`, paginada por
+cursor, do mais recente para o mais antigo, em páginas de 50. FK só para a base,
+em cascata; nenhuma para o documento, para o evento de exclusão sobreviver a ele.
+Autor é o subject do token (`operator`). `apps/workers`, `apps/inbox` e
+`apps/frontend` não foram tocados; a aba Histórico é a #101.
+
+**O critério de "atualizado" é a mudança real de texto (a mesma condição que
+incrementa `ContentRevision`) ou de título, e não o `ContentHash`.** Na linha
+legada com hash nulo, reenviar o mesmo texto volta o documento para a fila e
+**não** gera evento. `KnowledgeDocument.Update` passou a devolver as três
+respostas (`NeedsIndexing`, `ContentChanged`, `TitleChanged`), porque elas
+divergem exatamente nessa linha. O refinamento foi registrado em comentário na
+#98.
+
+### Issues abertas por esta linha antes e durante a change (convenção 23)
+
+- **#108**, exclusão de base de conhecimento. Achado da revisão: o fluxo de
+  recuperação da base sincronizada depende de uma rota que não existe. Está em
+  `Ready`, depois da #106, e bloqueia a #107.
+- **#109**, retenção do histórico, com `aguardando gatilho`. O gatilho é
+  `knowledge_document_events` passar de 1 milhão de linhas numa implantação.
+- **#110**, classes de migração que sobem um contêiner por teste. Ver abaixo.
+
+### O que a implementação mediu
+
+**A comparação do cursor vira SQL (tarefa 1.1).** Verificada na fonte (o
+`NpgsqlRowValueTranslator` decompilado da 10.0.3) e no SQL gerado por
+`ToQueryString()` num console com o mesmo pacote:
+`(e."OccurredAt", e."Id") < (@at, @id)` com `ORDER BY ... DESC`. A D7 se
+sustentou; a forma escolhida e a evidência estão nela.
+
+**Um contêiner por teste, confirmado (tarefa 8.1, #110).** Com `podman events
+--filter event=start` na janela da execução: `RejectionMetricsMigrationTests`
+sozinha, antes de qualquer mudança, **7/7 em 27 s com 7 contêineres**
+`pgvector/pgvector:pg18`. Depois de movida para a `MigrationPostgresCollection`,
+ela e a `KnowledgeDocumentEventsMigrationTests` somaram **10/10 em 5 s com 1
+contêiner**. Estado: `podman machine` `applehv` 6 CPUs, `postgres` e `rabbitmq`
+do compose de pé, `waha` parado, `load average` entre 2,3 e 4,4 em 12 núcleos.
+
+**Régua de contêineres de `apps/api` (tarefa 1.2).** Critério: *classes com
+fixture de contêiner mais classes que constroem o seu próprio, excluída
+`Support/`, contadas em todas as subpastas*.
+
+| | com fixture | constroem o próprio | classes (critério literal) | fontes de contêiner |
+|---|---|---|---|---|
+| antes (`1cae600`) | 36 | 5 | **41** | 41 |
+| depois | 38 (2 pela collection) | 4 | **42** | **41** |
+
+**O critério precisa contar a collection uma vez.** Ao pé da letra ele dá 42,
+porque conta classes, e as duas classes da collection têm fixture; as fontes de
+contêiner continuam 41. E nenhuma das duas colunas diz quantos contêineres sobem,
+enquanto as 4 classes da #110 sobem um por caso. A forma durável disto está na
+nona ocorrência da convenção 22 do `01`.
+
+**Suíte de `apps/api`:** **501/501 em 1 min 18 s** (84 s de relógio, `load
+average` 5,4), depois do complemento do teste de cursor pedido na revisão. Antes
+dele, **486/486 em 1 min 25 s**, com **47 casos** novos (44 `[Fact]` + 3
+`[InlineData]`, contados no diff contra a `main`, sem remover nenhum). O
+complemento acrescentou mais 15 (ver abaixo), e a change soma **62** sobre a
+baseline.
+**Baseline medida num `git worktree` limpo da `main` (`1cae600`): 439/439 em
+1 min 17 s** (82 s de relógio, `load average` 2,5), e 486 − 439 = 47 fecha com a
+contagem do diff. A primeira tentativa de baseline foi interrompida no limite de
+15 minutos sem executar teste nenhum, com a saída escondida por um `grep`. A
+segunda, com `restore` (3 s), build (12 s) e teste separados e o log inteiro em
+arquivo, rodou sem travar. **A causa do travamento da primeira não foi
+identificada**, e a hipótese da rede no `restore` ficou descartada.
+
+### Guardas contra o defeito real (convenção 15)
+
+Cada um reintroduzido de propósito, visto reprovando e desfeito.
+
+| guarda | defeito reintroduzido | o que reprovou |
+|---|---|---|
+| 3.3 | `ContentChanged` decidido pelo hash | `KnowledgeDocumentUpdateOutcomeTests.Update_LegacyRowWithNullHashAndIdenticalText_NeedsIndexingButContentDidNotChange` e `KnowledgeDocumentIndexingContractTests.LegacyDocumentWithNullHash_IdenticalContent_IsEnqueuedButRecordsNoEvent` |
+| 7.10a | evento salvo com `SaveChangesAsync` próprio antes da validação, no `Update` | `UpdateDocument_WithInvalidContent_RecordsNoEvent`, `UpdateDocument_AboveTheSizeCap_RecordsNoEvent` e mais 4 de `KnowledgeDocumentUpdateTests` que contam eventos |
+| 7.10b | sem desempate por `Id` | `DocumentEvents_TieOnOccurredAt_IsBrokenByIdDescending_AcrossThePageBoundary` (só ele) |
+| 7.10c | sem filtro por base | 8 de `KnowledgeDocumentCatalogTests`, entre eles `DocumentEvents_ReturnOnlyEventsOfTheRequestedBase` e `DocumentEvents_CursorFromAnotherBase_ReturnsOnlyEventsOfTheRequestedBase` |
+| 7.10d | sem a `CHECK` na migração | `DocumentEventsTable_RejectsUpdatedWithoutAnyChange` (só ele) |
+| 8.5 | backfill de `Created` no `Up` | `KnowledgeDocumentEventsMigrationTests.Migration_CreatesNoEventForDocumentsThatAlreadyExisted` (esperado 0, real 2) |
+| 7.10e (revisão) | sem a verificação de faixa de ticks no cursor | `DocumentEvents_WithMalformedCursor_ReturnValidationProblemOnCursor` nos dois casos de faixa, com `InternalServerError`, e os dois de `KnowledgeDocumentEventCursorTests.TicksOutsideTheDateTimeOffsetRange_AreRefusedByTheCursor` |
+
+**O guarda 7.10a nasceu no lugar errado e foi corrigido antes de rodar.** A
+redação aprovada dizia "adicionar o evento antes da validação". Lido o handler, o
+`Add` sozinho não grava nada: todo caminho de recusa retorna sem
+`SaveChangesAsync`, e o evento morre com o contexto. O guarda teria passado
+verde **com** a forma descrita, e o risco da D2 descrevia um defeito que não
+existe. O defeito real é um `SaveChangesAsync` a mais. O risco e a tarefa foram
+corrigidos no `design.md` e no `tasks.md`, com a causa.
+
+### Divergências do `design.md` aprovado, todas corrigidas lá com a causa
+
+1. **D2, risco:** o defeito que a D2 previne é o salvamento fora da transação,
+   não o `Add` antes da recusa (acima).
+2. **D7:** acrescida a evidência da tarefa 1.1, e a forma escolhida
+   (`EF.Functions.LessThan` com `ValueTuple.Create`) contra a forma expandida.
+   Não é mudança de decisão.
+3. **Achado sem mudança de decisão:** `Base64Url.TryDecodeFromChars` **lança**
+   `FormatException` para entrada malformada, apesar do `Try`. O cenário de
+   cursor malformado pegou isso: respondia 500. Corrigido no
+   `KnowledgeDocumentEventCursor` com captura e comentário; registrado na
+   convenção 6 do `01`.
+
+### Complemento da revisão: um caso por ramo de recusa do cursor
+
+A revisão pediu que o cenário de cursor malformado exercitasse **cada** ramo de
+`TryDecode`. Os três casos originais (`"nao-e-um-cursor"`, `""`, `"AAAA"`) não
+cobriam a faixa de ticks. Os valores novos foram conferidos por
+`KnowledgeDocumentEventCursorTests` (sem contêiner) **contra a BCL**: cada caso
+afirma o ramo que atinge, e não só o `false`.
+
+**A premissa do pedido sobre `"nao-e-um-cursor"` estava errada, e a medição
+corrigiu.** Ele foi pedido como caso do ramo de tamanho ("decodifica para 11
+bytes sem lançar"). No .NET 10 ele **lança** `FormatException`: 15 caracteres
+deixam 2 bits sem uso no último, e em `r` (`101011`) esses bits não são zero. O
+decodificador recusa a forma não canônica. Era esse, aliás, o caso que
+respondia 500 antes da captura. Ele ficou no teste, comentado como captura, e o
+ramo de tamanho ganhou `"nao-e-um-cursoo"` (`o` = `101000`), que decodifica para
+os 11 bytes do pedido. Os dois valores de faixa decodificaram para 24 bytes com
+ticks −1 e `MaxValue.UtcTicks + 1`, exatamente como informados.
+
+Nenhuma mudança de comportamento especificado; a `spec.md` não foi alterada na
+implementação.
+
+### O que ficou de fora, e é decisão
+
+- As outras 4 classes de migração continuam subindo um contêiner por teste. São
+  a **#110**, e a imagem continua literal e sem constante: 11 cópias na abertura
+  da #110, e 11 depois desta change (a fixture nova trouxe uma, e
+  `RejectionMetricsMigrationTests` perdeu a sua), medido com
+  `grep -rn "pgvector/pgvector:pg18" --include='*.cs' apps/api/tests`.
+- Sem conferência visual: a change não tem tela.

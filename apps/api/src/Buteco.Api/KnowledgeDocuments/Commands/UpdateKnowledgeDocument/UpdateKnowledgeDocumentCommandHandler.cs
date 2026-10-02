@@ -1,5 +1,6 @@
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Knowledge.Indexing;
+using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeDocuments.Responses;
 using Mediator;
@@ -39,10 +40,20 @@ public sealed class UpdateKnowledgeDocumentCommandHandler(
         // troca o título preserva o estado de indexação e NÃO enfileira — é a
         // regra do ContentHash (design.md, D9), e é o que impede gastar
         // embedding à toa em edição de metadado.
-        var needsIndexing = document.Update(command.Title, command.SourceType, content.ExtractedText!);
+        var outcome = document.Update(command.Title, command.SourceType, content.ExtractedText!);
+
+        // Evento só quando o DOCUMENTO mudou (texto ou título), e não quando o
+        // índice precisa de trabalho: na linha legada com hash nulo os dois
+        // divergem (historico-documentos-base, D4). Mesmo SaveChanges da
+        // escrita (D2).
+        if (outcome.HasDocumentChange)
+        {
+            dbContext.KnowledgeDocumentEvents.Add(KnowledgeDocumentEvent.Updated(document, outcome, command.Author));
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        if (needsIndexing)
+        if (outcome.NeedsIndexing)
         {
             await indexingPublisher.PublishAsync(
                 new KnowledgeIndexingJobMessage(document.Id, document.ContentRevision), cancellationToken);

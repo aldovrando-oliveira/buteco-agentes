@@ -6,4 +6,5 @@ public sealed record CreateKnowledgeDocumentCommand(
     Guid KnowledgeBaseId,
     string Title,
     string SourceType,
-    string Content) : ICommand<CreateKnowledgeDocumentResult>;
+    string Content,
+    string Author) : ICommand<CreateKnowledgeDocumentResult>;

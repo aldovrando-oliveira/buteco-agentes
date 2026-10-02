@@ -207,4 +207,22 @@ public class KnowledgeDocumentReindexTests(ApiFactoryFixture fixture) : IClassFi
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Empty(fixture.IndexingPublisher.PublishedFor(unknown));
     }
+
+    // ----------------------------------------- histórico de documentos ----
+
+    // Reindexar não muda texto nem título (historico-documentos-base): o
+    // histórico continua só com a inclusão.
+    [Fact]
+    public async Task Reindex_RecordsNoEvent()
+    {
+        var client = fixture.CreateClient();
+        var knowledgeBase = await client.CreateBaseAsync();
+        var document = await client.CreateDocumentAsync(knowledgeBase.Id);
+        await KnowledgeTestClient.ForceFailedAsync(fixture.Services, document.Id);
+
+        await client.ReindexDocumentAsync(knowledgeBase.Id, document.Id);
+
+        var only = Assert.Single(await client.GetAllDocumentEventsAsync(knowledgeBase.Id));
+        Assert.Equal(KnowledgeDocumentEventType.Created, only.Type);
+    }
 }

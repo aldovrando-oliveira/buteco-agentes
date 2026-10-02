@@ -160,13 +160,17 @@ public class KnowledgeDocument
     /// preserva o estado de indexação corrente.
     /// </summary>
     /// <returns>
-    /// <c>true</c> quando há indexação a enfileirar; <c>false</c> quando o
-    /// conteúdo já está indexado e nada precisa ser feito. O handler usa este
-    /// retorno para decidir se publica na fila.
+    /// O que a atualização fez (<see cref="KnowledgeDocumentUpdateOutcome"/>).
+    /// <c>NeedsIndexing</c> diz se há indexação a enfileirar, e o handler usa
+    /// para decidir se publica na fila. <c>ContentChanged</c> e
+    /// <c>TitleChanged</c> dizem se o documento mudou de fato, e o handler usa
+    /// para decidir se grava evento no histórico — os dois critérios divergem
+    /// na linha legada, ver o comentário sobre o <c>ContentHash</c> abaixo.
     /// </returns>
-    public bool Update(string title, string sourceType, string extractedText)
+    public KnowledgeDocumentUpdateOutcome Update(string title, string sourceType, string extractedText)
     {
         var contentChanged = !string.Equals(ExtractedText, extractedText, StringComparison.Ordinal);
+        var titleChanged = !string.Equals(Title, title, StringComparison.Ordinal);
 
         if (contentChanged)
         {
@@ -194,13 +198,18 @@ public class KnowledgeDocument
         //
         // ContentRevision continua sendo outra coisa: é o token de descarte do
         // consumidor (etapa 1, D7), move-se com o texto e não com o hash.
+        //
+        // E o histórico de documentos segue ContentRevision, não o hash
+        // (historico-documentos-base, D4): na linha legada o hash nulo manda
+        // reindexar o MESMO texto, o que está certo para o índice, mas gravar
+        // "conteúdo alterado" ali afirmaria uma mudança que o operador não fez.
         var newHash = ComputeContentHash(extractedText);
         var alreadyIndexedThisContent = string.Equals(ContentHash, newHash, StringComparison.Ordinal);
         ContentHash = newHash;
 
         if (alreadyIndexedThisContent)
         {
-            return false;
+            return new KnowledgeDocumentUpdateOutcome(NeedsIndexing: false, contentChanged, titleChanged);
         }
 
         IndexingStatus = KnowledgeIndexingStatus.Pending;
@@ -208,7 +217,7 @@ public class KnowledgeDocument
         IndexingAttempts = 0;
         LastAttemptAt = null;
 
-        return true;
+        return new KnowledgeDocumentUpdateOutcome(NeedsIndexing: true, contentChanged, titleChanged);
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using Buteco.Api.Infrastructure;
+using Buteco.Api.KnowledgeDocuments.Entities;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,6 +32,10 @@ public sealed class DeleteKnowledgeDocumentCommandHandler(AppDbContext dbContext
             return false;
         }
 
+        // O evento é montado ANTES do Remove, com o título que o documento tem
+        // agora, e sobrevive a ele: não há FK de evento para documento
+        // (historico-documentos-base, D1). Mesmo SaveChanges da exclusão (D2).
+        dbContext.KnowledgeDocumentEvents.Add(KnowledgeDocumentEvent.Deleted(document, command.Author));
         dbContext.KnowledgeDocuments.Remove(document);
         await dbContext.SaveChangesAsync(cancellationToken);
 

@@ -778,6 +778,18 @@ de propor algo nesta base:
    consome um item aberto reconfere as afirmações dele contra a árvore
    antes de decidir qualquer coisa — a verificação da convenção 6 vale
    para o registro interno, não só para dependência externa.
+
+   **E o prefixo `Try` não garante que a chamada não lance.**
+   `System.Buffers.Text.Base64Url.TryDecodeFromChars` devolve `false` só para
+   destino pequeno demais, e **lança `FormatException`** para entrada com
+   comprimento ou caractere inválido, **e também para bits finais não canônicos**
+   (`"nao-e-um-cursor"`: 15 caracteres, e os 2 bits sem uso de `r` não são zero).
+   Isso foi pego pelo cenário de cursor
+   malformado de `historico-documentos-base` (#98), que respondia **500** em vez
+   de 400 com o `Try` usado como se fosse total. Na fronteira de entrada do
+   cliente, o contrato de "não lança" se verifica com o cenário negativo, não com
+   o nome do método.
+
 7. **Frontend**: página busca dados e repassa como prop; componente
    apresentacional nunca importa hook de query/mutation diretamente.
    Cada feature mantém seu próprio `request<T>`/`ApiError` fino — sem
@@ -1652,6 +1664,26 @@ de propor algo nesta base:
     A comparação entre os dois diz **o que cada um errou**; ela não produz, sozinha, o
     número certo. Em varredura cujo resultado vai para spec ou para projeção, o
     `-l` dá a lista e o `-n` dá a prova, e é o `-n` que se lê.
+
+    **A nona ocorrência erra a UNIDADE, não a contagem.** A régua de contenção de
+    `apps/api` (41 em `1cae600`, recontada pelo critério da sexta ocorrência e
+    batendo) conta **classes**, e foi escrita com a leitura *"contêineres em
+    paralelo e **um** por classe"*. Para as 5 classes de migração que constroem o
+    próprio contêiner, isso é falso: o `IAsyncLifetime` está na **classe de teste**,
+    o xUnit cria uma instância por **teste**, e o contêiner sobe por caso. Medido em
+    `historico-documentos-base` (#98) com `podman events` na janela da execução:
+    `RejectionMetricsMigrationTests` sozinha, **7 casos, 7 contêineres**
+    `pgvector/pgvector:pg18`, 27 s. Movida para uma collection com banco por teste,
+    ela e a classe nova somaram **10 casos, 1 contêiner, 5 s**. As outras 4 classes
+    estão na **#110**.
+
+    **O que isto acrescenta:** a régua pode estar certa na contagem e errada no que
+    o número representa. Uma contagem de classes vale como proxy de contêineres só
+    enquanto cada classe sobe exatamente um, e isso depende de **onde** o ciclo de
+    vida está (fixture de classe, de collection, ou a própria classe). E o critério
+    já não fecha com a collection: contado ao pé da letra dá **42** classes, mas as
+    fontes de contêiner continuam **41**, porque uma fixture serve duas classes. Ao
+    recontar, **contar a collection uma vez** e dizer as duas grandezas.
 
 23. **Toda change nasce de uma issue, e toda change e todo PR referenciam a
     que os originou.** Demanda nova **cria issue antes** de virar change — a

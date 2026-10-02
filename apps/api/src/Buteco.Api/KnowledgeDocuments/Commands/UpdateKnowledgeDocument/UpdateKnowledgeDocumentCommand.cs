@@ -7,4 +7,5 @@ public sealed record UpdateKnowledgeDocumentCommand(
     Guid Id,
     string Title,
     string SourceType,
-    string Content) : ICommand<UpdateKnowledgeDocumentResult>;
+    string Content,
+    string Author) : ICommand<UpdateKnowledgeDocumentResult>;

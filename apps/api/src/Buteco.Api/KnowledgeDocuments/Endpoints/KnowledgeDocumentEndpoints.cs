@@ -1,9 +1,12 @@
+using System.Security.Claims;
+using Buteco.Api.Auth;
 using Buteco.Api.KnowledgeDocuments.Commands.CreateKnowledgeDocument;
 using Buteco.Api.KnowledgeDocuments.Commands.DeleteKnowledgeDocument;
 using Buteco.Api.KnowledgeDocuments.Commands.ReindexKnowledgeDocument;
 using Buteco.Api.KnowledgeDocuments.Commands.UpdateKnowledgeDocument;
 using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeDocuments.Queries.GetKnowledgeDocumentById;
+using Buteco.Api.KnowledgeDocuments.Queries.ListKnowledgeDocumentEvents;
 using Buteco.Api.KnowledgeDocuments.Queries.ListKnowledgeDocuments;
 using Buteco.Api.KnowledgeDocuments.Requests;
 using Buteco.Api.KnowledgeDocuments.Responses;
@@ -39,12 +42,20 @@ public static class KnowledgeDocumentEndpoints
         // aquele em que "continua no banco, invisível" é a resposta errada.
         group.MapDelete("/{id:guid}", DeleteKnowledgeDocumentAsync);
 
+        // Histórico de documentos da base (design.md da change
+        // historico-documentos-base, D8). Coleção própria, irmã de /documents e
+        // não dentro dela: o evento de um documento excluído não é sub-recurso de
+        // documento nenhum. Sem entrada na allowlist anônima nem no escopo de
+        // serviço — só o operador lê.
+        app.MapGet("/knowledge-bases/{knowledgeBaseId:guid}/document-events", ListKnowledgeDocumentEventsAsync);
+
         return app;
     }
 
     private static async Task<Results<Created<KnowledgeDocumentResponse>, NotFound, ValidationProblem>> CreateKnowledgeDocumentAsync(
         Guid knowledgeBaseId,
         CreateKnowledgeDocumentRequest request,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
@@ -55,7 +66,7 @@ public static class KnowledgeDocumentEndpoints
         }
 
         var command = new CreateKnowledgeDocumentCommand(
-            knowledgeBaseId, request.Title!, request.SourceType!, request.Content!);
+            knowledgeBaseId, request.Title!, request.SourceType!, request.Content!, ReadAuthor(user));
         var result = await mediator.Send(command, cancellationToken);
 
         if (!result.KnowledgeBaseFound)
@@ -101,6 +112,7 @@ public static class KnowledgeDocumentEndpoints
         Guid knowledgeBaseId,
         Guid id,
         UpdateKnowledgeDocumentRequest request,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
@@ -111,7 +123,7 @@ public static class KnowledgeDocumentEndpoints
         }
 
         var command = new UpdateKnowledgeDocumentCommand(
-            knowledgeBaseId, id, request.Title!, request.SourceType!, request.Content!);
+            knowledgeBaseId, id, request.Title!, request.SourceType!, request.Content!, ReadAuthor(user));
         var result = await mediator.Send(command, cancellationToken);
 
         if (!result.Found)
@@ -150,15 +162,62 @@ public static class KnowledgeDocumentEndpoints
     private static async Task<Results<NoContent, NotFound>> DeleteKnowledgeDocumentAsync(
         Guid knowledgeBaseId,
         Guid id,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var deleted = await mediator.Send(new DeleteKnowledgeDocumentCommand(knowledgeBaseId, id), cancellationToken);
+        var deleted = await mediator.Send(
+            new DeleteKnowledgeDocumentCommand(knowledgeBaseId, id, ReadAuthor(user)), cancellationToken);
 
         return deleted
             ? TypedResults.NoContent()
             : TypedResults.NotFound();
     }
+
+    private static async Task<Results<Ok<KnowledgeDocumentEventPageResponse>, NotFound, ValidationProblem>> ListKnowledgeDocumentEventsAsync(
+        Guid knowledgeBaseId,
+        string? cursor,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        KnowledgeDocumentEventCursor? after = null;
+        if (cursor is not null)
+        {
+            if (!KnowledgeDocumentEventCursor.TryDecode(cursor, out var decoded))
+            {
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["cursor"] = ["Cursor inválido: use o nextCursor devolvido pela página anterior."],
+                });
+            }
+
+            after = decoded;
+        }
+
+        var page = await mediator.Send(new ListKnowledgeDocumentEventsQuery(knowledgeBaseId, after), cancellationToken);
+
+        return page is null
+            ? TypedResults.NotFound()
+            : TypedResults.Ok(page);
+    }
+
+    /// <summary>
+    /// O autor de um evento do histórico é o subject do token, gravado como veio
+    /// (design.md da change historico-documentos-base, D6). Lido pela MESMA forma
+    /// de <see cref="ServiceScopeAuthorizationHandler"/>, sobre o claim que
+    /// <see cref="OperatorTokenAuthenticationHandler"/> emite — uma forma só de ler
+    /// o subject na base inteira.
+    ///
+    /// <para>
+    /// O claim sempre existe aqui: a rota cai na <c>FallbackPolicy</c>
+    /// autenticada. Se faltar mesmo assim, falha em vez de gravar autor vazio —
+    /// afirmar autoria que não existe é pior que a escrita falhar.
+    /// </para>
+    /// </summary>
+    private static string ReadAuthor(ClaimsPrincipal user) =>
+        user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        ?? throw new InvalidOperationException(
+            "Escrita de documento sem subject no token: a rota deveria ter exigido autenticação.");
 
     /// <summary>
     /// Só a forma do payload. O <c>sourceType</c> é validado contra os

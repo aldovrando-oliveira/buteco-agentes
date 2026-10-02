@@ -88,6 +88,77 @@ internal static class KnowledgeTestClient
         Assert.Equal(1, affected);
     }
 
+    public static string DocumentEventsPath(Guid knowledgeBaseId, string? cursor = null) =>
+        cursor is null
+            ? $"/knowledge-bases/{knowledgeBaseId}/document-events"
+            : $"/knowledge-bases/{knowledgeBaseId}/document-events?cursor={Uri.EscapeDataString(cursor)}";
+
+    public static async Task<KnowledgeDocumentEventPageResponse> GetDocumentEventsPageAsync(
+        this HttpClient client, Guid knowledgeBaseId, string? cursor = null)
+    {
+        var response = await client.GetAsync(DocumentEventsPath(knowledgeBaseId, cursor));
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<KnowledgeDocumentEventPageResponse>())!;
+    }
+
+    /// <summary>
+    /// Segue o <c>nextCursor</c> até o fim e devolve todos os eventos da base, na
+    /// ordem da rota. O limite de páginas existe só para um defeito de cursor
+    /// (página que aponta para si mesma) reprovar o teste em vez de prendê-lo.
+    /// </summary>
+    public static async Task<List<KnowledgeDocumentEventResponse>> GetAllDocumentEventsAsync(
+        this HttpClient client, Guid knowledgeBaseId)
+    {
+        var all = new List<KnowledgeDocumentEventResponse>();
+        string? cursor = null;
+
+        for (var page = 0; page < 100; page++)
+        {
+            var current = await client.GetDocumentEventsPageAsync(knowledgeBaseId, cursor);
+            all.AddRange(current.Items);
+            cursor = current.NextCursor;
+            if (cursor is null)
+            {
+                return all;
+            }
+        }
+
+        throw new InvalidOperationException("A rota de eventos não terminou em 100 páginas: cursor sem fim.");
+    }
+
+    /// <summary>
+    /// Conta os eventos de uma base direto no banco. Para os cenários em que a
+    /// rota não serve de testemunha — base inexistente responde 404, e o que se
+    /// quer afirmar é que nenhuma linha nasceu com aquele <c>KnowledgeBaseId</c>.
+    /// </summary>
+    public static async Task<int> CountDocumentEventsInDatabaseAsync(IServiceProvider services, Guid knowledgeBaseId)
+    {
+        using var scope = services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await dbContext.KnowledgeDocumentEvents.CountAsync(
+            documentEvent => documentEvent.KnowledgeBaseId == knowledgeBaseId);
+    }
+
+    /// <summary>
+    /// Grava um evento <c>Created</c> direto no banco, com id e instante
+    /// escolhidos pelo teste. É o único jeito de arranjar empate de
+    /// <c>OccurredAt</c> e volume de página sem 50 cadastros pela rota —
+    /// a escrita real é exercida nos testes de cada handler, não aqui.
+    /// <paramref name="occurredAt"/> deve ter resolução de microssegundo, como o
+    /// <c>timestamptz</c>.
+    /// </summary>
+    public static async Task InsertCreatedEventAsync(
+        IServiceProvider services, Guid knowledgeBaseId, Guid id, DateTimeOffset occurredAt, string title = "Arranjo")
+    {
+        using var scope = services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO knowledge_document_events
+                ("Id", "KnowledgeBaseId", "DocumentId", "DocumentTitle", "Type", "ContentChanged", "TitleChanged", "Author", "OccurredAt")
+            VALUES ({id}, {knowledgeBaseId}, {Guid.NewGuid()}, {title}, 'Created', NULL, NULL, 'operator', {occurredAt});
+            """);
+    }
+
     /// <summary>
     /// Leva um documento a <c>Indexed</c> direto no banco, pelo mesmo motivo de
     /// <see cref="ForceFailedAsync"/>.

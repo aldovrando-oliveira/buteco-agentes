@@ -1,6 +1,10 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
+using Buteco.Api.Auth.Requests;
+using Buteco.Api.Auth.Responses;
 using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeDocuments.Options;
 using Buteco.Api.KnowledgeDocuments.Requests;
@@ -324,5 +328,347 @@ public class KnowledgeDocumentCatalogTests(ApiFactoryFixture factory) : IClassFi
         var bytes = Encoding.UTF8.GetByteCount(acentuado);
         Assert.NotEqual(acentuado.Length, bytes);
         Assert.Equal(bytes, created.ContentLengthBytes);
+    }
+
+    // --- Histórico de documentos (historico-documentos-base) ---------------
+
+    [Fact]
+    public async Task CreateDocument_RecordsExactlyOneCreatedEvent()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Cadastro");
+
+        var document = await _client.CreateDocumentAsync(knowledgeBase.Id, "Política de trocas");
+
+        var documentEvent = Assert.Single(await _client.GetAllDocumentEventsAsync(knowledgeBase.Id));
+        Assert.Equal(KnowledgeDocumentEventType.Created, documentEvent.Type);
+        Assert.Equal(document.Id, documentEvent.DocumentId);
+        Assert.Equal("Política de trocas", documentEvent.DocumentTitle);
+        Assert.Equal("operator", documentEvent.Author);
+        Assert.Null(documentEvent.ContentChanged);
+        Assert.Null(documentEvent.TitleChanged);
+    }
+
+    // Conteúdo que passa a validação de forma do endpoint e é recusado pelo
+    // extrator dentro do handler: o caractere NUL. É o caminho que chega ao
+    // handler — conteúdo vazio já para no endpoint.
+    [Fact]
+    public async Task CreateDocument_WithInvalidContent_RecordsNoEvent()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Inválido");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/knowledge-bases/{knowledgeBase.Id}/documents",
+            new CreateKnowledgeDocumentRequest("Documento", "markdown", "# Título\n\ncom \u0000 nulo"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(await _client.GetAllDocumentEventsAsync(knowledgeBase.Id));
+    }
+
+    [Fact]
+    public async Task CreateDocument_AboveTheSizeCap_RecordsNoEvent()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Teto");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/knowledge-bases/{knowledgeBase.Id}/documents",
+            new CreateKnowledgeDocumentRequest(
+                "Documento", "markdown", new string('a', KnowledgeDocumentLimits.MaxContentBytes + 1)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(await _client.GetAllDocumentEventsAsync(knowledgeBase.Id));
+    }
+
+    // A rota responde 404 para base inexistente, então ela não serve de
+    // testemunha: a contagem vai direto no banco.
+    [Fact]
+    public async Task CreateDocument_InMissingBase_RecordsNoEvent()
+    {
+        var missingBaseId = Guid.NewGuid();
+
+        var response = await _client.PostAsJsonAsync(
+            $"/knowledge-bases/{missingBaseId}/documents",
+            new CreateKnowledgeDocumentRequest("Documento", "markdown", KnowledgeTestClient.SampleMarkdown));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(0, await KnowledgeTestClient.CountDocumentEventsInDatabaseAsync(factory.Services, missingBaseId));
+    }
+
+    // O token vem do LOGIN de verdade, não do atalho que a fixture anexa: o que
+    // se afirma é que o subject que o esquema de autenticação emite é o que o
+    // endpoint lê (D6). Com a leitura errada as três escritas responderiam 500.
+    [Fact]
+    public async Task DocumentWrites_WithTokenFromLogin_RecordOperatorAsAuthor()
+    {
+        var client = factory.CreateClient();
+        var login = await client.PostAsJsonAsync(
+            "/auth/login",
+            new LoginRequest(ApiFactoryFixture.KnownOperatorUsername, ApiFactoryFixture.KnownOperatorPassword));
+        login.EnsureSuccessStatusCode();
+        var token = (await login.Content.ReadFromJsonAsync<LoginResponse>())!.Token;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var knowledgeBase = await client.CreateBaseAsync("Base Histórico Autor");
+        var document = await client.CreateDocumentAsync(knowledgeBase.Id, "Original");
+        var update = await client.PutAsJsonAsync(
+            $"/knowledge-bases/{knowledgeBase.Id}/documents/{document.Id}",
+            new UpdateKnowledgeDocumentRequest("Renomeado", "markdown", KnowledgeTestClient.SampleMarkdown));
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var delete = await client.DeleteAsync($"/knowledge-bases/{knowledgeBase.Id}/documents/{document.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        var events = await client.GetAllDocumentEventsAsync(knowledgeBase.Id);
+        Assert.Equal(3, events.Count);
+        Assert.All(events, documentEvent => Assert.Equal("operator", documentEvent.Author));
+    }
+
+    // --- Rota de eventos -----------------------------------------------------
+
+    [Fact]
+    public async Task DocumentEvents_ReturnOnlyEventsOfTheRequestedBase()
+    {
+        var baseA = await _client.CreateBaseAsync("Base Histórico A");
+        var baseB = await _client.CreateBaseAsync("Base Histórico B");
+        var documentA1 = await _client.CreateDocumentAsync(baseA.Id, "A1");
+        var documentA2 = await _client.CreateDocumentAsync(baseA.Id, "A2");
+        var documentB = await _client.CreateDocumentAsync(baseB.Id, "B");
+
+        var eventsOfA = await _client.GetAllDocumentEventsAsync(baseA.Id);
+
+        Assert.Equal(
+            new[] { documentA1.Id, documentA2.Id }.Order(),
+            eventsOfA.Select(documentEvent => documentEvent.DocumentId).Order());
+        Assert.DoesNotContain(eventsOfA, documentEvent => documentEvent.DocumentId == documentB.Id);
+    }
+
+    // O cursor não carrega a base (D8): usado em outra base, ele só desloca a
+    // posição dentro DELA.
+    [Fact]
+    public async Task DocumentEvents_CursorFromAnotherBase_ReturnsOnlyEventsOfTheRequestedBase()
+    {
+        var baseA = await _client.CreateBaseAsync("Base Cursor A");
+        var baseB = await _client.CreateBaseAsync("Base Cursor B");
+        var t0 = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 51; i++)
+        {
+            await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, baseA.Id, Guid.NewGuid(), t0.AddSeconds(i));
+        }
+
+        // Eventos de B mais antigos que o cursor de A, para que o deslocamento
+        // devolva alguma coisa — e só de B.
+        await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, baseB.Id, Guid.NewGuid(), t0.AddDays(-1));
+        await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, baseB.Id, Guid.NewGuid(), t0.AddDays(-2));
+
+        var cursorOfA = (await _client.GetDocumentEventsPageAsync(baseA.Id)).NextCursor;
+        Assert.NotNull(cursorOfA);
+
+        var page = await _client.GetDocumentEventsPageAsync(baseB.Id, cursorOfA);
+
+        var idsOfB = (await _client.GetAllDocumentEventsAsync(baseB.Id)).Select(documentEvent => documentEvent.Id).ToHashSet();
+        Assert.Equal(2, page.Items.Count);
+        Assert.All(page.Items, documentEvent => Assert.Contains(documentEvent.Id, idsOfB));
+    }
+
+    [Fact]
+    public async Task DocumentEvents_AreMostRecentFirst()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Ordem");
+        var document = await _client.CreateDocumentAsync(knowledgeBase.Id, "Documento");
+        var update = await _client.PutAsJsonAsync(
+            $"/knowledge-bases/{knowledgeBase.Id}/documents/{document.Id}",
+            new UpdateKnowledgeDocumentRequest("Documento", "markdown", "# Outro\n\nTexto novo.\n"));
+        update.EnsureSuccessStatusCode();
+        (await _client.DeleteAsync($"/knowledge-bases/{knowledgeBase.Id}/documents/{document.Id}")).EnsureSuccessStatusCode();
+
+        var events = await _client.GetAllDocumentEventsAsync(knowledgeBase.Id);
+
+        Assert.Equal(
+            new[] { KnowledgeDocumentEventType.Deleted, KnowledgeDocumentEventType.Updated, KnowledgeDocumentEventType.Created },
+            events.Select(documentEvent => documentEvent.Type));
+    }
+
+    // api-response-ordering na forma que vale: empatados inseridos em ordem
+    // OPOSTA à esperada, e o grupo empatado atravessando a fronteira de página,
+    // que é onde um cursor sem o Id erraria (repetindo ou pulando item).
+    //
+    // A ordem esperada de uuid é a do Postgres, que compara os 16 bytes na ordem
+    // canônica — a mesma da string minúscula, e NÃO a de Guid.CompareTo do .NET.
+    [Fact]
+    public async Task DocumentEvents_TieOnOccurredAt_IsBrokenByIdDescending_AcrossThePageBoundary()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Empate");
+        var t0 = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var expected = new List<Guid>();
+
+        // 45 mais recentes, distintos: posições 1 a 45.
+        var newest = Enumerable.Range(0, 45).Select(i => (Id: Guid.NewGuid(), At: t0.AddMinutes(100 - i))).ToList();
+        // 6 empatados em t0: posições 46 a 51, atravessando a 50.
+        var tied = Enumerable.Range(0, 6).Select(_ => Guid.NewGuid())
+            .OrderBy(id => id.ToString(), StringComparer.Ordinal).ToList();
+        // 2 mais antigos: posições 52 e 53.
+        var oldest = Enumerable.Range(0, 2).Select(i => (Id: Guid.NewGuid(), At: t0.AddMinutes(-1 - i))).ToList();
+
+        foreach (var (id, at) in newest)
+        {
+            await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, knowledgeBase.Id, id, at);
+        }
+
+        // Inseridos em ordem CRESCENTE de id; a rota tem de devolvê-los decrescentes.
+        foreach (var id in tied)
+        {
+            await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, knowledgeBase.Id, id, t0);
+        }
+
+        foreach (var (id, at) in oldest)
+        {
+            await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, knowledgeBase.Id, id, at);
+        }
+
+        expected.AddRange(newest.Select(item => item.Id));
+        expected.AddRange(Enumerable.Reverse(tied));
+        expected.AddRange(oldest.Select(item => item.Id));
+
+        var firstPage = await _client.GetDocumentEventsPageAsync(knowledgeBase.Id);
+        var secondPage = await _client.GetDocumentEventsPageAsync(knowledgeBase.Id, firstPage.NextCursor);
+
+        Assert.Equal(50, firstPage.Items.Count);
+        Assert.Null(secondPage.NextCursor);
+        Assert.Equal(expected, firstPage.Items.Concat(secondPage.Items).Select(documentEvent => documentEvent.Id));
+    }
+
+    [Fact]
+    public async Task DocumentEvents_NewEventBetweenPages_IsNeitherRepeatedNorShifted()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Concorrente");
+        var t0 = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 51; i++)
+        {
+            await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, knowledgeBase.Id, Guid.NewGuid(), t0.AddSeconds(i));
+        }
+
+        var firstPage = await _client.GetDocumentEventsPageAsync(knowledgeBase.Id);
+        var newEventId = Guid.NewGuid();
+        await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, knowledgeBase.Id, newEventId, t0.AddDays(1));
+        var secondPage = await _client.GetDocumentEventsPageAsync(knowledgeBase.Id, firstPage.NextCursor);
+
+        var firstIds = firstPage.Items.Select(documentEvent => documentEvent.Id).ToHashSet();
+        var onlyOldest = Assert.Single(secondPage.Items);
+        Assert.DoesNotContain(onlyOldest.Id, firstIds);
+        Assert.NotEqual(newEventId, onlyOldest.Id);
+        Assert.Equal(t0, onlyOldest.OccurredAt);
+    }
+
+    [Fact]
+    public async Task DocumentEvents_WithExactlyOnePageOfEvents_HaveNullCursor()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico 50");
+        var t0 = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 50; i++)
+        {
+            await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, knowledgeBase.Id, Guid.NewGuid(), t0.AddSeconds(i));
+        }
+
+        var page = await _client.GetDocumentEventsPageAsync(knowledgeBase.Id);
+
+        Assert.Equal(50, page.Items.Count);
+        Assert.Null(page.NextCursor);
+    }
+
+    [Fact]
+    public async Task DocumentEvents_WithOneMoreThanAPage_HaveASecondPageOfOne()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico 51");
+        var t0 = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 51; i++)
+        {
+            await KnowledgeTestClient.InsertCreatedEventAsync(factory.Services, knowledgeBase.Id, Guid.NewGuid(), t0.AddSeconds(i));
+        }
+
+        var firstPage = await _client.GetDocumentEventsPageAsync(knowledgeBase.Id);
+        var secondPage = await _client.GetDocumentEventsPageAsync(knowledgeBase.Id, firstPage.NextCursor);
+
+        Assert.Equal(50, firstPage.Items.Count);
+        Assert.NotNull(firstPage.NextCursor);
+        var oldest = Assert.Single(secondPage.Items);
+        Assert.Equal(t0, oldest.OccurredAt);
+        Assert.Null(secondPage.NextCursor);
+    }
+
+    [Fact]
+    public async Task DocumentEvents_ForBaseWithoutEvents_ReturnEmptyPage()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Vazia");
+
+        var response = await _client.GetAsync(KnowledgeTestClient.DocumentEventsPath(knowledgeBase.Id));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var page = await response.Content.ReadFromJsonAsync<KnowledgeDocumentEventPageResponse>();
+        Assert.Empty(page!.Items);
+        Assert.Null(page.NextCursor);
+    }
+
+    [Fact]
+    public async Task DocumentEvents_ForMissingBase_ReturnNotFound()
+    {
+        var response = await _client.GetAsync(KnowledgeTestClient.DocumentEventsPath(Guid.NewGuid()));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DocumentEvents_OfInactiveBase_AreReadable()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Inativa");
+        await _client.CreateDocumentAsync(knowledgeBase.Id);
+        (await _client.PostAsync($"/knowledge-bases/{knowledgeBase.Id}/deactivate", content: null)).EnsureSuccessStatusCode();
+
+        var events = await _client.GetAllDocumentEventsAsync(knowledgeBase.Id);
+
+        Assert.Single(events);
+    }
+
+    // Um caso por ramo de recusa de KnowledgeDocumentEventCursor.TryDecode. Qual
+    // ramo cada valor atinge é conferido contra a BCL em
+    // KnowledgeDocumentEventCursorTests, e não só pelo comentário.
+    [Theory]
+    [InlineData("abc$")]                             // captura: caractere fora do alfabeto base64url
+    [InlineData("abcde")]                            // captura: resto 1 por 4, comprimento inválido
+    [InlineData("nao-e-um-cursor")]                  // captura: bits finais de "r" não canônicos
+    [InlineData("nao-e-um-cursoo")]                  // tamanho: decodifica para 11 bytes
+    [InlineData("AAAA")]                             // tamanho: decodifica para 3 bytes
+    [InlineData("")]                                 // tamanho: query vazia, 0 bytes
+    [InlineData("__________8RERERIiIzM0REVVVVVVVV")] // faixa: 24 bytes, ticks = -1
+    [InlineData("K8oodfQ3QAARERERIiIzM0REVVVVVVVV")] // faixa: 24 bytes, ticks = MaxValue.UtcTicks + 1
+    public async Task DocumentEvents_WithMalformedCursor_ReturnValidationProblemOnCursor(string cursor)
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Cursor Inválido");
+
+        var response = await _client.GetAsync(KnowledgeTestClient.DocumentEventsPath(knowledgeBase.Id, cursor));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(problem.RootElement.GetProperty("errors").TryGetProperty("cursor", out _));
+    }
+
+    // Formato de fio afirmado sobre o TEXTO da resposta HTTP real, nunca por
+    // desserialização para o mesmo tipo (convenção 11/12).
+    [Fact]
+    public async Task DocumentEvents_WireFormat_HasStringTypeAndCamelCaseKeys()
+    {
+        var knowledgeBase = await _client.CreateBaseAsync("Base Histórico Fio");
+        var document = await _client.CreateDocumentAsync(knowledgeBase.Id, "Documento");
+        (await _client.PutAsJsonAsync(
+            $"/knowledge-bases/{knowledgeBase.Id}/documents/{document.Id}",
+            new UpdateKnowledgeDocumentRequest("Renomeado", "markdown", KnowledgeTestClient.SampleMarkdown))).EnsureSuccessStatusCode();
+        (await _client.DeleteAsync($"/knowledge-bases/{knowledgeBase.Id}/documents/{document.Id}")).EnsureSuccessStatusCode();
+
+        var text = await _client.GetStringAsync(KnowledgeTestClient.DocumentEventsPath(knowledgeBase.Id));
+
+        Assert.Contains("\"type\":\"Created\"", text);
+        Assert.Contains("\"type\":\"Updated\"", text);
+        Assert.Contains("\"type\":\"Deleted\"", text);
+        foreach (var key in new[] { "items", "nextCursor", "id", "documentId", "documentTitle", "contentChanged", "titleChanged", "author", "occurredAt" })
+        {
+            Assert.Contains($"\"{key}\":", text);
+        }
     }
 }

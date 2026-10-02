@@ -200,6 +200,34 @@ Quatro pontos que não se deduzem lendo os campos:
   ao transicionar de estado, e um token de linha invalidaria o próprio
   trabalho em curso.
 
+### `KnowledgeDocumentEvent` (`apps/api`)
+
+`KnowledgeBaseId`, `DocumentId`, `DocumentTitle`, `Type` (`Created`,
+`Updated`, `Deleted`), `ContentChanged`, `TitleChanged`, `Author`,
+`OccurredAt`. É o histórico de mudanças nos documentos de uma base, lido por
+`GET /knowledge-bases/{id}/document-events`, paginado por cursor, do mais
+recente para o mais antigo.
+
+- **Gravado por `apps/api` no mesmo `SaveChangesAsync` da escrita do
+  documento**: escrita recusada não deixa evento, e evento sem escrita não
+  existe. Reindexar não gera evento, e as transições de indexação de
+  `apps/workers` também não.
+- **`Updated` só quando o texto extraído ou o título mudou de fato.** O
+  critério de conteúdo é o mesmo que incrementa `ContentRevision`, e **não** o
+  `ContentHash`: numa linha anterior ao hash, reenviar o mesmo texto volta o
+  documento para a fila de indexação, mas não é mudança do documento.
+  `ContentChanged` e `TitleChanged` só existem em `Updated` e são nulos nos
+  outros tipos, com o formato garantido por uma `CHECK` no banco.
+- **FK só para a base, em cascata, e nenhuma para o documento.** O evento de
+  exclusão sobrevive ao documento, por isso `DocumentId` é coluna solta e
+  `DocumentTitle` é snapshot. Os eventos morrem com a base. Hoje a cascata só
+  é alcançável por SQL, porque a base não tem rota de exclusão.
+- **`Author` é o subject do token que escreveu, gravado como veio** (hoje só
+  `operator`). O rótulo de apresentação é do frontend.
+- **Sem eventos retroativos e sem retenção.** O histórico começa vazio na
+  implantação, e o gatilho para rever o crescimento está numa issue com o
+  rótulo `aguardando gatilho`.
+
 ### `Channel` (`apps/inbox`)
 
 `ChannelType` (string aberta, validada em runtime contra os adapters
