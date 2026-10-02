@@ -1,0 +1,2032 @@
+{
+  "sem-agente_documentos_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 123
+    },
+    "barra": {
+      "x": 240,
+      "y": 357,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": true
+    },
+    "dentroDoPainel": false
+  },
+  "sem-agente_diagnostico_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 123
+    },
+    "barra": {
+      "x": 240,
+      "y": 357,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": true
+    },
+    "dentroDoPainel": false
+  },
+  "sem-agente_documentos_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 123
+    },
+    "barra": {
+      "x": 240,
+      "y": 357,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": true
+    },
+    "dentroDoPainel": false
+  },
+  "sem-agente_diagnostico_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 123
+    },
+    "barra": {
+      "x": 240,
+      "y": 357,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": true
+    },
+    "dentroDoPainel": false
+  },
+  "sem-agente_documentos_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 123
+    },
+    "barra": {
+      "x": 240,
+      "y": 357,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": true
+    },
+    "dentroDoPainel": false
+  },
+  "sem-agente_diagnostico_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 123
+    },
+    "barra": {
+      "x": 240,
+      "y": 357,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": true
+    },
+    "dentroDoPainel": false
+  },
+  "sem-agente_documentos_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 123
+    },
+    "barra": {
+      "x": 240,
+      "y": 357,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": true
+    },
+    "dentroDoPainel": false
+  },
+  "sem-agente_diagnostico_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 123
+    },
+    "barra": {
+      "x": 240,
+      "y": 357,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": true
+    },
+    "dentroDoPainel": false
+  },
+  "um-agente_documentos_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 1,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [],
+    "contagem": "1 agente",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "um-agente_diagnostico_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 1,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [],
+    "contagem": "1 agente",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "um-agente_documentos_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 1,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [],
+    "contagem": "1 agente",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "um-agente_diagnostico_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 1,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [],
+    "contagem": "1 agente",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "um-agente_documentos_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 1,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [],
+    "contagem": "1 agente",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "um-agente_diagnostico_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 1,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [],
+    "contagem": "1 agente",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "um-agente_documentos_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 1,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [],
+    "contagem": "1 agente",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "um-agente_diagnostico_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 1,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [],
+    "contagem": "1 agente",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "agente-inativo_documentos_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 2,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "2 agentes",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "agente-inativo_diagnostico_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 2,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "2 agentes",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "agente-inativo_documentos_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 2,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "2 agentes",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "agente-inativo_diagnostico_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 2,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "2 agentes",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "agente-inativo_documentos_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 2,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "2 agentes",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "agente-inativo_diagnostico_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 2,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "2 agentes",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "agente-inativo_documentos_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 2,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "2 agentes",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "agente-inativo_diagnostico_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 2,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "2 agentes",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "sete-agentes_documentos_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 7,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "7 agentes",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "sete-agentes_diagnostico_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 7,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "7 agentes",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "sete-agentes_documentos_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 7,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "7 agentes",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "sete-agentes_diagnostico_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 7,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "7 agentes",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "sete-agentes_documentos_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 7,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "7 agentes",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "sete-agentes_diagnostico_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 7,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(246, 245, 243)",
+      "borda": "rgb(229, 229, 229)",
+      "corLink": "rgb(0, 0, 0)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "7 agentes",
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "sete-agentes_documentos_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 7,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "7 agentes",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "sete-agentes_diagnostico_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 94
+    },
+    "barra": {
+      "x": 240,
+      "y": 328,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 7,
+    "linhasDeChips": 1,
+    "chip": {
+      "x": 257,
+      "y": 263,
+      "w": 73,
+      "h": 28,
+      "raio": "14px",
+      "fundo": "rgb(18, 19, 22)",
+      "borda": "rgb(52, 54, 57)",
+      "corLink": "rgb(233, 234, 236)",
+      "fonteLink": "13px"
+    },
+    "vaosEntreChips": [
+      8
+    ],
+    "contagem": "7 agentes",
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "carregando_documentos_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 88
+    },
+    "barra": {
+      "x": 240,
+      "y": 322,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": true,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "carregando_diagnostico_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 88
+    },
+    "barra": {
+      "x": 240,
+      "y": 322,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": true,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "carregando_documentos_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 88
+    },
+    "barra": {
+      "x": 240,
+      "y": 322,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": true,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "carregando_diagnostico_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 88
+    },
+    "barra": {
+      "x": 240,
+      "y": 322,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": true,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "carregando_documentos_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 88
+    },
+    "barra": {
+      "x": 240,
+      "y": 322,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": true,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "carregando_diagnostico_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 88
+    },
+    "barra": {
+      "x": 240,
+      "y": 322,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": true,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "carregando_documentos_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 88
+    },
+    "barra": {
+      "x": 240,
+      "y": 322,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": true,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "carregando_diagnostico_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 88
+    },
+    "barra": {
+      "x": 240,
+      "y": 322,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": true,
+      "indisponivel": false,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "indisponivel_documentos_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 83
+    },
+    "barra": {
+      "x": 240,
+      "y": 317,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": true,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "indisponivel_diagnostico_claro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 83
+    },
+    "barra": {
+      "x": 240,
+      "y": 317,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": true,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "indisponivel_documentos_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 83
+    },
+    "barra": {
+      "x": 240,
+      "y": 317,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": true,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "indisponivel_diagnostico_escuro_1440": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1184,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1184,
+      "h": 83
+    },
+    "barra": {
+      "x": 240,
+      "y": 317,
+      "w": 1184,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": true,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "indisponivel_documentos_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 83
+    },
+    "barra": {
+      "x": 240,
+      "y": 317,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": true,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "indisponivel_diagnostico_claro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 83
+    },
+    "barra": {
+      "x": 240,
+      "y": 317,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(229, 229, 229)",
+    "card": "rgb(255, 255, 255)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": true,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "indisponivel_documentos_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 83
+    },
+    "barra": {
+      "x": 240,
+      "y": 317,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": true,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "indisponivel_diagnostico_escuro_1860": {
+    "estabilizou": true,
+    "descricao": {
+      "x": 240,
+      "y": 87,
+      "w": 1604,
+      "h": 108
+    },
+    "agentes": {
+      "x": 240,
+      "y": 210,
+      "w": 1604,
+      "h": 83
+    },
+    "barra": {
+      "x": 240,
+      "y": 317,
+      "w": 1604,
+      "h": 40
+    },
+    "vaoAgentesBarra": 24,
+    "vaoDescricaoAgentes": 16,
+    "chips": 0,
+    "linhasDeChips": 0,
+    "chip": null,
+    "vaosEntreChips": [],
+    "contagem": null,
+    "faixa": "rgb(52, 54, 57)",
+    "card": "rgb(27, 29, 33)",
+    "textos": {
+      "carregando": false,
+      "indisponivel": true,
+      "vazio": false
+    },
+    "dentroDoPainel": false
+  },
+  "foco_claro": {
+    "tabsAteOChip": 11,
+    "texto": "Triagem",
+    "focusVisible": true,
+    "outline": "solid 2px rgb(42, 110, 203)",
+    "offset": "2px"
+  },
+  "foco_escuro": {
+    "tabsAteOChip": 11,
+    "texto": "Triagem",
+    "focusVisible": true,
+    "outline": "solid 2px rgb(100, 149, 219)",
+    "offset": "2px"
+  },
+  "areaClicavelInativo": {
+    "chip": {
+      "w": 168,
+      "h": 28
+    },
+    "link": {
+      "w": 101,
+      "h": 19
+    },
+    "inativo": {
+      "w": 35,
+      "h": 15
+    },
+    "cliqueNoInativoNavega": false,
+    "cliqueNaBordaNavega": false
+  }
+}
