@@ -90,7 +90,6 @@ export function InsightsKpiGrid({ insights, queryState, reason }: InsightsKpiGri
         testId="kpi-chamadas"
         footer={
           <DeclaredGap
-            variant="inline"
             label="turno e compactação"
             qualifier="não disponível"
             data-testid="kpi-chamadas-lacuna"

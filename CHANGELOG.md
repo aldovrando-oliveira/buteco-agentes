@@ -703,6 +703,22 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **A lacuna declarada tinha uma forma que a própria spec proíbe, e ela era o
+  PADRÃO.** O componente de lacuna declarada — o texto que nomeia uma métrica sem
+  fonte — oferecia duas formas: uma linha no peso de subtítulo e um quadro de moldura
+  tracejada. A segunda ficou **sem nenhum consumidor** quando os três rodapés de
+  lacuna da página do sistema foram removidos, e continuou sendo a forma que saía por
+  padrão — de modo que uma lacuna nova, escrita sem escolher nada, renderizava
+  exatamente o quadro que o requisito *"coluna sem fonte sai sem deixar quadro no
+  lugar"* proíbe. Era defeito latente, não preferência de estilo: o caso proibido era
+  o barato e o permitido é que precisava ser pedido. **A forma foi removida inteira**,
+  em vez de só deixar de ser o padrão — assim a escolha errada deixa de existir, e não
+  depende de cada tela nova lembrar de recusá-la. **Nenhuma mudança no que o operador
+  vê:** as duas lacunas em tela já usavam a forma que ficou, e a árvore renderizada
+  delas é idêntica à anterior. O caso de teste que cobria a forma removida saiu junto
+  com ela — ele era o motivo de a orfandade nunca ter aparecido numa varredura de
+  cobertura.
+
 - **Falha de agente sumia da coluna "Falhas" do ranking "Consumo por agente", por
   dois caminhos independentes.** *(1)* As linhas da tabela nasciam só da agregação
   de **tokens**, que depende de chamada ao provedor — então **agente que falhou

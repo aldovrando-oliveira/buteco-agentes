@@ -122,16 +122,21 @@ describe('AgentModelsCard — as duas lacunas', () => {
     expect(lacuna).not.toHaveTextContent(/falhou|erro|tentar de novo/i);
   });
 
-  it('a lacuna é INLINE: ela substitui um subtítulo, não uma coluna', () => {
-    // O peso segue o elemento substituído, não o estado. Moldura num subtítulo
+  it('a lacuna substitui um SUBTÍTULO, e não ganha contorno de coluna', () => {
+    // O peso segue o elemento substituído, não o estado. Contornar um subtítulo
     // faz o que falta pesar mais que o que existe — medido na página do
     // sistema, na terceira rodada de conferência.
+    //
+    // ESTE ERA O CASO MAIS FRACO DOS TRÊS: ele afirmava SÓ o nome da variante, e
+    // não notaria se o contorno voltasse por outro caminho. Afirmar o nome da
+    // escolha não é afirmar o resultado dela — o guarda de ausência tem de
+    // precondicionar no estado observável mais próximo do elemento negado, e aqui
+    // o elemento negado é o contorno.
     renderCard(dois);
 
-    expect(screen.getByTestId('modelos-do-agente-lacuna')).toHaveAttribute(
-      'data-gap-variant',
-      'inline',
-    );
+    const lacuna = screen.getByTestId('modelos-do-agente-lacuna');
+    expect(lacuna.getAttribute('style') ?? '').not.toMatch(/border|outline/);
+    expect(lacuna).toHaveAttribute('data-declared-gap', 'true');
   });
 
   it('a nota e a lacuna ficam na MESMA linha, como no artboard', () => {

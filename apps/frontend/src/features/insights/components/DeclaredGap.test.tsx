@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { theme } from '../../../theme';
@@ -67,11 +69,10 @@ describe('DeclaredGap — o quadro 6 do Estados.dc.html', () => {
     expect(texto).not.toMatch(/falhou|erro|tentar de novo/i);
   });
 
-  it('a variante inline não tem moldura, e continua marcada como lacuna', () => {
+  it('a lacuna tem o PESO DE SUBTÍTULO, e continua marcada como lacuna', () => {
     render(
       <MantineProvider theme={theme}>
         <DeclaredGap
-          variant="inline"
           label="turno e compactação"
           qualifier="não disponível"
           data-testid="lacuna-inline"
@@ -81,25 +82,63 @@ describe('DeclaredGap — o quadro 6 do Estados.dc.html', () => {
 
     // Onde a lacuna substitui um SUBTÍTULO, ela tem o peso de subtítulo: o
     // protótipo escreve ali "522 de turno · 41 de compactação", do mesmo peso
-    // das linhas dos outros cinco cards. A moldura tracejada ficava maior que o
-    // próprio número (pego na conferência manual).
+    // das linhas dos outros cinco cards. Contornar o subtítulo fazia o que falta
+    // pesar mais que o que existe (pego na conferência manual).
+    //
+    // ESTE CASO AFIRMAVA `data-gap-variant="inline"`, e o atributo saiu com a
+    // #83: com uma forma só ele era constante, e atributo constante não
+    // discrimina nada — era a mesma declaração sem consumidor que a change fecha,
+    // reposta no DOM. O que ficou no lugar é a ausência do contorno, que é o
+    // estado observável mais próximo do que a spec nega.
     const lacuna = screen.getByTestId('lacuna-inline');
-    expect(lacuna).toHaveAttribute('data-gap-variant', 'inline');
-    expect(lacuna.getAttribute('style') ?? '').not.toContain('dashed');
+    expect(lacuna.getAttribute('style') ?? '').not.toMatch(/border|outline/);
 
-    // Mesmo estado, mesma marca: o que muda é o peso, não o significado.
+    // Mesmo estado, mesma marca. `data-declared-gap` FICA: ele tem consumidor —
+    // é o que separa a lacuna do travessão, e está no requisito.
     expect(lacuna).toHaveAttribute('data-declared-gap', 'true');
     expect(lacuna.querySelector('[data-metric-state]')).toBeNull();
     expect(lacuna).toHaveTextContent('turno e compactação');
     expect(lacuna).toHaveTextContent('não disponível');
   });
 
-  it('a variante block mantém a moldura tracejada do quadro 6', () => {
+  it('NEGATIVO: sem escolher forma, a lacuna vem SEM moldura', () => {
+    // O GUARDA CENTRAL DA #83.
+    //
+    // `renderGap()` não passa forma nenhuma — é o `<DeclaredGap>` que alguém
+    // escreve sem pensar —, e o requisito *"Métrica aprovada no protótipo e sem
+    // fonte não é inventada"* proíbe o quadro para coluna. Enquanto houvesse uma
+    // forma com moldura disponível, e ainda por cima como padrão, o caso proibido
+    // era o que saía de graça.
     renderGap();
 
     const lacuna = screen.getByTestId('lacuna');
-    expect(lacuna).toHaveAttribute('data-gap-variant', 'block');
-    expect(lacuna.getAttribute('style') ?? '').toContain('dashed');
+    expect(lacuna.getAttribute('style') ?? '').not.toMatch(/border|outline/);
+    expect(lacuna).toHaveAttribute('data-declared-gap', 'true');
+  });
+
+  it('NEGATIVO: a FONTE do componente não declara contorno nenhum', () => {
+    // A VARREDURA, e ela existe porque o guarda de cima não basta.
+    //
+    // Renderizar sem escolher forma prova o CAMINHO PADRÃO. Não prova que não há
+    // outro caminho: uma forma nova, opcional, com moldura, passaria por ele
+    // intacta — e a spec proíbe que ela EXISTA, não que seja escolhida.
+    //
+    // A união de tipo não é varrível em tempo de execução (#89), mas texto de
+    // fonte é. Mesma forma de `components/data/surfaceTokens.test.ts`: filtrar as
+    // linhas infratoras e comparar com `[]`, para a falha NOMEAR a linha em vez de
+    // dizer só "false !== true".
+    const fonte = readFileSync(join(import.meta.dirname, 'DeclaredGap.tsx'), 'utf8');
+
+    const infratores = fonte
+      .split('\n')
+      .map((linha, i) => ({ linha: linha.trim(), numero: i + 1 }))
+      // Comentário não é código: este arquivo PRECISA poder contar que houve uma
+      // moldura, e contar não é desenhar.
+      .filter(({ linha }) => !/^(\/\/|\/\*|\*)/.test(linha))
+      .filter(({ linha }) => /\b(border|borderRadius|outline)\s*:/.test(linha))
+      .map(({ numero, linha }) => `DeclaredGap.tsx:${numero} → ${linha}`);
+
+    expect(infratores).toEqual([]);
   });
 
   it('tem apresentação DISTINTA do travessão na mesma tela', () => {

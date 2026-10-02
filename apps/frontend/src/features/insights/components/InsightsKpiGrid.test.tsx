@@ -62,11 +62,15 @@ describe('InsightsKpiGrid — cada card com a sua fonte', () => {
 
     // O protótipo tem ali uma LINHA DE SUBTÍTULO — "522 de turno · 41 de
     // compactação" —, do mesmo peso das dos outros cinco cards, e a D8 diz que
-    // é o subtítulo que vira lacuna. A moldura tracejada do quadro 6 é para
-    // lacuna que substitui elemento próprio, no rodapé do card, e ali ela
-    // ficava maior que o próprio número (pego pelo dono na conferência manual).
-    expect(lacuna).toHaveAttribute('data-gap-variant', 'inline');
-    expect(lacuna.getAttribute('style') ?? '').not.toContain('dashed');
+    // é o subtítulo que vira lacuna. Contorná-la fazia o quadro ficar maior que o
+    // próprio número (pego pelo dono na conferência manual).
+    //
+    // A asserção era `data-gap-variant="inline"` mais a ausência de `dashed`. O
+    // atributo saiu com a #83 — com uma forma só ele não discriminava nada — e a
+    // asserção do estilo ficou MAIS LARGA: qualquer contorno reprova, não só o
+    // tracejado. O guarda de ausência afirma o elemento negado, não o nome da
+    // escolha que o evitava.
+    expect(lacuna.getAttribute('style') ?? '').not.toMatch(/border|outline/);
   });
 
   it('a lacuna do KPI ocupa UMA linha, como o subtítulo que ela substitui', () => {

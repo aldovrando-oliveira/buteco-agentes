@@ -5,6 +5,7 @@ import {
   caveatsFor,
   unknownCaveats,
 } from './caveatLabels';
+import type { CaveatPlacement, CaveatSurface } from './caveatLabels';
 import { errorsFixture, performanceFixture } from '../test/systemInsightsFixture';
 import {
   agentDelegationFixture,
@@ -71,6 +72,57 @@ describe('caveatLabels', () => {
     const textosConhecidos = KNOWN_CAVEAT_CODES.map((c) => caveatLabel(c).text);
 
     expect(textosConhecidos).not.toContain(caveatLabel('outro-codigo').text);
+  });
+});
+
+// A EXAUSTIVIDADE DE `CaveatPlacement` — O GUARDA DA #89.
+//
+// A #89 registra a classe: declaração viva sem consumidor, que o compilador não
+// acusa. O caso dela foi `'rejection-reason'`, que existia para um `caveat` que a
+// #51 tirou dos dois handlers; **nenhum dos dois mapas de posição o usava**, e uma
+// união com um membro a mais nunca quebra quem não o menciona.
+//
+// A #89 propunha derivar a união de um `const` array com `typeof`. RECUSADO na
+// change `declared-gap-variante-morta`: custaria os sete comentários por membro,
+// que é onde mora "Só na página do sistema" / "Só na aba do agente" — e nesta base
+// o registro é o produto.
+//
+// O QUE ESTE `Record` FAZ, E OS `as const` DAQUI DE BAIXO NÃO FAZIAM: ele é
+// EXAUSTIVO. Membro novo na união deixa o `Record` incompleto e **o `tsc` reprova**
+// (`tsconfig.vitest.json` entra no `tsc -b`), obrigando quem acrescentou a dizer se
+// é posição de render. As listas em `as const` dos casos abaixo são escritas à mão
+// e um membro novo passa por elas sem encostar.
+//
+// E a lição de que a varredura precisava disto: `HeatStep` JÁ tem a lista como
+// valor (`HEAT_STEPS`, `heatScale.ts:21`) — a forma que a #89 propunha já existe
+// nesta base —, e ela é `readonly HeatStep[]`, uma lista PARALELA à união. Um
+// membro novo compila com o array intacto. Varrível, sim; auto-verificável, não.
+const POSICOES: Record<CaveatPlacement, 'render' | 'nao-render'> = {
+  'task-duration': 'render',
+  'rejection-count': 'render',
+  'non-terminal': 'render',
+  residual: 'render',
+  'delegation-sides': 'render',
+  // Os dois que NÃO são posição de render, e por isso não precisam de código
+  // apontando para eles: um diz "o número não está nesta superfície", o outro é o
+  // caminho do desconhecido.
+  'not-on-this-page': 'nao-render',
+  unknown: 'nao-render',
+};
+
+describe('CaveatPlacement não guarda posição sem consumidor (#89)', () => {
+  it('toda posição de render tem pelo menos um código apontando para ela', () => {
+    const comConsumidor = new Set<CaveatPlacement>(
+      (['system', 'agent'] as CaveatSurface[]).flatMap((superficie) =>
+        KNOWN_CAVEAT_CODES.map((codigo) => caveatLabel(codigo, superficie).placement),
+      ),
+    );
+
+    const orfas = (Object.keys(POSICOES) as CaveatPlacement[])
+      .filter((posicao) => POSICOES[posicao] === 'render')
+      .filter((posicao) => !comConsumidor.has(posicao));
+
+    expect(orfas).toEqual([]);
   });
 });
 

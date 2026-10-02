@@ -37,80 +37,74 @@ import { Box, Text } from '@mantine/core';
 // contém esse risco não é a palavra, é o resto:
 //
 //   - a marca `data-declared-gap`, e nunca `data-metric-state`;
-//   - a moldura tracejada do `block`, que o travessão não tem;
 //   - a ausência de qualquer ação de nova tentativa ao lado;
 //   - o guarda que proíbe "falhou", "erro" e "tentar de novo" no texto.
+//
+// **A lista tinha uma QUARTA perna e ela saiu com a #83** — era "a moldura do
+// `block`, que o travessão não tem". Ela não contava: os dois sítios vivos
+// sempre pediram a forma sem moldura, então **nenhuma lacuna em tela jamais teve
+// essa contenção**. A lista afirmava mais cuidado do que havia, que é a forma de
+// erro que a convenção 13 nomeia — a afirmação verdadeira quando foi escrita e
+// que outra etapa tornou falsa, aqui pela direção mais enganosa: ela nasceu
+// descrevendo uma perna que a tela não usava.
 //
 // Se a confusão aparecer numa conferência futura, é aqui que se mexe — e o
 // risco está escrito para que a mudança não pareça capricho.
 //
-// ------------------------------------------------------------------ VARIANTE
+// --------------------------------------------------------- UMA FORMA SÓ, E POR QUÊ
 //
-// `block` é a moldura tracejada, e nasceu para o rodapé de card, onde a lacuna
-// substituía um grupo de COLUNAS.
+// Este componente teve DUAS formas até a #83, e a segunda era **o padrão**.
 //
-// **ELA NÃO TEM MAIS CONSUMIDOR.** A décima rodada de conferência da #52 removeu
-// os três rodapés, e os dois sítios que usam este componente passam hoje
-// `variant="inline"`. Pior: `block` continua sendo o `variant` DEFAULT, então um
-// `<DeclaredGap>` novo sem a prop renderiza exatamente o quadro que a spec
-// proíbe para coluna. **É defeito, e está na #83 — não mexer nele aqui.**
+// `block` desenhava um contorno interrompido em volta da lacuna, e nasceu para o
+// rodapé de card, onde a lacuna substituía um grupo de COLUNAS. A décima rodada
+// de conferência da #52 removeu os três rodapés — *"subtítulo vira lacuna; coluna
+// sai sem deixar quadro"* —, e ela **ficou sem consumidor**, enquanto continuava
+// sendo o valor que saía de graça para quem não escolhesse nada.
 //
-// `inline` é uma linha esmaecida, sem moldura, onde a lacuna substitui um
-// SUBTÍTULO. É a L2, e a D8 diz exatamente isso: "o KPI mostra o total; o
-// subtítulo vira a lacuna declarada".
+// **Era defeito latente, não preferência de estilo:** um `<DeclaredGap>` novo sem
+// prop renderizava exatamente o elemento que o requisito *"Métrica aprovada no
+// protótipo e sem fonte não é inventada"* proíbe para coluna. O caso proibido era
+// o padrão; o permitido é que precisava ser pedido por escrito.
 //
-// **O peso segue o elemento substituído, não o estado.** Usar a moldura no
-// subtítulo fez o que falta pesar mais que o que existe.
+// **E ninguém viu porque o ramo morto tinha teste verde.** Um guarda que cobre
+// código sem consumidor mantém o código vivo e esconde que ele está morto — a
+// cobertura vira camuflagem, e é por isso que nenhuma varredura a acusaria.
+//
+// **A #83 removeu a forma inteira em vez de só inverter o padrão, e o motivo é o
+// que decide:** inverter desarmava a armadilha e deixava viva a declaração sem
+// consumidor, que nenhuma ferramenta varre. Removendo, a prop deixa de existir e
+// **o compilador passa a acusar** todo sítio futuro que tente escolher — a classe
+// sai da leitura manual e entra no `tsc`. Ver a #89, que registra a mesma classe
+// noutro lugar, e a #94, que registra a terceira forma dela.
+//
+// **Se um artboard desenhar o elemento depois, reabrir pela #83**, onde a razão
+// está escrita. São poucas linhas, e o custo de reescrevê-las é menor que o de
+// manter disponível uma forma que a spec proíbe.
+//
+// A forma que sobrou é a do SUBTÍTULO: uma linha esmaecida, sem contorno, onde a
+// lacuna substitui um subtítulo. É a L2, e a D8 diz exatamente isso: "o KPI
+// mostra o total; o subtítulo vira a lacuna declarada".
+//
+// **O peso segue o elemento substituído, não o estado.** Dar contorno ao
+// subtítulo fazia o que falta pesar mais que o que existe.
 
 export interface DeclaredGapProps {
   /** O que o protótipo desenha e não chega a esta tela. */
   label: string;
   /** O que falta. Concorda em número com `label`. */
   qualifier: string;
-  /** `block` no rodapé de card; `inline` onde a lacuna substitui um subtítulo. */
-  variant?: 'block' | 'inline';
   'data-testid'?: string;
 }
 
-export function DeclaredGap({
-  label,
-  qualifier,
-  variant = 'block',
-  'data-testid': testId,
-}: DeclaredGapProps) {
-  const corpo = (
-    <Text
-      size="xs"
-      fw={variant === 'block' ? 500 : 400}
-      c={variant === 'block' ? undefined : 'dimmed'}
-    >
-      {label} —{' '}
-      <Text span c="dimmed">
-        {qualifier}
-      </Text>
-    </Text>
-  );
-
-  if (variant === 'inline') {
-    return (
-      <Box data-testid={testId} data-declared-gap="true" data-gap-variant="inline">
-        {corpo}
-      </Box>
-    );
-  }
-
+export function DeclaredGap({ label, qualifier, 'data-testid': testId }: DeclaredGapProps) {
   return (
-    <Box
-      data-testid={testId}
-      data-declared-gap="true"
-      data-gap-variant="block"
-      style={{
-        border: '1px dashed var(--mantine-color-default-border)',
-        borderRadius: 'var(--mantine-radius-sm)',
-        padding: '10px 12px',
-      }}
-    >
-      {corpo}
+    <Box data-testid={testId} data-declared-gap="true">
+      <Text size="xs" fw={400} c="dimmed">
+        {label} —{' '}
+        <Text span c="dimmed">
+          {qualifier}
+        </Text>
+      </Text>
     </Box>
   );
 }
