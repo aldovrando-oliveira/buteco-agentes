@@ -475,6 +475,14 @@ A aba ativa SHALL ser refletida na URL, de forma que o endereço seja
 compartilhável e sobreviva a um recarregamento da página. Apenas o conteúdo da
 aba ativa SHALL estar presente na página.
 
+**A identificação da aba é UMA CHAVE do endereço, e não o endereço inteiro.**
+Trocar de aba SHALL alterar apenas a identificação da aba e SHALL preservar os
+demais parâmetros do endereço, inclusive ao voltar para a visão geral — que
+remove a identificação da aba e SHALL NOT remover o resto. Substituir a busca
+inteira a cada troca de aba SHALL NOT ocorrer: ela apagaria em silêncio qualquer
+outro parâmetro que a página carregue, e o sintoma seria uma escolha do operador
+perdida sem aviso.
+
 #### Scenario: Cinco abas exibidas no detalhe do agente
 - **WHEN** o usuário acessa a página de detalhe de um agente existente
 - **THEN** a interface exibe as abas de visão geral, ferramentas, conhecimento,
@@ -518,6 +526,18 @@ aba ativa SHALL estar presente na página.
 - **WHEN** o usuário está em uma das abas do detalhe do agente
 - **THEN** o conteúdo das outras abas não está presente na página, e
   passa a existir apenas quando a aba correspondente é acionada
+
+#### Scenario: Trocar de aba preserva os demais parâmetros do endereço
+- **WHEN** o endereço identifica uma aba e também outro parâmetro, e o usuário
+  aciona outra aba
+- **THEN** a identificação da aba passa a ser a nova, e o outro parâmetro
+  **permanece** no endereço
+
+#### Scenario: Voltar à visão geral remove só a identificação da aba
+- **WHEN** o endereço identifica uma aba e também outro parâmetro, e o usuário
+  aciona a visão geral
+- **THEN** a identificação da aba sai do endereço, e o outro parâmetro
+  **permanece**
 
 ### Requirement: Endereços A2A no detalhe do agente
 O sistema SHALL exibir, na visão geral do detalhe do agente em

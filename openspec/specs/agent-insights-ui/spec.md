@@ -394,6 +394,23 @@ O operador SHALL poder escolher o período entre as mesmas opções já oferecid
 página do escopo do sistema, e a janela SHALL ser recalculada no instante da
 consulta, nunca no instante do render.
 
+**O período da aba SHALL vir do endereço, e não de estado local da aba.** O
+sistema SHALL lê-lo do endereço da página de detalhe e SHALL escrevê-lo ali quando
+o operador o troca, com o mesmo vocabulário que a página do escopo do sistema usa:
+o **nome** da janela, ausência do parâmetro como forma canônica do padrão, valor
+não reconhecido caindo no padrão, e **nenhuma reescrita do endereço** em nenhum dos
+dois casos.
+
+**O período SHALL conviver com a identificação da aba no mesmo endereço**, e
+nenhum dos dois SHALL apagar o outro.
+
+**A janela SHALL sobreviver à travessia do ranking do escopo do sistema até esta
+aba.** Quando o operador chega aqui por aquele acionamento, a aba SHALL abrir na
+janela em que o ranking estava, e SHALL NOT abrir na janela padrão: a decisão de
+manter as métricas por agente apenas nesta superfície se apoia na profundidade
+estar a **um acionamento**, e um acionamento que troca a janela de medição em
+silêncio entrega a superfície certa respondendo outra pergunta.
+
 Quando a janela pedida começa **antes** do início da medição, o sistema SHALL
 declarar quantos dos dias pedidos têm medida e quantos não existem, e SHALL
 afirmar que os dias sem medida **não são dias sem uso**.
@@ -411,6 +428,35 @@ pé do agrupamento.
 - **WHEN** a resposta da aba chega
 - **THEN** o período apresentado no topo é o que a resposta ecoa, e o fuso usado
   para formatá-lo é o que ela declara
+
+#### Scenario: O endereço decide o período da aba
+- **WHEN** a aba é aberta num endereço que identifica a aba e um período
+  reconhecido
+- **THEN** a aba abre nesse período e consulta a rota agregada do escopo do agente
+  com a janela correspondente
+
+#### Scenario: Aba sem período no endereço abre no padrão
+- **WHEN** a aba é aberta num endereço que identifica a aba e **não** identifica
+  período
+- **THEN** a aba abre no período padrão, e o endereço **não** é reescrito
+
+#### Scenario: Período não reconhecido na aba abre no padrão
+- **WHEN** a aba é aberta num endereço cuja identificação de período não
+  corresponde a nenhuma das oferecidas
+- **THEN** a aba abre no período padrão, sem quebrar e sem exibir erro
+- **AND** o endereço **não** é reescrito
+
+#### Scenario: Trocar de período na aba escreve o endereço
+- **WHEN** o operador escolhe outro período dentro da aba
+- **THEN** o endereço passa a identificar o período escolhido, e continua
+  identificando a aba
+
+#### Scenario: A janela atravessa do ranking até a aba
+- **WHEN** o operador escolhe um período na página do escopo do sistema e aciona
+  o nome de um agente no ranking de consumo
+- **THEN** a aba de Insights daquele agente abre ativa **e** no período escolhido,
+  consultando a rota agregada do escopo do agente com aquela janela
+- **AND** **nenhuma** consulta é feita com a janela do período padrão
 
 #### Scenario: Janela maior que a medição é declarada
 - **WHEN** a janela pedida começa antes do início do regime que governa a aba
