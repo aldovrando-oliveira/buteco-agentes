@@ -1104,6 +1104,36 @@ de propor algo nesta base:
     | 2 | `lock-de-contexto-falha-terminal` | **48 : 111** (2,3:1), em `apps/workers/src/Buteco.Workers/Agents/` | três registros de mecanismo |
     | 3 | `delegacao-ciclo-no-cadastro` | **92 : 121** (1,3:1), em `apps/api/src/Buteco.Api/AgentDelegations/` | um registro de mecanismo, e a proporção foi **projetada em 1,4:1 antes de escrever o código** |
     | 4 | `consumo-por-agente-falhas` | **14 : 62** (1 : 4,4), em `apps/frontend/src/features/insights/components/AgentConsumptionCard.tsx` | quatro blocos corrigidos com a causa, e a proporção **não foi projetada** — ver abaixo |
+    | 5 | `declared-gap-variante-morta` | **8 : 40** (1 : 5,0), em `apps/frontend/src/features/insights/components/DeclaredGap.tsx` | a primeira change de **REMOÇÃO** da série, e a proporção foi **projetada em 6:1 antes de escrever o código**, com falsificação declarada |
+
+    **A 5 responde a pergunta que a régua deixava em aberto: numa change de REMOÇÃO a
+    régua INVERTE?** Não — **ela se agrava**, por dois efeitos que somam e que são
+    previsíveis por leitura:
+
+    - **o numerador cresce**: numa correção, o texto novo descreve um mecanismo que
+      continua no arquivo logo abaixo, então ele pode apontar e ser curto. Numa
+      remoção o mecanismo **não está mais lá**, e o texto precisa carregá-lo inteiro —
+      senão a próxima pessoa o reintroduz sem saber que já houve um;
+    - **o denominador encolhe**: a change tira lógica em vez de acrescentar. Medido:
+      **8 linhas de lógica adicionadas contra 54 removidas**, e o arquivo fechou
+      **menor** (116 → 110) com **mais comentário** do que tinha.
+
+    **A hipótese foi declarada FALSIFICÁVEL antes de medir** — *"abaixo de 4,4:1 a
+    régua está errada"* —, e passou em 5,0:1. **O número projetado errou 20% para
+    cima (6:1), e isso não enfraquece a hipótese**: ela era sobre a direção e o piso,
+    e os dois acertaram. Essa separação é o que a 4 não fez, ao ler um erro de volume
+    como erro de régua.
+
+    **E o que a 5 acrescenta de novo, que nenhuma das quatro tinha: a régua vale para
+    o TESTE também, e a projeção dela só a aplicou à produção.** Das 114 linhas
+    adicionadas em teste, **69 são comentário** (1,53:1) — num guarda cuja razão de
+    existir é uma classe de defeito, o teste carrega o registro tanto quanto o
+    componente. O volume de teste errou **+43%**, e é onde está quase todo o erro de
+    linhas da change (+41% no total). Segunda causa, também por leitura: **guarda com
+    arranjo próprio custa o dobro do guarda de asserção** — uma varredura de fonte e
+    um `Record` exaustivo são 17 e 23 linhas de lógica, não um `expect`. **Régua:
+    projetar comentário dos dois lados, e separar "caso de asserção" de "caso com
+    arranjo" no custo unitário.**
 
     **A 4 é a primeira ocorrência de SINAL CONTRÁRIO AO DA 3: a regra existia e
     não foi aplicada.** A projeção escreveu "~170 linhas de código" e declarou
@@ -1338,6 +1368,37 @@ de propor algo nesta base:
     na tarefa de fechamento, e não à disciplina de quem roda** — escrito como
     tarefa, deixa de depender de alguém lembrar.
 
+    **E a QUARTA coisa, que é a direção inversa e já aconteceu duas vezes na linha
+    de `metricas-de-operacao`: a máquina carregada produz falhas que PARECEM
+    defeito.** Não é "pré-existente lido como regressão" — é **ambiente lido como
+    código**, e o sintoma é convincente porque vem com nome de teste e tudo.
+
+    | # | change | o que apareceu | o que era |
+    |---|---|---|---|
+    | 1 | `insights-sistema-motivo-da-recusa` (#75) | duas medições inválidas seguidas; a terceira **abortada de propósito** | VM carregada. O número fechou na quarta execução |
+    | 2 | `declared-gap-variante-morta` (#83) | **11 arquivos reprovados / 14 casos**, duração de **2379 s**, total de 1359 contra 1411 | VM do Podman a **343%** de CPU, `load average` **33-37** em 12 núcleos |
+
+    **A ocorrência 2 foi remedida na mesma árvore e no mesmo commit duas horas
+    depois, com `load average` de 11,4 e a VM ociosa: 1411 / 118, zero falhas, em
+    112 s.** Mesmo código, **21× de diferença de duração**, e **nenhum** dos 14
+    "defeitos" existia.
+
+    **O sintoma que separa ambiente de defeito, e ele é textual:** `Unhandled Error`
+    de pool — `[vitest-pool]: Failed to start forks worker`, `Timeout waiting for
+    worker to respond` — em vez de asserção reprovando. **Quando os workers não
+    sobem, os casos daqueles arquivos nem são contados**, então o total também
+    mente, e para baixo.
+
+    **Na prática:** `uptime` e `ps aux | sort -nrk 3 | head` **antes** de rodar, não
+    depois; `podman ps` e `load average` escritos **na mesma frase** do número
+    (convenção 22); e **abortar** acima de ~1× o número de núcleos. Medição inválida
+    citada depois vale menos que medição ausente — é a convenção 22 pelo avesso.
+
+    **E isto é o caso concreto da regra de guardar a saída inteira**, logo acima: a
+    primeira tentativa da ocorrência 2 passou por `| tail -25` e **perdeu a lista
+    dos 11 arquivos**. O que sobrou foi o rodapé, que é justamente a parte que não
+    distingue ambiente de defeito.
+
     **E a variável ambiental mais provável desta base é a própria ferramenta da
     conferência de protótipo, que disputa a máquina com a suíte.** Medido em
     `frontend-knowledge-base-resumo-indexacao`, no mesmo commit e na mesma
@@ -1507,6 +1568,26 @@ de propor algo nesta base:
     commit original** antes de concluir que houve crescimento. Distinguir "cresceu"
     de "foi contado errado" muda a leitura: no primeiro caso o gatilho está no
     futuro, no segundo ele já passou.
+
+    **A sétima ocorrência é da mesma família da sexta — número que nasce errado — e
+    acrescenta COMO detectá-la, que a sexta não dizia.** A varredura de uniões de
+    `declared-gap-variante-morta` rodou com um critério estreito (casar só o nome em
+    `[A-Za-z]*` e a abertura da união na mesma linha) e devolveu **19** aliases do
+    frontend. O critério largo, que casa todo `type X =`, devolveu **30** — e o que
+    faltava era um alias que o estreito não via.
+
+    **Nenhuma leitura do primeiro resultado tinha como acusar o buraco:** 19 itens
+    plausíveis, todos reais, e a lista não diz o que não está nela. **O que acusou
+    foi rodar os dois critérios e comparar.**
+
+    **Na prática, para toda varredura cujo número vai ser citado:** enumerar o
+    universo **antes** de filtrar, e conferir o critério contra um mais largo. O
+    custo é um segundo `grep`; o custo de não fazer é um número que parece medido e
+    é uma amostra. Vale também para varredura de escopo de change: na mesma change,
+    a busca pelo **nome do componente** devolveu 4 arquivos e a busca pelo
+    **atributo que ele emite** acrescentou 2 — *varredura por nome perde quem toca só
+    a marca*, que é a mesma forma da régua da #84/#86 (*varredura por número de issue
+    acha o que fala do assunto, não o que o executa*).
 
 23. **Toda change nasce de uma issue, e toda change e todo PR referenciam a
     que os originou.** Demanda nova **cria issue antes** de virar change — a
@@ -1709,3 +1790,68 @@ de propor algo nesta base:
       `ProjectV2ViewConfiguration` só traz `visibleFields`. É conferência de UI,
       não feita. Se houver limite e a fila o estourar, o que sai é decisão de
       fila, do dono.
+
+25. **Declaração viva sem consumidor: o compilador não acusa, e as três formas de
+    sobrevivência são opostas entre si.** Promovida na terceira ocorrência, e o que
+    decidiu a promoção não foi a contagem — foi as três sobreviverem por **mecanismos
+    contrários**, o que faz nenhuma régua sobre cobertura pegar qualquer uma delas.
+
+    O mecanismo comum: uma declaração — uma variante de componente, um membro de
+    união, uma lista de valores — perde o consumidor numa etapa anterior e **não
+    custa nada a ninguém**, então fica. Ninguém erra, nada reprova, e o código
+    continua lá afirmando que alguém o usa.
+
+    | # | o que ficou órfão | por que ficou | teste? | o que a oposição mostra |
+    |---|---|---|---|---|
+    | **#83** | a variante `block` do `DeclaredGap` | a #52 removeu os três rodapés que a usavam | **sim**, e verde | o guarda **mantém o código morto vivo e esconde que ele está morto** — a cobertura vira camuflagem |
+    | **#89** | o membro `'rejection-reason'` de `CaveatPlacement` | a #51 removeu o único `caveat` que o usava | **não** | sem teste **não há nem o sintoma** de um caso que ninguém consegue explicar |
+    | **#94** | nada: `theme.test.ts` redeclara `HEAT_STEPS` em vez de importar | nunca importou | o teste cobre a **cópia** | a divergência **não produz sintoma nenhum** — não há nada morto para alguém achar |
+
+    **Ter teste, não ter teste e testar uma cópia produzem o mesmo resultado.** É por
+    isso que "aumentar a cobertura" não é resposta: na #83 a cobertura **era** o
+    problema.
+
+    **O que o compilador faz nos três casos: nada.** Um `variant` default compila e
+    renderiza; uma união com um membro a mais nunca quebra quem não o menciona; uma
+    cópia é um literal válido, independente do original.
+
+    **As duas ferramentas que funcionam, e qual serve para quê — medidas em
+    `declared-gap-variante-morta`:**
+
+    - **declaração textual → varredura sobre a FONTE.** A forma já existia na casa
+      (`components/data/surfaceTokens.test.ts`, que varre tom fixo de superfície): ler
+      o arquivo, filtrar as linhas infratoras, comparar com `[]`. A falha **nomeia a
+      linha**, que é o que a distingue de um `expect(false)`. Precisa descartar
+      comentário — o arquivo tem de poder **contar** que houve uma moldura, e contar
+      não é desenhar;
+    - **declaração de tipo → exaustividade que o `tsc` sabe checar.** Um
+      `Record<Union, …>` no teste reprova a compilação quando um membro novo entra, e
+      obriga quem o acrescentou a classificá-lo. **Não** derivar a união de um `const`
+      array (`typeof X[number]`), que é a saída intuitiva: ela custa o comentário por
+      membro, e nesta base o registro é o produto.
+
+    **E a lista paralela NÃO é exaustividade**, que é o erro a não repetir: `HeatStep`
+    já tem `HEAT_STEPS: readonly HeatStep[]` — a forma que parecia resolver —, e um
+    membro novo na união **compila com o array intacto**. Varrível, sim;
+    auto-verificável, não. Só o `Record` amarra os dois lados.
+
+    **A saída mais barata, quando ela existe, é remover a declaração.** Na #83 as três
+    formas na mesa eram remover a variante, inverter o default, ou deixar como estava.
+    **Remover é a única que move a classe para dentro do compilador**: sem a prop,
+    passá-la deixa de compilar, e nenhum sítio futuro precisa lembrar de recusá-la.
+    Inverter o default desarmaria a armadilha e deixaria a declaração viva —
+    inofensiva e igualmente invisível. Medido: logo depois da remoção, o `tsc` apontou
+    sozinho o único sítio restante no repositório, sem varredura nenhuma.
+
+    **Na prática, ao remover o último consumidor de qualquer coisa:** perguntar se a
+    declaração ainda tem quem a use, **na mesma change**. A #83 e a #89 nasceram as
+    duas de uma remoção anterior (#52 e #51) que não fez essa pergunta, e as duas
+    levaram meses para aparecer.
+
+    **E a varredura que procura a classe precisa enumerar o universo ANTES de
+    filtrar.** A primeira passagem de `declared-gap-variante-morta` casou só uniões de
+    literal e devolveu **19** aliases; a larga, que casa todo `type X =`, devolveu
+    **30** — e o que faltava era um alias que o critério estreito não via. **Só a
+    comparação entre os dois critérios acusou o buraco**; a leitura do primeiro
+    resultado não tinha como. Parente da convenção 22 na sexta ocorrência: o número
+    não envelheceu, nasceu errado.

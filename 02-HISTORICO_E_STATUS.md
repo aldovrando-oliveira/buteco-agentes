@@ -197,6 +197,108 @@ delta é comentário** — 62 das 76 linhas do componente. A régua para a próx
 projetar linhas em duas parcelas, e projetar comentário por **quantos blocos a
 change torna falsos**.
 
+**E a linha fechou a dívida que ela própria tinha aberto** com
+`declared-gap-variante-morta` (01/10/2026, issues **#83** e **#89** juntas), aplicada
+em `fix/83-declared-gap-variante-morta` sobre `9709e045`, sincronizada
+(`system-insights-ui`) e **arquivada** em
+`openspec/changes/archive/2026-10-01-declared-gap-variante-morta/`. Ela remove a variante
+`block` do `DeclaredGap` — moldura tracejada **sem consumidor desde a décima rodada da
+#52** e, pior, **o `variant` default**, de modo que um `<DeclaredGap>` novo sem prop
+renderizava exatamente o quadro que o requisito proíbe para coluna. `apps/frontend` em
+**1413 / 118**, contra baseline de **1411 / 118** remedida em árvore limpa.
+
+**A decisão não foi inverter o default, e o motivo é o que vale.** Das três saídas, só
+a remoção **move a classe para dentro do compilador**: sem a prop, passá-la deixa de
+compilar. Inverter o default desarmaria a armadilha e deixaria viva a declaração sem
+consumidor — inofensiva e igualmente invisível. **Medido logo depois da remoção:** o
+`tsc` apontou sozinho o único sítio restante no repositório, sem varredura nenhuma.
+
+**A #90 foi lida ANTES de decidir, e não pede a moldura.** O trabalho que ela guarda é
+a nota de regime por grupo, que a página já renderiza como texto esmaecido sem moldura
+(`FailuresCard.tsx:186-190`), e os dois gatilhos dela são sobre elemento de artboard,
+não sobre quadro.
+
+**A #89 dobrou**, com o conteúdo exclusivo movido para o `01` **antes** do fechamento —
+a ordem que a #80 ensinou. A forma que ela propunha (`const` array + `typeof`) foi
+**recusada**: custaria os sete comentários por membro de `CaveatPlacement`. Entrou um
+`Record<CaveatPlacement, …>` exaustivo no teste, que o `tsc -b` checa porque
+`tsconfig.vitest.json` entra na build. **E a varredura fechou a #89 com resultado:**
+30 aliases de tipo do frontend, **nenhum membro de nenhuma união da classe sem
+consumidor de produção**. Não há terceira ocorrência da orfandade.
+
+**O achado da varredura abriu a #94, e ele é a TERCEIRA forma da classe:**
+`theme.test.ts:147` redeclara `HEAT_STEPS` em vez de importar o exportado, e dois
+`it.each` são alimentados pela cópia. Se a escala ganhar um passo, a cópia continua com
+seis e os dois casos passam verdes **cobrindo menos**. As três formas sobrevivem por
+mecanismos **opostos** — teste verde que mantém vivo, nenhum teste, teste que cobre a
+cópia — e é essa oposição que promoveu a **convenção 25**.
+
+**A régua da fiação foi rodada e NÃO achou buraco, o que também é resultado.** Trocando
+`<DeclaredGap>` por `<></>` em cada consumidor: **5 de 460** reprovam no primeiro, **4
+de 460** no segundo, todas no arquivo do próprio consumidor. A change anterior precisou
+de um nono guarda porque a **página** garantia a prop e nunca afirmava a célula; aqui
+essa camada não existe — a lacuna é JSX estático, então o guarda de componente **é** o
+de fiação. **A leitura da régua é a distribuição das reprovações, não a contagem.**
+
+**E as cinco trocas de guarda negativo foram reverificadas** contra o contorno reposto
+no componente já simplificado: as cinco reprovam. As três adaptadas ficaram **mais
+fortes** — a asserção saiu de `not.toContain('dashed')`, um glifo, para
+`not.toMatch(/border|outline/)`, e a de `AgentModelsCard` nem estilo afirmava, só o
+nome da variante.
+
+**Convenção 18, vigésima quinta medição — e a hipótese era falsificável:** projetado
+**6:1** de comentário : lógica na produção, com *"abaixo de 4,4:1 a régua está errada"*
+escrito antes de medir. **Medido 5,0:1** (8 linhas de lógica contra 40 de comentário),
+acima do 4,4:1 da 24ª e do 1,98:1 da 23ª. **A hipótese passa: numa change de remoção a
+régua não inverte, ela se agrava** — o numerador cresce porque o mecanismo sai do
+arquivo, o denominador encolhe porque se tira lógica, e `DeclaredGap.tsx` fechou
+**menor** (116 → 110) com mais comentário do que tinha. **Casos acertaram em todas as
+categorias** — novos 3/3, adaptados 3/3, removidos 1/1, reforçados 0/0, fiação 0/0,
+saldo +2/+2, arquivos 7/7. **Linhas erraram +41%**, e a parcela inteira está no
+**teste** (114 contra ~80): a régua do comentário foi aplicada à produção e não ao
+teste, e guarda com arranjo próprio custa o dobro do guarda de asserção. A única
+categoria de caso que errou foi **negativas, 2 projetadas e 3 medidas** — a terceira é
+uma negativa **sobre o código**, não sobre a tela, e a projeção só contou as de tela.
+
+**A baseline precisou de duas tentativas, e o contraste virou convenção.** A primeira
+(01:29) deu **1359 / 14 falhas em 2379 s**, com a VM do Podman a **343%** de CPU e
+`load average` de **33-37** em 12 núcleos. **Abortada de propósito.** A segunda (21:36),
+**mesma árvore e mesmo commit**, com `load` de 11,4 e a VM ociosa: **1411 / 118, zero
+falhas, 112 s** — **21× de diferença de duração**, e nenhum dos 14 "defeitos" existia.
+É a segunda vez na linha que a VM carregada invalida medição (a primeira foi a #75, que
+abortou três vezes), e o padrão entrou na **convenção 19** com as duas ocorrências e com
+o sintoma textual que o separa de defeito: `Unhandled Error` de pool, não asserção.
+
+**E a varredura de escopo ensinou duas coisas sobre varredura**, as duas no `01`: a
+busca pelo **nome do componente** devolveu 4 arquivos e a busca pelo **atributo que ele
+emite** acrescentou 2 — *varredura por nome perde quem toca só a marca*; e a varredura
+de uniões **nasceu com critério estreito** (19 aliases) que só a comparação com o
+critério largo (30) acusou — sétima ocorrência da convenção 22, e a primeira que diz
+**como** detectar o número que nasce errado.
+
+**A conferência visual do dono foi feita antes do archive** (convenção 14), com o app
+de pé — `apps/api` em `:5017` com `TZ=America/Sao_Paulo` e o Vite em `:5173`; o
+`apps/inbox` ficou fora porque os insights não o usam. As duas lacunas conferidas nas
+duas telas e **nos dois esquemas de cor**: sem moldura, no peso dos subtítulos
+vizinhos, com a régua de comparação na própria linha (*"11 de origem externa"*,
+*"média 10,7 s"*).
+
+**O risco nomeado foi fechado antes dela, de forma determinística**, e isso mudou o que
+a conferência tinha de procurar: a árvore renderizada da lacuna, antes e depois, difere
+**apenas** no atributo `data-gap-variant` que saiu de propósito — `font-weight: 400`,
+`color: var(--mantine-color-dimmed)` e os tokens de tamanho são idênticos. **Isso não
+substitui a conferência**, que é o que vê cor, contraste e layout; o que ele faz é
+deixar o olho livre para o resto. *(Dizia **"Não arquivada: a conferência visual do dono
+é a condição que falta"**. **Era verdade quando foi escrito**, e o dono conferiu em
+seguida; corrigido na mesma change, não em cauda — convenção 9.)*
+
+**Dois registros da conferência, nenhum dos dois desta change:** o card *"Tokens de
+embedding"* aparece **sem número** nos dois esquemas — o diff de produção dos
+consumidores é **uma linha removida em cada**, e o card lê `tokens.embeddingInputTokens`
+como lia (`InsightsKpiGrid.tsx:162-174`, intocado) —, e o **botão de tema não respondeu
+a clique sintético**, só a `.click()` por JavaScript, o que pode ser limitação da
+automação.
+
 ## Changes aplicadas, por linha de trabalho
 
 ### Fundação (backend + frontend básico)
@@ -12829,7 +12931,10 @@ linguagem, mesmo tipo de arquivo, **duas ordens de grandeza de diferença**.
   removeu os três rodapés. Como é o default, `<DeclaredGap>` sem a prop renderiza o
   quadro que a spec proíbe para coluna. **E o branch morto tem teste verde**
   (`DeclaredGap.test.tsx:97`): um guarda que cobre código sem consumidor mantém o
-  código vivo e esconde que ele está morto.
+  código vivo e esconde que ele está morto. *(**Corrigido** na change
+  `declared-gap-variante-morta`: a variante saiu inteira, e não só o default foi
+  invertido — o motivo está na D1 dela, e é que remover é a única saída que move a
+  classe para dentro do compilador. O caso de teste do branch morto saiu junto.)*
 - **(b) Agente que falhou sem chamar o provedor não tem linha em "Consumo por
   agente"** — **#84**. **Não é latente: está acontecendo.** `Atendente Sênior` tem 2
   falhas em 2 tasks, zero chamadas, e nenhuma linha. *(**Corrigido** na change

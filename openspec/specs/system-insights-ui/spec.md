@@ -606,6 +606,19 @@ Onde o protótipo desenha **coluna ou conjunto de colunas**, o sistema SHALL
 removê-las e SHALL NOT acrescentar elemento próprio para anunciá-las. A lacuna
 existe na **issue** que a registra, não na tela.
 
+**A lacuna declarada SHALL ter uma forma só, e ela é a do subtítulo.** O sistema
+SHALL NOT dispor de forma de lacuna declarada que renderize moldura, quadro ou
+qualquer elemento de contenção próprio — não como opção escolhida, não como opção
+disponível, e não como padrão.
+
+**A razão de a proibição ser sobre a FORMA e não sobre o resultado:** proibir o
+quadro na tela deixa aberto o caminho para produzi-lo, e o caminho mais barato é o
+que se percorre sem escolher — uma forma que exista e seja o padrão renderiza o
+quadro para quem não pediu nada. Enquanto a forma existir, a conformidade depende
+de cada sítio novo lembrar de recusá-la, e uma forma sem sítio que a use **não é
+detectável por cobertura de teste**: o guarda que a exercita a mantém viva e esconde
+que ela não tem consumidor.
+
 **A razão da assimetria:** declarar na tela vale onde há um elemento do próprio
 protótipo para carregar a declaração — ali a lacuna ocupa um lugar que já
 existia. Criar um quadro novo, que o artboard não tem, acrescenta à tela um
@@ -646,6 +659,16 @@ tela está incompleta quando ela está como se quis.
 - **WHEN** o protótipo desenha uma coluna cuja fonte a rota não serve
 - **THEN** a coluna não aparece, e **nenhum** elemento novo é acrescentado ao
   card para anunciá-la
+
+#### Scenario: A lacuna declarada vem sem moldura mesmo quando nada é escolhido
+- **WHEN** uma lacuna declarada é apresentada sem que a superfície escolha forma
+  alguma para ela
+- **THEN** ela vem no peso do subtítulo, **sem moldura e sem quadro**
+
+#### Scenario: Não há forma de lacuna que renderize quadro
+- **WHEN** qualquer superfície apresenta uma lacuna declarada
+- **THEN** **nenhuma** escolha disponível a essa superfície produz moldura, quadro
+  ou elemento de contenção próprio em torno da lacuna
 
 #### Scenario: A lacuna não é confundida com dado desconhecido
 - **WHEN** a lacuna declarada e o travessão aparecem na mesma tela

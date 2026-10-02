@@ -146,7 +146,6 @@ export function AgentModelsCard({ byModel, queryState, reason }: AgentModelsCard
           ) : null}
 
           <DeclaredGap
-            variant="inline"
             label="Separação entre turno e compactação"
             qualifier="não devolvida por esta rota"
             data-testid="modelos-do-agente-lacuna"
