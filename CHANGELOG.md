@@ -595,6 +595,35 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **O período escolhido pelo operador passa a viajar entre as duas telas de
+  Insights, e a sobreviver a recarregamento e a link colado** (#85). Ele mora no
+  endereço — `/insights?period=90d` e
+  `/agents/{id}?tab=insights&period=90d` —, nas duas superfícies, e o nome do
+  agente no ranking o leva junto. Antes as duas guardavam o período em estado
+  local semeado com o mesmo padrão: quem comparava agentes em 90 dias e clicava
+  num nome **abria a aba na janela de 30 — sem nada na tela dizendo que a janela
+  mudou**. O clique único que a #67 comprou ficava pela metade, e o modo de falha
+  era o mais silencioso desta linha: os dois números existem, os dois estão
+  certos, e não falam do mesmo período. Era limitação declarada da
+  `fechamento-da-l4`, e deixa de ser.
+- **O que o endereço carrega é o NOME da janela, não os seus limites**, e isso
+  decide qual pergunta o link responde: compartilhado amanhã, ele mostra os
+  últimos 90 dias **de amanhã**, porque a janela é rolante por requisito. O
+  intervalo concreto continua na tela, ecoado pela resposta. Um endereço com
+  instantes absolutos congelaria a janela, contra o requisito vivo de ela ser
+  recalculada no instante da consulta — e a interface, que oferece três opções
+  num seletor, não tem como produzir nem ler de volta um limite arbitrário.
+- **Endereço sem período, ou com período não reconhecido, abre no padrão sem ser
+  reescrito** — o mesmo contrato que a identificação da aba já declara, pelo
+  mesmo motivo de não poluir o histórico. Todo link já compartilhado continua
+  valendo com o significado que tinha.
+- **Trocar de aba no detalhe do agente deixa de apagar o resto do endereço.** O
+  escritor substituía a busca inteira; passa a alterar só a chave que lhe
+  pertence. Não havia sintoma enquanto a aba era o único parâmetro daquele
+  endereço — e com o período lá, ir para outra aba e voltar perderia a janela em
+  silêncio, que é o mesmo defeito por outro caminho. A mesma forma em
+  `KnowledgeBaseDetailPage` ficou registrada como **#96**, com gatilho
+  observável: ela não é defeito enquanto aquele endereço tiver uma chave só.
 - **O nome do agente no ranking "Consumo por agente" passa a abrir direto a aba
   de Insights do agente** (`?tab=insights`), e não o detalhe dele. Eram dois
   cliques — sem o parâmetro a página cai em "Visão geral" por contrato — e o que

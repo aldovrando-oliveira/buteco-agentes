@@ -280,6 +280,97 @@ describe('appRoutes', () => {
     expect(await screen.findByTestId('aba-insights-do-agente')).toBeInTheDocument();
   });
 
+  // E A JANELA TAMBÉM ATRAVESSA — CASO PRÓPRIO, NÃO ASSERÇÃO DENTRO DO DE CIMA
+  // (#85).
+  //
+  // O caso acima prova que o clique chega à aba certa. Este prova que ele chega
+  // MEDINDO A MESMA COISA, que é a outra metade da decisão da #67: a profundidade
+  // está a um clique, e um clique que troca a janela em silêncio não é a mesma
+  // passagem.
+  //
+  // CASO PRÓPRIO, e é régua: numa tela cujo valor está no que ela afirma, cada
+  // afirmação é um `it()` — acrescentar esta asserção dentro do caso acima a faria
+  // sumir na primeira refatoração que "limpasse" o teste.
+  //
+  // E É AQUI, não nas pontas: `AgentConsumptionCard.test.tsx` afirma o `href` com
+  // `period=90d` e `AgentDetailPage.test.tsx` afirma que `?period=90d` abre em 90
+  // dias. Os dois podem estar verdes com a travessia quebrada, porque nenhum
+  // NAVEGA. Guarda que afirma o meio do caminho não prova o fim dele.
+  //
+  // A LARGURA, E NÃO OS INSTANTES: `(to - from)` não depende de quando o teste
+  // roda, então não há relógio a controlar — o painel não tem `TimeProvider` e a
+  // feature de insights não usa `vi.setSystemTime` em teste nenhum. É consequência
+  // da decisão de o endereço levar o NOME da janela e não os seus limites: com
+  // instantes no endereço, este guarda precisaria de relógio fixo para ser
+  // reprodutível.
+  it('do ranking do sistema, a JANELA escolhida atravessa até a aba do agente', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listAgents).mockResolvedValue([agent]);
+    vi.mocked(getSystemInsights).mockResolvedValue(
+      systemInsightsFixture({
+        tokens: tokensFixture({
+          byAgent: [{ agentId: agent.id, inputTokens: 1000, outputTokens: 500 }],
+        }),
+      }),
+    );
+
+    renderRoutesFrom('/insights');
+
+    // 90d, que NÃO é o padrão: em 30d o guarda passaria com o defeito presente.
+    await user.click(await screen.findByRole('radio', { name: '90d' }));
+    await user.click(await screen.findByTestId(`agente-${agent.id}-nome`));
+
+    expect(await screen.findByTestId('aba-insights-do-agente')).toBeInTheDocument();
+
+    const chamadas = vi.mocked(getAgentInsights).mock.calls;
+    expect(chamadas.length).toBeGreaterThan(0);
+    const dias = chamadas.map(
+      ([, from, to]) => (new Date(to).getTime() - new Date(from).getTime()) / (24 * 60 * 60 * 1000),
+    );
+
+    expect(dias).toContain(90);
+    // O SELETOR DA ABA marcado, e não só a consulta: é o que o operador lê para
+    // saber sobre qual período o número fala.
+    expect(
+      within(await screen.findByTestId('aba-insights-do-agente')).getByRole('radio', {
+        name: '90d',
+      }),
+    ).toBeChecked();
+  });
+
+  it('NEGATIVO: a travessia não consulta a aba com a janela PADRÃO', async () => {
+    // O par do caso acima, e sem ele o modo de falha desta issue passaria: uma
+    // consulta a mais com os 30 dias do padrão — pela aba nascendo no default e
+    // sendo corrigida depois, ou por um link que não leva o parâmetro — entregaria
+    // números de outro período antes dos certos, e `toContain(90)` continuaria
+    // verde.
+    const user = userEvent.setup();
+    vi.mocked(listAgents).mockResolvedValue([agent]);
+    vi.mocked(getSystemInsights).mockResolvedValue(
+      systemInsightsFixture({
+        tokens: tokensFixture({
+          byAgent: [{ agentId: agent.id, inputTokens: 1000, outputTokens: 500 }],
+        }),
+      }),
+    );
+
+    renderRoutesFrom('/insights');
+
+    await user.click(await screen.findByRole('radio', { name: '90d' }));
+    await user.click(await screen.findByTestId(`agente-${agent.id}-nome`));
+    await screen.findByTestId('aba-insights-do-agente');
+
+    const dias = vi
+      .mocked(getAgentInsights)
+      .mock.calls.map(
+        ([, from, to]) =>
+          (new Date(to).getTime() - new Date(from).getTime()) / (24 * 60 * 60 * 1000),
+      );
+
+    expect(dias).not.toContain(30);
+    expect(new Set(dias)).toEqual(new Set([90]));
+  });
+
   it('monta a partir de uma rota interna, com o mesmo layout e a mesma proteção', async () => {
     renderRoutesFrom('/channels');
 

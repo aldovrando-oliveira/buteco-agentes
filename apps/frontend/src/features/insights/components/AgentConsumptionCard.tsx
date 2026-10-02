@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import type { AgentFailures, AgentTokens } from '../types/systemInsights';
 import { MetricValue } from './MetricValue';
 import { formatCount, formatTokens, sumKnown, type QueryState } from '../utils/metricState';
+import type { InsightsPeriod } from '../utils/insightsWindow';
 
 // "Consumo por agente" — A TABELA QUE CRUZA DOIS CONTRATOS.
 //
@@ -60,6 +61,15 @@ export interface AgentConsumptionCardProps {
   catalogLoading: boolean;
   catalogFailed: boolean;
   onRetryCatalog: () => void;
+  /**
+   * O período EM VIGOR na página, que o link da linha leva para a aba do agente.
+   *
+   * OBRIGATÓRIO de propósito (D4): prop obrigatória move a fiação para dentro do
+   * compilador — sem ela o card não compila, e nenhum sítio futuro precisa
+   * LEMBRAR de passá-la. É a mesma propriedade que a #83 mediu ao remover a
+   * variante morta do `DeclaredGap`.
+   */
+  period: InsightsPeriod;
   queryState: QueryState;
   reason?: string;
 }
@@ -71,6 +81,7 @@ export function AgentConsumptionCard({
   catalogLoading,
   catalogFailed,
   onRetryCatalog,
+  period,
   queryState,
   reason,
 }: AgentConsumptionCardProps) {
@@ -236,7 +247,21 @@ export function AgentConsumptionCard({
                           // cai em "Visão geral" por contrato declarado, então
                           // sem `?tab=insights` o operador que veio do ranking
                           // ainda precisa escolher a aba (#67, caminho 2).
-                          to={`/agents/${linha.agentId}?tab=insights`}
+                          //
+                          // E O PERÍODO VAI JUNTO, porque a travessia atravessa
+                          // para um ENDEREÇO DIFERENTE: as duas telas lerem
+                          // `?period=` não faz o parâmetro ser herdado: ele tem
+                          // de ser escrito aqui. Sem isso o clique continua
+                          // sendo um e leva a OUTRA JANELA DE MEDIÇÃO — os dois
+                          // números existem, os dois estão certos, e não falam
+                          // do mesmo período. Era a limitação declarada na D7 da
+                          // `fechamento-da-l4`, e é o que a #85 fecha.
+                          //
+                          // O período é lido da prop, nunca do default: fixar
+                          // `30d` aqui faria o link parecer certo e desfazer a
+                          // travessia justamente quando o operador escolheu
+                          // outra coisa.
+                          to={`/agents/${linha.agentId}?tab=insights&period=${period}`}
                           size="sm"
                           data-testid={`agente-${linha.agentId}-nome`}
                           // Fora do catálogo: o identificador abreviado no lugar

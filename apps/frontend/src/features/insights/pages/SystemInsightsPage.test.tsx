@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MantineProvider } from '@mantine/core';
-import { MemoryRouter } from 'react-router';
+import { RouterProvider, createMemoryRouter } from 'react-router';
 import { theme } from '../../../theme';
 import { SystemInsightsPage } from './SystemInsightsPage';
 import { getSystemInsights } from '../api/insightsApi';
@@ -16,6 +16,7 @@ import {
   volumeFixture,
 } from '../test/systemInsightsFixture';
 import type { Agent } from '../../agents/types/agent';
+import { DEFAULT_INSIGHTS_PERIOD } from '../utils/insightsWindow';
 
 vi.mock('../api/insightsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/insightsApi')>();
@@ -54,17 +55,38 @@ const corpo = systemInsightsFixture({
   }),
 });
 
-function renderPage() {
+/**
+ * `createMemoryRouter` E NÃO `MemoryRouter`, e a troca é pelo que ela devolve.
+ *
+ * A página passou a LER E ESCREVER o período no endereço (#85), então os guardas
+ * precisam afirmar o endereço — inclusive que ele NÃO foi reescrito, que é uma
+ * afirmação sobre o que não aconteceu. `MemoryRouter` não expõe a localização;
+ * o router devolvido por `createMemoryRouter` expõe `state.location.search`.
+ *
+ * É a mesma forma que `AgentDetailPage.test.tsx` já usa, pela mesma razão.
+ *
+ * A rota de `/agents/:id` existe porque o card de consumo por agente renderiza
+ * `<Link>` para lá, e um `Link` sem rota casada avisa no console.
+ */
+function renderPage(search = '') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const router = createMemoryRouter(
+    [
+      { path: '/insights', element: <SystemInsightsPage /> },
+      { path: '/agents/:id', element: <p>detalhe do agente</p> },
+    ],
+    { initialEntries: [`/insights${search}`] },
+  );
+
+  render(
     <MantineProvider theme={theme}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <SystemInsightsPage />
-        </MemoryRouter>
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </MantineProvider>,
   );
+
+  return router;
 }
 
 describe('SystemInsightsPage', () => {
@@ -92,6 +114,84 @@ describe('SystemInsightsPage', () => {
     const [from, to] = vi.mocked(getSystemInsights).mock.calls[1];
     const dias = (new Date(to).getTime() - new Date(from).getTime()) / (24 * 60 * 60 * 1000);
     expect(dias).toBe(7);
+  });
+
+  // --------------------------------- O PERÍODO NO ENDEREÇO (#85)
+  //
+  // O que a #85 entrega é o período VIAJANDO, e a travessia inteira tem guarda
+  // próprio em `src/app/router.test.tsx`, que NAVEGA. Os quatro casos abaixo são a
+  // metade de origem: o endereço decide a abertura, a troca escreve o endereço, e
+  // os dois caminhos de ausência caem no padrão sem reescrever.
+
+  it('o endereço decide o período de abertura, e a consulta usa aquela janela', async () => {
+    const router = renderPage('?period=90d');
+
+    await waitFor(() => expect(getSystemInsights).toHaveBeenCalledTimes(1));
+
+    // A LARGURA, não os instantes (D8): a diferença entre os dois limites não
+    // depende de quando o teste roda, então não há relógio a controlar. É a mesma
+    // forma do caso "trocar de período refaz a consulta" acima.
+    const [from, to] = vi.mocked(getSystemInsights).mock.calls[0];
+    const dias = (new Date(to).getTime() - new Date(from).getTime()) / (24 * 60 * 60 * 1000);
+    expect(dias).toBe(90);
+
+    // O seletor marcado, e não só a consulta: é o que o operador lê.
+    expect(screen.getByRole('radio', { name: '90d' })).toBeChecked();
+    // E recarregar o mesmo endereço reabre o mesmo período, que é o endereço
+    // continuar sendo o que ele é — nada o normalizou no caminho.
+    expect(router.state.location.search).toBe('?period=90d');
+  });
+
+  it('trocar de período escreve o endereço', async () => {
+    // Sem isto o período não sobrevive a refresh nem viaja em link colado, que é
+    // metade do que a issue pede. A outra metade é o link do ranking.
+    const router = renderPage();
+    await waitFor(() => expect(getSystemInsights).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('radio', { name: '7d' }));
+
+    await waitFor(() =>
+      expect(new URLSearchParams(router.state.location.search).get('period')).toBe('7d'),
+    );
+  });
+
+  it('endereço SEM período abre no padrão, e o endereço NÃO é reescrito', async () => {
+    // O par positivo, e é o caminho de TODO link já compartilhado: os endereços
+    // que existiam antes desta change não têm período, e continuam valendo com o
+    // mesmo significado que tinham.
+    //
+    // A precondição afirmada é o estado observável MAIS PRÓXIMO do elemento
+    // negado: o endereço depois de a página ter respondido e antes de qualquer
+    // interação. Afirmá-lo depois de um clique mediria um endereço que a própria
+    // interação já teria escrito.
+    const router = renderPage();
+
+    await waitFor(() => expect(getSystemInsights).toHaveBeenCalledTimes(1));
+
+    expect(screen.getByRole('radio', { name: DEFAULT_INSIGHTS_PERIOD })).toBeChecked();
+    expect(router.state.location.search).toBe('');
+  });
+
+  it('período NÃO RECONHECIDO abre no padrão sem quebrar, e o endereço NÃO é reescrito', async () => {
+    // Mesmo contrato que `parseTab` declara para a aba, e por simetria medida: a
+    // página de detalhe já trata identificação de aba desconhecida assim, com
+    // cenário de spec próprio. Duas chaves do mesmo endereço com disciplinas
+    // opostas seriam duas regras para o operador aprender.
+    //
+    // E o silêncio não esconde nada: a janela consultada vai para o cabeçalho
+    // ecoada pela RESPOSTA, então o operador vê em qual período está.
+    const router = renderPage('?period=180d');
+
+    // Esperar a RESPOSTA, não a chamada: o KPI existe desde o primeiro render,
+    // sustentado pelo esqueleto, e afirmar o valor logo após a chamada mede o
+    // estado pendente — que é travessão, não número. A primeira escrita deste
+    // guarda reprovou assim.
+    await waitFor(() =>
+      expect(screen.getByTestId('kpi-tasks-valor')).toHaveTextContent('476'),
+    );
+
+    expect(screen.getByRole('radio', { name: DEFAULT_INSIGHTS_PERIOD })).toBeChecked();
+    expect(router.state.location.search).toBe('?period=180d');
   });
 
   // ------------------------------------ O "MEDINDO DESDE" POR REGIME (spec)

@@ -12,6 +12,7 @@ import { listMcpServers, listMcpServerTools } from '../../mcp-servers/api/mcpSer
 import { listKnowledgeBases } from '../../knowledge-bases/api/knowledgeBasesApi';
 import { getAgentInsights } from '../../insights/api/insightsApi';
 import { agentInsightsFixture } from '../../insights/test/agentInsightsFixture';
+import { DEFAULT_INSIGHTS_PERIOD } from '../../insights/utils/insightsWindow';
 import type { KnowledgeBase } from '../../knowledge-bases/types/knowledgeBase';
 import type { Agent } from '../types/agent';
 import type { McpServer } from '../../mcp-servers/types/mcpServer';
@@ -284,6 +285,60 @@ describe('AgentDetailPage', () => {
     expect(screen.getByText(activeAgent.instructions)).toBeInTheDocument();
   });
 
+  // A IDENTIFICAÇÃO DA ABA É UMA CHAVE DO ENDEREÇO, NÃO O ENDEREÇO INTEIRO.
+  //
+  // O escritor fazia `setSearchParams(next === OVERVIEW_TAB ? {} : { tab: next })`,
+  // e AS DUAS PERNAS substituíam a busca inteira: `{}` esvazia, `{ tab: next }`
+  // descarta tudo que não seja `tab`. Era inofensivo enquanto `tab` fosse a única
+  // chave — e passou a ser defeito no instante em que o período entrou no endereço.
+  //
+  // O SINTOMA QUE ISSO PRODUZ É O DESTA PRÓPRIA ISSUE, por outro caminho: quem
+  // chega à aba em 90 dias, vai para "Visão geral" e volta, perde a janela em
+  // silêncio. Nada quebra, nada reprova, e o número passa a responder outra
+  // pergunta — que é exactamente o que a #85 existe para fechar.
+  //
+  // OS DOIS CASOS SEMEIAM O SEGUNDO PARÂMETRO NO ARRANJO, e é o que os torna
+  // guardas do defeito em vez de guardas da forma: sem semeá-lo, não há nada a
+  // perder, e eles passariam verdes contra o escritor velho.
+  //
+  // A irmã deste defeito, em `KnowledgeBaseDetailPage.tsx:98`, tem a MESMA forma e
+  // ficou de fora por não ter parâmetro concorrente hoje — é a #96, com gatilho
+  // observável.
+  it('trocar de aba preserva os demais parâmetros do endereço', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+    const user = userEvent.setup();
+
+    const router = renderPage(activeAgent.id, '?tab=ferramentas&period=90d');
+
+    await screen.findByRole('heading', { name: activeAgent.name });
+    await user.click(tab(/conhecimento/i));
+
+    await waitFor(() =>
+      expect(new URLSearchParams(router.state.location.search).get('tab')).toBe(
+        'conhecimento',
+      ),
+    );
+    expect(new URLSearchParams(router.state.location.search).get('period')).toBe('90d');
+  });
+
+  it('voltar à visão geral remove SÓ a identificação da aba', async () => {
+    // A visão geral continua sendo a AUSÊNCIA de `tab`, não `tab=visao-geral` — o
+    // contrato de `parseTab` fica intacto. O que muda é o que o escritor preserva
+    // ao redor dele, e esta é a perna que o `{}` tornava total.
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+    const user = userEvent.setup();
+
+    const router = renderPage(activeAgent.id, '?tab=ferramentas&period=7d');
+
+    await screen.findByRole('heading', { name: activeAgent.name });
+    await user.click(tab(/visão geral/i));
+
+    await waitFor(() =>
+      expect(new URLSearchParams(router.state.location.search).has('tab')).toBe(false),
+    );
+    expect(new URLSearchParams(router.state.location.search).get('period')).toBe('7d');
+  });
+
   it('o conteúdo da aba inativa não está presente na página', async () => {
     vi.mocked(getAgent).mockResolvedValue(activeAgent);
     vi.mocked(listAgents).mockResolvedValue([activeAgent, otherAgent]);
@@ -464,6 +519,12 @@ describe('AgentDetailPage', () => {
 describe('AgentDetailPage — aba Conhecimento', () => {
   // beforeEach próprio: o do describe acima não alcança este bloco, e sem o
   // reset as contagens de chamada acumulam entre os testes daqui.
+  //
+  // `getAgentInsights` FALTAVA NESTA LISTA, e isso custou uma reprovação: o guarda
+  // novo do período leu `mock.calls[0]` e recebeu a janela de 30 dias de um teste
+  // ANTERIOR do bloco, não a de 90 que ele próprio pediu — `expected 30 to be 90`,
+  // com a produção correta. É exatamente o acúmulo que o comentário acima já
+  // nomeava, num espião que a lista não cobria.
   beforeEach(() => {
     vi.mocked(getAgent).mockReset();
     vi.mocked(listAgents).mockReset();
@@ -472,6 +533,10 @@ describe('AgentDetailPage — aba Conhecimento', () => {
     vi.mocked(listMcpServers).mockResolvedValue([mcpServer]);
     vi.mocked(listKnowledgeBases).mockReset();
     vi.mocked(listKnowledgeBases).mockResolvedValue([knowledgeBase]);
+    vi.mocked(getAgentInsights).mockReset();
+    vi.mocked(getAgentInsights).mockResolvedValue(
+      agentInsightsFixture({ agentId: activeAgent.id }),
+    );
   });
 
   it('abre a aba pelo endereço e lista as bases vinculadas', async () => {
@@ -625,6 +690,71 @@ describe('AgentDetailPage — aba Conhecimento', () => {
 
       await screen.findByRole('heading', { name: activeAgent.name });
       expect(screen.queryByTestId('aba-insights-do-agente')).not.toBeInTheDocument();
+    });
+
+    // ------------------------------ O PERÍODO NO ENDEREÇO (#85)
+
+    it('o endereço decide o período da aba, e a consulta usa aquela janela', async () => {
+      // A metade de DESTINO da travessia. A de origem está em
+      // `SystemInsightsPage.test.tsx`; o caminho inteiro, em `router.test.tsx`,
+      // porque guarda que afirma o meio do caminho não prova o fim dele.
+      vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+      renderPage(activeAgent.id, '?tab=insights&period=90d');
+
+      await screen.findByTestId('kpis-do-agente');
+
+      // A LARGURA, não os instantes (D8).
+      const [, from, to] = vi.mocked(getAgentInsights).mock.calls[0];
+      const dias = (new Date(to).getTime() - new Date(from).getTime()) / (24 * 60 * 60 * 1000);
+      expect(dias).toBe(90);
+      expect(screen.getByRole('radio', { name: '90d' })).toBeChecked();
+    });
+
+    it('aba SEM período no endereço abre no padrão, e o endereço NÃO é reescrito', async () => {
+      // O caminho de todo link já compartilhado — inclusive o que a
+      // `fechamento-da-l4` entregou, que leva `?tab=insights` e nada mais.
+      vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+      const router = renderPage(activeAgent.id, '?tab=insights');
+
+      await screen.findByTestId('kpis-do-agente');
+
+      expect(screen.getByRole('radio', { name: DEFAULT_INSIGHTS_PERIOD })).toBeChecked();
+      expect(router.state.location.search).toBe('?tab=insights');
+    });
+
+    it('período NÃO RECONHECIDO abre no padrão sem quebrar, e o endereço NÃO é reescrito', async () => {
+      // Mesmo contrato que `parseTab` já declara para a aba ao lado, e é por
+      // simetria: duas chaves do mesmo endereço com disciplinas opostas seriam
+      // duas regras sobre a mesma barra de endereços.
+      vi.mocked(getAgent).mockResolvedValue(activeAgent);
+
+      const router = renderPage(activeAgent.id, '?tab=insights&period=180d');
+
+      await screen.findByTestId('kpis-do-agente');
+
+      expect(screen.getByRole('radio', { name: DEFAULT_INSIGHTS_PERIOD })).toBeChecked();
+      expect(router.state.location.search).toBe('?tab=insights&period=180d');
+    });
+
+    it('trocar o período escreve o endereço E mantém a aba', async () => {
+      // As duas metades importam: `setSearchParams({ period })` escreveria o
+      // período e apagaria `tab`, jogando o operador na visão geral — a aba
+      // desapareceria debaixo do clique. É a régua da D5 do outro lado.
+      vi.mocked(getAgent).mockResolvedValue(activeAgent);
+      const user = userEvent.setup();
+
+      const router = renderPage(activeAgent.id, '?tab=insights&period=90d');
+      await screen.findByTestId('kpis-do-agente');
+
+      await user.click(screen.getByRole('radio', { name: '7d' }));
+
+      await waitFor(() =>
+        expect(new URLSearchParams(router.state.location.search).get('period')).toBe('7d'),
+      );
+      expect(new URLSearchParams(router.state.location.search).get('tab')).toBe('insights');
+      expect(await screen.findByTestId('aba-insights-do-agente')).toBeInTheDocument();
     });
 
     it('agente INATIVO abre a aba normalmente', async () => {

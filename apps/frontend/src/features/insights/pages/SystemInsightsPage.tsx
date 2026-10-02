@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Alert, Anchor, Grid, Group, Stack, Text, Title } from '@mantine/core';
+import { useSearchParams } from 'react-router';
 import { TriangleAlert } from 'lucide-react';
 import { useSystemInsightsQuery } from '../api/useSystemInsights';
 import { useAgentsQuery } from '../../agents/api/useAgents';
 import {
-  DEFAULT_INSIGHTS_PERIOD,
   insightsWindow,
+  parsePeriod,
   type InsightsPeriod,
 } from '../utils/insightsWindow';
 import { measuredDays } from '../utils/measuredDays';
@@ -143,7 +144,37 @@ function formatarInstante(iso: string, timeZone: string): string {
 }
 
 export function SystemInsightsPage() {
-  const [period, setPeriod] = useState<InsightsPeriod>(DEFAULT_INSIGHTS_PERIOD);
+  // O PERÍODO MORA NO ENDEREÇO, NÃO EM ESTADO LOCAL.
+  //
+  // Era `useState(DEFAULT_INSIGHTS_PERIOD)`, e o estado local não alcança nem o
+  // recarregamento nem o link colado — nem a aba do agente, que é o que fazia o
+  // clique único da #67 levar a outra janela de medição em silêncio (#85).
+  //
+  // As três formas que estavam na mesa, e por que esta: a URL é a ÚNICA que
+  // resolve as duas metades. Estado compartilhado (contexto, store) resolve a
+  // travessia e perde o refresh; o período só no link do ranking resolve a
+  // travessia e perde o refresh também. O mecanismo já é usado nesta casa, pela
+  // aba do detalhe do agente.
+  //
+  // `parsePeriod` CARREGA O CONTRATO — ausência é a forma canônica do padrão,
+  // desconhecido cai nela, e o endereço NÃO é reescrito em nenhum dos dois casos.
+  // A razão de cada uma dessas três coisas está em `utils/insightsWindow.ts`,
+  // junto da função, porque é lá que a próxima pessoa a procura.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const period = parsePeriod(searchParams.get('period'));
+
+  // ESCREVER SÓ A CHAVE QUE LHE PERTENCE, mesmo com `period` sendo hoje a única
+  // chave deste endereço. É a régua que a #96 nomeia e que a D5 corrigiu no
+  // detalhe do agente: `setSearchParams({ period })` funcionaria hoje e viraria
+  // perda silenciosa no primeiro segundo parâmetro desta página. `prev` é
+  // COPIADO, nunca mutado — é a instância que o router entrega.
+  const handlePeriodChange = (next: InsightsPeriod) => {
+    setSearchParams((prev) => {
+      const proximo = new URLSearchParams(prev);
+      proximo.set('period', next);
+      return proximo;
+    });
+  };
 
   const insightsQuery = useSystemInsightsQuery(period);
   const agentsQuery = useAgentsQuery();
@@ -250,7 +281,7 @@ export function SystemInsightsPage() {
             )}
           </Text>
         </Stack>
-        <PeriodPicker value={period} onChange={setPeriod} />
+        <PeriodPicker value={period} onChange={handlePeriodChange} />
       </Group>
 
       {insightsQuery.isError ? (
@@ -339,6 +370,7 @@ export function SystemInsightsPage() {
             catalogLoading={agentsQuery.isLoading}
             catalogFailed={agentsQuery.isError}
             onRetryCatalog={() => void agentsQuery.refetch()}
+            period={period}
             queryState={queryState}
             reason={razao}
           />

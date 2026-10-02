@@ -1,13 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Alert, Anchor, Grid, Group, Stack, Text } from '@mantine/core';
 import { TriangleAlert } from 'lucide-react';
 import { useAgentInsightsQuery } from '../api/useAgentInsights';
 import { ApiError } from '../api/insightsApi';
-import {
-  DEFAULT_INSIGHTS_PERIOD,
-  insightsWindow,
-  type InsightsPeriod,
-} from '../utils/insightsWindow';
+import { insightsWindow, type InsightsPeriod } from '../utils/insightsWindow';
 import { measuredDays } from '../utils/measuredDays';
 import { unknownCaveats } from '../utils/caveatLabels';
 import type { QueryState } from '../utils/metricState';
@@ -140,14 +136,37 @@ export interface AgentInsightsTabProps {
   registeredTargets: { id: string; name: string }[];
   /** O catálogo inteiro, ou `undefined` enquanto ele não respondeu. */
   agentsCatalog: DelegationCatalogAgent[] | undefined;
+  /**
+   * O PERÍODO VEM DA PÁGINA, NÃO DE ESTADO LOCAL DESTA ABA (#85).
+   *
+   * Era `useState(DEFAULT_INSIGHTS_PERIOD)`, e por isso quem comparava agentes em
+   * 90 dias no ranking do sistema e clicava num nome caía aqui em 30 — sem nada
+   * dizendo que a janela mudou. O clique já era um (`?tab=insights`); a janela,
+   * não.
+   *
+   * POR QUE PROP E NÃO `useSearchParams` AQUI (D4), já que a página do sistema lê
+   * o seu próprio endereço:
+   *
+   *   1. UM DONO POR ENDEREÇO. `parseTab` já mora na página. Com esta aba lendo o
+   *      mesmo `searchParams`, duas peças escreveriam na mesma busca, e o escritor
+   *      de `tab` teria de conhecer uma chave que não é dele para não a apagar.
+   *   2. Convenção 7 — quem o router monta é a página, e o endereço é dela.
+   *   3. Prop OBRIGATÓRIA move a fiação para dentro do compilador (convenção 25):
+   *      sem ela a página não compila, e nenhum sítio futuro precisa LEMBRAR de
+   *      passá-la. Foi o `tsc -b` que apontou os sítios, sem varredura nenhuma.
+   */
+  period: InsightsPeriod;
+  /** A troca de período, que a página escreve no endereço. */
+  onPeriodChange: (period: InsightsPeriod) => void;
 }
 
 export function AgentInsightsTab({
   agentId,
   registeredTargets,
   agentsCatalog,
+  period,
+  onPeriodChange,
 }: AgentInsightsTabProps) {
-  const [period, setPeriod] = useState<InsightsPeriod>(DEFAULT_INSIGHTS_PERIOD);
   const insightsQuery = useAgentInsightsQuery(agentId, period);
 
   const naoEncontrado =
@@ -231,7 +250,7 @@ export function AgentInsightsTab({
             </Text>
           )}
         </Text>
-        <PeriodPicker value={period} onChange={setPeriod} />
+        <PeriodPicker value={period} onChange={onPeriodChange} />
       </Group>
 
       {queryState === 'failed' ? (
