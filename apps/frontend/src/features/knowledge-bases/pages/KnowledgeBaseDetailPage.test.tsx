@@ -214,6 +214,87 @@ describe('KnowledgeBaseDetailPage', () => {
     expect(await screen.findByTestId('agents-unavailable')).toBeInTheDocument();
   });
 
+  // Descrição e agentes são DA BASE, não de uma aba (issue #99, design.md D1):
+  // ficam entre o cabeçalho e a barra de abas, e não somem na aba de
+  // diagnóstico.
+  describe('cards da base acima das abas', () => {
+    it('exibe descrição e agentes com a aba de diagnóstico ativa', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+
+      renderPage('?tab=diagnostico');
+
+      expect(await screen.findByTestId('knowledge-base-description')).toHaveTextContent(
+        knowledgeBase.description,
+      );
+      expect(await screen.findByTestId('agents-empty')).toBeInTheDocument();
+    });
+
+    it.each([
+      ['Documentos', ''],
+      ['Diagnóstico do índice', '?tab=diagnostico'],
+    ])(
+      'com a aba %s ativa, os dois cards ficam antes da barra e fora do painel',
+      async (_aba, search) => {
+        vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+
+        renderPage(search);
+
+        const description = await screen.findByTestId('knowledge-base-description');
+        const agentsCard = await screen.findByTestId('knowledge-base-agents-card');
+        const tablist = screen.getByRole('tablist');
+        const panel = screen.getByRole('tabpanel');
+
+        expect(panel).not.toContainElement(description);
+        expect(panel).not.toContainElement(agentsCard);
+        expect(
+          description.compareDocumentPosition(agentsCard) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+        expect(
+          agentsCard.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+      },
+    );
+
+    // Carregamento não é falha nem ausência (design.md, D5).
+    it('enquanto os agentes carregam, o card indica carregamento e não afirma falha, ausência nem contagem', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+      vi.mocked(listAgents).mockReturnValue(new Promise(() => {}));
+
+      renderPage();
+
+      expect(await screen.findByTestId('agents-loading')).toBeInTheDocument();
+      expect(screen.queryByTestId('agents-unavailable')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('agents-empty')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('agents-count')).not.toBeInTheDocument();
+    });
+
+    it('com os agentes indisponíveis, não exibe contagem', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+      vi.mocked(listAgents).mockRejectedValue(new Error('falha de rede'));
+
+      renderPage();
+
+      expect(await screen.findByTestId('agents-unavailable')).toBeInTheDocument();
+      expect(screen.queryByTestId('agents-count')).not.toBeInTheDocument();
+    });
+
+    it('com agentes vinculados, exibe a contagem no card', async () => {
+      vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+      vi.mocked(listAgents).mockResolvedValue([
+        agent({ id: 'a1', knowledgeBases: [{ id: knowledgeBase.id, name: knowledgeBase.name }] }),
+        agent({
+          id: 'a2',
+          name: 'Triagem',
+          knowledgeBases: [{ id: knowledgeBase.id, name: knowledgeBase.name }],
+        }),
+      ]);
+
+      renderPage();
+
+      expect(await screen.findByTestId('agents-count')).toHaveTextContent('2 agentes');
+    });
+  });
+
   it('oferece volta para a listagem de conhecimento', async () => {
     vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
 

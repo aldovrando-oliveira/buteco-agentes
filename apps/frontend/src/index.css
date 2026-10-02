@@ -32,3 +32,18 @@ body {
 [data-sectioned-card-row] + [data-sectioned-card-row] {
   border-top: 1px solid var(--mantine-color-default-border);
 }
+
+/* Chip de agente do detalhe da base (KnowledgeBaseAgentsCard). O anel de foco é
+   da PÍLULA, e não do link: o link não cobre o rótulo "Inativo", que fica fora
+   dele para o nome acessível ser só o nome do agente (design.md da change
+   frontend-knowledge-base-cards-acima-das-abas, D2). Com o anel no link, ele
+   saía como um retângulo cortando a pílula — medido na conferência. Mesma
+   espessura e mesma variável do foco do Mantine (.mantine-focus-auto). */
+[data-agent-chip]:has(a:focus-visible) {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+
+[data-agent-chip] a:focus-visible {
+  outline: none;
+}
