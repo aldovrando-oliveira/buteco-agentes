@@ -299,9 +299,17 @@ estrutura que a tela não tinha (`design.md` de
 aba, e ela chegou — o diagnóstico do índice, cuja rota de backend entrou em
 13/09/2026.
 
-O detalhe SHALL apresentar uma barra com **duas** abas: `Documentos`, que reúne a
-descrição, a listagem de documentos e os agentes que consultam a base, e
-`Diagnóstico do índice`, especificada em `knowledge-index-diagnostics-ui`.
+O detalhe SHALL apresentar uma barra com **duas** abas: `Documentos`, que reúne
+a listagem de documentos, e `Diagnóstico do índice`, especificada em
+`knowledge-index-diagnostics-ui`.
+
+**O que é da base fica acima da barra, e o que é de uma aba fica no painel
+dela.** A seção de descrição e a seção de agentes que consultam a base SHALL
+ficar entre o cabeçalho de detalhe e a barra de abas, nesta ordem: descrição,
+depois agentes. As duas SHALL ser exibidas com qualquer aba ativa, e SHALL NOT
+estar dentro do painel de nenhuma aba. Elas descrevem a base, não o conteúdo de
+uma aba; dentro do painel de `Documentos` elas sumiam ao abrir outra aba
+(issue #99).
 
 A aba ativa SHALL estar refletida no endereço, no mesmo desenho do detalhe do
 agente: a primeira aba é a forma canônica e **não** carrega parâmetro; a outra
@@ -342,6 +350,20 @@ contagem que ainda não foi feita.
 - **WHEN** o operador visualiza o detalhe de uma base
 - **THEN** a tela apresenta as abas `Documentos` e `Diagnóstico do índice`, com
   `Documentos` ativa por padrão
+
+#### Scenario: Descrição e agentes ficam acima da barra de abas, nessa ordem
+- **WHEN** o operador visualiza o detalhe de uma base
+- **THEN** a seção de descrição e a seção de agentes aparecem antes da barra de
+  abas no documento, a descrição antes dos agentes
+
+#### Scenario: Descrição e agentes aparecem com a aba de diagnóstico ativa
+- **WHEN** o operador abre o detalhe com a aba `Diagnóstico do índice` ativa
+- **THEN** a seção de descrição e a seção de agentes são exibidas
+
+#### Scenario: Descrição e agentes não estão dentro de painel de aba
+- **WHEN** o operador visualiza o detalhe com qualquer aba ativa
+- **THEN** nem a seção de descrição nem a seção de agentes está contida no
+  painel da aba ativa
 
 #### Scenario: A aba ativa está no endereço
 - **WHEN** o operador seleciona a aba de diagnóstico do índice
@@ -447,10 +469,28 @@ aba, onde a troca de aba perde trabalho sem sair da rota (`design.md`, D11).
 
 ### Requirement: Agentes que consultam a base
 O sistema SHALL exibir, no detalhe da base, quais agentes a consultam, com o nome
-de cada um como link para o detalhe do agente e o estado dele. A relação SHALL
-ser derivada no cliente a partir de `GET /agents`, que já devolve as bases
-vinculadas a cada agente — não existe consulta inversa na API, e isso é decisão
-registrada do backend.
+de cada um como link para o detalhe do agente. A relação SHALL ser derivada no
+cliente a partir de `GET /agents`, que já devolve as bases vinculadas a cada
+agente — não existe consulta inversa na API, e isso é decisão registrada do
+backend.
+
+Cada agente SHALL ser apresentado como um chip, e os chips SHALL quebrar na
+horizontal, ocupando a largura do conteúdo: muitos agentes viram mais linhas de
+chips, não uma lista vertical com um agente por linha. O nome acessível do link
+de cada chip SHALL ser o nome do agente.
+
+O estado do agente SHALL continuar identificável **por texto**, e não só por
+cor: o chip de um agente inativo SHALL exibir `Inativo`. O chip de agente ativo
+SHALL NOT carregar marca de estado. Agente inativo não consulta a base, e
+escondê-lo atrás de um chip igual aos outros afirmaria uma consulta que não
+acontece (`design.md`, D2).
+
+O cabeçalho da seção SHALL exibir a contagem de agentes vinculados (por exemplo,
+`7 agentes`; `1 agente` no singular) **somente** quando o catálogo de agentes
+tiver respondido e pelo menos um agente estiver vinculado. Enquanto o catálogo
+não respondeu, e quando ele falhou, nenhuma contagem SHALL ser exibida: um
+número ali afirmaria uma contagem que não foi feita. Sem nenhum agente
+vinculado, a contagem SHALL NOT ser exibida, e o estado vazio diz o fato.
 
 Quando nenhum agente consulta a base, o sistema SHALL dizer isso e SHALL
 indicar onde o vínculo é feito — a aba Conhecimento do detalhe do agente. A
@@ -461,23 +501,57 @@ Quando o catálogo de agentes não puder ser carregado, o sistema SHALL informar
 indisponibilidade e SHALL NOT afirmar que nenhum agente consulta a base — uma
 requisição que não respondeu não é evidência de ausência de vínculo.
 
+Enquanto o catálogo de agentes ainda não respondeu, a seção SHALL indicar
+carregamento. Nesse estado ela SHALL NOT exibir o texto de indisponibilidade,
+SHALL NOT exibir o estado vazio e SHALL NOT exibir contagem: carregamento não é
+falha nem ausência, e dizer qualquer um dos dois afirmaria um resultado que a
+requisição ainda não deu. Carregamento, falha e resposta SHALL ser distinguidos
+a partir do estado da consulta, e não deduzidos da ausência de dado.
+
 #### Scenario: Lista os agentes vinculados
 - **WHEN** o operador visualiza o detalhe de uma base que dois agentes consultam
-- **THEN** os dois aparecem, cada um como link para o seu detalhe, com o seu
-  estado
+- **THEN** os dois aparecem, cada um como chip com link para o seu detalhe, e o
+  nome acessível de cada link é o nome do agente
 
 #### Scenario: Agente vinculado a outra base não aparece
 - **WHEN** existe agente vinculado apenas a outra base
 - **THEN** ele não aparece na relação desta base
 
-#### Scenario: Agente inativo vinculado aparece
+#### Scenario: Agente inativo vinculado aparece marcado por texto
 - **WHEN** um agente inativo consulta a base
-- **THEN** ele aparece na relação, marcado como inativo
+- **THEN** ele aparece na relação, e o chip dele exibe o texto `Inativo`
+
+#### Scenario: Agente ativo não carrega marca de estado
+- **WHEN** um agente ativo consulta a base
+- **THEN** o chip dele não exibe `Inativo`
+
+#### Scenario: Muitos agentes viram linhas de chips
+- **WHEN** sete ou mais agentes consultam a base
+- **THEN** todos aparecem como chips no mesmo agrupamento, sem um agente por
+  linha
+
+#### Scenario: Contagem com a lista carregada
+- **WHEN** o catálogo de agentes respondeu e sete agentes consultam a base
+- **THEN** o cabeçalho da seção exibe `7 agentes`
+
+#### Scenario: Carregamento não afirma falha nem ausência
+- **WHEN** o catálogo de agentes ainda não respondeu
+- **THEN** a seção indica carregamento, não exibe o texto de
+  indisponibilidade, não exibe o estado vazio e não exibe contagem
+
+#### Scenario: Nenhuma contagem durante o carregamento
+- **WHEN** o catálogo de agentes ainda não respondeu
+- **THEN** o cabeçalho da seção não exibe contagem de agentes
+
+#### Scenario: Nenhuma contagem com o catálogo indisponível
+- **WHEN** a consulta de agentes falha
+- **THEN** o cabeçalho da seção não exibe contagem de agentes
 
 #### Scenario: Nenhum agente consulta a base
 - **WHEN** nenhum agente está vinculado à base
 - **THEN** a tela informa isso e diz que o vínculo é feito na aba Conhecimento
-  do detalhe do agente, sem anunciar etapa futura
+  do detalhe do agente, sem anunciar etapa futura, e o cabeçalho não exibe
+  contagem
 
 #### Scenario: Catálogo de agentes indisponível
 - **WHEN** a consulta de agentes falha

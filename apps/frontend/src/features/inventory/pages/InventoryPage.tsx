@@ -125,7 +125,7 @@ export function InventoryPage() {
               <Box>
                 {/* Travessão é "não sei", nunca zero. E a razão ao lado é o que
                     impede que ele seja LIDO como zero — mesmo tratamento de
-                    KnowledgeBaseAgentsCard.tsx:17-27 (D6). */}
+                    KnowledgeBaseAgentsCard.tsx:62-79 (D6). */}
                 <Text ff="monospace" fz={28} c="dimmed" lh={1}>
                   —
                 </Text>

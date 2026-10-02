@@ -263,10 +263,26 @@ export function KnowledgeBaseDetailPage() {
         }
       />
 
+      {/* O QUE É DA BASE FICA ACIMA DA BARRA, e o que é de uma aba fica no painel
+          dela (issue #99, design.md D1). Descrição e agentes descrevem a base,
+          não o conteúdo de uma aba: dentro do painel de Documentos eles sumiam
+          ao abrir o diagnóstico, porque o painel inativo é desmontado. */}
+      <KnowledgeBaseDescriptionCard description={data.description} />
+
+      <KnowledgeBaseAgentsCard
+        knowledgeBaseId={data.id}
+        agents={agentsQuery.data}
+        status={agentsQuery.status}
+      />
+
       {/* keepMounted={false}: só a aba ativa existe no DOM. É o que sustenta o
           `enabled` da consulta de proveniência — a aba inativa não mantém
           observador vivo nem intervalo armado por trás dela. */}
-      <Tabs value={activeTab} onChange={handleTabChange} keepMounted={false}>
+      {/* `mt={8}` sobre o vão da Stack: a barra fica a 24px do card de agentes,
+          como na prancha 3a/4a (vão de 18 + margem de 6), um pouco mais longe
+          do que separa os cards entre si — o que é da base e o que é da aba se
+          leem como dois grupos. */}
+      <Tabs value={activeTab} onChange={handleTabChange} keepMounted={false} mt={8}>
         <Tabs.List>
           {/* ALTURA FIXA, e não padding — o mesmo defeito e a mesma correção da
               faixa de cabeçalho do `SectionedCard`. Medido na conferência: a
@@ -287,22 +303,16 @@ export function KnowledgeBaseDetailPage() {
         </Tabs.List>
 
         <Tabs.Panel value={DOCUMENTS_TAB} pt="md">
-          <Stack gap="md">
-            <KnowledgeBaseDescriptionCard description={data.description} />
-
-            <KnowledgeDocumentsCard
-              documents={documentsQuery.data}
-              isLoading={documentsQuery.isLoading}
-              error={documentsQuery.error}
-              onAdd={handleAddDocument}
-              onUpdate={handleUpdateDocument}
-              onDelete={setDocumentToDelete}
-              onReindex={handleReindexDocument}
-              reindexingId={reindexDocument.isPending ? reindexDocument.variables : null}
-            />
-
-            <KnowledgeBaseAgentsCard knowledgeBaseId={data.id} agents={agentsQuery.data} />
-          </Stack>
+          <KnowledgeDocumentsCard
+            documents={documentsQuery.data}
+            isLoading={documentsQuery.isLoading}
+            error={documentsQuery.error}
+            onAdd={handleAddDocument}
+            onUpdate={handleUpdateDocument}
+            onDelete={setDocumentToDelete}
+            onReindex={handleReindexDocument}
+            reindexingId={reindexDocument.isPending ? reindexDocument.variables : null}
+          />
         </Tabs.Panel>
 
         <Tabs.Panel value={DIAGNOSTICS_TAB} pt="md">
@@ -331,7 +341,7 @@ export function KnowledgeBaseDetailPage() {
 
       {/* Exclusão de documento passa por confirmação, e a confirmação NOMEIA os
           agentes afetados — derivados de GET /agents no cliente, a mesma
-          requisição que o card de agentes já usa (agentUsage.ts). */}
+          requisição que o card de agentes acima da barra usa (agentUsage.ts). */}
       <Modal
         opened={documentToDelete !== null}
         onClose={() => setDocumentToDelete(null)}
