@@ -1890,7 +1890,8 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **catorze**, achadas em sete etapas diferentes. A décima quarta vem primeiro
+São **quinze**, achadas em oito etapas diferentes (a décima quinta, da #99, está
+no fim da lista). A décima quarta vem primeiro
 porque é de **tipo novo** e muda o critério de detecção da lista inteira; depois
 a oitava, que também era de tipo novo quando entrou; depois as duas da 5c, depois
 as três da 5a-3, depois as duas da 5a-2, que **corrigiram duas das cinco
@@ -2143,6 +2144,21 @@ Os dois últimos vieram de **abrir o protótipo e clicar**, não de ler a
 especificação escrita: nenhum dos dois está na prosa do `CONHECIMENTO.md`. Vale
 como método, não só como achado — a revisão 2 foi lida inteira na 5a-1 sem que
 nenhum aparecesse.
+
+**A décima quinta, da #99 (`frontend-knowledge-base-cards-acima-das-abas`,
+02/10/2026), do canvas "Bases sincronizadas — protótipo", pranchas 3a, 4a e 4b.**
+Volta ao tipo das treze primeiras — o protótipo errado sobre o sistema — e é da
+família da 5a-1 (convenção 13 na direção da OMISSÃO):
+
+- **O chip de agente mostra só o nome, e esconde o agente inativo.** No card
+  "Agentes que consultam esta base" em chips, o protótipo desenha cada agente só
+  pelo nome. O card que já existia mostrava o estado (`Ativo`/`Inativo`), e
+  agente inativo **não consulta** a base: um chip igual aos outros afirma uma
+  consulta que não acontece. Implementado com o texto `Inativo` **só** no chip do
+  inativo, fora do link (o nome acessível continua sendo o nome), e asserção
+  negativa contra a volta de `Ativo` em todo chip (`design.md`, D2). O protótipo
+  também não desenha o estado "agentes indisponíveis" (`GET /agents` falhando),
+  que continua existindo com o texto de antes.
 
 **Para a 5b, o que já está pronto — e o que a 5a-1 já entregou:**
 
@@ -13952,3 +13968,129 @@ implementação.
   `RejectionMetricsMigrationTests` perdeu a sua), medido com
   `grep -rn "pgvector/pgvector:pg18" --include='*.cs' apps/api/tests`.
 - Sem conferência visual: a change não tem tela.
+
+## `frontend-knowledge-base-cards-acima-das-abas` — cards da base acima das abas (#99)
+
+**Change implementada, validada pelo operador, sincronizada e arquivada em
+02/10/2026** (`openspec/changes/archive/2026-10-02-frontend-knowledge-base-cards-acima-das-abas/`);
+sem commit, sem push e sem PR (convenção 24). A #99 está em `In progress` no
+projeto #3. **Validação manual pelo operador: realizada em 02/10/2026**, sem
+ajuste pedido (convenção 14).
+
+### O que entrou
+
+Só `apps/frontend`. No detalhe da base, a Descrição e o card "Agentes que
+consultam esta base" saíram do painel da aba Documentos e ficaram entre o
+cabeçalho e a barra de abas, presentes em qualquer aba. O card de agentes virou
+chips em lista (`ul`/`li`) que quebram na horizontal, com contagem no cabeçalho
+só com a lista carregada e não vazia. A barra de abas, o conteúdo das abas e os
+modais não mudaram.
+
+**Correção de defeito existente, decidida na revisão:** o card mostrava "Não foi
+possível carregar os agentes…" **durante o carregamento**, porque a página
+repassava o mesmo `undefined` no carregamento e na falha (convenção 13). A
+página passou a repassar `agentsQuery.status` ao lado do dado, e o card decide
+cada ramo por um fato: dado na mão → lista; `pending` → "Carregando agentes...";
+`error` → indisponível. O dado na mão vem antes do `status`, para uma
+revalidação que falha não apagar uma lista já lida (D5).
+
+**Correção de protótipo:** a décima quinta da lista viva, acima — o chip com só
+o nome escondia o agente inativo.
+
+### Issues abertas (convenção 23)
+
+- **#112**, o mesmo defeito de carregamento no detalhe do servidor MCP:
+  `McpServerDetailPage.tsx:170` repassa só `agentsQuery.data` e
+  `McpServerAgentsCard.tsx:15-24` trata `undefined` como falha. Na mesma página,
+  o modal de desativação diz "Nenhum agente usa este servidor no momento." com o
+  catálogo carregando **ou em falha** (`:115` e `:179-188`). O
+  `McpServerToolsCatalog` recebe o mesmo dado e **não** tem o defeito. Em
+  `Backlog`, sem `blocked-by`.
+
+### O que a implementação mediu
+
+**Baseline num `git worktree` limpo da `main` (`47c33b0`):** `lint` verde;
+`format:check` reprova em **52 arquivos**, nenhum desta change; **1431/1431** em
+108,76s; `build` verde.
+
+**Depois:** `lint` verde; `format:check` nos **mesmos 52**; **1444/1444** em
+108,44s (13 novos: 7 no card, 6 na página); `build` verde; `check-docs` OK. O
+teste da página só ganhou linhas (81 + / 0 −). No do card, a única asserção
+removida é a de `Ativo` em todo chip (D2); as chamadas existentes ganharam o
+`status` obrigatório.
+
+**Uma rodada da suíte reprovou 7 casos, e não foi classificada pela leitura.**
+Com `load average` chegando a 62, a suíte levou 584,96s e reprovou sete
+*timeouts* de 15s em arquivos que a change não toca, mais um worker que não
+subiu. Refeita na mesma árvore com o load em 5,3: 1444/1444 em 108,44s. É a
+memória "suíte do frontend reprova com a VM carregada", agora com o número.
+
+### Guardas contra o defeito real (convenção 15)
+
+Oito, cada um reintroduzido por script, visto reprovando e desfeito, e
+**refeitos contra o código final** depois da conferência:
+
+| guarda | defeito reintroduzido | o que reprovou |
+|---|---|---|
+| G1 | cards de volta dentro do painel de Documentos | página: os três testes de posição (diagnóstico ativo; antes da barra e fora do painel, nas duas abas) |
+| G2 | contagem durante o carregamento | card e página: "durante o carregamento…" / "enquanto os agentes carregam…" |
+| G3 | contagem na falha | card e página: "não exibe contagem com o catálogo indisponível" / "com os agentes indisponíveis…" |
+| G4 | zero medido como `0 agentes` | card: "não exibe contagem quando nenhum agente consulta a base" |
+| G5 | `Ativo` em todo chip | card: "marca por texto só o agente inativo" |
+| G6 | `Inativo` dentro do link | card: "marca por texto só o agente inativo" |
+| G7 | card volta a tratar `undefined` como falha | card e página: os dois testes de carregamento |
+| G8 | `status` `error` vence o dado na mão | card: "com a lista na mão, uma falha posterior não esconde os agentes" |
+
+**Quatro testes negativos passavam antes da implementação** (o código antigo não
+tinha contagem nem `status`); só valem pelos guardas G3, G4 e G8.
+
+### A conferência — quatro rodadas, e o que cada uma mudou
+
+Chrome headless dirigido por CDP, 7 estados × 2 abas × 2 esquemas × 1440 e
+1860px, mais foco por teclado e área clicável. Capturas e medidas em
+`openspec/changes/archive/2026-10-02-frontend-knowledge-base-cards-acima-das-abas/design/capturas/`.
+
+**Os estados de falha e de carregamento saíram do próprio CDP** (`Fetch.enable`
+filtrando `/agents`; `Fetch.failRequest`, ou a requisição pausada sem continuar),
+sem derrubar a API. **Os estados com vínculo também**, por `Fetch.fulfillRequest`
+sobre a resposta real de `GET /agents`: a base local não tinha vínculo e só 5
+agentes, e nada foi gravado no banco.
+
+Os achados, todos por **medida** e não por estado — a lição da conferência da 5b:
+
+- fundo do chip igual ao do card no claro (`--mantine-color-default` é branco) →
+  `--buteco-page-bg`;
+- texto do chip em azul de link e 12px → tinta do card, 13px;
+- barra a 16px do card, contra 24px na prancha → `mt={8}` nos `Tabs`;
+- **sete agentes não quebravam linha nem a 1440**: o estado de quebra não estava
+  sendo exercitado → estado de doze agentes;
+- **só o texto do link era clicável, em todo chip** (101×19 num chip de 168×28) →
+  o link leva padding e altura da pílula;
+- anel de foco retangular cortando a pílula → anel na pílula, por `:has()` em
+  `index.css`;
+- estado vazio centralizado com 123px de altura → alinhado à esquerda, como na 3a;
+- **a altura do card variava por estado** (88, 94, 83px), então a barra e tudo
+  abaixo pulavam quando `GET /agents` respondia → altura mínima de 28px, 94px em
+  todos. Mesmo defeito da altura da barra de abas, achado de novo.
+
+A quarta rodada não teve achado. Área clicável do chip inativo: **aceitável**
+(só o rótulo `Inativo`, 47×15, não navega). *Hover* azul da prancha não
+implementado, por decisão registrada na D8.
+
+### Divergências do `design.md` aprovado, todas corrigidas lá com a causa
+
+1. **D1:** "nada mais na página muda de lugar" deixou de valer — a barra ganhou
+   `mt={8}` (D8).
+2. **D4:** fundo, cor e tamanho do texto do chip, link ocupando a pílula e anel
+   de foco em `index.css`, que entrou na árvore de arquivos (D8).
+3. **Estado vazio:** perdeu o centralizado e o `py="lg"` (D8).
+4. **D6, passo 1:** os dados dos estados com vínculo vieram do CDP sobre a
+   resposta real, não de cadastro no banco.
+
+A `spec.md` não foi alterada na implementação: nenhuma correção mudou
+comportamento especificado.
+
+### O que ficou de fora
+
+- A #112.
+- Commit, push e PR — decisão do dono.

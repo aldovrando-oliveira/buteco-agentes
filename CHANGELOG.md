@@ -604,6 +604,17 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **No detalhe da base de conhecimento, a Descrição e os agentes que consultam a
+  base ficam acima das abas, e aparecem em qualquer uma** (#99). Antes os dois
+  cards ficavam dentro da aba Documentos e sumiam ao abrir o Diagnóstico do
+  índice. O que é da base fica acima da barra; o que é de cada aba, no painel
+  dela. Nenhum comportamento da barra de abas mudou.
+- **O card de agentes passa a mostrar cada agente como um chip que quebra na
+  horizontal**, em largura cheia: muitos agentes viram mais linhas de chips, não
+  um card alto. O cabeçalho mostra a contagem (`7 agentes`) só com a lista
+  carregada e não vazia. O agente **inativo** continua identificado **por
+  texto** no chip — o protótipo mostrava só o nome, e agente inativo não
+  consulta a base.
 - **O período escolhido pelo operador passa a viajar entre as duas telas de
   Insights, e a sobreviver a recarregamento e a link colado** (#85). Ele mora no
   endereço — `/insights?period=90d` e
@@ -741,6 +752,12 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **O card "Agentes que consultam esta base" dizia que não tinha conseguido
+  carregar os agentes enquanto eles ainda estavam carregando** (#99). A página
+  repassava o mesmo valor vazio no carregamento e na falha, e o card afirmava uma
+  falha que não tinha acontecido. Agora ele recebe o estado da consulta e mostra
+  "Carregando agentes..." até a resposta, sem texto de falha, sem estado vazio e
+  sem contagem. O mesmo defeito no detalhe do servidor MCP está na #112.
 - **A lacuna declarada tinha uma forma que a própria spec proíbe, e ela era o
   PADRÃO.** O componente de lacuna declarada — o texto que nomeia uma métrica sem
   fonte — oferecia duas formas: uma linha no peso de subtítulo e um quadro de moldura
