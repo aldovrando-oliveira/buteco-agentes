@@ -1089,5 +1089,12 @@ o versionamento pretende seguir
 - **Tons fixos de superfície quebrando em um dos esquemas de cor**, em três
   pontos do painel — fundo da página, faixa de cabeçalho e linha selecionada
   — por usar valor que não troca de ponta da escala entre temas.
+- **O `apps/inbox` aceitava qualquer token validamente assinado como se fosse o
+  operador** (#116). A política padrão só exigia autenticação, e um token de
+  serviço (`service:inbox`, que o próprio app assina, ou `service:connectors`)
+  tinha acesso a canais, contatos, sessões e mensagens; medido antes da correção,
+  um `service:connectors` criava canal. Agora só o subject `operator` é autorizado
+  nas rotas autenticadas, e qualquer outro recebe `403`. As rotas anônimas
+  (`/health`, webhooks de canal, push notification) não mudam.
 
 [Unreleased]: https://github.com/aldovrando-oliveira/buteco-agentes/commits/main

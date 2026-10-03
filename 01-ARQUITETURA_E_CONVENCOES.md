@@ -466,8 +466,10 @@ isolados sem introduzir store compartilhado.
   acesso do operador. A lista de rotas de cada serviço é conferida no boot
   (convenção 8), e pegou na primeira execução a barra final do `RawText` que
   `MapGroup` gera para `MapGet("/")`. A tabela protege contra defeito de
-  código, não contra quem guarda a chave (#117); o `apps/inbox` ainda não
-  restringe subject (#116).
+  código, não contra quem guarda a chave (#117). O `apps/inbox` aceita só
+  `operator` nas rotas autenticadas, e outro subject recebe `403` (#116); o
+  serviço que precisar de rota dele traz a lista por subject e a checagem de
+  boot, no molde do `apps/api`.
 - **Enforcement por padrão**: toda rota HTTP de `apps/api` e `apps/inbox`
   exige token; as exceções vivem numa allowlist explícita com motivo
   classificado por enum, validada no startup (ver convenção 8).

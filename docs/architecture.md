@@ -654,8 +654,17 @@ sem introduzir um store compartilhado.
   A lista de rotas de cada serviço é conferida no boot contra os endpoints
   mapeados (casa por método e padrão de rota). Quem guarda a chave assina qualquer
   subject, inclusive `operator`: a tabela protege contra defeito de código, não
-  contra o comprometimento de um app que guarda a chave (issue #117). O
-  `apps/inbox` ainda autoriza qualquer subject válido nas rotas dele (issue #116).
+  contra o comprometimento de um app que guarda a chave (issue #117).
+
+  O `apps/inbox` aceita **só o subject `operator`** nas rotas autenticadas;
+  qualquer outro subject válido recebe `403`, inclusive o `service:inbox` que ele
+  mesmo assina para chamar o `apps/api` (#116). Nenhum serviço chama rota
+  autenticada dele, então ainda não há lista de rotas por subject de serviço.
+  **Um serviço que precise de rota do `apps/inbox` traz a lista de rotas do seu
+  subject e a checagem de boot dessa lista, no molde do `apps/api`.** A regra é
+  duplicada, sem `libs/`: `Auth/SubjectAuthorization.cs` no `apps/inbox`, com o
+  par em `Auth/ServiceScopeAuthorizationHandler.cs` e
+  `Auth/ServiceScopeRouteValidation.cs` no `apps/api`.
 - **Enforcement por padrão**: toda rota HTTP de `apps/api` e `apps/inbox`
   exige token. Uma rota só fica anônima com `.AllowAnonymous()` **e** um
   `AnonymousRouteClassification` (motivo documentado) anexados explicitamente
