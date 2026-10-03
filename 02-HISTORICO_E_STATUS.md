@@ -9883,6 +9883,9 @@ duas changes parado até alguém lhe dar posição.
     `replicas-de-worker` — que vai parar e subir instâncias.
   - **Posição:** dentro da `replicas-de-worker`, como pré-requisito dela: ela
     mexe exatamente no ciclo de vida das instâncias.
+  - **Recalibrada em 03/10/2026 e corrigida (#49):** o dono antecipou para a
+    trilha paralela de bugs; ver "`workers-parada-com-execucao-em-voo`" no fim
+    deste arquivo. A posição acima fica como registro.
 
 - **O regime da série de métricas de execução — dois marcos a registrar, com data
   e fuso.** A métrica não é retroativa: o `submitted` é destruído na transição
@@ -14540,3 +14543,119 @@ exportação com o limite curto. O teste de vazamento da chave examinou 43 texto
   telas (#106, #107), `VITE_CONNECTORS_BASE_URL` (#106).
 - A validação manual pelo mantenedor, contra o Drive real, continua pendente
   (convenção 14).
+
+## `workers-parada-com-execucao-em-voo` — parada do worker com execução em voo (#49)
+
+Change arquivada em
+`openspec/changes/archive/2026-10-03-workers-parada-com-execucao-em-voo/`.
+
+### Recalibração de posição (convenção 22)
+
+A #49 estava **dentro da `replicas-de-worker`, como pré-requisito dela**. Em
+03/10/2026 o dono a **antecipou para a trilha paralela de bugs**: é isolada em
+`apps/workers`, pequena, e tira uma carga da `replicas-de-worker`, que passa a
+encontrar o ciclo de parada já corrigido. Registrado na issue antes da change abrir
+([comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/49#issuecomment-5972231522)).
+
+### O que entrou
+
+`TaskJobConsumer.StopAsync` passou a fazer, nesta ordem: `BasicCancelAsync` do
+consumidor com prazo próprio de **2 s**, `base.StopAsync` (que cancela o
+`stoppingToken`), fechamento do canal, fechamento da conexão. Antes fechava canal e
+conexão primeiro e só então cancelava. A execução interrompida pela parada (opção B
+do D2) **não grava `failed`**: os dois `catch` de `AgentExecutionService` que chamam
+`FailTaskAsync` deixam passar o `OperationCanceledException` quando o token da
+execução foi cancelado, e o consumidor devolve o job com `nack(requeue: true)` e
+`CancellationToken.None`, logando informação: sem log de erro **na parada**. A
+reentrega ainda gera duas linhas `fail:` do EF Core (`Database.Command` e `Update`)
+ao reabrir a métrica da execução, registradas na #126. A task fica em `working`; a
+reentrega cai no requisito que já existia ("task em `working` continua
+executando").
+
+### O que a implementação mediu
+
+- **O mecanismo, decomposto:** no `RabbitMQ.Client` 7.2.1 (descompilado),
+  `Channel.CloseAsync` espera o callback do consumidor até o token de `StopAsync`, e
+  a conexão usa `DefaultConnectionCloseTimeout` = 30 s. Medido sobre `f2e7b09`:
+  **60,1 s** com o `ShutdownTimeout` padrão e **40,0 s** com 10 s — 30 + 30 e
+  10 + 30. O `base.StopAsync` nem rodava; o cancelamento chegava no `Dispose` do host,
+  e o fechamento da métrica batia em `ObjectDisposedException: IServiceProvider`. É
+  o "60 s" e o "host descartado" que este `02` registrou em 21/09/2026.
+- **O "1m10s em `Connection.CloseAsync`" da `delegacao-diagnostico` continua
+  hipótese nomeada, não confirmada.** Os dados daquela rodada não existem, e esta
+  change não afirma que o resolveu.
+- **A B, sem o cancelamento no broker, reentregava em laço — e dez rodadas limpas
+  não mostravam.** O `nack(requeue: true)` libera o slot do `prefetchCount: 1` com o
+  consumidor ainda registrado até o `Quiesce` do fechamento; o broker entrega o job de
+  novo ao mesmo consumidor, já cancelado, que o devolve outra vez. É corrida entre o
+  `nack` e o `Quiesce`. Sem espera artificial, **10 de 10 rodadas** tiveram uma entrega
+  só; com **2 s** entre `base.StopAsync` e o fechamento, **649 entregas** do mesmo job
+  (`DeliveryTag` 1→649). Com `BasicCancelAsync` primeiro, **1**; com um guarda na
+  entrada do callback, **2** (a segunda presa sem `ack` até o fechamento, e só porque
+  o prefetch é 1). Escolhido o `BasicCancelAsync` (D5).
+- **Por que o guarda do laço é `ConsumerCount == 0`, e não a contagem de
+  entregas.** Contar entregas mede o resultado da corrida, e a ordem errada venceu a
+  corrida 10 de 10 vezes sem janela forçada: um guarda pela contagem passaria verde
+  com o defeito presente. O que não depende de corrida é a **ordem**: no instante em
+  que a execução observa o cancelamento, o consumidor deste worker já tem de ter
+  saído da fila. Sem o `BasicCancelAsync` ele ainda está lá **sempre**, porque o
+  fechamento do canal espera o callback, que está parado na própria consulta. Medido:
+  `ConsumerCount` = 1 contra a B sem cancelamento, 0 com ele.
+- **Prazo do `BasicCancelAsync`, 2 s, não o token de `StopAsync`** (acréscimo do
+  dono no ok do apply): o token de `StopAsync` é o `ShutdownTimeout` de 30 s, maior
+  que os 10 s do `stop_grace_period` padrão do Compose (lido na documentação, não
+  medido). Preso a ele, um `cancel-ok` lento reproduziria a #49 por outro caminho.
+  Sem teste da demora: provocá-la exige pausar o broker, e aí o fechamento também
+  demora — mede outra coisa.
+- **O advisory lock é liberado no caminho cancelado:** o `pg_advisory_unlock` usa
+  `CancellationToken.None`. Medido nas duas pontas: **1** com a execução em voo,
+  **0** entre a parada e a reentrega, e a reentrega no mesmo processo (mesmo pool do
+  Npgsql) completa. Sem comentário na #46. Contra o código antigo, os guardas leram
+  `1` depois da parada em 3 de 5 execuções — inconclusivo: lá a limpeza roda depois
+  do `Dispose` do host, e a leitura não separa "não rodou" de "ainda não tinha
+  rodado".
+- **O caminho da tool:** `FunctionInvocationProcessor` (`Microsoft.Extensions.AI`
+  10.6.0) só converte exceção de tool em resultado quando o token **não** foi
+  cancelado. Guardado por execução com uma tool em voo.
+- **Guardas (convenção 15),** cinco em `TaskJobConsumerTests`, sem classe de host
+  nova (a `WorkerHostCollection` continua com as mesmas classes; nada a recalibrar):
+  contra `f2e7b09`, 4 de 5 reprovam (o de laço passa ali, porque o cancelamento só
+  chega depois do fechamento); contra a opção A (só reordenar), reprovam o de estado
+  (nenhum log de interrupção, dois de erro) e o da tool; contra a B sem
+  `BasicCancelAsync`, reprova o de laço. Com a correção, 5/5.
+- **Suíte de `apps/workers`:** baseline em `f2e7b09`, **386/386**, 39 classes / 39
+  arquivos `*Tests.cs`, 477 s, `podman ps` vazio, load 4,61 em 12 núcleos.
+  Fechamento: **391/391**, 39 classes, **391 s**, com
+  `podman ps` vazio e load 5,07 na largada, na árvore de trabalho sobre `f2e7b09`
+  (o commit é do dono). Por classe, só `TaskJobConsumerTests` mudou de contagem,
+  **18 → 23** (os 5 guardas); única variação de duração acima de 5 s,
+  `ConversationHistoryTests` 45,7 → 33,5 s, mais rápida e sem mudança. A primeira
+  tentativa foi abortada antes de começar: a linha principal rodava as suítes dela
+  na mesma VM do Podman (load 13,97, contêineres de pé) — convenção 19, quarta
+  parte, aplicada antes e não depois.
+
+### Decisões
+
+- **D2 = B**, decidida pelo dono em 03/10/2026, entre quatro opções: A (só
+  reordenar — resultado certo por acidente, dois logs de erro por deploy), B (parada
+  como caminho próprio, job devolvido explicitamente), C (`failed` na parada — todo
+  deploy vira erro para o usuário e precisa de fase nova espelhada no `apps/api`), D
+  (drenagem — o prazo útil é o `stop_grace_period` de 10 s, contra 120 s da espera de
+  delegação). Condições do dono: medir o laço (D5) e o lock (D6).
+- **Risco aceito:** timeout de `HttpClient` que estoure no mesmo instante da parada é
+  tratado como parada e reentregue, não `failed`.
+
+### Issues abertas (convenção 23)
+
+- **#125** — `KnowledgeIndexingConsumer.StopAsync` tem o mesmo padrão. Achada na
+  varredura de escopo (4 hosted services conferidos item a item; o critério estreito
+  devolveu 0 por causa de construtor primário, o largo 5 linhas com um comentário).
+- **#126** — a reentrega de task em `working` reabre `task_executions`, e o `INSERT`
+  por chave duplicada loga duas linhas `fail:` do EF e um aviso. O dado sai certo; o
+  ruído passa a aparecer em todo deploy com mensagem em voo.
+
+### Fora do escopo
+
+`PushNotificationSender` e os `HttpClient` de saída (#46, #47); `stop_grace_period`
+do deploy; a push notification não reenviada quando a parada cai entre o estado
+terminal e o envio (janela estreita, registrada no `design.md`).

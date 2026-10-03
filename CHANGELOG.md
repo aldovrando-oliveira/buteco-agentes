@@ -792,6 +792,18 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Parar o worker com uma execução em voo levava 60 s e terminava com o processo
+  morto no meio** (#49). `TaskJobConsumer.StopAsync` fechava canal e conexão do
+  RabbitMQ antes de cancelar a execução; o fechamento do canal esperava o callback,
+  que esperava um cancelamento que ainda não tinha vindo. Agora a parada cancela o
+  consumidor no broker, cancela a execução e só então fecha, e retorna sem esperar os
+  prazos de fechamento. A execução interrompida pela parada deixa a task em
+  `working` e devolve o job à fila explicitamente, para outro worker, em vez de
+  depender de um `nack` que lançava; a reentrega executa a task normalmente. Não há
+  mais log de erro **na parada**; a reentrega ainda gera duas linhas `fail:` do EF
+  Core (`Database.Command` e `Update`) ao reabrir a métrica da execução,
+  registradas na #126.
+
 - **Duas atualizações simultâneas do mesmo documento de conhecimento não gravam mais
   a mesma revisão** (#102). Antes, as duas liam a revisão N e gravavam N+1, e a
   indexação de um texto podia terminar por último e deixar no índice os fragmentos

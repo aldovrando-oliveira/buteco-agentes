@@ -283,7 +283,7 @@ public sealed class AgentExecutionService(
                 acquiredLock = await ConversationContextLock.AcquireAsync(
                     scopeFactory, message.AgentId, message.ContextId, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsShutdownCancellation(ex, cancellationToken))
             {
                 // ContextId no log não é enfeite: é o único campo que liga esta
                 // falha à conversa que estava segurando o lock, que é a única coisa
@@ -489,7 +489,7 @@ public sealed class AgentExecutionService(
 
                 await SendPushNotificationIfConfiguredAsync(message, savedTask, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!IsShutdownCancellation(ex, cancellationToken))
             {
                 logger.LogError(ex, "Falha ao executar o agente {AgentId} para a task {TaskId}", message.AgentId, message.TaskId);
 
@@ -503,6 +503,32 @@ public sealed class AgentExecutionService(
             await metricsWriter.CloseAsync(execution, metrics);
         }
     }
+
+    /// <summary>
+    /// A execução foi interrompida pela PARADA do worker, e não falhou — design.md
+    /// da change workers-parada-com-execucao-em-voo, D2 (opção B). O
+    /// <paramref name="cancellationToken"/> é o <c>stoppingToken</c> de
+    /// <c>TaskJobConsumer</c>, então "cancelado" aqui só quer dizer parada.
+    /// </summary>
+    /// <remarks>
+    /// Os dois <c>catch</c> que chamam <see cref="FailTaskAsync"/> deixam esta
+    /// exceção passar: gravar <c>failed</c> transformaria todo deploy com mensagem
+    /// em voo numa resposta de erro, e a gravação nem chegaria ao banco — ela
+    /// recebe o token já cancelado. A task fica em <c>working</c>, o
+    /// <c>finally</c> da métrica fecha a linha sem estado terminal (que é o que
+    /// ela é), o <c>await using</c> do lock de contexto o libera com
+    /// <c>CancellationToken.None</c>, e <c>TaskJobConsumer</c> devolve o job à
+    /// fila. A reentrega cai em "task em <c>working</c> continua executando".
+    ///
+    /// <para>
+    /// Um timeout de <c>HttpClient</c> que estoure no MESMO instante da parada
+    /// também chega como <see cref="OperationCanceledException"/> com o token
+    /// cancelado, e é tratado como parada: reentregue em vez de <c>failed</c>.
+    /// Risco aceito no design.md — o erro vai para o lado de tentar de novo.
+    /// </para>
+    /// </remarks>
+    private static bool IsShutdownCancellation(Exception exception, CancellationToken cancellationToken) =>
+        exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
 
     /// <summary>
     /// Termina a task em <c>failed</c> e dispara a push notification, se houver
