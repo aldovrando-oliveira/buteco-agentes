@@ -21,12 +21,13 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Npgsql;
 using RabbitMQ.Client;
+using Xunit.Abstractions;
 using TaskStatus = A2A.TaskStatus;
 
 namespace Buteco.Workers.Tests;
 
 [Collection(WorkerHostCollection.Name)]
-public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassFixture<WorkerInfrastructureFixture>
+public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture, ITestOutputHelper output) : IClassFixture<WorkerInfrastructureFixture>
 {
     [Fact]
     public async Task Consumer_ProcessesJob_TaskEndsCompletedWithArtifact()
@@ -679,6 +680,339 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         }
     }
 
+    // ── Parada do worker com execução em voo (#49, change
+    // workers-parada-com-execucao-em-voo) ──────────────────────────────────
+    //
+    // Os cinco guardas abaixo partem do mesmo cenário, montado por
+    // StopWithExecutionInFlightAsync: um job em execução que espera pelo token
+    // que recebe — na chamada ao provedor ou numa tool, a mesma forma da espera
+    // da delegação, que liga o seu prazo de 120 s ao token da execução — e o
+    // host parado com ele em voo. Antes da correção a parada levava 60,1 s
+    // (30 s do ShutdownTimeout esperando o callback no Channel.CloseAsync + 30 s
+    // do DefaultConnectionCloseTimeout) e lançava TaskCanceledException.
+
+    /// <summary>
+    /// 2.1 — a parada não espera os prazos de fechamento do canal e da conexão.
+    /// O limite de 10 s fica bem abaixo do primeiro deles (30 s) e acima de
+    /// qualquer ruído de máquina carregada; medido com a correção: 0,0-0,1 s.
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WithProviderCallInFlight_ReturnsWithoutWaitingForCloseTimeouts()
+    {
+        var stop = await StopWithExecutionInFlightAsync(toolInFlight: false);
+        await PurgeTaskQueueAsync();
+
+        Assert.Null(stop.StopFailure);
+        Assert.True(
+            stop.StopElapsed < TimeSpan.FromSeconds(10),
+            $"StopAsync levou {stop.StopElapsed.TotalSeconds:F1} s com uma execução em voo.");
+    }
+
+    /// <summary>
+    /// 2.2 — o que a execução interrompida vira (D2, opção B), com contagens
+    /// EXATAS: um reentrega em laço apareceria aqui como mais de um log de
+    /// interrupção, e um tratamento como falha comum, como log de erro.
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WithProviderCallInFlight_LeavesTaskWorking_AndRequeuesTheJobOnce()
+    {
+        var stop = await StopWithExecutionInFlightAsync(toolInFlight: false);
+        var queued = await PurgeTaskQueueAsync();
+
+        Assert.Equal(1, stop.ProviderCalls);
+        Assert.Single(stop.InterruptionLogs);
+        Assert.Empty(stop.ErrorLogs);
+        Assert.Equal(0, stop.MetricsOpenFailures);
+        Assert.NotNull(await ExecutionMetricsReader.FindExecutionAsync(ConnectionString, stop.TaskId));
+        Assert.Equal(nameof(TaskState.Working), await ReadTaskStateAsync(stop.TaskId));
+        Assert.Equal(1u, queued);
+    }
+
+    /// <summary>
+    /// 2.3 — GUARDA DO LAÇO (D5). Sem o BasicCancelAsync primeiro, o
+    /// nack(requeue: true) da parada devolve o job ao PRÓPRIO consumidor, que
+    /// segue registrado até o Quiesce do Channel.CloseAsync — medido: 649
+    /// entregas em 2 s com a janela aberta.
+    ///
+    /// <para>
+    /// NÃO É A CONTAGEM DE ENTREGAS, DE PROPÓSITO. O laço depende de o nack
+    /// chegar ao broker antes do Quiesce, e isso é corrida: sem janela forçada a
+    /// ordem errada passou 10 de 10 rodadas com uma entrega só. Um guarda pela
+    /// contagem passaria verde com o defeito presente. O que é determinístico é
+    /// a ORDEM: no instante em que a execução observa o cancelamento, o
+    /// consumidor deste worker já tem de ter saído da fila. Sem o cancelamento no
+    /// broker ele ainda está lá — sempre, porque o fechamento do canal espera o
+    /// callback, que está parado nesta consulta.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_ConsumerHasLeftTheQueue_BeforeTheExecutionObservesTheCancellation()
+    {
+        var stop = await StopWithExecutionInFlightAsync(toolInFlight: false);
+        await PurgeTaskQueueAsync();
+
+        Assert.Equal(0u, stop.ConsumersWhenCancelled);
+    }
+
+    /// <summary>
+    /// 2.4 — o caminho da TOOL (D4). A espera da delegação é uma tool, e o
+    /// FunctionInvokingChatClient só transforma exceção de tool em resultado de
+    /// erro quando o token NÃO foi cancelado (FunctionInvocationProcessor,
+    /// Microsoft.Extensions.AI 10.6.0). Se transformasse, o client receberia uma
+    /// segunda chamada com o resultado da tool e a execução seguiria.
+    /// </summary>
+    [Fact]
+    public async Task StopAsync_WithToolCallInFlight_ReturnsPromptly_AndDoesNotContinueTheRun()
+    {
+        var stop = await StopWithExecutionInFlightAsync(toolInFlight: true);
+        var queued = await PurgeTaskQueueAsync();
+
+        Assert.Null(stop.StopFailure);
+        Assert.True(
+            stop.StopElapsed < TimeSpan.FromSeconds(10),
+            $"StopAsync levou {stop.StopElapsed.TotalSeconds:F1} s com uma tool em voo.");
+        Assert.Equal(1, stop.ProviderCalls);
+        Assert.Single(stop.InterruptionLogs);
+        Assert.Empty(stop.ErrorLogs);
+        Assert.Equal(nameof(TaskState.Working), await ReadTaskStateAsync(stop.TaskId));
+        Assert.Equal(1u, queued);
+    }
+
+    /// <summary>
+    /// 2.5 — o job devolvido pela parada é executado na reentrega, e o lock de
+    /// contexto foi liberado no caminho cancelado (D6). O lock é lido nas DUAS
+    /// pontas: 1 com a execução em voo (sem isso o 0 depois não prova liberação,
+    /// só ausência) e 0 entre a parada e a reentrega. O host novo roda no mesmo
+    /// processo e, portanto, no mesmo pool do Npgsql — que NÃO libera advisory
+    /// lock ao devolver a conexão (ConversationContextLock) —, que é o cenário em
+    /// que um unlock que não rodou apareceria como a reentrega presa no lock.
+    /// </summary>
+    [Fact]
+    public async Task JobRequeuedByStop_IsExecutedOnRedelivery_AndTheContextLockWasReleased()
+    {
+        var stop = await StopWithExecutionInFlightAsync(toolInFlight: false);
+
+        Assert.Equal(1, stop.ContextLocksWhileInFlight);
+        Assert.Equal(0, stop.ContextLocksAfterStop);
+
+        var logs = new List<(LogLevel Level, IReadOnlyList<KeyValuePair<string, object?>> State)>();
+        using var host = BuildHost(ReplyingClient(usage: null), logs);
+        await host.StartAsync();
+
+        try
+        {
+            var record = await PollUntilTerminalAsync(stop.TaskId);
+            Assert.Equal(nameof(TaskState.Completed), record.State);
+
+            var execution = await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, stop.TaskId);
+            Assert.Equal(nameof(TaskState.Completed), execution.TerminalState);
+
+            // Registro do risco "Reentrega abre a linha de métrica de novo"
+            // (design.md): a linha tem chave em TaskId, e a reabertura falha.
+            output.WriteLine($"reentrega: falhas de abertura de task_executions = {CountMetricsOpenFailures(logs)}");
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+    }
+
+    private sealed record InFlightStop(
+        string TaskId,
+        TimeSpan StopElapsed,
+        Exception? StopFailure,
+        int ProviderCalls,
+        uint? ConsumersWhenCancelled,
+        long ContextLocksWhileInFlight,
+        long ContextLocksAfterStop,
+        IReadOnlyList<string> InterruptionLogs,
+        IReadOnlyList<string> ErrorLogs,
+        int MetricsOpenFailures);
+
+    private async Task<InFlightStop> StopWithExecutionInFlightAsync(bool toolInFlight)
+    {
+        var agentId = Guid.NewGuid();
+        var taskId = Guid.NewGuid().ToString("N");
+        var contextId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAndTaskAsync(agentId, "Atendente", "Responda com simpatia.", taskId, contextId, "oi");
+
+        // Conexão aberta ANTES, para a consulta do guarda 2.3 não pagar o
+        // handshake dentro da janela que ela mede.
+        var factory = new ConnectionFactory
+        {
+            HostName = fixture.RabbitMq.Hostname,
+            Port = fixture.RabbitMq.GetMappedPublicPort(5672),
+            UserName = "buteco",
+            Password = "buteco_test_password",
+        };
+        await using var probeConnection = await factory.CreateConnectionAsync();
+        await using var probeChannel = await probeConnection.CreateChannelAsync();
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        uint? consumersWhenCancelled = null;
+
+        async Task WaitForCancellationAsync(CancellationToken cancellationToken)
+        {
+            entered.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                var queue = await probeChannel.QueueDeclarePassiveAsync(TaskJobConsumer.QueueName);
+                consumersWhenCancelled = queue.ConsumerCount;
+                throw;
+            }
+        }
+
+        const string toolName = "esperar_parada";
+        var providerCalls = 0;
+        var chatClient = new Mock<IChatClient>();
+        chatClient
+            .Setup(client => client.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .Returns(async (IEnumerable<ChatMessage> _, ChatOptions? _, CancellationToken cancellationToken) =>
+            {
+                Interlocked.Increment(ref providerCalls);
+                if (toolInFlight)
+                {
+                    return new ChatResponse(new ChatMessage(
+                        ChatRole.Assistant,
+                        new List<AIContent> { new FunctionCallContent("call-1", toolName) }));
+                }
+
+                await WaitForCancellationAsync(cancellationToken);
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, "nunca"));
+            });
+
+        var delegationResolver = new Mock<IAgentDelegationToolSetResolver>();
+        delegationResolver
+            .Setup(resolver => resolver.ResolveAsync(
+                It.IsAny<AppDbContext>(), It.IsAny<global::Buteco.Workers.Agents.Entities.Agent>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<int>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(toolInFlight
+                ? (IReadOnlyList<AITool>)[AIFunctionFactory.Create(
+                    async (CancellationToken cancellationToken) =>
+                    {
+                        await WaitForCancellationAsync(cancellationToken);
+                        return "nunca";
+                    },
+                    toolName)]
+                : []);
+
+        var logs = new List<(LogLevel Level, IReadOnlyList<KeyValuePair<string, object?>> State)>();
+        var stopwatch = new System.Diagnostics.Stopwatch();
+        long locksWhileInFlight;
+        Exception? stopFailure = null;
+
+        using (var host = BuildHost(chatClient.Object, logs, delegationResolver.Object))
+        {
+            await host.StartAsync();
+            await PublishJobAsync(taskId, agentId, contextId);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            locksWhileInFlight = await CountContextAdvisoryLocksAsync(agentId, contextId);
+
+            stopwatch.Start();
+            try
+            {
+                await host.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                stopFailure = ex;
+            }
+
+            stopwatch.Stop();
+        }
+
+        var locksAfterStop = await CountContextAdvisoryLocksAsync(agentId, contextId);
+
+        List<string> interruptions, errors;
+        lock (logs)
+        {
+            interruptions = logs
+                .Where(entry => entry.Level == LogLevel.Information && FormatOf(entry.State).Contains("interrompida pela parada"))
+                .Select(entry => FormatOf(entry.State))
+                .ToList();
+            errors = logs.Where(entry => entry.Level >= LogLevel.Error).Select(entry => FormatOf(entry.State)).ToList();
+        }
+
+        var stop = new InFlightStop(
+            taskId,
+            stopwatch.Elapsed,
+            stopFailure,
+            providerCalls,
+            consumersWhenCancelled,
+            locksWhileInFlight,
+            locksAfterStop,
+            interruptions,
+            errors,
+            CountMetricsOpenFailures(logs));
+
+        output.WriteLine(
+            $"parada: {stop.StopElapsed.TotalSeconds:F1} s, exceção = {stop.StopFailure?.GetType().Name ?? "nenhuma"}, " +
+            $"chamadas ao provedor = {stop.ProviderCalls}, consumidores no cancelamento = {stop.ConsumersWhenCancelled?.ToString() ?? "não observado"}, " +
+            $"locks em voo/depois = {stop.ContextLocksWhileInFlight}/{stop.ContextLocksAfterStop}, " +
+            $"interrupções = {stop.InterruptionLogs.Count}, erros = {stop.ErrorLogs.Count} [{string.Join(" | ", stop.ErrorLogs)}], " +
+            $"falhas de abertura = {stop.MetricsOpenFailures}");
+
+        return stop;
+    }
+
+    private static string FormatOf(IReadOnlyList<KeyValuePair<string, object?>> state) =>
+        state.FirstOrDefault(pair => pair.Key == "{OriginalFormat}").Value as string ?? string.Empty;
+
+    private static int CountMetricsOpenFailures(List<(LogLevel Level, IReadOnlyList<KeyValuePair<string, object?>> State)> logs)
+    {
+        lock (logs)
+        {
+            return logs.Count(entry => entry.State.Any(pair => pair.Key == "MetricsWriteStage" && pair.Value as string == "abertura"));
+        }
+    }
+
+    private async Task<string> ReadTaskStateAsync(string taskId)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(ConnectionString).Options;
+        await using var dbContext = new AppDbContext(options);
+        return (await dbContext.A2ATasks.AsNoTracking().SingleAsync(t => t.TaskId == taskId)).State;
+    }
+
+    private async Task<long> CountContextAdvisoryLocksAsync(Guid agentId, string contextId)
+    {
+        // pg_advisory_lock(int4, int4) aparece em pg_locks com objsubid = 2 e as
+        // duas chaves em classid/objid, que são oid (sem sinal) — daí a máscara
+        // sobre o hashtext, que é int4 com sinal.
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT count(*) FROM pg_locks
+            WHERE locktype = 'advisory' AND objsubid = 2 AND granted
+              AND classid::bigint = (hashtext(@agent)::bigint & 4294967295)
+              AND objid::bigint = (hashtext(@context)::bigint & 4294967295)
+            """,
+            connection);
+        command.Parameters.AddWithValue("agent", agentId.ToString());
+        command.Parameters.AddWithValue("context", contextId);
+        return (long)(await command.ExecuteScalarAsync())!;
+    }
+
+    private async Task<uint> PurgeTaskQueueAsync()
+    {
+        var factory = new ConnectionFactory
+        {
+            HostName = fixture.RabbitMq.Hostname,
+            Port = fixture.RabbitMq.GetMappedPublicPort(5672),
+            UserName = "buteco",
+            Password = "buteco_test_password",
+        };
+
+        await using var connection = await factory.CreateConnectionAsync();
+        await using var channel = await connection.CreateChannelAsync();
+        return await channel.QueuePurgeAsync(TaskJobConsumer.QueueName);
+    }
+
     private static IChatClient ReplyingClient(UsageDetails? usage)
     {
         var chatClient = new Mock<IChatClient>();
@@ -840,12 +1174,20 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         return builder.Build();
     }
 
-    private IHost BuildHost(IChatClient chatClient)
+    private IHost BuildHost(
+        IChatClient chatClient,
+        List<(LogLevel Level, IReadOnlyList<KeyValuePair<string, object?>> State)>? logs = null,
+        IAgentDelegationToolSetResolver? delegationResolver = null)
     {
         var builder = Host.CreateApplicationBuilder();
 
         builder.Configuration["ConnectionStrings:Postgres"] = fixture.Postgres.GetConnectionString();
         builder.Services.AddInfrastructure(builder.Configuration);
+
+        if (logs is not null)
+        {
+            builder.Logging.AddProvider(new CapturingLoggerProvider(logs));
+        }
 
         builder.Services.Configure<RabbitMqOptions>(options =>
         {
@@ -859,7 +1201,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture) : IClassF
         resolverMock.Setup(resolver => resolver.Resolve(It.IsAny<string>(), It.IsAny<string>())).Returns(chatClient);
         builder.Services.AddSingleton(resolverMock.Object);
         builder.Services.AddSingleton<IMcpToolSetResolver, NullMcpToolSetResolver>();
-        builder.Services.AddSingleton<IAgentDelegationToolSetResolver, NullAgentDelegationToolSetResolver>();
+        builder.Services.AddSingleton(delegationResolver ?? new NullAgentDelegationToolSetResolver());
         builder.Services.AddSingleton<IKnowledgeToolSetResolver, NullKnowledgeToolSetResolver>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
