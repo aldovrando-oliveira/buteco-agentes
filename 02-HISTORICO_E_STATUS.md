@@ -14392,3 +14392,58 @@ do upsert idêntico pelo `catch` de `UniqueViolation` em 27 de 30.
 - Criar base `Synced` pela rota do operador (#104), conectores e ciclo (#103,
   #105), telas (#107), exclusão de base (#108).
 - Sem conferência visual: a change não tem tela.
+
+## `inbox-restricao-de-subject` — só `operator` nas rotas do `apps/inbox` (#116)
+
+### O que entrou
+
+A `FallbackPolicy` do `apps/inbox` passou de `RequireAuthenticatedUser()` para
+`RequireAuthenticatedUser().RequireClaim(NameIdentifier, "operator")`, montada em
+`Auth/SubjectAuthorization.cs`. Qualquer outro subject validamente assinado recebe
+`403` nas doze rotas autenticadas, inclusive o `service:inbox` que o próprio app
+assina para chamar o `apps/api`. As três rotas anônimas não mudaram. **A política
+alterada é a `FallbackPolicy`, e só ela:** o `Program.cs` não configurava
+`DefaultPolicy`, e nenhuma rota declara `RequireAuthorization` ou `[Authorize]`, então
+é a `FallbackPolicy` que governa toda rota sem `AllowAnonymous`. A tabela de serviços
+começa vazia, sem checagem de boot; o serviço que precisar de rota do `apps/inbox`
+traz as duas, no molde do `apps/api` (registrado em `docs/architecture.md`).
+
+### O que a implementação mediu
+
+- **`RequireClaim` compara exato:** descompilado do ASP.NET Core 10.0.9,
+  `ClaimsAuthorizationRequirement` compara o tipo com `OrdinalIgnoreCase` e o valor
+  com `StringComparer.Ordinal`; o `HandleForbiddenAsync` padrão de
+  `AuthenticationHandler<T>` responde `403`, e o esquema do inbox não o sobrescreve.
+- **O defeito, por execução e não só por leitura:** antes da correção, um token
+  `service:connectors` **criou canal** (`POST /channels` → `201`), e as 12 rotas
+  autenticadas processaram a requisição (`200`, `400` ou `404`, nenhuma `403`).
+- **A varredura sobre o host achou 12 pares (método, rota) autenticados**, os mesmos
+  12 da tabela do `design.md`.
+- **Guarda (convenção 15):** com a regra antiga reintroduzida, reprovaram os 6 testes
+  de `403` — `GetChannels_WithSubjectOtherThanOperator_ReturnsForbidden` com
+  `service:connectors`, `service:inbox`, `service:desconhecido` e `Operator`,
+  `EveryAuthenticatedRoute_WithServiceSubject_ReturnsForbidden` e
+  `CreateChannel_WithServiceSubject_ReturnsForbiddenAndCreatesNothing` — e passaram
+  os 9 de operador e de rota anônima. Uma rota temporária com `.RequireAuthorization()`
+  sem política (que usaria a `DefaultPolicy`) fez a varredura reprovar nomeando
+  `GET /guarda-temporario-default-policy → 200`. As duas alterações foram desfeitas e
+  conferidas por `grep`.
+- **Suítes, no worktree da #116, em 03/10/2026:** baseline `apps/inbox` **203/203**
+  em 27 s (`load average` 5,26 no início) e round-trip **4/4** em 3 s (8,65); depois
+  da change, **213/213** em 21 s (4,10 no início, 8,14 no fim) e **4/4** em 3 s
+  (8,14). A diferença de 10 é a classe nova.
+
+### Achado de ambiente
+
+O primeiro `dotnet restore` do worktree novo ficou parado sem erro: o .NET tentava o
+nuget.org por IPv6, que não conecta nesta rede (`curl -6` estoura em 15 s, `curl -4`
+responde em 0,2 s), e ficava em `SYN_SENT`. Com
+`DOTNET_SYSTEM_NET_DISABLEIPV6=1` só no ambiente da sessão, o restore levou 1,8 s.
+Nada no repositório mudou por isso.
+
+### Fora do escopo, reportado
+
+- **#122**: o `SECURITY.md` ainda diz que o `apps/api` emite o token de serviço.
+- O restore do `Buteco.Inbox.Tests` avisa `NU1903` para o `SSH.NET` 2025.1.0,
+  dependência transitiva de teste. Não virou issue pública por causa da política do
+  `SECURITY.md`; fica com o mantenedor.

@@ -5,11 +5,11 @@ using Microsoft.Extensions.Options;
 
 namespace Buteco.Inbox.Auth;
 
-// Único esquema de autenticação do app — aceita tanto o token do
-// operador (emitido por apps/api) quanto o token de serviço que
-// apps/inbox emite para si mesmo (não usado nas rotas de entrada de
-// apps/inbox, só nas chamadas de saída para apps/api), ambos validados
-// pela mesma assinatura via ITokenService (design.md, Decision 1/3).
+// Único esquema de autenticação do app — autentica qualquer token
+// validamente assinado via ITokenService (design.md, Decision 1/3),
+// qualquer que seja o subject, e põe o subject em NameIdentifier. Quem
+// recusa subject diferente de "operator" é a autorização
+// (SubjectAuthorization, inbox-restricao-de-subject), com 403.
 public sealed class OperatorTokenAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
