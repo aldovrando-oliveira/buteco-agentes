@@ -75,7 +75,7 @@ openspec show <nome>                   # exibe uma mudança ou spec
 ### Regras dos artefatos
 
 - **Cada tarefa deve indicar em qual app ela roda** (`apps/api`,
-  `apps/workers`, `apps/inbox`, `apps/frontend`).
+  `apps/workers`, `apps/inbox`, `apps/connectors`, `apps/frontend`).
 - **Nunca proponha referência de projeto entre apps.** O isolamento é
   estrutural, não uma preferência.
 - **Justifique qualquer conteúdo colocado em `libs/`** no `design.md`.
@@ -112,6 +112,7 @@ dotnet test libs/ProviderCatalog.Tests
 dotnet test apps/api/Api.sln
 dotnet test apps/workers/Workers.sln
 dotnet test apps/inbox/Inbox.sln
+dotnet test apps/connectors/Connectors.sln
 dotnet test tests/CrossAppTaskStoreCompatibility.Tests
 dotnet test tests/InboxOrchestratorRoundTrip.Tests
 
@@ -154,7 +155,7 @@ app e assunto em português, no imperativo, sem ponto final.
 
 **Tipos em uso:** `feat`, `fix`, `refactor`, `doc`, `chore`.
 
-**Escopos em uso:** `api`, `workers`, `inbox`, `frontend`, e ocasionalmente
+**Escopos em uso:** `api`, `workers`, `inbox`, `connectors`, `frontend`, e ocasionalmente
 `auth`, `mcp`, `deploy`, `dev`. Uma mudança que atinge mais de um app lista
 os escopos separados por vírgula.
 

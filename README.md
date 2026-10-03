@@ -25,7 +25,7 @@ proprietary API.
 
 Most agent platforms make you choose between a hosted product you cannot
 inspect and a framework you have to assemble yourself. This one is a running
-system you own: four small services, a Postgres database, a message broker,
+system you own: a handful of small services, a Postgres database, a message broker,
 and a web panel — deployable on a single VM with `docker compose`.
 
 The design commitment that shapes everything else: **an agent is reachable
@@ -63,9 +63,10 @@ results back over webhooks.
 | **`apps/api`** | Agent catalog, MCP catalog, delegation, knowledge bases, A2A endpoint and agent card, operator login. Never calls the LLM — it persists the task and publishes a job | .NET 10, ASP.NET Core Minimal API, EF Core, RabbitMQ publisher |
 | **`apps/workers`** | Executes tasks: calls the LLM, resolves MCP tools, runs delegation, fires push notifications | .NET 10 Worker Service, `Microsoft.Agents.AI` |
 | **`apps/inbox`** | Inbound channel catalog, contact/session CRM, message history, debounce orchestrator, channel adapters | .NET 10 Minimal API, own isolated database |
+| **`apps/connectors`** | File-provider connectors for knowledge bases: folder browsing, folder description, root listing and markdown per file. Today, Google Drive through a service account. Development only for now: not yet in the server stack | .NET 10 Minimal API, no database, plain REST calls to the provider |
 | **`apps/frontend`** | Operations panel for agents, MCP, delegation, channels, sessions and conversation history | React 19, TypeScript, Vite, Mantine |
 
-The four apps never reference each other's code. Anything crossing an app
+The five apps never reference each other's code. Anything crossing an app
 boundary goes over authenticated HTTP. See
 [architecture](docs/architecture.md) for the reasoning.
 
@@ -120,6 +121,7 @@ docker compose up -d
 dotnet run --project apps/api/src/Buteco.Api          # http://localhost:5017
 dotnet run --project apps/workers/src/Buteco.Workers
 dotnet run --project apps/inbox/src/Buteco.Inbox      # http://localhost:5027
+dotnet run --project apps/connectors/src/Buteco.Connectors   # http://localhost:5037 (optional)
 
 # 4. the panel
 cd apps/frontend && npm install && npm run dev        # http://localhost:5173
@@ -144,7 +146,7 @@ Full setup, per-app details and troubleshooting:
 |---|---|
 | [Development](docs/development.md) | Running everything locally, testing, building images |
 | [Configuration](docs/configuration.md) | Every environment variable, per process |
-| [Architecture](docs/architecture.md) | The four apps, domain model, business rules |
+| [Architecture](docs/architecture.md) | The five apps, domain model, business rules |
 | [Conventions](docs/conventions.md) | House style and the assumptions behind it |
 | [A2A integration](docs/a2a-integration.md) | Calling an agent from an external client |
 | [Deployment](docs/deployment.md) | Running the stack on a server |

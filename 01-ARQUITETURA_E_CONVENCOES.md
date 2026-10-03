@@ -17,13 +17,14 @@ Workflow de desenvolvimento: spec-driven via OpenSpec
 `/opsx:sync` → `/opsx:archive`). Specs vivos em
 `openspec/specs/{capability}/spec.md`.
 
-## Os quatro apps
+## Os cinco apps
 
 | App | Papel | Stack | Banco |
 |---|---|---|---|
 | `apps/api` | CRUD de agentes, catálogo MCP, delegação, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, push notification (emissor), login do operador e emissão de token | .NET 10, ASP.NET Core Minimal API, CQRS via `Mediator.Abstractions`+`SourceGenerator` v3.0.2, EF Core+Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` (mesmas tabelas, dois `AppDbContext` mantidos sincronizados por disciplina, não por schema separado) |
 | `apps/workers` | Executa tasks: chama o LLM, resolve tools MCP, executa delegação, dispara push notification | .NET 10 Worker Service, `Microsoft.Agents.AI` 1.15.0 (`ChatClientAgent`, `Compaction`), EF Core mirror, consumidor RabbitMQ | Mesmo Postgres de `apps/api` |
 | `apps/frontend` | UI de gestão (agentes, MCP, delegação, canais), tela de login, sessões e histórico de conversa por canal | React 19.2+, TypeScript, Vite, Mantine v9, `react-router` v8, `@tanstack/react-query` v5, `react-markdown`+`remark-gfm`, Vitest+Testing Library | — |
+| `apps/connectors` | Conectores de provedor de arquivos para bases de conhecimento: navegar, descrever pasta, listar a raiz (suportados e ignorados com motivo), entregar markdown. Google Drive por service account | .NET 10 Minimal API, REST ao Google sem biblioteca do provedor | — |
 | `apps/inbox` | Catálogo de canais de entrada, CRM (Contact/Session), histórico de mensagens, orquestrador de debounce, adapters de canal (WAHA, Telegram) | .NET 10 Minimal API, CQRS próprio (Mediator), EF Core | Postgres **próprio** (`buteco_inbox`), isolado — sem tabela em comum com `apps/api`/`apps/workers` |
 
 Isolamento estrito entre apps: nenhum `ProjectReference` cruzado.
@@ -678,6 +679,20 @@ webhook, sem verificação de autenticidade do webhook de entrada — risco
 aceito, classificado explicitamente na allowlist de rotas anônimas) e
 **Telegram** (Bot API, `setWebhook` automático com `secret_token` gerado
 por canal, verificação nativa do webhook de entrada).
+
+## Contrato de conector (`apps/connectors`)
+
+Fronteira com o `apps/inbox`: canal de conversa é dele; provedor de arquivos para
+base de conhecimento é do `apps/connectors`. Por provedor, sob uma chave
+(`google-drive`): `IFolderNavigator` e `IFolderContentSource` keyed, e um
+`ConnectorAccount` **não keyed** que carrega a própria chave, porque o contêiner não
+enumera chaves keyed em tempo de execução e a rota de provedores precisa listá-las.
+`ValidateConnectorRegistrations` (forma `IServiceCollection`) derruba o boot com
+registro incompleto. Falha sai como código, a listagem da raiz é completa ou falha, e
+toda operação sobre uma pasta a lê antes (consulta em pasta sem acesso devolve lista
+vazia). Autorização por tabela de subjects **sem operador em tudo**: `operator` em
+provedores e navegação, `service:api` (#104) na descrição de pasta, o resto `403`,
+conferida no boot nos dois sentidos. Change `apps-connectors-google-drive` (#103).
 
 ## Convenções estabelecidas (o "estilo da casa")
 

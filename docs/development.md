@@ -19,6 +19,7 @@ Para o inventário completo de variáveis de ambiente, ver
   - [apps/api](#appsapi)
   - [apps/workers](#appsworkers)
   - [apps/inbox](#appsinbox)
+  - [apps/connectors](#appsconnectors)
   - [apps/frontend](#appsfrontend)
 - [Autenticação em desenvolvimento](#autenticação-em-desenvolvimento)
 - [Checklists de round-trip manual](#checklists-de-round-trip-manual)
@@ -331,6 +332,41 @@ aguardam a janela de debounce (`Debounce:Window`, varrida periodicamente por
 um `BackgroundService` a cada `Debounce:SweepInterval`) antes de disparar um
 `SendMessage` real contra `apps/api`.
 
+### apps/connectors
+
+Sem banco e sem migration.
+
+```bash
+cd apps/connectors
+dotnet run --project src/Buteco.Connectors
+```
+
+Escuta em `http://localhost:5037` em desenvolvimento. Lê `Auth:TokenSigningKey`
+(mesmo valor de `apps/api`, já no `appsettings.Development.json`), `Cors:*` e, se
+houver, `GoogleDrive:ServiceAccountKeyBase64`.
+
+**Sem a chave do Google o app sobe sem provedor**, e `GET /connectors/providers`
+responde `[]`. Para ligar o Google Drive, passe o arquivo JSON da chave de uma service
+account em base64, **sem imprimir o valor nem gravá-lo em arquivo versionado**:
+
+```bash
+GoogleDrive__ServiceAccountKeyBase64="$(base64 -i caminho/da/chave.json | tr -d '\n')" \
+  dotnet run --project src/Buteco.Connectors
+```
+
+A service account precisa da Drive API ativada no projeto dela, e cada pasta precisa
+estar compartilhada com o `client_email` da conta como Leitor.
+
+As rotas de provedores e de navegação aceitam o token do operador obtido em
+`apps/api`. A descrição de pasta é do `apps/api` (`service:api`), e o operador recebe
+`403` nela:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5037/connectors/providers
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5037/connectors/providers/google-drive/folders
+curl -H "Authorization: Bearer $TOKEN" "http://localhost:5037/connectors/providers/google-drive/folders?parentId=<id da pasta>"
+```
+
 ### apps/frontend
 
 ```bash
@@ -469,6 +505,9 @@ dotnet test apps/workers/Workers.sln
 # apps/inbox
 dotnet test apps/inbox/Inbox.sln
 
+# apps/connectors — sem contêiner; o Google é um HttpMessageHandler falso
+dotnet test apps/connectors/Connectors.sln
+
 # compatibilidade de schema entre apps/api e apps/workers
 dotnet test tests/CrossAppTaskStoreCompatibility.Tests
 
@@ -483,6 +522,11 @@ npm run format:check
 npm run test
 npm run build
 ```
+
+A suíte do `apps/connectors` tem um teste marcado `Category=Manual`, que fica pulado a
+menos que `GoogleDrive__ServiceAccountKeyBase64` e `CONNECTORS_MANUAL_FOLDER_ID`
+estejam no ambiente: ele lista a raiz de uma pasta real e baixa o markdown de cada
+arquivo, imprimindo só nomes, códigos e tamanhos.
 
 Os dois projetos em `tests/` são as únicas exceções ao isolamento entre apps,
 e existem exatamente para verificar acordos que nenhum app sozinho consegue
@@ -506,6 +550,9 @@ docker build -f apps/inbox/Dockerfile -t buteco-inbox .
 
 # apps/workers
 docker build -f apps/workers/Dockerfile -t buteco-workers .
+
+# apps/connectors
+docker build -f apps/connectors/Dockerfile -t buteco-connectors .
 
 # apps/frontend
 docker build -f apps/frontend/Dockerfile \

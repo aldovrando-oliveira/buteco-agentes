@@ -314,6 +314,19 @@ o versionamento pretende seguir
   `service:connectors`; upsert com o mesmo texto e título não gera evento nem
   reindexa. Nenhuma rota do operador cria base sincronizada ainda.
 
+- App `apps/connectors`, sem banco, com o conector Google Drive (#103). Navega as
+  pastas que a service account enxerga (Drives Compartilhados e pastas
+  compartilhadas com ela), descreve uma pasta, lista a raiz separando suportados de
+  ignorados com o motivo (atalho, subpasta, tipo não suportado, download bloqueado)
+  e entrega o markdown de cada arquivo: Google Doc exportado sem as imagens
+  embutidas, `.md` baixado sem transformação. O tipo é decidido pelo `mimeType`, e
+  os erros do Google pelo `reason`; pasta sem acesso responde erro, nunca lista
+  vazia. Rotas sob `/connectors`: provedores configurados com o e-mail da conta e
+  navegação, para o operador; descrição de pasta, para o `apps/api` (#104).
+  Qualquer outro subject recebe `403`, e a tabela de subjects é conferida no boot.
+  A chave da service account entra em base64 por variável de ambiente e só o
+  e-mail da conta sai do processo. Ainda não está no stack de servidor (#119).
+
 **Entrega containerizada**
 
 - `Dockerfile` multi-stage por app, com build context na raiz do monorepo.

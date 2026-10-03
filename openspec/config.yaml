@@ -2,8 +2,9 @@ schema: spec-driven
 
 context: |
   Plataforma de gestão de agentes de IA.
-  Monorepo com isolamento estrito entre QUATRO apps: apps/api, apps/workers,
-  apps/inbox e apps/frontend nunca referenciam código interno umas das outras.
+  Monorepo com isolamento estrito entre CINCO apps: apps/api, apps/workers,
+  apps/inbox, apps/connectors e apps/frontend nunca referenciam código interno
+  umas das outras.
   Compartilhamento real só via libs/ explícita, pequena e versionada — nunca por
   padrão. Referência entre domínios de apps diferentes é sempre validada via HTTP
   autenticado, nunca por FK.
@@ -16,7 +17,11 @@ context: |
   apps/workers = Worker Service (executa os agentes via Microsoft Agent Framework,
   chamando MCP e o LLM). apps/inbox = ASP.NET Core Minimal API, banco PRÓPRIO
   (buteco_inbox), isolado: catálogo de canais, CRM de Contact/Session, histórico
-  de mensagens, orquestrador de debounce e adapters de canal. RabbitMQ é o broker
+  de mensagens, orquestrador de debounce e adapters de canal. apps/connectors =
+  ASP.NET Core Minimal API sem banco: conectores de provedor de arquivos para bases
+  de conhecimento (navegar, descrever pasta, listar a raiz, entregar markdown).
+  Canal de conversa pertence ao apps/inbox; provedor de arquivos, ao
+  apps/connectors. RabbitMQ é o broker
   entre api e workers. PostgreSQL com EF Core para o catálogo (agentes, servidores
   MCP, bindings, bases de conhecimento) e para o store durável de tasks/eventos do
   protocolo A2A (https://a2a-protocol.org/latest/) — nada de store em memória em
@@ -27,6 +32,9 @@ context: |
   o contrato de plugin de apps/inbox (três contratos obrigatórios por ChannelType
   mais um opcional de provisionamento de webhook), com mais canais a serem
   adicionados no futuro.
+  Conector de provedor implementado hoje: Google Drive (service account, REST sem
+  biblioteca do Google), sob o contrato de apps/connectors (IFolderNavigator e
+  IFolderContentSource keyed por provedor, mais ConnectorAccount).
   Documentação: README.md e arquivos de vitrine/legal em inglês; docs/,
   CONTRIBUTING.md e CHANGELOG.md em pt-BR. Ver docs/conventions.md. Link para
   mudança arquivada usa sempre openspec/changes/archive/AAAA-MM-DD-<nome>/.
