@@ -149,19 +149,48 @@ Dois vínculos N:N:
 
 ### `KnowledgeBase` (`apps/api`)
 
-`Name`, `Description`, `IsActive`.
+`Name`, `Description`, `IsActive`, `ContentMode` (`Manual` ou `Synced`), a origem
+(`SyncProvider`, `SyncFolderId`, `SyncFolderName`, `SyncFolderUrl`) e o estado da
+sincronização (`LastSyncCompletedAt`, `LastSyncFinishedAt`, `LastSyncErrorCode`,
+`LastSyncErrorDetail`, `SyncFailingSince`, `SyncIgnoredFiles`).
 
 `Description` **não é campo decorativo**: é o texto que vira a descrição da
 tool exposta ao modelo, e é por ele que o modelo decide se a base é relevante
 para a pergunta. Por isso é obrigatória e não vazia — ao contrário de
 `McpServer.Description`.
 
+O que não se deduz lendo os campos da sincronização:
+
+- **`ContentMode` é fechado e imutável; o provedor é string aberta.** O tipo tem
+  comportamento no `apps/api` (em base `Synced`, só o subject de serviço escreve
+  documento, e o operador recebe `409`); o provedor pertence ao app que sincroniza.
+  Tipo, provedor e id da pasta nunca mudam depois do cadastro. Nome e URL da pasta
+  são snapshot da última sincronização concluída: o operador não os altera, e só a
+  gravação de um ciclo bem-sucedido os atualiza. Base manual tem tudo isso nulo, e
+  `CHECK`s garantem as combinações.
+- **Uma pasta pertence a uma base só, inclusive inativa.** Índice único parcial em
+  `(SyncProvider, SyncFolderId)`, sem filtro por `IsActive`, porque base inativa
+  continua sendo sincronizada. O id é comparado como veio.
+- **Motivos são códigos, nunca frases.** `LastSyncErrorCode` e o `code` de cada
+  item de `SyncIgnoredFiles` (`jsonb`) seguem a forma `access-denied`; o texto
+  exibido é do frontend.
+- **"Falhando desde" é derivado da transição.** Preenchido na primeira falha depois
+  de um sucesso, mantido nas seguintes, limpo no sucesso; a falha nunca apaga a
+  última concluída. `LastSyncFinishedAt` muda em todo ciclo, sucesso ou falha, e é
+  o que o polling da tela acompanha.
+- **Na resposta, base manual tem `syncSource` e `syncState` nulos**, e base
+  sincronizada que nunca terminou um ciclo tem `ignoredFiles: null`, não lista
+  vazia: nenhuma listagem aconteceu.
+- **Nesta etapa nenhuma rota do operador cria base `Synced`.** O cadastro recusa
+  `contentMode: "Synced"` com `400`; a criação, com a pasta validada pelo app que
+  acessa o provedor, é a etapa seguinte da linha.
+
 ### `KnowledgeDocument` (`apps/api`)
 
 `KnowledgeBaseId`, `Title`, `SourceType`, `ExtractedText`,
 `ContentLengthBytes`, `IndexingStatus`, `IndexedAt`, `FailureReason`,
 `ContentRevision`, `ContentHash`, `FragmentCount`, `IndexingAttempts`,
-`LastAttemptAt`.
+`LastAttemptAt`, `KnowledgeBaseContentMode`, `ExternalRef`, `ExternalVersion`.
 
 Os quatro últimos são escritos pelo consumidor de indexação de `apps/workers`,
 nunca por `apps/api` — com **uma** exceção, a rota de reindexação, que limpa
@@ -199,6 +228,18 @@ Quatro pontos que não se deduzem lendo os campos:
   quando `ExtractedText` muda. O consumidor de indexação muta a própria linha
   ao transicionar de estado, e um token de linha invalidaria o próprio
   trabalho em curso.
+- **`ExternalRef` existe se e somente se a base é `Synced`, e o banco garante.**
+  A regra cruza tabelas, então o documento carrega `KnowledgeBaseContentMode`, uma
+  cópia do tipo da base, e a FK para a base é **composta**
+  (`KnowledgeBaseId`, `KnowledgeBaseContentMode`) → (`Id`, `ContentMode`), em
+  `Restrict`. Com a cópia amarrada à base, uma `CHECK` na própria tabela amarra a
+  cópia à referência. A cópia não envelhece porque o tipo é imutável. `ExternalRef`
+  é único por base e comparado como veio.
+- **`ExternalVersion` é opaco.** É o marcador de mudança do provedor
+  (`modifiedTime` de Google Doc, `md5Checksum` de `.md`), gravado como veio e nunca
+  interpretado pelo `apps/api`. Quem decide se o documento mudou continua sendo o
+  texto extraído e o título: um upsert com o marcador novo e o mesmo texto e título
+  grava só o marcador, sem evento, sem indexação e sem tocar `UpdatedAt`.
 
 ### `KnowledgeDocumentEvent` (`apps/api`)
 
@@ -222,8 +263,9 @@ recente para o mais antigo.
   exclusão sobrevive ao documento, por isso `DocumentId` é coluna solta e
   `DocumentTitle` é snapshot. Os eventos morrem com a base. Hoje a cascata só
   é alcançável por SQL, porque a base não tem rota de exclusão.
-- **`Author` é o subject do token que escreveu, gravado como veio** (hoje só
-  `operator`). O rótulo de apresentação é do frontend.
+- **`Author` é o subject do token que escreveu, gravado como veio**
+  (`operator`, ou `service:connectors` nas escritas da sincronização). O rótulo de
+  apresentação é do frontend.
 - **Sem eventos retroativos e sem retenção.** O histórico começa vazio na
   implantação, e o gatilho para rever o crescimento está numa issue com o
   rótulo `aguardando gatilho`.
@@ -582,9 +624,11 @@ decisão não foi revista aqui; está registrada como candidata em
 ## Autenticação
 
 **Token stateless assinado com HMAC**, sem biblioteca JWT e sem sessão em
-banco. `apps/api` emite (login do operador e token de serviço); `apps/api` e
-`apps/inbox` validam **localmente**, compartilhando apenas a chave de
-assinatura via configuração. Não há chamada de rede entre os processos para
+banco. `apps/api` emite **só o token do operador**, no login; cada serviço assina
+o **próprio** token de serviço com a mesma chave — o `apps/inbox` faz isso em
+`apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs:24`, a cada
+requisição de saída. `apps/api` e `apps/inbox` validam **localmente**,
+compartilhando apenas a chave de assinatura via configuração. Não há chamada de rede entre os processos para
 validar token — foi o que permitiu autenticar dois apps com bancos isolados
 sem introduzir um store compartilhado.
 
@@ -592,10 +636,26 @@ sem introduzir um store compartilhado.
   hash PBKDF2), por `POST /auth/login` em `apps/api`. Sem tabela de usuários
   e sem RBAC. TTL de 30 minutos por padrão, configurável — o default vive no
   tipo de Options, não no `appsettings.json`.
-- **Token de serviço** (`apps/inbox` → `apps/api`): mesmo mecanismo de
-  assinatura, `sub` distinto, assinado a cada requisição de saída com TTL
-  fixo curto, e **escopado** — só autoriza as rotas que `apps/inbox` de fato
-  consome; qualquer outra responde `403`.
+- **Tokens de serviço**, assinados pelo próprio serviço a cada requisição de
+  saída, com `sub` distinto e TTL fixo curto (5 min), e **escopados** no
+  `apps/api` por uma tabela de subjects (`ServiceScopeAuthorizationHandler`):
+  - `operator` passa em todas as rotas;
+  - `service:inbox` (`apps/inbox` → `apps/api`) só nas duas rotas que consome;
+  - `service:connectors` só nas cinco rotas de `/sync/knowledge-bases`
+    (listagem das bases sincronizadas e das referências dos documentos, upsert e
+    exclusão por `ExternalRef`, gravação do resultado de um ciclo). O app que
+    sincroniza vai obter o token como o `apps/inbox`: recebe a mesma
+    `Auth__TokenSigningKey` e assina com um `DelegatingHandler` próprio, sem
+    `libs/`;
+  - **qualquer outro subject recebe `403`**, mesmo com assinatura válida. Até a
+    linha de bases sincronizadas a regra era o inverso, e um subject novo assinado
+    com a chave tinha o acesso do operador.
+
+  A lista de rotas de cada serviço é conferida no boot contra os endpoints
+  mapeados (casa por método e padrão de rota). Quem guarda a chave assina qualquer
+  subject, inclusive `operator`: a tabela protege contra defeito de código, não
+  contra o comprometimento de um app que guarda a chave (issue #117). O
+  `apps/inbox` ainda autoriza qualquer subject válido nas rotas dele (issue #116).
 - **Enforcement por padrão**: toda rota HTTP de `apps/api` e `apps/inbox`
   exige token. Uma rota só fica anônima com `.AllowAnonymous()` **e** um
   `AnonymousRouteClassification` (motivo documentado) anexados explicitamente
