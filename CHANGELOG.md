@@ -341,6 +341,16 @@ o versionamento pretende seguir
   `connectors-not-configured`. Teste de ida e volta entre os dois apps reais em
   `tests/ApiConnectorsRoundTrip.Tests`.
 
+- Código estável na recusa de conteúdo de documento, em `apps/api` (#120). As
+  quatro recusas de conteúdo — texto acima de 1 MiB, `sourceType` sem extrator,
+  caractere nulo e conteúdo vazio — passam a responder `400` com a extensão `code`
+  (`too-large`, `unsupported-source-type`, `null-character`, `empty-content`) no
+  `ValidationProblemDetails`, no upsert de `/sync` e no cadastro e na atualização
+  de documento pelo operador. O `too-large` traz o tamanho medido e o teto como
+  números (`contentBytes`, `maxContentBytes`). O `title` e o `errors` de antes
+  continuam; a recusa de forma (campo ausente) segue sem `code`, e é a presença
+  dele que distingue as duas.
+
 **Entrega containerizada**
 
 - `Dockerfile` multi-stage por app, com build context na raiz do monorepo.
@@ -654,6 +664,11 @@ o versionamento pretende seguir
   `contentMode: "Synced"` respondia `400` até a #104, que passou a criá-la.
 - **O cadastro de base manual recusa `provider` e `folderId`** (#104): qualquer
   valor não nulo, inclusive vazio, responde `400`; `null` conta como ausente.
+- **Conteúdo de documento vazio ou só de espaços deixa de ser recusa de forma**
+  (#120). Passa a ser recusado pelo extrator, com a mesma mensagem e o código
+  `empty-content`, **depois** de procurar a base: numa base inexistente a resposta
+  passa de `400` a `404`, e numa base sincronizada, pelas rotas do operador, de
+  `400` a `409`. O `content` ausente do corpo continua recusa de forma, sem código.
 - **Token com subject desconhecido passa a receber `403` em `apps/api`** (#102).
   Antes, qualquer subject diferente de `service:inbox`, assinado com a chave
   compartilhada, tinha o acesso do operador. Agora `operator` passa em tudo, cada
