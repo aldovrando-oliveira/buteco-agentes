@@ -15,7 +15,6 @@ using Buteco.Inbox.Options;
 using Buteco.Inbox.Orchestration;
 using Buteco.Inbox.Orchestration.PushNotifications.Endpoints;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -109,8 +108,11 @@ builder.Services
     .AddAuthentication(OperatorTokenAuthenticationHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, OperatorTokenAuthenticationHandler>(
         OperatorTokenAuthenticationHandler.SchemeName, _ => { });
+// Só o subject "operator" passa; qualquer outro recebe 403
+// (inbox-restricao-de-subject, D1/D2). FallbackPolicy porque nenhuma rota
+// declara autorização própria: é ela que governa toda rota sem AllowAnonymous.
 builder.Services.AddAuthorization(options =>
-    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+    options.FallbackPolicy = SubjectAuthorization.BuildFallbackPolicy());
 
 builder.Services.AddHostedService<DebounceSweepService>();
 
