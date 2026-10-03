@@ -349,8 +349,9 @@ public partial class KnowledgeDocumentCatalogTests(ApiFactoryFixture factory) : 
     }
 
     // Conteúdo que passa a validação de forma do endpoint e é recusado pelo
-    // extrator dentro do handler: o caractere NUL. É o caminho que chega ao
-    // handler — conteúdo vazio já para no endpoint.
+    // extrator dentro do handler: o caractere NUL. Desde a change
+    // codigo-recusa-conteudo-upsert (D2), o conteúdo vazio também chega ao handler;
+    // só o conteúdo AUSENTE para no endpoint.
     [Fact]
     public async Task CreateDocument_WithInvalidContent_RecordsNoEvent()
     {

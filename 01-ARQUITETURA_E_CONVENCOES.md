@@ -709,6 +709,17 @@ deslogariam o operador). Os limites de tempo formam uma cadeia entre três lugar
 painel. Pasta em uso é `409` `folder-in-use` com a base dona, e a mensagem não manda
 excluir nada enquanto a #108 não existir.
 
+**A recusa de conteúdo do upsert de `/sync` sai com código** (change
+`codigo-recusa-conteudo-upsert`, #120). As quatro recusas de conteúdo do
+`KnowledgeContentProcessor` — `too-large`, `unsupported-source-type`,
+`null-character` e `empty-content` — respondem `400` em `ValidationProblemDetails`
+com a extensão `code`, e o `too-large` traz `contentBytes` e `maxContentBytes` como
+números. A **presença** de `code` é o que separa recusa de conteúdo (propriedade do
+arquivo, vai para a lista de ignorados da #105) de recusa de forma (campo ausente no
+payload, defeito do conector, sem `code`). Conteúdo `""` ou só de espaços é
+conteúdo, não forma: um Google Doc vazio exporta `""`. As rotas do operador levam o
+mesmo código, e o `title` e o `errors` de antes continuam no corpo.
+
 ## Convenções estabelecidas (o "estilo da casa")
 
 Essas regras não estão escritas em nenhum lugar do código — são o

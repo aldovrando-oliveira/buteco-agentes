@@ -113,9 +113,9 @@ group.MapGet("/", ListSyncedKnowledgeBasesAsync);
             return ManualKnowledgeBaseConflict();
         }
 
-        if (result.ValidationErrors is not null)
+        if (result.ContentRefusal is not null)
         {
-            return TypedResults.ValidationProblem(result.ValidationErrors);
+            return KnowledgeDocumentEndpoints.ContentRefused(result.ContentRefusal);
         }
 
         if (result.ConcurrentWriteConflict)

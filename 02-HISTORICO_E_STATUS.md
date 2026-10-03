@@ -14770,3 +14770,71 @@ caíram na fixture); `401` repassado como `401`.
   `apps/connectors` em produção (#119).
 - A conferência pelo mantenedor, contra o Drive real, continua pendente
   (convenção 14).
+
+## `codigo-recusa-conteudo-upsert` — código na recusa de conteúdo do upsert (#120)
+
+**Change proposta, revisada, implementada, sincronizada e arquivada em 03/10/2026
+(`openspec/changes/archive/2026-10-03-codigo-recusa-conteudo-upsert/`).** A #120 vai
+para `In review` com a abertura do PR. Branch `feat/120-codigo-recusa-conteudo`, criada de `2cb1f5c`.
+
+### O que entrou
+
+As quatro recusas de conteúdo do `KnowledgeContentProcessor` respondem `400` em
+`ValidationProblemDetails` com a extensão `code`: `too-large` (com `contentBytes` e
+`maxContentBytes`, e a frase no `detail`), `unsupported-source-type`,
+`null-character` e `empty-content`. O `title` e o `errors` de antes continuam. A
+recusa de forma não tem `code`, e é a presença dele que separa as duas. As rotas do
+operador levam o mesmo código, por um helper só (`ContentRefused`). O código anda
+tipado do extrator até o endpoint: `ExtractionResult.Failure` e
+`KnowledgeContentRefusal` não têm construtor sem ele. O teto continua uma constante
+só, `KnowledgeDocumentLimits.MaxContentBytes`.
+
+**Escopo maior que o da issue**, registrado na #120 por comentário: a issue pedia o
+`too-large`; o upsert tem quatro recusas de conteúdo, e a #105 recebe todas.
+
+**Mudança de ordem, e só ela:** conteúdo `""` ou só de espaços deixou de ser recusa
+de forma (um Google Doc vazio exporta `""`, e sem código a #105 não o registraria
+como ignorado). Agora é recusado depois de procurar a base: base inexistente passa
+de `400` a `404`, base sincronizada pelas rotas do operador de `400` a `409`. O
+`content` ausente continua forma.
+
+### O que a implementação mediu
+
+| suíte | baseline em `2cb1f5c` | fechamento na árvore de trabalho | estado da máquina |
+|---|---|---|---|
+| `apps/api` | 697/697, 1 min 35 s | **717/717**, 1 min 30 s | `load average` entre 7 e 13 na baseline e entre 3 e 8 no fechamento, por outra carga na máquina |
+| `tests/ApiConnectorsRoundTrip.Tests` | — | 4/4 | |
+
+A diferença, conferida por nome de teste nos `.trx`: **20 entradas novas e nenhuma
+saída**, igual à projeção feita antes de rodar. 17 em `KnowledgeDocumentCatalogTests`
+(arquivo novo do `partial`), 2 em `KnowledgeContentRefusalCodesTests` (sem
+contêiner) e 1 caso novo na teoria de conteúdo em branco de
+`MarkdownSourceExtractorTests` (só o BOM).
+
+**Corpo real de hoje, lido antes do código (tarefa 1.2):** `title` padrão do
+framework, `errors.content` com a frase, sem `code`, `detail` nem `traceId`. A D3
+não mudou.
+
+**Nenhum teste existente mudou de asserção.** Houve só acréscimo previsto
+(`FailureCode` em `MarkdownSourceExtractorTests`) e um comentário de teste que a D2
+tornou falso, corrigido. **Nenhuma classe nova com contêiner.**
+
+### Guardas contra o defeito real (convenção 15)
+
+Três, cada um aplicado sobre uma cópia, visto reprovar e desfeito, conferido por
+`grep` depois: a resposta só com frase no upsert (6 reprovações, entre elas o
+`too-large`); um `code` na recusa de forma (os 2 testes de forma); o vazio de volta
+à validação de forma (5, inclusive o `404` da base inexistente). Os testes e as
+mensagens estão no `tasks.md` da change.
+
+### Achados fora do escopo (convenção 23)
+
+- **#131**: o modal de documento do painel mostra o `title` genérico em inglês
+  ("One or more validation errors occurred.") para toda recusa de conteúdo, e nunca
+  o motivo. É de hoje, não desta change; com o `code` servido, o painel pode
+  escolher a mensagem por ele. `blocked-by` #120. Entra no PR como `Refs #131`.
+
+### O que ficou de fora, e é decisão
+
+- Ler o `code` no `apps/connectors` e gravar o arquivo ignorado: #105.
+- Mudar o que o painel mostra: #131.

@@ -25,6 +25,7 @@ public sealed class MarkdownSourceExtractor : IKnowledgeSourceExtractor
         if (rawContent.Contains(Nul))
         {
             return ExtractionResult.Failure(
+                KnowledgeContentRefusalCodes.NullCharacter,
                 "O conteúdo contém um caractere nulo (U+0000), que não pode ser armazenado como texto.");
         }
 
@@ -41,7 +42,8 @@ public sealed class MarkdownSourceExtractor : IKnowledgeSourceExtractor
 
         if (string.IsNullOrWhiteSpace(normalized))
         {
-            return ExtractionResult.Failure("O conteúdo do documento é obrigatório e não pode ser vazio.");
+            return ExtractionResult.Failure(
+                KnowledgeContentRefusalCodes.EmptyContent, "O conteúdo do documento é obrigatório e não pode ser vazio.");
         }
 
         return ExtractionResult.Success(normalized);

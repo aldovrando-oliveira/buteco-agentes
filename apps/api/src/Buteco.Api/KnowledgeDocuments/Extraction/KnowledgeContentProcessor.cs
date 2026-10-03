@@ -29,34 +29,53 @@ public sealed class KnowledgeContentProcessor(IServiceProvider serviceProvider)
         var extractor = serviceProvider.GetKeyedService<IKnowledgeSourceExtractor>(sourceType);
         if (extractor is null)
         {
-            return KnowledgeContentResult.Invalid(SourceTypeErrorKey,
-                $"Tipo de origem '{sourceType}' não é suportado. Valores aceitos: {string.Join(", ", KnowledgeSourceTypes.All)}.");
+            return KnowledgeContentResult.Refused(new KnowledgeContentRefusal(
+                SourceTypeErrorKey,
+                KnowledgeContentRefusalCodes.UnsupportedSourceType,
+                $"Tipo de origem '{sourceType}' não é suportado. Valores aceitos: {string.Join(", ", KnowledgeSourceTypes.All)}."));
         }
 
         var extraction = extractor.Extract(rawContent);
         if (!extraction.Succeeded)
         {
-            return KnowledgeContentResult.Invalid(ContentErrorKey, extraction.FailureMessage!);
+            return KnowledgeContentResult.Refused(
+                new KnowledgeContentRefusal(ContentErrorKey, extraction.FailureCode!, extraction.FailureMessage!));
         }
 
         var extractedText = extraction.Text!;
         var byteCount = Encoding.UTF8.GetByteCount(extractedText);
         if (byteCount > KnowledgeDocumentLimits.MaxContentBytes)
         {
-            return KnowledgeContentResult.Invalid(ContentErrorKey,
-                $"O conteúdo do documento tem {byteCount} bytes e excede o limite de {KnowledgeDocumentLimits.MaxContentBytes} bytes.");
+            return KnowledgeContentResult.Refused(new KnowledgeContentRefusal(
+                ContentErrorKey,
+                KnowledgeContentRefusalCodes.TooLarge,
+                $"O conteúdo do documento tem {byteCount} bytes e excede o limite de {KnowledgeDocumentLimits.MaxContentBytes} bytes.",
+                ContentBytes: byteCount,
+                MaxContentBytes: KnowledgeDocumentLimits.MaxContentBytes));
         }
 
         return KnowledgeContentResult.Success(extractedText);
     }
 }
 
-public sealed record KnowledgeContentResult(string? ExtractedText, Dictionary<string, string[]>? ValidationErrors)
+public sealed record KnowledgeContentResult(string? ExtractedText, KnowledgeContentRefusal? Refusal)
 {
-    public bool Succeeded => ValidationErrors is null;
+    public bool Succeeded => Refusal is null;
 
     public static KnowledgeContentResult Success(string extractedText) => new(extractedText, null);
 
-    public static KnowledgeContentResult Invalid(string key, string message) =>
-        new(null, new Dictionary<string, string[]> { [key] = [message] });
+    public static KnowledgeContentResult Refused(KnowledgeContentRefusal refusal) => new(null, refusal);
 }
+
+/// <summary>
+/// Uma recusa de conteúdo, tipada do extrator até o endpoint (design.md da change
+/// codigo-recusa-conteudo-upsert, D5): a chave e a mensagem de <c>errors</c> que já
+/// existiam, mais o código, que é o sinal. O tamanho e o teto só existem no
+/// <c>too-large</c>, como números, para ninguém precisar extraí-los da frase.
+/// </summary>
+public sealed record KnowledgeContentRefusal(
+    string ErrorKey,
+    string Code,
+    string Message,
+    int? ContentBytes = null,
+    int? MaxContentBytes = null);

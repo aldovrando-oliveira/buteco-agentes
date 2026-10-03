@@ -1,3 +1,4 @@
+using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeSync.Responses;
 
 namespace Buteco.Api.KnowledgeSync.Commands.UpsertSyncedDocument;
@@ -5,7 +6,7 @@ namespace Buteco.Api.KnowledgeSync.Commands.UpsertSyncedDocument;
 public sealed record UpsertSyncedDocumentResult(
     SyncedKnowledgeBaseLookup Lookup,
     UpsertSyncedDocumentResponse? Response,
-    Dictionary<string, string[]>? ValidationErrors,
+    KnowledgeContentRefusal? ContentRefusal,
     bool ConcurrentWriteConflict = false)
 {
     /// <summary>
@@ -17,8 +18,8 @@ public sealed record UpsertSyncedDocumentResult(
 
     public static UpsertSyncedDocumentResult NotSynced(SyncedKnowledgeBaseLookup lookup) => new(lookup, null, null);
 
-    public static UpsertSyncedDocumentResult Invalid(Dictionary<string, string[]> errors) =>
-        new(SyncedKnowledgeBaseLookup.Synced, null, errors);
+    public static UpsertSyncedDocumentResult Invalid(KnowledgeContentRefusal refusal) =>
+        new(SyncedKnowledgeBaseLookup.Synced, null, refusal);
 
     public static UpsertSyncedDocumentResult Success(Guid documentId, SyncedDocumentUpsertOutcome outcome) =>
         new(SyncedKnowledgeBaseLookup.Synced, new UpsertSyncedDocumentResponse(documentId, outcome), null);

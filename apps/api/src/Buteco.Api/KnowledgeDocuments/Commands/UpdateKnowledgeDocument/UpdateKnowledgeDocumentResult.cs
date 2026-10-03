@@ -1,3 +1,4 @@
+using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeDocuments.Responses;
 
 namespace Buteco.Api.KnowledgeDocuments.Commands.UpdateKnowledgeDocument;
@@ -5,7 +6,7 @@ namespace Buteco.Api.KnowledgeDocuments.Commands.UpdateKnowledgeDocument;
 public sealed record UpdateKnowledgeDocumentResult(
     bool Found,
     KnowledgeDocumentResponse? Document,
-    Dictionary<string, string[]>? ValidationErrors,
+    KnowledgeContentRefusal? ContentRefusal,
     bool KnowledgeBaseIsSynced = false,
     bool ConcurrentWriteConflict = false)
 {
@@ -20,7 +21,7 @@ public sealed record UpdateKnowledgeDocumentResult(
     /// <summary>Base sincronizada: o operador não escreve documento nela (D7 da #102).</summary>
     public static UpdateKnowledgeDocumentResult SyncedKnowledgeBase() => new(true, null, null, KnowledgeBaseIsSynced: true);
 
-    public static UpdateKnowledgeDocumentResult Invalid(Dictionary<string, string[]> errors) => new(true, null, errors);
+    public static UpdateKnowledgeDocumentResult Invalid(KnowledgeContentRefusal refusal) => new(true, null, refusal);
 
     public static UpdateKnowledgeDocumentResult Success(KnowledgeDocumentResponse document) => new(true, document, null);
 }
