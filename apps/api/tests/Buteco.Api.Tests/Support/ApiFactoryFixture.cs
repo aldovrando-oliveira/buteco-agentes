@@ -45,6 +45,14 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Anthropic:ApiKey"] = string.Empty,
                 ["Gemini:ApiKey"] = string.Empty,
                 ["PublicUrl:BaseUrl"] = ConfiguredPublicBaseUrl,
+
+                // Vazio de propósito, por cima do http://localhost:5037 do
+                // appsettings.Development.json: é o estado de produção até a #119,
+                // e assim TODA classe com esta fixture prova que nenhuma rota além do
+                // cadastro de base Synced depende do apps/connectors (design.md da
+                // change criacao-base-sincronizada, D1). Os testes de cadastro Synced
+                // derivam um host com o valor.
+                ["Connectors:BaseUrl"] = string.Empty,
             });
             config.AddInMemoryCollection(TestAuthentication.ConfigOverrides);
         });

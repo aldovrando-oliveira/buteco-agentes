@@ -67,11 +67,13 @@ public partial class KnowledgeBaseCatalogTests
         Assert.Equal(KnowledgeBaseContentMode.Manual, created.ContentMode);
     }
 
+    // "Synced" saiu deste caso com a change criacao-base-sincronizada (#104): a rota
+    // passou a criar base sincronizada, e o cadastro está em
+    // KnowledgeBaseCatalogTests.SyncedCreation.cs. Valor desconhecido continua 400.
     [Theory]
-    [InlineData("Synced")]
     [InlineData("Sincronizada")]
     [InlineData("synced")]
-    public async Task CreateBase_WithSyncedOrUnknownContentMode_IsRefusedAndCreatesNothing(string contentMode)
+    public async Task CreateBase_WithUnknownContentMode_IsRefusedAndCreatesNothing(string contentMode)
     {
         var name = $"Base recusada {contentMode} {Guid.NewGuid():N}";
 

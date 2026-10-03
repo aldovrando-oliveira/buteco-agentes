@@ -157,6 +157,25 @@ public class ServiceScopeAuthorizationTests(ApiFactoryFixture factory) : IClassF
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    /// <summary>
+    /// O subject que o próprio <c>apps/api</c> assina para chamar o
+    /// <c>apps/connectors</c> não abre nada aqui (design.md da change
+    /// criacao-base-sincronizada, D4): ele fica fora da tabela, e recebe 403 como
+    /// qualquer subject desconhecido.
+    /// </summary>
+    [Fact]
+    public async Task ApiOutgoingSubject_OnKnowledgeBaseRoutes_ReturnsForbidden()
+    {
+        var client = Knowledge.KnowledgeSyncTestSeed.CreateClientAs(factory, Buteco.Api.Auth.ServiceTokenDelegatingHandler.ApiSubject);
+
+        var list = await client.GetAsync("/knowledge-bases");
+        var create = await client.PostAsJsonAsync("/knowledge-bases", new { name = "Base de service:api", description = "Descrição." });
+
+        Assert.Equal("service:api", Buteco.Api.Auth.ServiceTokenDelegatingHandler.ApiSubject);
+        Assert.Equal(HttpStatusCode.Forbidden, list.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
+    }
+
     [Fact]
     public async Task Operator_KeepsFullAccess_IncludingSyncRoutes()
     {

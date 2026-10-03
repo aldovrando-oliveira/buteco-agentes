@@ -8,6 +8,7 @@ using Buteco.Api.KnowledgeBases.Queries.GetKnowledgeBaseIndexingSummary;
 using Buteco.Api.KnowledgeBases.Queries.ListKnowledgeBases;
 using Buteco.Api.KnowledgeBases.Requests;
 using Buteco.Api.KnowledgeBases.Responses;
+using Buteco.Api.KnowledgeSync;
 using Mediator;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -46,21 +47,66 @@ public static class KnowledgeBaseEndpoints
         return app;
     }
 
-    private static async Task<Results<Created<KnowledgeBaseResponse>, ValidationProblem>> CreateKnowledgeBaseAsync(
+    private static async Task<Results<Created<KnowledgeBaseResponse>, ValidationProblem, ProblemHttpResult>> CreateKnowledgeBaseAsync(
         CreateKnowledgeBaseRequest request,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var errors = ValidateShape(request.Name, request.Description) ?? ValidateContentMode(request.ContentMode);
+        var errors = ValidateShape(request.Name, request.Description)
+            ?? ValidateContentMode(request.ContentMode)
+            ?? ValidateSyncSource(request);
         if (errors is not null)
         {
             return TypedResults.ValidationProblem(errors);
         }
 
-        var result = await mediator.Send(new CreateKnowledgeBaseCommand(request.Name!, request.Description!), cancellationToken);
+        var synced = request.ContentMode == nameof(KnowledgeBaseContentMode.Synced);
+        var result = await mediator.Send(
+            new CreateKnowledgeBaseCommand(
+                request.Name!,
+                request.Description!,
+                synced ? request.Provider : null,
+                synced ? request.FolderId : null),
+            cancellationToken);
 
-        return TypedResults.Created($"/knowledge-bases/{result.Id}", result);
+        return result.Outcome switch
+        {
+            CreateKnowledgeBaseOutcome.Created =>
+                TypedResults.Created($"/knowledge-bases/{result.KnowledgeBase!.Id}", result.KnowledgeBase),
+            CreateKnowledgeBaseOutcome.FolderInUse => FolderInUse(result.ConflictingKnowledgeBaseId!.Value, result.ConflictingKnowledgeBaseName!),
+            _ => FolderValidationFailed(result.ValidationFailure!),
+        };
     }
+
+    /// <summary>
+    /// 409 de pasta em uso (design.md da change criacao-base-sincronizada, D5). A frase
+    /// nomeia a base e diz que a pasta continua ocupada mesmo com a base inativa, e NÃO
+    /// manda excluir a base: não existe rota de exclusão de base até a #108. Quando ela
+    /// existir, esta frase e o teste que afirma a ausência dessa instrução mudam juntos.
+    /// </summary>
+    private static ProblemHttpResult FolderInUse(Guid knowledgeBaseId, string knowledgeBaseName) =>
+        TypedResults.Problem(
+            title: "A pasta já é usada por outra base de conhecimento.",
+            detail: $"A pasta já é usada pela base \"{knowledgeBaseName}\". Uma pasta pertence a uma base só, e continua ocupada mesmo com a base inativa.",
+            statusCode: StatusCodes.Status409Conflict,
+            extensions: new Dictionary<string, object?>
+            {
+                ["code"] = "folder-in-use",
+                ["knowledgeBaseId"] = knowledgeBaseId,
+                ["knowledgeBaseName"] = knowledgeBaseName,
+            });
+
+    /// <summary>
+    /// Falha da validação no apps/connectors: o código e o detalhe como vieram, com o
+    /// status que o cliente decidiu (D2 e D3). O título é fixo e genérico, só para quem
+    /// lê a resposta crua; o painel escolhe a mensagem pelo código (#106).
+    /// </summary>
+    private static ProblemHttpResult FolderValidationFailed(KnowledgeSync.Connectors.ConnectorsFolderResult failure) =>
+        TypedResults.Problem(
+            title: "A pasta não pôde ser validada pelo apps/connectors.",
+            detail: failure.FailureDetail,
+            statusCode: failure.FailureStatus,
+            extensions: new Dictionary<string, object?> { ["code"] = failure.FailureCode });
 
     private static async Task<Ok<IReadOnlyList<KnowledgeBaseResponse>>> ListKnowledgeBasesAsync(
         IMediator mediator,
@@ -136,24 +182,83 @@ public static class KnowledgeBaseEndpoints
     }
 
     /// <summary>
-    /// Omitido ou <c>Manual</c> cria base manual. <c>Synced</c> é recusado: a base
-    /// sincronizada nasce com a pasta validada pelo app que acessa o provedor, e essa
-    /// rota é da #104 (design.md da change catalogo-base-sincronizada, D11). Ignorar
-    /// o valor criaria com 201 uma coisa diferente da pedida.
+    /// Omitido, <c>Manual</c> ou <c>Synced</c> (design.md da change
+    /// catalogo-base-sincronizada, D11; a recusa de <c>Synced</c> saiu com a #104). Valor
+    /// desconhecido é recusado: ignorá-lo criaria com 201 uma coisa diferente da pedida.
     /// </summary>
     private static Dictionary<string, string[]>? ValidateContentMode(string? contentMode)
     {
-        if (contentMode is null || contentMode == nameof(KnowledgeBaseContentMode.Manual))
+        if (contentMode is null ||
+            contentMode == nameof(KnowledgeBaseContentMode.Manual) ||
+            contentMode == nameof(KnowledgeBaseContentMode.Synced))
         {
             return null;
         }
 
-        var message = contentMode == nameof(KnowledgeBaseContentMode.Synced)
-            ? "A base sincronizada ainda não pode ser criada por aqui: ela nasce com a pasta validada pelo app que acessa o provedor."
-            : $"Tipo de conteúdo desconhecido. Valor aceito nesta rota: {nameof(KnowledgeBaseContentMode.Manual)}.";
-
-        return new Dictionary<string, string[]> { ["contentMode"] = [message] };
+        return new Dictionary<string, string[]>
+        {
+            ["contentMode"] = [$"Tipo de conteúdo desconhecido. Valores aceitos: {nameof(KnowledgeBaseContentMode.Manual)} e {nameof(KnowledgeBaseContentMode.Synced)}."],
+        };
     }
+
+    /// <summary>
+    /// Forma da origem, antes de qualquer chamada ao apps/connectors (design.md da
+    /// change criacao-base-sincronizada, D6).
+    ///
+    /// <para>
+    /// Em <c>Manual</c>, <c>provider</c> e <c>folderId</c> são proibidos, e todo valor
+    /// não nulo é recusado, inclusive vazio: o cliente achou que estava criando outra
+    /// coisa. <c>null</c> conta como ausente, porque a desserialização não distingue
+    /// propriedade ausente de nula.
+    /// </para>
+    ///
+    /// <para>
+    /// Em <c>Synced</c>, o provedor tem a forma de código (vai no caminho da URL do
+    /// apps/connectors e fecha <c>../</c> sem lista fechada de provedores) e o id da
+    /// pasta é não vazio, até 256 caracteres, aceito como veio.
+    /// </para>
+    /// </summary>
+    private static Dictionary<string, string[]>? ValidateSyncSource(CreateKnowledgeBaseRequest request)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (request.ContentMode != nameof(KnowledgeBaseContentMode.Synced))
+        {
+            if (request.Provider is not null)
+            {
+                errors["provider"] = ["Base manual não tem provedor. Para acompanhar uma pasta, crie a base com contentMode Synced."];
+            }
+
+            if (request.FolderId is not null)
+            {
+                errors["folderId"] = ["Base manual não tem pasta. Para acompanhar uma pasta, crie a base com contentMode Synced."];
+            }
+
+            return errors.Count > 0 ? errors : null;
+        }
+
+        if (!SyncCode.IsValid(request.Provider))
+        {
+            errors["provider"] = [$"O provedor é obrigatório na base sincronizada, e precisa ser {SyncCode.ShapeDescription}."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.FolderId))
+        {
+            errors["folderId"] = ["O id da pasta é obrigatório na base sincronizada."];
+        }
+        else if (request.FolderId.Length > MaxFolderIdLength)
+        {
+            errors["folderId"] = [$"O id da pasta tem no máximo {MaxFolderIdLength} caracteres."];
+        }
+
+        return errors.Count > 0 ? errors : null;
+    }
+
+    /// <summary>
+    /// Teto contra abuso, não regra do provedor: os ids de pasta medidos na etapa 0 têm
+    /// entre 33 e 51 caracteres (D6).
+    /// </summary>
+    private const int MaxFolderIdLength = 256;
 
     /// <summary>
     /// <c>Description</c> é obrigatória, diferente de <c>McpServer.Description</c>:
