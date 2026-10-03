@@ -28,6 +28,7 @@ body:
         - apps/api
         - apps/workers
         - apps/inbox
+        - apps/connectors
         - apps/frontend
         - libs/ProviderCatalog
         - stack de deploy (docker-compose.prod.yml, deploy/)

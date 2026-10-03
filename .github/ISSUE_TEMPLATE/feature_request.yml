@@ -41,6 +41,7 @@ body:
         - apps/api
         - apps/workers
         - apps/inbox
+        - apps/connectors
         - apps/frontend
         - stack de deploy
         - documentação

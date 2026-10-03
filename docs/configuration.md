@@ -3,7 +3,7 @@
 Inventário das variáveis de ambiente do sistema, por processo.
 
 Os arquivos de referência são [`.env.example`](../.env.example) (dependências
-locais e os quatro apps em desenvolvimento) e
+locais e os cinco apps em desenvolvimento) e
 [`.env.prod.example`](../.env.prod.example) (stack de servidor, consumido por
 `docker-compose.prod.yml`). Este documento explica o que cada variável faz e
 quais restrições existem entre processos; os arquivos de exemplo continuam
@@ -39,7 +39,7 @@ aparece longe da causa.
 
 | Segredo | Processos | O que quebra se divergir |
 |---|---|---|
-| `Auth:TokenSigningKey` | `apps/api` + `apps/inbox` | Um token emitido no login por `apps/api` é rejeitado por `apps/inbox` e vice-versa. Também quebra o token de serviço que `apps/inbox` assina para chamar `apps/api` |
+| `Auth:TokenSigningKey` | `apps/api` + `apps/inbox` + `apps/connectors` | Um token emitido no login por `apps/api` é rejeitado por `apps/inbox` ou `apps/connectors`, e vice-versa. Também quebra o token de serviço que `apps/inbox` assina para chamar `apps/api` |
 | `Mcp:CredentialEncryptionKey` | `apps/api` + `apps/workers` | `apps/api` cifra a credencial do servidor MCP ao salvar; `apps/workers` não consegue decifrá-la para conectar durante uma execução |
 | Chaves de provedor de LLM | `apps/api` + `apps/workers` | `apps/api` anuncia o provedor como disponível em `GET /providers`, mas a task termina `failed` no worker |
 
@@ -65,7 +65,7 @@ Ausentes, estes valores **derrubam o processo no boot** (fail-fast):
 
 | Variável | Processo |
 |---|---|
-| `Auth__TokenSigningKey` | `apps/api`, `apps/inbox` |
+| `Auth__TokenSigningKey` | `apps/api`, `apps/inbox`, `apps/connectors` |
 | `Auth__OperatorUsername` | `apps/api` |
 | `Auth__OperatorPasswordHash` | `apps/api` |
 | `Api__BaseUrl` | `apps/inbox` |
@@ -213,6 +213,23 @@ runtime.
 | `Debounce__SweepInterval` | não | Cadência de varredura do `BackgroundService` que dispara buffers vencidos. Default `00:00:02` |
 | `Debounce__MaxDispatchAttempts` | não | Teto de retentativas em falha de transporte. Default `3` |
 | `Session__InactivityTimeout` | não | Tempo de inatividade que fecha a fronteira de uma `Session`. Default `01:00:00` |
+
+---
+
+## `apps/connectors`
+
+Sem banco. Em desenvolvimento, `dotnet run` na porta 5037. A implantação no stack de
+servidor ainda não existe (#119).
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api` e `apps/inbox`. Ausente ou vazia, o boot falha |
+| `GoogleDrive__ServiceAccountKeyBase64` | não | O arquivo JSON da chave da service account do Google, em base64 numa linha (`base64 -i chave.json \| tr -d '\n'`). **Ausente ou vazia, o provedor `google-drive` não existe** para o processo: o app sobe e `GET /connectors/providers` não o lista. **Presente e inválida, o boot falha**, com a verificação que falhou e sem trecho do valor. Só o `client_email` sai do processo, na rota de provedores |
+| `Cors__AllowedOrigins` | não | Origens do painel autorizadas por CORS, no mesmo formato dos outros apps |
+
+A service account usa só o escopo `drive.readonly`. A Drive API precisa estar
+**ativada no projeto do Google Cloud dono da service account**; sem isso, toda
+chamada responde `502` com o código `api-not-configured`.
 
 ---
 

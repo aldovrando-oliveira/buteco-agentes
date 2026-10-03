@@ -14447,3 +14447,96 @@ Nada no repositório mudou por isso.
 - O restore do `Buteco.Inbox.Tests` avisa `NU1903` para o `SSH.NET` 2025.1.0,
   dependência transitiva de teste. Não virou issue pública por causa da política do
   `SECURITY.md`; fica com o mantenedor.
+
+## `apps-connectors-google-drive` — app `apps/connectors` e conector Google Drive (#103)
+
+**Change proposta, revisada, implementada, sincronizada e arquivada em 03/10/2026
+(`openspec/changes/archive/2026-10-03-apps-connectors-google-drive/`); sem commit,
+sem push e sem PR** (convenção 24: o archive vem antes do push). A #103 está em
+`In progress`. Branch `feat/103-apps-connectors`, criada de `06ce6e5` e atualizada
+por fast-forward com a `main` depois do merge da #116 (#123).
+
+### O que entrou
+
+App novo `apps/connectors`, sem banco (`Buteco.Connectors`, `Connectors.sln`, imagem
+`buteco-connectors`). Contrato de conector em dois contratos keyed
+(`IFolderNavigator`, `IFolderContentSource`) mais `ConnectorAccount`, com checagem de
+boot; conector Google Drive por REST, sem biblioteca do Google, com JWT `RS256` da
+service account assinado no próprio app; conector falso só nos testes. Rotas sob
+`/connectors`, com tabela de subjects sem operador em tudo (`operator` em provedores e
+navegação, `service:api` na descrição de pasta, o resto `403`), conferida no boot nos
+dois sentidos. Documentação de cinco apps. Nenhum pacote NuGet novo.
+
+### Issues abertas por esta linha (convenção 23)
+
+- **#119**, implantação no stack de produção, adiada por decisão do mantenedor
+  (`blocked-by` #103 e #116; a #116 já foi mergeada).
+- **#120**, código `too-large` na recusa de tamanho do upsert de `/sync`, em `Ready`
+  acima da #105, que fica `blocked-by` ela.
+- **#121**, rever os escapes do markdown exportado, `aguardando gatilho`.
+
+### O que a implementação mediu
+
+**Suíte do `apps/connectors`:** 137 aprovados e 1 pulado (o teste manual, que só roda
+com a chave real no ambiente), em 7 s; `load average` 2,02 antes e 2,45 depois. Sem
+contêiner: o Google é um `HttpMessageHandler` falso com respostas montadas dos campos
+medidos na etapa 0, sanitizadas.
+
+**Contra o Drive real, somente leitura, nas pastas de teste da etapa 0** (app local,
+token assinado localmente por subject):
+
+| o que | resultado |
+|---|---|
+| provedores | `google-drive` com o e-mail da service account |
+| nível de cima da navegação | nenhum Drive Compartilhado; as duas pastas de teste vêm do `sharedWithMe`, como `Folder`. Era a parte não medida da D7 |
+| dentro da pasta principal | só a subpasta |
+| descrição das duas pastas por `service:api` | `200`, nome e URL |
+| id de arquivo no lugar da pasta | `422 not-a-folder` |
+| id que a conta não lê | `422 access-denied` com o e-mail, na descrição e na navegação; nunca `200` com lista vazia |
+| operador na descrição, `service:api` nos provedores | `403` |
+| raiz da pasta principal | atalho `shortcut-not-followed`, planilha `unsupported-type`, subpasta `subfolder-not-synced`. Nenhum arquivo com download bloqueado, porque a etapa 0 religou a opção |
+| `.md` | MD5 do markdown entregue igual ao `md5Checksum` do Drive e à origem: o `02` ao repositório em `505ea24`; o `01` à cópia que a P6 enviou como nova versão |
+| Doc com imagem | entregue sem `data:`, 1.365 B |
+| exportação | todas sem `supportsAllDrives` |
+
+O estado do Drive é o que a etapa 0 deixou (arquivos renomeados, um na subpasta, um
+na lixeira do outro dono), e nada foi pedido para mudar.
+
+**Exportar o Doc convertido do `02` (849.530 B de markdown) levou 16,8 s, 17,0 s,
+26,1 s e 31,1 s**, e com o limite único de 30 s uma tentativa falhou como
+`provider-unavailable`. Ficaram dois limites fixos: 30 s para metadado, listagem e
+token; 120 s para exportação e download (D2).
+
+**Condição do ambiente da medição:** nesta máquina o IPv6 até o Google não conecta
+(`curl -6` estoura, `-4` responde em 0,2 s), e o .NET tenta o IPv6 primeiro; sem
+`DOTNET_SYSTEM_NET_DISABLEIPV6=1`, a troca de token esgotava o limite. É da máquina,
+não do código.
+
+### Guardas contra o defeito real (convenção 15)
+
+Cada um reintroduzido, visto reprovar e desfeito; o teste que reprovou está no
+`tasks.md` da change. `FallbackPolicy` só com autenticação (14 testes); checagem de
+boot sem o segundo sentido; listar sem ler a pasta antes; mapear erro pelo status;
+listagem parcial com a segunda página falhando; sem retirar as imagens; tipo decidido
+pelo nome antes do `mimeType`; `canDownload` antes do atalho; checagem de registro
+removida do boot; chave na mensagem de erro de boot; exportação com `supportsAllDrives`;
+exportação com o limite curto. O teste de vazamento da chave examinou 43 textos
+(5.551 caracteres) nas rotas, 10 com o token recusado e 2 no boot inválido.
+
+### Divergências do `design.md` aprovado, todas corrigidas lá com a causa
+
+1. **D7:** `files.export` não aceita `supportsAllDrives` (referência oficial do
+   método). Decisão do mantenedor, com o requisito da spec `google-drive-connector`
+   alterado junto.
+2. **D2:** o limite único de 30 s virou dois, pela medição acima.
+3. **Árvore:** `ConnectorAccount` é singleton não keyed com a própria chave, porque o
+   contêiner não enumera chaves keyed em tempo de execução.
+4. **D7:** a navegação do nível de cima passou de não medida a medida (sem Drive
+   Compartilhado).
+
+### O que ficou de fora, e é decisão
+
+- Implantação em produção (#119), criação de base sincronizada (#104), ciclo (#105),
+  telas (#106, #107), `VITE_CONNECTORS_BASE_URL` (#106).
+- A validação manual pelo mantenedor, contra o Drive real, continua pendente
+  (convenção 14).

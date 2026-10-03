@@ -13,7 +13,7 @@ Para integrar um cliente externo via A2A, ver
 ## Índice
 
 - [O que é](#o-que-é)
-- [Os quatro apps](#os-quatro-apps)
+- [Os cinco apps](#os-cinco-apps)
 - [Isolamento entre apps](#isolamento-entre-apps)
 - [Modelo de domínio](#modelo-de-domínio)
 - [Regras de negócio transversais](#regras-de-negócio-transversais)
@@ -22,6 +22,7 @@ Para integrar um cliente externo via A2A, ver
 - [Contexto do agente](#contexto-do-agente)
 - [Histórico de conversa e compactação](#histórico-de-conversa-e-compactação)
 - [Contrato de plugin de canal](#contrato-de-plugin-de-canal)
+- [Contrato de conector](#contrato-de-conector)
 - [Autenticação](#autenticação)
 - [Fuso horário do sistema](#fuso-horário-do-sistema)
 
@@ -60,17 +61,19 @@ mínimo de contatos e sessões.
 ```
 
 `apps/frontend` é o painel de operação sobre `apps/api` e `apps/inbox`, fora
-desse caminho de mensagem.
+desse caminho de mensagem. `apps/connectors` também fica fora dele: é quem fala com
+provedores de arquivos (Google Drive) para as bases de conhecimento.
 
 ---
 
-## Os quatro apps
+## Os cinco apps
 
 | App | Papel | Stack | Banco |
 |---|---|---|---|
 | `apps/api` | CRUD de agentes, catálogo MCP, delegação, bases de conhecimento, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, emissão de push notification, login do operador e emissão de token | .NET 10, ASP.NET Core Minimal API, CQRS via `Mediator`, EF Core + Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` |
 | `apps/workers` | Executa tasks: chama o LLM, resolve tools MCP, executa delegação, dispara push notification | .NET 10 Worker Service, `Microsoft.Agents.AI` (`ChatClientAgent`, `Compaction`), EF Core espelhado, consumidor RabbitMQ | Mesmo Postgres de `apps/api` |
 | `apps/inbox` | Catálogo de canais de entrada, CRM (`Contact`/`Session`), histórico de mensagens, orquestrador de debounce, adapters de canal | .NET 10 Minimal API, CQRS próprio, EF Core | Postgres **próprio** (`buteco_inbox`), isolado |
+| `apps/connectors` | Conectores de provedor de arquivos para bases de conhecimento: navegação de pastas, descrição de pasta, listagem da raiz e markdown de arquivo. Hoje, Google Drive por service account | .NET 10 Minimal API, chamadas REST ao Google sem biblioteca do provedor | — |
 | `apps/frontend` | Painel de gestão: agentes, MCP, delegação, canais, bases de conhecimento, sessões e histórico de conversa | React 19, TypeScript, Vite, Mantine v9, `react-router`, `@tanstack/react-query`, Vitest + Testing Library | — |
 
 `apps/api` **nunca chama o LLM**. Ele persiste a task e publica um job no
@@ -98,7 +101,7 @@ o processo** — ver [configuration.md](configuration.md).
 
 Nenhum `.csproj` ou arquivo do frontend referencia código de outro app. Não
 existe `ProjectReference` cruzado entre `apps/api`, `apps/workers`,
-`apps/inbox` e `apps/frontend`.
+`apps/inbox`, `apps/connectors` e `apps/frontend`.
 
 Referências entre domínios de apps diferentes são sempre validadas **via
 HTTP autenticado**, nunca por chave estrangeira. `apps/inbox` valida o
@@ -621,6 +624,37 @@ decisão não foi revista aqui; está registrada como candidata em
 
 ---
 
+## Contrato de conector
+
+**Fronteira entre os dois apps que falam com sistemas externos:** canal de conversa
+(entrada e saída de mensagens) pertence ao `apps/inbox`; provedor de arquivos para
+base de conhecimento pertence ao `apps/connectors`.
+
+Cada provedor é registrado no `apps/connectors` sob uma chave (`google-drive`) com
+três registros obrigatórios:
+
+| Registro | Responsabilidade |
+|---|---|
+| `IFolderNavigator` (keyed) | navegar (o nível de cima do que a conta enxerga, ou as subpastas de uma pasta) e descrever uma pasta, verificando o acesso |
+| `IFolderContentSource` (keyed) | listar a raiz de uma pasta, separando arquivos suportados de ignorados (com o motivo), e entregar o markdown de um arquivo |
+| `ConnectorAccount` | a chave e o e-mail da conta com que o provedor acessa |
+
+`ValidateConnectorRegistrations` roda no startup e derruba o boot se uma chave tiver
+um registro sem os outros dois. Toda falha de operação sai como **código** estável
+(`access-denied`, `api-not-configured`, `rate-limited`, ...), nunca como frase: o
+texto exibido é do frontend. A listagem da raiz é completa ou falha, e toda operação
+sobre uma pasta lê a pasta antes, porque uma consulta numa pasta sem acesso devolve
+lista vazia em vez de erro.
+
+O conector **Google Drive** só é registrado quando a chave da service account está
+configurada. Ele decide o tipo de cada arquivo pelo `mimeType`, nunca pela extensão;
+exporta Google Doc como markdown e retira as imagens embutidas em base64; baixa `.md`
+sem transformar; e ignora atalho, subpasta, tipo não suportado e arquivo com download
+bloqueado para leitores, cada um com o seu código. Erros do Google são distinguidos
+pelo `reason`, não pelo status. Um conector falso existe só nos testes.
+
+---
+
 ## Autenticação
 
 **Token stateless assinado com HMAC**, sem biblioteca JWT e sem sessão em
@@ -672,7 +706,20 @@ sem introduzir um store compartilhado.
   `RouteAuthenticationExtensions.ValidateRouteAuthenticationClassification`,
   chamada no fim de cada `Program.cs`, derruba o boot se alguma rota ficar
   sem essa dupla marcação — ou se a allowlist citar uma rota que não existe
-  mais.
+  mais. O `apps/connectors` segue a mesma regra.
+- **`apps/connectors`** valida o token localmente com a mesma
+  `Auth:TokenSigningKey`, e o boot falha se ela estiver vazia. A autorização é uma
+  tabela explícita de subjects, e aqui **o operador não passa em tudo**:
+  - `operator` só na listagem de provedores e na navegação de pastas
+    (`/connectors/providers` e `/connectors/providers/{providerKey}/folders`);
+  - `service:api` só na descrição de pasta
+    (`/connectors/providers/{providerKey}/folder`), que o `apps/api` vai chamar
+    para validar a pasta de uma base sincronizada (#104), assinando o próprio
+    token como o `apps/inbox` faz;
+  - qualquer outro subject recebe `403`.
+
+  A tabela é conferida no boot nos dois sentidos: entrada sem rota mapeada, e rota
+  autenticada que não está na lista de nenhum subject.
 - **Frontend**: módulo fino de token sobre `sessionStorage` (ler, anexar,
   limpar em `401`), importado por cada `request<T>` de feature — sem cliente
   HTTP compartilhado.

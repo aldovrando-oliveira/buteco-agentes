@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Sem nenhum PackageReference de produção (design.md, D2): o Google é chamado por
+    REST com HttpClient, e o JWT da service account é assinado com
+    System.Security.Cryptography.
+  -->
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Buteco.Connectors.Tests" />
+  </ItemGroup>
+
+</Project>
