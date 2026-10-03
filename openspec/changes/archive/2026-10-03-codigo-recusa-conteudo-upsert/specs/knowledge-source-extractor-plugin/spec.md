@@ -1,10 +1,4 @@
-# knowledge-source-extractor-plugin Specification
-
-## Purpose
-
-TBD - defined by change knowledge-base-catalogo-documentos. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Contrato de extrator por tipo de origem
 O sistema SHALL definir um contrato único de extração, `IKnowledgeSourceExtractor`,
@@ -83,38 +77,3 @@ conteúdo vazio ou composto apenas de espaços em branco, com o código
 - **WHEN** um cliente cria um documento cujo conteúdo é só o BOM UTF-8
 - **THEN** a API responde HTTP 400 com `code` `empty-content`, e não cria nenhum
   registro
-
-### Requirement: Checagem de integridade de extratores no startup
-`apps/api` SHALL validar, no startup — antes de começar a servir requisições —,
-que a lista de `SourceType` declarados e os extratores registrados via DI keyed
-correspondem exatamente. A validação SHALL ser **bidirecional**: tipo declarado
-sem extrator registrado é falha, e extrator registrado para tipo não declarado
-também é falha.
-
-A falha SHALL lançar `InvalidOperationException` com mensagem identificando o
-tipo divergente, sem bypass e sem modo de tolerância.
-
-O **momento exato no ciclo de vida do host** é decisão de design, não requisito:
-o que esta spec exige é que a aplicação não sirva requisição alguma com registro
-divergente. Ver a convenção 8 de `01-ARQUITETURA_E_CONVENCOES.md` para as duas
-formas do padrão (sobre `IServiceCollection`, antes do `Build()`, para checagens
-que inspecionam descritores de DI keyed — o caso desta; e sobre o host
-construído, para as demais) e para o teste adicional que a primeira forma
-obriga.
-
-#### Scenario: Registro completo permite o boot
-- **WHEN** todos os `SourceType` declarados têm extrator registrado e não há
-  extrator registrado para tipo não declarado
-- **THEN** a aplicação inicia normalmente
-
-#### Scenario: Tipo declarado sem extrator registrado impede o boot
-- **WHEN** um `SourceType` está declarado na lista esperada mas nenhum extrator
-  foi registrado para ele
-- **THEN** a inicialização falha com `InvalidOperationException` identificando o
-  tipo, e a aplicação não sobe
-
-#### Scenario: Extrator registrado para tipo não declarado impede o boot
-- **WHEN** existe um extrator registrado via DI keyed para um valor que não está
-  na lista de tipos declarados
-- **THEN** a inicialização falha com `InvalidOperationException` identificando o
-  valor, e a aplicação não sobe
