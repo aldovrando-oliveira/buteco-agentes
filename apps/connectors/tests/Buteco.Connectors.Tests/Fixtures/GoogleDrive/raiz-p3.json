@@ -1,0 +1,101 @@
+{
+ "files": [
+  {
+   "id": "arquivo-doc-outro-dono",
+   "name": "outro_dono",
+   "mimeType": "application/vnd.google-apps.document",
+   "modifiedTime": "2026-10-03T02:46:23.832Z",
+   "capabilities": {
+    "canDownload": true
+   }
+  },
+  {
+   "id": "arquivo-atalho",
+   "name": "Curriculo.docx",
+   "mimeType": "application/vnd.google-apps.shortcut",
+   "modifiedTime": "2026-10-03T02:40:27.135Z",
+   "capabilities": {
+    "canDownload": false
+   },
+   "shortcutDetails": {
+    "targetId": "arquivo-destino-do-atalho",
+    "targetMimeType": "application/vnd.google-apps.document"
+   }
+  },
+  {
+   "id": "arquivo-planilha",
+   "name": "planilha_teste",
+   "mimeType": "application/vnd.google-apps.spreadsheet",
+   "modifiedTime": "2026-10-03T02:33:44.536Z",
+   "capabilities": {
+    "canDownload": true
+   }
+  },
+  {
+   "id": "pasta-sub",
+   "name": "sub_pasta",
+   "mimeType": "application/vnd.google-apps.folder",
+   "modifiedTime": "2026-10-03T02:31:56.536Z",
+   "capabilities": {
+    "canDownload": true
+   }
+  },
+  {
+   "id": "arquivo-doc-longo",
+   "name": "doc_longo",
+   "mimeType": "application/vnd.google-apps.document",
+   "modifiedTime": "2026-10-03T02:31:30.705Z",
+   "capabilities": {
+    "canDownload": true
+   }
+  },
+  {
+   "id": "arquivo-doc-tabela",
+   "name": "doc_tabela_e_listas",
+   "mimeType": "application/vnd.google-apps.document",
+   "modifiedTime": "2026-10-03T02:23:18.358Z",
+   "capabilities": {
+    "canDownload": true
+   }
+  },
+  {
+   "id": "arquivo-doc-imagem",
+   "name": "doc_com_imagem",
+   "mimeType": "application/vnd.google-apps.document",
+   "modifiedTime": "2026-10-03T02:20:00.000Z",
+   "capabilities": {
+    "canDownload": true
+   }
+  },
+  {
+   "id": "arquivo-md-01",
+   "name": "01-ARQUITETURA_E_CONVENCOES.md",
+   "mimeType": "text/x-markdown",
+   "modifiedTime": "2026-10-02T14:19:21.000Z",
+   "capabilities": {
+    "canDownload": true
+   },
+   "md5Checksum": "b039972d4bd52b7c77ee21c89ceaeebf"
+  },
+  {
+   "id": "arquivo-md-02",
+   "name": "02-HISTORICO_E_STATUS.md",
+   "mimeType": "text/x-markdown",
+   "modifiedTime": "2026-10-02T14:19:22.000Z",
+   "capabilities": {
+    "canDownload": true
+   },
+   "md5Checksum": "fdcdcff9b0ba038893f107c6481f6774"
+  },
+  {
+   "id": "arquivo-doc-bloqueado",
+   "name": "doc_bloqueado",
+   "mimeType": "application/vnd.google-apps.document",
+   "modifiedTime": "2026-10-03T03:19:36.570Z",
+   "capabilities": {
+    "canDownload": false
+   },
+   "copyRequiresWriterPermission": true
+  }
+ ]
+}
