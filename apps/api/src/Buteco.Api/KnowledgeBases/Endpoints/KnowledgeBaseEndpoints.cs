@@ -2,6 +2,7 @@ using Buteco.Api.KnowledgeBases.Commands.ActivateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Commands.CreateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Commands.DeactivateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Commands.UpdateKnowledgeBase;
+using Buteco.Api.KnowledgeBases.Entities;
 using Buteco.Api.KnowledgeBases.Queries.GetKnowledgeBaseById;
 using Buteco.Api.KnowledgeBases.Queries.GetKnowledgeBaseIndexingSummary;
 using Buteco.Api.KnowledgeBases.Queries.ListKnowledgeBases;
@@ -50,7 +51,7 @@ public static class KnowledgeBaseEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var errors = ValidateShape(request.Name, request.Description);
+        var errors = ValidateShape(request.Name, request.Description) ?? ValidateContentMode(request.ContentMode);
         if (errors is not null)
         {
             return TypedResults.ValidationProblem(errors);
@@ -132,6 +133,26 @@ public static class KnowledgeBaseEndpoints
         return response is null
             ? TypedResults.NotFound()
             : TypedResults.Ok(response);
+    }
+
+    /// <summary>
+    /// Omitido ou <c>Manual</c> cria base manual. <c>Synced</c> é recusado: a base
+    /// sincronizada nasce com a pasta validada pelo app que acessa o provedor, e essa
+    /// rota é da #104 (design.md da change catalogo-base-sincronizada, D11). Ignorar
+    /// o valor criaria com 201 uma coisa diferente da pedida.
+    /// </summary>
+    private static Dictionary<string, string[]>? ValidateContentMode(string? contentMode)
+    {
+        if (contentMode is null || contentMode == nameof(KnowledgeBaseContentMode.Manual))
+        {
+            return null;
+        }
+
+        var message = contentMode == nameof(KnowledgeBaseContentMode.Synced)
+            ? "A base sincronizada ainda não pode ser criada por aqui: ela nasce com a pasta validada pelo app que acessa o provedor."
+            : $"Tipo de conteúdo desconhecido. Valor aceito nesta rota: {nameof(KnowledgeBaseContentMode.Manual)}.";
+
+        return new Dictionary<string, string[]> { ["contentMode"] = [message] };
     }
 
     /// <summary>

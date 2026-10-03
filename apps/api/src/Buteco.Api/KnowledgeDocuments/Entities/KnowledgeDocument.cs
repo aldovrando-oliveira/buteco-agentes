@@ -1,3 +1,5 @@
+using Buteco.Api.KnowledgeBases.Entities;
+
 namespace Buteco.Api.KnowledgeDocuments.Entities;
 
 /// <summary>
@@ -121,6 +123,31 @@ public class KnowledgeDocument
 
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// Cópia do <c>ContentMode</c> da base, que só existe para o banco garantir
+    /// "<see cref="ExternalRef"/> preenchido se e somente se a base é
+    /// <c>Synced</c>" (design.md da change catalogo-base-sincronizada, D4): a FK
+    /// composta <c>(KnowledgeBaseId, KnowledgeBaseContentMode)</c> amarra a cópia ao
+    /// tipo da base, e uma <c>CHECK</c> na própria tabela amarra a cópia à
+    /// referência. Não envelhece porque o tipo da base é imutável.
+    /// </summary>
+    public KnowledgeBaseContentMode KnowledgeBaseContentMode { get; private set; }
+
+    /// <summary>
+    /// Identidade do arquivo no provedor (o id do arquivo no Drive), string opaca
+    /// comparada como veio. Única por base. Nula em documento de base manual.
+    /// </summary>
+    public string? ExternalRef { get; private set; }
+
+    /// <summary>
+    /// Marcador de mudança do provedor (<c>modifiedTime</c> de Google Doc,
+    /// <c>md5Checksum</c> de <c>.md</c>), gravado como veio e <b>nunca</b>
+    /// interpretado pelo <c>apps/api</c> (D3): serve ao conector, para não
+    /// reexportar o que não mudou. Quem decide se o documento mudou continua sendo
+    /// o texto extraído e o título.
+    /// </summary>
+    public string? ExternalVersion { get; private set; }
+
     private KnowledgeDocument()
     {
     }
@@ -140,8 +167,56 @@ public class KnowledgeDocument
         FragmentCount = 0;
         IndexingAttempts = 0;
         LastAttemptAt = null;
+        KnowledgeBaseContentMode = KnowledgeBaseContentMode.Manual;
+        ExternalRef = null;
+        ExternalVersion = null;
         CreatedAt = DateTimeOffset.UtcNow;
         UpdatedAt = CreatedAt;
+    }
+
+    /// <summary>
+    /// Documento de base sincronizada, escrito pelo subject de serviço (D8). O
+    /// construtor público é sempre de base manual: o operador não cria documento em
+    /// base <c>Synced</c> (D7), e se um handler esquecer essa recusa, a FK composta
+    /// recusa a linha.
+    /// </summary>
+    public static KnowledgeDocument CreateSynced(
+        Guid knowledgeBaseId, string title, string sourceType, string extractedText, string externalRef, string externalVersion) =>
+        new(knowledgeBaseId, title, sourceType, extractedText)
+        {
+            KnowledgeBaseContentMode = KnowledgeBaseContentMode.Synced,
+            ExternalRef = externalRef,
+            ExternalVersion = externalVersion,
+        };
+
+    /// <summary>
+    /// Aplica uma revisão vinda do provedor (D3). Com título, tipo de origem e texto
+    /// extraído iguais aos gravados, grava <b>só</b> o
+    /// <see cref="ExternalVersion"/> novo e não toca mais nada — nem
+    /// <see cref="UpdatedAt"/>, porque renomear ou recompartilhar um Google Doc muda
+    /// o marcador com o markdown idêntico, e a tela afirmaria uma atualização que não
+    /// houve (convenção 13). Com qualquer diferença, delega a
+    /// <see cref="Update"/>, que é a mesma regra do operador.
+    /// </summary>
+    /// <returns>
+    /// O desfecho de <see cref="Update"/>, ou um desfecho sem mudança nenhuma
+    /// quando nada além do marcador mudou.
+    /// </returns>
+    public KnowledgeDocumentUpdateOutcome ApplyExternalRevision(
+        string title, string sourceType, string extractedText, string externalVersion)
+    {
+        ExternalVersion = externalVersion;
+
+        var unchanged = string.Equals(Title, title, StringComparison.Ordinal)
+            && string.Equals(SourceType, sourceType, StringComparison.Ordinal)
+            && string.Equals(ExtractedText, extractedText, StringComparison.Ordinal);
+
+        if (unchanged)
+        {
+            return new KnowledgeDocumentUpdateOutcome(NeedsIndexing: false, ContentChanged: false, TitleChanged: false);
+        }
+
+        return Update(title, sourceType, extractedText);
     }
 
     /// <summary>

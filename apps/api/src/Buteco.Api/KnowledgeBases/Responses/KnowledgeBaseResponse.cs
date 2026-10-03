@@ -8,7 +8,10 @@ public sealed record KnowledgeBaseResponse(
     string Description,
     bool IsActive,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    KnowledgeBaseContentMode ContentMode,
+    KnowledgeBaseSyncSourceResponse? SyncSource,
+    KnowledgeBaseSyncStateResponse? SyncState)
 {
     public static KnowledgeBaseResponse FromEntity(KnowledgeBase knowledgeBase) => new(
         knowledgeBase.Id,
@@ -16,5 +19,8 @@ public sealed record KnowledgeBaseResponse(
         knowledgeBase.Description,
         knowledgeBase.IsActive,
         knowledgeBase.CreatedAt,
-        knowledgeBase.UpdatedAt);
+        knowledgeBase.UpdatedAt,
+        knowledgeBase.ContentMode,
+        KnowledgeBaseSyncSourceResponse.FromEntity(knowledgeBase),
+        KnowledgeBaseSyncStateResponse.FromEntity(knowledgeBase));
 }

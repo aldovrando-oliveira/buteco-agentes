@@ -9,9 +9,35 @@ namespace Buteco.Api.KnowledgeDocuments.Commands.ReindexKnowledgeDocument;
 public sealed class ReindexKnowledgeDocumentCommandHandler(
     AppDbContext dbContext,
     IKnowledgeIndexingJobPublisher indexingPublisher)
-    : ICommandHandler<ReindexKnowledgeDocumentCommand, KnowledgeDocumentResponse?>
+    : ICommandHandler<ReindexKnowledgeDocumentCommand, ReindexKnowledgeDocumentResult>
 {
-    public async ValueTask<KnowledgeDocumentResponse?> Handle(
+    // Reindexar continua liberado em base sincronizada (catalogo-base-sincronizada, D7):
+    // não muda conteúdo nem título, e por isso não consulta o tipo da base.
+    public async ValueTask<ReindexKnowledgeDocumentResult> Handle(
+        ReindexKnowledgeDocumentCommand command, CancellationToken cancellationToken)
+    {
+        // ContentRevision é token de concorrência (catalogo-base-sincronizada, D10), e o
+        // UPDATE desta gravação leva a revisão lida no WHERE: uma edição concorrente de
+        // conteúdo entre a leitura e o SaveChanges faz a reindexação falhar com
+        // DbUpdateConcurrencyException. Relê e reaplica UMA vez — a mensagem precisa
+        // levar a revisão corrente, não a lida, ou o consumidor a descarta; uma
+        // segunda falha seguida não vira 500.
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            var result = await TryOnceAsync(command, cancellationToken);
+            if (result is not null)
+            {
+                return result;
+            }
+
+            dbContext.ChangeTracker.Clear();
+        }
+
+        return new ReindexKnowledgeDocumentResult(null, ConcurrentWriteConflict: true);
+    }
+
+    /// <returns>O resultado, ou <c>null</c> quando perdeu para uma escrita concorrente.</returns>
+    private async Task<ReindexKnowledgeDocumentResult?> TryOnceAsync(
         ReindexKnowledgeDocumentCommand command, CancellationToken cancellationToken)
     {
         // Filtra por KnowledgeBaseId E Id, nunca só por Id: sem isso seria
@@ -29,7 +55,7 @@ public sealed class ReindexKnowledgeDocumentCommandHandler(
 
         if (document is null)
         {
-            return null;
+            return new ReindexKnowledgeDocumentResult(null);
         }
 
         // Aceita em QUALQUER estado, inclusive Indexing (design.md, D5). Rota
@@ -42,7 +68,14 @@ public sealed class ReindexKnowledgeDocumentCommandHandler(
         // RequestReindex(), inclusive por que anular ContentHash aqui seria
         // armadilha.
         document.RequestReindex();
-        await dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return null;
+        }
 
         // Publica DEPOIS do SaveChanges, nunca antes — mesma ordem e mesma forma
         // de Create e Update (design.md, V4). Attempt fica no default 1: é a
@@ -54,6 +87,6 @@ public sealed class ReindexKnowledgeDocumentCommandHandler(
         await indexingPublisher.PublishAsync(
             new KnowledgeIndexingJobMessage(document.Id, document.ContentRevision), cancellationToken);
 
-        return KnowledgeDocumentResponse.FromEntity(document);
+        return new ReindexKnowledgeDocumentResult(KnowledgeDocumentResponse.FromEntity(document));
     }
 }

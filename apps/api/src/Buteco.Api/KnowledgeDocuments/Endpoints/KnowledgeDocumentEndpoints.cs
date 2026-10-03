@@ -52,7 +52,7 @@ public static class KnowledgeDocumentEndpoints
         return app;
     }
 
-    private static async Task<Results<Created<KnowledgeDocumentResponse>, NotFound, ValidationProblem>> CreateKnowledgeDocumentAsync(
+    private static async Task<Results<Created<KnowledgeDocumentResponse>, NotFound, ValidationProblem, ProblemHttpResult>> CreateKnowledgeDocumentAsync(
         Guid knowledgeBaseId,
         CreateKnowledgeDocumentRequest request,
         ClaimsPrincipal user,
@@ -72,6 +72,11 @@ public static class KnowledgeDocumentEndpoints
         if (!result.KnowledgeBaseFound)
         {
             return TypedResults.NotFound();
+        }
+
+        if (result.KnowledgeBaseIsSynced)
+        {
+            return SyncedKnowledgeBaseConflict();
         }
 
         if (result.ValidationErrors is not null)
@@ -108,11 +113,12 @@ public static class KnowledgeDocumentEndpoints
             : TypedResults.Ok(document);
     }
 
-    private static async Task<Results<Ok<KnowledgeDocumentResponse>, NotFound, ValidationProblem>> UpdateKnowledgeDocumentAsync(
+    private static async Task<Results<Ok<KnowledgeDocumentResponse>, NotFound, ValidationProblem, ProblemHttpResult>> UpdateKnowledgeDocumentAsync(
         Guid knowledgeBaseId,
         Guid id,
         UpdateKnowledgeDocumentRequest request,
         ClaimsPrincipal user,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
@@ -131,6 +137,16 @@ public static class KnowledgeDocumentEndpoints
             return TypedResults.NotFound();
         }
 
+        if (result.KnowledgeBaseIsSynced)
+        {
+            return SyncedKnowledgeBaseConflict();
+        }
+
+        if (result.ConcurrentWriteConflict)
+        {
+            return ConcurrentWriteConflict(httpContext);
+        }
+
         if (result.ValidationErrors is not null)
         {
             return TypedResults.ValidationProblem(result.ValidationErrors);
@@ -146,33 +162,72 @@ public static class KnowledgeDocumentEndpoints
     /// e o documento já diz isso no próprio <c>indexingStatus</c>. A tela
     /// re-renderiza a linha sem uma segunda leitura.
     /// </summary>
-    private static async Task<Results<Ok<KnowledgeDocumentResponse>, NotFound>> ReindexKnowledgeDocumentAsync(
+    private static async Task<Results<Ok<KnowledgeDocumentResponse>, NotFound, ProblemHttpResult>> ReindexKnowledgeDocumentAsync(
         Guid knowledgeBaseId,
         Guid id,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var document = await mediator.Send(new ReindexKnowledgeDocumentCommand(knowledgeBaseId, id), cancellationToken);
+        var result = await mediator.Send(new ReindexKnowledgeDocumentCommand(knowledgeBaseId, id), cancellationToken);
 
-        return document is null
+        if (result.ConcurrentWriteConflict)
+        {
+            return ConcurrentWriteConflict(httpContext);
+        }
+
+        return result.Document is null
             ? TypedResults.NotFound()
-            : TypedResults.Ok(document);
+            : TypedResults.Ok(result.Document);
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteKnowledgeDocumentAsync(
+    private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> DeleteKnowledgeDocumentAsync(
         Guid knowledgeBaseId,
         Guid id,
         ClaimsPrincipal user,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var deleted = await mediator.Send(
+        var result = await mediator.Send(
             new DeleteKnowledgeDocumentCommand(knowledgeBaseId, id, ReadAuthor(user)), cancellationToken);
 
-        return deleted
-            ? TypedResults.NoContent()
-            : TypedResults.NotFound();
+        return result switch
+        {
+            DeleteKnowledgeDocumentResult.Deleted => TypedResults.NoContent(),
+            DeleteKnowledgeDocumentResult.SyncedKnowledgeBase => SyncedKnowledgeBaseConflict(),
+            DeleteKnowledgeDocumentResult.ConcurrentWrite => ConcurrentWriteConflict(httpContext),
+            _ => TypedResults.NotFound(),
+        };
     }
+
+    /// <summary>
+    /// Duas falhas de concorrência seguidas sobre o mesmo documento
+    /// (catalogo-base-sincronizada, D10): nada foi gravado, e a escrita pode ser
+    /// repetida. 503 com <c>Retry-After</c>, e não 409: nas mesmas rotas o 409 já
+    /// diz "o tipo da base não permite esta escrita", que repetir não resolve, e o
+    /// cliente precisa distinguir os dois sem ler o corpo. 503 é o status que
+    /// políticas de retentativa padrão repetem sozinhas.
+    /// </summary>
+    internal static ProblemHttpResult ConcurrentWriteConflict(HttpContext httpContext)
+    {
+        httpContext.Response.Headers.RetryAfter = "1";
+        return TypedResults.Problem(
+            title: "Outra escrita alterou este documento ao mesmo tempo, duas vezes seguidas. Nada foi gravado; repita a operação.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    /// <summary>
+    /// 409, e não 403 nem 405 (design.md da change catalogo-base-sincronizada, D7):
+    /// o operador tem permissão e a rota oferece o verbo; quem impede a escrita é o
+    /// tipo da base. Primeiro 409 do <c>apps/api</c>, na forma de
+    /// <c>TypedResults.Problem</c> que <c>AgentMcpBindingEndpoints</c> já usa para o
+    /// 502.
+    /// </summary>
+    internal static ProblemHttpResult SyncedKnowledgeBaseConflict() =>
+        TypedResults.Problem(
+            title: "Esta base é sincronizada: os documentos vêm da pasta de origem e não podem ser criados, editados nem excluídos por aqui.",
+            statusCode: StatusCodes.Status409Conflict);
 
     private static async Task<Results<Ok<KnowledgeDocumentEventPageResponse>, NotFound, ValidationProblem>> ListKnowledgeDocumentEventsAsync(
         Guid knowledgeBaseId,
@@ -214,7 +269,7 @@ public static class KnowledgeDocumentEndpoints
     /// afirmar autoria que não existe é pior que a escrita falhar.
     /// </para>
     /// </summary>
-    private static string ReadAuthor(ClaimsPrincipal user) =>
+    internal static string ReadAuthor(ClaimsPrincipal user) =>
         user.FindFirst(ClaimTypes.NameIdentifier)?.Value
         ?? throw new InvalidOperationException(
             "Escrita de documento sem subject no token: a rota deveria ter exigido autenticação.");
@@ -226,7 +281,7 @@ public static class KnowledgeDocumentEndpoints
     /// de tamanho — para que a ordem "extrai, depois valida o teto" fique num
     /// lugar só (design.md, D5).
     /// </summary>
-    private static Dictionary<string, string[]>? ValidateShape(string? title, string? sourceType, string? content)
+    internal static Dictionary<string, string[]>? ValidateShape(string? title, string? sourceType, string? content)
     {
         var errors = new Dictionary<string, string[]>();
 

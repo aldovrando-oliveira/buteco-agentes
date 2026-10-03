@@ -146,7 +146,7 @@ public class KnowledgeRouteAuthenticationTests(ApiFactoryFixture factory) : ICla
         var knowledgeBase = await factory.CreateClient().CreateBaseAsync("Base do histórico");
         var client = factory.CreateClient();
         var tokenService = factory.Services.GetRequiredService<ITokenService>();
-        var (token, _) = tokenService.Issue(ServiceScopeAuthorizationHandler.ServiceSubject, TimeSpan.FromMinutes(5));
+        var (token, _) = tokenService.Issue(ServiceScopeAuthorizationHandler.InboxSubject, TimeSpan.FromMinutes(5));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.GetAsync(KnowledgeTestClient.DocumentEventsPath(knowledgeBase.Id));

@@ -419,6 +419,12 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ContentMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("Manual");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -431,8 +437,38 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<DateTimeOffset?>("LastSyncCompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastSyncErrorCode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("LastSyncErrorDetail")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastSyncFinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("SyncFailingSince")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SyncFolderId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SyncFolderName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SyncFolderUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SyncIgnoredFiles")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("SyncProvider")
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -440,7 +476,20 @@ namespace Buteco.Api.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("knowledge_bases", (string)null);
+                    b.HasIndex("SyncProvider", "SyncFolderId")
+                        .IsUnique()
+                        .HasFilter("\"ContentMode\" = 'Synced'");
+
+                    b.ToTable("knowledge_bases", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_knowledge_bases_content_mode", "\"ContentMode\" IN ('Manual', 'Synced')");
+
+                            t.HasCheckConstraint("CK_knowledge_bases_sync_error_detail", "\"LastSyncErrorDetail\" IS NULL OR \"LastSyncErrorCode\" IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_knowledge_bases_sync_failing_since", "(\"SyncFailingSince\" IS NULL) = (\"LastSyncErrorCode\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_knowledge_bases_sync_source", "(\"ContentMode\" = 'Synced' AND \"SyncProvider\" IS NOT NULL AND \"SyncFolderId\" IS NOT NULL AND \"SyncFolderName\" IS NOT NULL AND \"SyncFolderUrl\" IS NOT NULL) OR (\"ContentMode\" = 'Manual' AND \"SyncProvider\" IS NULL AND \"SyncFolderId\" IS NULL AND \"SyncFolderName\" IS NULL AND \"SyncFolderUrl\" IS NULL AND \"LastSyncCompletedAt\" IS NULL AND \"LastSyncFinishedAt\" IS NULL AND \"LastSyncErrorCode\" IS NULL AND \"LastSyncErrorDetail\" IS NULL AND \"SyncFailingSince\" IS NULL AND \"SyncIgnoredFiles\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Buteco.Api.KnowledgeDocuments.Entities.KnowledgeDocument", b =>
@@ -462,6 +511,12 @@ namespace Buteco.Api.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalRef")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExternalVersion")
+                        .HasColumnType("text");
 
                     b.Property<string>("ExtractedText")
                         .IsRequired()
@@ -487,6 +542,12 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("KnowledgeBaseContentMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("Manual");
+
                     b.Property<Guid>("KnowledgeBaseId")
                         .HasColumnType("uuid");
 
@@ -508,7 +569,18 @@ namespace Buteco.Api.Infrastructure.Migrations
 
                     b.HasIndex("KnowledgeBaseId");
 
-                    b.ToTable("knowledge_documents", (string)null);
+                    b.HasIndex("KnowledgeBaseId", "ExternalRef")
+                        .IsUnique()
+                        .HasFilter("\"ExternalRef\" IS NOT NULL");
+
+                    b.HasIndex("KnowledgeBaseId", "KnowledgeBaseContentMode");
+
+                    b.ToTable("knowledge_documents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_knowledge_documents_external_ref", "(\"KnowledgeBaseContentMode\" = 'Synced') = (\"ExternalRef\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_knowledge_documents_external_version", "(\"ExternalRef\" IS NULL) = (\"ExternalVersion\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Buteco.Api.KnowledgeDocuments.Entities.KnowledgeDocumentEvent", b =>
@@ -754,7 +826,8 @@ namespace Buteco.Api.Infrastructure.Migrations
                 {
                     b.HasOne("Buteco.Api.KnowledgeBases.Entities.KnowledgeBase", null)
                         .WithMany()
-                        .HasForeignKey("KnowledgeBaseId")
+                        .HasForeignKey("KnowledgeBaseId", "KnowledgeBaseContentMode")
+                        .HasPrincipalKey("Id", "ContentMode")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

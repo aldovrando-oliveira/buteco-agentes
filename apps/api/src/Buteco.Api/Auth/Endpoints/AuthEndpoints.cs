@@ -42,7 +42,7 @@ public static class AuthEndpoints
             return TypedResults.Problem(title: InvalidCredentialsMessage, statusCode: StatusCodes.Status401Unauthorized);
         }
 
-        var (token, expiresAt) = tokenService.Issue("operator", tokenOptions.Value.OperatorTokenLifetime);
+        var (token, expiresAt) = tokenService.Issue(ServiceScopeAuthorizationHandler.OperatorSubject, tokenOptions.Value.OperatorTokenLifetime);
         return TypedResults.Ok(new LoginResponse(token, expiresAt));
     }
 }

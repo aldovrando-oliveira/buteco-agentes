@@ -14,6 +14,7 @@ using Buteco.Api.KnowledgeBases.Endpoints;
 using Buteco.Api.KnowledgeDocuments.Endpoints;
 using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeFragments.Endpoints;
+using Buteco.Api.KnowledgeSync.Endpoints;
 using Buteco.Api.McpServers.Connectivity;
 using Buteco.Api.McpServers.Endpoints;
 using Buteco.Api.McpServers.Security;
@@ -147,6 +148,7 @@ app.MapAgentDelegationEndpoints();
 app.MapAgentKnowledgeBindingEndpoints();
 app.MapKnowledgeBaseEndpoints();
 app.MapKnowledgeDocumentEndpoints();
+app.MapKnowledgeSyncEndpoints();
 app.MapKnowledgeIndexEndpoints();
 app.MapInsightsEndpoints();
 app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a");
@@ -160,6 +162,11 @@ app.ValidateRouteAuthenticationClassification(
     "/health",
     "/auth/login",
     "/agents/{id:guid}/.well-known/agent-card.json");
+
+// Cada rota das listas dos subjects de serviço precisa existir entre os
+// endpoints mapeados (design.md da change catalogo-base-sincronizada, D6;
+// convenção 8). Também depois de todos os Map*.
+app.ValidateServiceScopeRoutes(ServiceScopeAuthorizationHandler.ServiceRoutes);
 
 app.Run();
 
