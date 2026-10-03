@@ -79,9 +79,9 @@ public static class KnowledgeDocumentEndpoints
             return SyncedKnowledgeBaseConflict();
         }
 
-        if (result.ValidationErrors is not null)
+        if (result.ContentRefusal is not null)
         {
-            return TypedResults.ValidationProblem(result.ValidationErrors);
+            return ContentRefused(result.ContentRefusal);
         }
 
         return TypedResults.Created(
@@ -147,9 +147,9 @@ public static class KnowledgeDocumentEndpoints
             return ConcurrentWriteConflict(httpContext);
         }
 
-        if (result.ValidationErrors is not null)
+        if (result.ContentRefusal is not null)
         {
-            return TypedResults.ValidationProblem(result.ValidationErrors);
+            return ContentRefused(result.ContentRefusal);
         }
 
         return TypedResults.Ok(result.Document!);
@@ -209,6 +209,30 @@ public static class KnowledgeDocumentEndpoints
     /// cliente precisa distinguir os dois sem ler o corpo. 503 é o status que
     /// políticas de retentativa padrão repetem sozinhas.
     /// </summary>
+    /// <summary>
+    /// Recusa de conteúdo, a mesma nas duas rotas do operador e no upsert de
+    /// <c>/sync</c> (design.md da change codigo-recusa-conteudo-upsert, D3 e D4): o
+    /// <c>ValidationProblemDetails</c> de antes, com o mesmo <c>errors</c> e o
+    /// <c>title</c> padrão, mais a extensão <c>code</c>, que é o sinal. A recusa de
+    /// FORMA não passa por aqui e não tem <c>code</c>: a presença dele é o que separa
+    /// as duas (D2). <c>detail</c> e os números só no <c>too-large</c>, a única recusa
+    /// com dado além do código.
+    /// </summary>
+    internal static ValidationProblem ContentRefused(KnowledgeContentRefusal refusal)
+    {
+        var extensions = new Dictionary<string, object?> { ["code"] = refusal.Code };
+        if (refusal.ContentBytes is { } contentBytes && refusal.MaxContentBytes is { } maxContentBytes)
+        {
+            extensions["contentBytes"] = contentBytes;
+            extensions["maxContentBytes"] = maxContentBytes;
+        }
+
+        return TypedResults.ValidationProblem(
+            new Dictionary<string, string[]> { [refusal.ErrorKey] = [refusal.Message] },
+            detail: refusal.Code == KnowledgeContentRefusalCodes.TooLarge ? refusal.Message : null,
+            extensions: extensions);
+    }
+
     internal static ProblemHttpResult ConcurrentWriteConflict(HttpContext httpContext)
     {
         httpContext.Response.Headers.RetryAfter = "1";
@@ -296,7 +320,11 @@ public static class KnowledgeDocumentEndpoints
                 [$"O tipo de origem é obrigatório. Valores aceitos: {string.Join(", ", KnowledgeSourceTypes.All)}."];
         }
 
-        if (string.IsNullOrWhiteSpace(content))
+        // Só o conteúdo AUSENTE é forma (defeito de quem monta o payload). Vazio ou só
+        // de espaços é propriedade do arquivo — um Google Doc vazio exporta "" — e o
+        // extrator o recusa com empty-content e a mesma frase (design.md da change
+        // codigo-recusa-conteudo-upsert, D2).
+        if (content is null)
         {
             errors[KnowledgeContentProcessor.ContentErrorKey] = ["O conteúdo do documento é obrigatório e não pode ser vazio."];
         }

@@ -45,7 +45,7 @@ public sealed class UpdateKnowledgeDocumentCommandHandler(
         var content = contentProcessor.Process(command.SourceType, command.Content);
         if (!content.Succeeded)
         {
-            return UpdateKnowledgeDocumentResult.Invalid(content.ValidationErrors!);
+            return UpdateKnowledgeDocumentResult.Invalid(content.Refusal!);
         }
 
         var extractedText = content.ExtractedText!;

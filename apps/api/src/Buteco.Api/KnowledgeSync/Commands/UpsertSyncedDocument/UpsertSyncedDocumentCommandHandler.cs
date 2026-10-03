@@ -56,7 +56,7 @@ public sealed class UpsertSyncedDocumentCommandHandler(
         var content = contentProcessor.Process(command.SourceType, command.Content);
         if (!content.Succeeded)
         {
-            return UpsertSyncedDocumentResult.Invalid(content.ValidationErrors!);
+            return UpsertSyncedDocumentResult.Invalid(content.Refusal!);
         }
 
         var extractedText = content.ExtractedText!;

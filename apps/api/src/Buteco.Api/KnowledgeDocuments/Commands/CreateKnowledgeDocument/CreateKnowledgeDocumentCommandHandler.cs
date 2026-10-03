@@ -41,7 +41,7 @@ public sealed class CreateKnowledgeDocumentCommandHandler(
         var content = contentProcessor.Process(command.SourceType, command.Content);
         if (!content.Succeeded)
         {
-            return CreateKnowledgeDocumentResult.Invalid(content.ValidationErrors!);
+            return CreateKnowledgeDocumentResult.Invalid(content.Refusal!);
         }
 
         var document = new KnowledgeDocument(

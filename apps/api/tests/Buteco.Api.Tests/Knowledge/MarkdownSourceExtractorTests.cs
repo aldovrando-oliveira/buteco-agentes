@@ -47,6 +47,7 @@ public class MarkdownSourceExtractorTests
 
         Assert.False(result.Succeeded);
         Assert.NotNull(result.FailureMessage);
+        Assert.Equal(KnowledgeContentRefusalCodes.NullCharacter, result.FailureCode);
         Assert.Null(result.Text);
     }
 
@@ -66,12 +67,14 @@ public class MarkdownSourceExtractorTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("\n\n\t  \r\n")]
+    [InlineData("\uFEFF")] // só o BOM: não é espaço para char.IsWhiteSpace, e só fica vazio depois de normalizar
     public void Extract_WithBlankContent_IsRejected(string content)
     {
         var result = _extractor.Extract(content);
 
         Assert.False(result.Succeeded);
         Assert.NotNull(result.FailureMessage);
+        Assert.Equal(KnowledgeContentRefusalCodes.EmptyContent, result.FailureCode);
     }
 
     // .txt sem marcação nenhuma não é caso de erro: texto puro é markdown
