@@ -1,5 +1,6 @@
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Knowledge.Indexing;
+using Buteco.Api.KnowledgeBases.Entities;
 using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeDocuments.Responses;
@@ -18,12 +19,23 @@ public sealed class CreateKnowledgeDocumentCommandHandler(
     {
         // Base inativa aceita documento normalmente: desativar impede o uso
         // pelo agente, não a manutenção do conteúdo.
-        var knowledgeBaseExists = await dbContext.KnowledgeBases
-            .AnyAsync(knowledgeBase => knowledgeBase.Id == command.KnowledgeBaseId, cancellationToken);
+        var contentMode = await dbContext.KnowledgeBases
+            .Where(knowledgeBase => knowledgeBase.Id == command.KnowledgeBaseId)
+            .Select(knowledgeBase => (KnowledgeBaseContentMode?)knowledgeBase.ContentMode)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        if (!knowledgeBaseExists)
+        if (contentMode is null)
         {
             return CreateKnowledgeDocumentResult.KnowledgeBaseNotFound();
+        }
+
+        // Em base sincronizada os documentos vêm da pasta, escritos pelo subject de
+        // serviço (catalogo-base-sincronizada, D7). Recusado antes de processar o
+        // conteúdo. Se esta recusa sumir, a FK composta recusa a linha no banco: o
+        // construtor abaixo cria sempre documento de base manual (D4).
+        if (contentMode == KnowledgeBaseContentMode.Synced)
+        {
+            return CreateKnowledgeDocumentResult.SyncedKnowledgeBase();
         }
 
         var content = contentProcessor.Process(command.SourceType, command.Content);

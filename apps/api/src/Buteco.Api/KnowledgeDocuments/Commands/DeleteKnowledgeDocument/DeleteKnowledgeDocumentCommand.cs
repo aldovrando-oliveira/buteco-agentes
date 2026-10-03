@@ -2,4 +2,4 @@ using Mediator;
 
 namespace Buteco.Api.KnowledgeDocuments.Commands.DeleteKnowledgeDocument;
 
-public sealed record DeleteKnowledgeDocumentCommand(Guid KnowledgeBaseId, Guid Id, string Author) : ICommand<bool>;
+public sealed record DeleteKnowledgeDocumentCommand(Guid KnowledgeBaseId, Guid Id, string Author) : ICommand<DeleteKnowledgeDocumentResult>;

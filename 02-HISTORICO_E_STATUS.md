@@ -14204,6 +14204,14 @@ classe entra `files.export`, e foi contado como download. Não medido por carga.
 
 - **#102:** `ExternalVersion` é **hash de conteúdo**, não campo do Drive: o
   `md5Checksum` para `.md` e o hash do markdown exportado para Doc.
+
+  > **Substituído pelo comentário da etapa 0 na própria #102**, posterior a esta
+  > seção, e é ele que vale: `ExternalVersion` é o **marcador do provedor**, string
+  > opaca para o `apps/api` (`modifiedTime` para Doc, `md5Checksum` para `.md`). O
+  > hash calculado pelo conector foi descartado porque seria uma segunda regra de
+  > "conteúdo mudou", divergente da do `apps/api`, que normaliza BOM e quebras de
+  > linha antes do `ContentHash`. É o que a change `catalogo-base-sincronizada`
+  > implementou (D3 do `design.md`). O resto desta seção continua valendo.
 - **#103:**
   - retirar as imagens embutidas antes de medir contra 1 MiB;
   - decidir sobre os escapes e o código sem cerca;
@@ -14249,3 +14257,138 @@ classe entra `files.export`, e foi contado como download. Não medido por carga.
     repositório, a pedido do dono, para não tocar no original.
 
 Relatório completo: `~/.cache/buteco-agents/drive-0/RELATORIO.md`.
+
+## `catalogo-base-sincronizada` — catálogo de base sincronizada (#102)
+
+**Change proposta, revisada, implementada, sincronizada e arquivada em 03/10/2026
+(`openspec/changes/archive/2026-10-03-catalogo-base-sincronizada/`); sem commit, sem
+push e sem PR** (convenção 24: o archive vem antes do push). A
+#102 está em `In progress`. Branch `feat/102-catalogo-base-sincronizada`, criada de
+`9cd2a93`.
+
+### O que entrou
+
+Só `apps/api`. A base ganha `ContentMode` (`Manual`/`Synced`, imutável), origem
+(provedor e pasta imutáveis; nome e URL da pasta como snapshot que só um ciclo
+bem-sucedido atualiza) e estado da sincronização (última concluída, último ciclo
+terminado, último erro como código, "falhando desde", arquivos ignorados em
+`jsonb`), tudo na resposta da base em `contentMode`, `syncSource` e `syncState`. O
+documento ganha `ExternalRef` e `ExternalVersion`, com a regra "`ExternalRef` se e
+somente se a base é `Synced`" no banco, por uma FK composta com a cópia do tipo. O
+operador recebe `409` ao escrever documento em base `Synced`. Rotas de serviço sob
+`/sync/knowledge-bases` com o subject `service:connectors`, e subject desconhecido
+passa a receber `403`. Nenhuma rota do operador cria base `Synced` (#104).
+
+### Issues abertas por esta linha (convenção 23)
+
+- **#116**, o `apps/inbox` autoriza qualquer subject validamente assinado como
+  operador (a `FallbackPolicy` dele só exige autenticação). Achado na revisão dos
+  artefatos, lido no código.
+- **#117**, chave de assinatura por serviço, `aguardando gatilho`: primeira
+  implantação do `apps/connectors` fora do ambiente de desenvolvimento.
+
+### O que a implementação mediu
+
+**A FK composta e a chave alternativa, antes do código (tarefa 1.1).** Console com
+EF Core 10.0.10 e Npgsql 10.0.3: o SQL de `dotnet ef migrations script` saiu como a
+D4, a D5 e a D10 descrevem, e o change tracker lançou `The property 'Kb.ContentMode'
+is part of a key and so cannot be modified` ao alterar o tipo. Nenhuma decisão
+mudou.
+
+**A checagem de boot da lista de rotas de serviço pegou um defeito real na primeira
+execução** (convenção 8). A lista dizia `GET /sync/knowledge-bases`; o `RawText`
+que `MapGroup` gera para `MapGet("/")` é `/sync/knowledge-bases/`, com barra final
+(e `MapGet("")` dá o mesmo, medido à parte). Sem a checagem, o conector receberia
+`403` nessa rota em produção. A lista passou a usar o padrão com barra.
+
+**Corridas, com a evidência de que a corrida aconteceu.**
+
+| corrida | iterações | caminho de violação exercitado |
+|---|---|---|
+| duas conexões inserindo a mesma pasta, com `Barrier`, cada uma na sua transação | 10 | **10 de 10** (`23505` afirmado por iteração: a segunda fica bloqueada na entrada não confirmada do índice) |
+| dois upserts idênticos de referência nova, via HTTP | 30 | **29 de 30** numa execução da classe e **28 de 30** na suíte inteira, contados pelo evento de log do `catch` |
+| dois upserts com textos diferentes sobre documento existente | 20 | **20 de 20** pela releitura de `DbUpdateConcurrencyException` (ver "Ajuste da revisão", abaixo; a primeira versão deste teste não olhava as revisões e passava com o defeito) |
+| dois `PUT` simultâneos do operador com textos diferentes | 20 | **20 de 20** pela releitura |
+
+**Guardas contra o defeito real (convenção 15)**, cada um reintroduzido, visto
+reprovar e desfeito; a tabela com o teste que reprovou cada um está no `tasks.md`
+da change (6.13 e 7.2). Nove na lista e um a mais: sem a recusa do handler de
+cadastro, o banco recusou o documento pela FK composta (`500`, nada gravado), que é
+a D4 segurando o defeito.
+
+**Suíte de `apps/api`:** **603/603 em 2,25 min** (138 s de relógio), `load average`
+10,30 no início e 15,49 no fim, 12 núcleos. **Baseline** num `git worktree` limpo
+de `9cd2a93`: **501/501 em 2 min 41 s** (167 s de relógio), `load average` 6,37 →
+9,17. A diferença, 102, fecha com os casos contados no diff contra a `main`: 72
+`[Fact]`, 21 `[InlineData]` e 9 linhas de `MemberData` de 5 `[Theory]`, nenhum
+removido.
+
+**Régua de contêineres** (critério do `02`: classes com fixture de contêiner mais
+classes que constroem o próprio, excluída `Support/`, com `grep` em todas as
+subpastas):
+
+| | `IClassFixture` | pela collection | constroem o próprio | classes | fontes |
+|---|---|---|---|---|---|
+| `9cd2a93` | 37 | 2 | 4 | **43** | **42** |
+| depois | 37 | 3 | 4 | **44** | **42** |
+
+A classe nova (`KnowledgeBaseContentModeMigrationTests`) entra na
+`MigrationPostgresCollection`, autorizada pelo mantenedor em 03/10/2026; os demais
+casos novos são `partial` de classes que já existiam. **Esta régua dá +1 sobre a que
+a #98 registrou acima (42/41 depois da #98)**, e a diferença já existe em `1cae600`
+(37 `IClassFixture` contra 36 registrados): é de instrumento, constante, e o delta
+de cada change é o mesmo nas duas.
+
+### Divergências do `design.md` aprovado, todas corrigidas lá com a causa
+
+1. **D6:** o padrão da lista de `service:connectors` para a listagem ficou com barra
+   final, pela causa acima.
+2. **D4:** dois detalhes de forma da tarefa 1.1 (o índice que o EF cria para a FK
+   composta, e o `HasSentinel` do enum com default).
+3. **D1:** a regex do código usa `\z`, não `$`.
+4. **D7:** na edição, o documento é procurado antes do `409`.
+5. **Árvore da D12:** `CreateKnowledgeBaseCommand` não mudou; entraram
+   `DeleteKnowledgeDocumentResult`, `SyncedKnowledgeBaseLookup` e duas classes de
+   teste sem contêiner.
+
+Nenhuma `spec.md` mudou na implementação.
+
+### Ajuste da revisão: duas escritas gravavam a mesma revisão
+
+**Achado na revisão da implementação, e o defeito é anterior à change no caminho do
+operador.** Duas escritas que leem o documento na revisão N gravavam as duas N+1, e
+as duas publicações de indexação levavam a mesma revisão para textos diferentes. O
+consumidor de `apps/workers` lê o texto do banco no início
+(`KnowledgeIndexingService.cs:71-73`) e grava os fragmentos sob `UPDATE ... WHERE
+"ContentRevision" = <mensagem>` (linha 321), na mesma transação dos fragmentos. Então
+o job do texto A podia terminar depois do job do texto B, conferir a revisão (que
+batia) e gravar os fragmentos de A num documento com o texto B, marcado como
+indexado. **A primeira redação da D10 dizia que a corrida só produzia a última
+escrita vencendo, e o risco dizia que o estado convergia; as duas estavam erradas.**
+Reproduzido antes da correção nos dois caminhos: publicações `[2, 2]`.
+
+**A correção:** `ContentRevision` passou a ser token de concorrência
+(`IsConcurrencyToken()`, sem migração; o `UPDATE` e o `DELETE` emitidos levam
+`AND "ContentRevision" = @p` no `WHERE`). Na `DbUpdateConcurrencyException`, o handler
+relê e reaplica uma vez, e o perdedor fica com N+2. Vale para o upsert, a atualização
+do operador, a reindexação e as duas exclusões. A segunda falha seguida responde
+`503` com `Retry-After: 1`, não `500`, e não `409`, que nessas rotas já significa
+"o tipo da base não permite". `apps/workers` não mudou: ele não grava a revisão.
+
+**Medido:** 20 de 20 iterações pela releitura em cada corrida; a segunda falha
+forçada por interceptor nos cinco caminhos de escrita, todos `503`. Guardas: sem o
+token, as duas corridas e o teste do SQL reprovaram; sem o segundo `catch` do
+upsert, o teste da segunda falha reprovou.
+
+**Suíte depois do ajuste:** **606/606 em 2,31 min** (142 s de relógio), `load
+average` 7,86 no início e 16,46 no fim. Contra os 603 anteriores: +3, que fecham com
+o diff (a corrida do upsert sobre documento existente foi **substituída**, e entraram
+a corrida do `PUT` do operador, o teste do SQL emitido e o da segunda falha). Na
+mesma execução, as corridas passaram pela releitura em 19 de 20 iterações cada, e a
+do upsert idêntico pelo `catch` de `UniqueViolation` em 27 de 30.
+
+### O que ficou de fora, e é decisão
+
+- Criar base `Synced` pela rota do operador (#104), conectores e ciclo (#103,
+  #105), telas (#107), exclusão de base (#108).
+- Sem conferência visual: a change não tem tela.

@@ -169,18 +169,105 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<KnowledgeBase>(entity =>
         {
-            entity.ToTable("knowledge_bases");
+            // As combinações de tipo, origem e estado da sincronização garantidas
+            // pelo banco (design.md da change catalogo-base-sincronizada, D2 e D4):
+            // cabem numa CHECK porque não cruzam tabela.
+            entity.ToTable("knowledge_bases", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_knowledge_bases_content_mode",
+                    "\"ContentMode\" IN ('Manual', 'Synced')");
+
+                // Synced tem origem completa; Manual não tem origem nem estado.
+                table.HasCheckConstraint(
+                    "CK_knowledge_bases_sync_source",
+                    "(\"ContentMode\" = 'Synced' AND \"SyncProvider\" IS NOT NULL AND \"SyncFolderId\" IS NOT NULL " +
+                    "AND \"SyncFolderName\" IS NOT NULL AND \"SyncFolderUrl\" IS NOT NULL) " +
+                    "OR (\"ContentMode\" = 'Manual' AND \"SyncProvider\" IS NULL AND \"SyncFolderId\" IS NULL " +
+                    "AND \"SyncFolderName\" IS NULL AND \"SyncFolderUrl\" IS NULL AND \"LastSyncCompletedAt\" IS NULL " +
+                    "AND \"LastSyncFinishedAt\" IS NULL AND \"LastSyncErrorCode\" IS NULL AND \"LastSyncErrorDetail\" IS NULL " +
+                    "AND \"SyncFailingSince\" IS NULL AND \"SyncIgnoredFiles\" IS NULL)");
+
+                // Está falhando se e somente se há último erro (D2).
+                table.HasCheckConstraint(
+                    "CK_knowledge_bases_sync_failing_since",
+                    "(\"SyncFailingSince\" IS NULL) = (\"LastSyncErrorCode\" IS NULL)");
+
+                table.HasCheckConstraint(
+                    "CK_knowledge_bases_sync_error_detail",
+                    "\"LastSyncErrorDetail\" IS NULL OR \"LastSyncErrorCode\" IS NOT NULL");
+            });
             entity.HasKey(knowledgeBase => knowledgeBase.Id);
             entity.Property(knowledgeBase => knowledgeBase.Name).IsRequired();
             entity.Property(knowledgeBase => knowledgeBase.Description).IsRequired();
             entity.Property(knowledgeBase => knowledgeBase.IsActive).IsRequired().HasDefaultValue(true);
             entity.Property(knowledgeBase => knowledgeBase.CreatedAt).IsRequired();
             entity.Property(knowledgeBase => knowledgeBase.UpdatedAt).IsRequired();
+
+            // Default 'Manual' só para as linhas que existiam antes da migração. O
+            // sentinela fora do domínio faz o EF escrever sempre o valor, inclusive
+            // Manual, que é o default do CLR e seria omitido no INSERT (tarefa 1.1).
+            entity.Property(knowledgeBase => knowledgeBase.ContentMode)
+                .IsRequired()
+                .HasConversion<string>()
+                .HasDefaultValue(KnowledgeBaseContentMode.Manual)
+                .HasSentinel((KnowledgeBaseContentMode)(-1));
+            entity.Property(knowledgeBase => knowledgeBase.SyncProvider).IsRequired(false);
+            entity.Property(knowledgeBase => knowledgeBase.SyncFolderId).IsRequired(false);
+            entity.Property(knowledgeBase => knowledgeBase.SyncFolderName).IsRequired(false);
+            entity.Property(knowledgeBase => knowledgeBase.SyncFolderUrl).IsRequired(false);
+            entity.Property(knowledgeBase => knowledgeBase.LastSyncCompletedAt).IsRequired(false);
+            entity.Property(knowledgeBase => knowledgeBase.LastSyncFinishedAt).IsRequired(false);
+            entity.Property(knowledgeBase => knowledgeBase.LastSyncErrorCode).IsRequired(false);
+            entity.Property(knowledgeBase => knowledgeBase.LastSyncErrorDetail).IsRequired(false);
+            entity.Property(knowledgeBase => knowledgeBase.SyncFailingSince).IsRequired(false);
+
+            // jsonb no molde de Agent.Skills (D1): HasConversion + ValueComparer
+            // serializa o valor inteiro a cada SaveChanges, a forma que o 01
+            // classifica como imune ao aliasing do change tracker. Nulo enquanto
+            // nenhum ciclo terminou com sucesso, e não lista vazia (D13).
+            var ignoredFilesProperty = entity.Property(knowledgeBase => knowledgeBase.SyncIgnoredFiles)
+                .HasColumnType("jsonb")
+                .IsRequired(false)
+                .HasConversion(
+                    files => files == null ? null : JsonSerializer.Serialize(files, (JsonSerializerOptions?)null),
+                    json => json == null
+                        ? null
+                        : JsonSerializer.Deserialize<List<KnowledgeBaseSyncIgnoredFile>>(json, (JsonSerializerOptions?)null));
+
+            ignoredFilesProperty.Metadata.SetValueComparer(new ValueComparer<IReadOnlyList<KnowledgeBaseSyncIgnoredFile>?>(
+                (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),
+                files => files == null ? 0 : files.Aggregate(0, (hash, file) => HashCode.Combine(hash, file.GetHashCode())),
+                files => files == null ? null : files.ToList()));
+
+            // Alvo da FK composta do documento (D4). Torna ContentMode parte de uma
+            // chave: o change tracker recusa modificá-lo, e um UPDATE dele numa base
+            // com documentos viola a FK. É a imutabilidade garantida em dois lugares.
+            entity.HasAlternateKey(knowledgeBase => new { knowledgeBase.Id, knowledgeBase.ContentMode });
+
+            // Uma pasta pertence a uma base só (D5), inclusive inativa: sem filtro por
+            // IsActive, porque base inativa continua sendo sincronizada. O id é
+            // comparado como veio (collation determinística do banco).
+            entity.HasIndex(knowledgeBase => new { knowledgeBase.SyncProvider, knowledgeBase.SyncFolderId })
+                .IsUnique()
+                .HasFilter("\"ContentMode\" = 'Synced'");
         });
 
         modelBuilder.Entity<KnowledgeDocument>(entity =>
         {
-            entity.ToTable("knowledge_documents");
+            // "ExternalRef preenchido se e somente se a base é Synced" (D4 da change
+            // catalogo-base-sincronizada) cruza tabelas e não cabe numa CHECK sozinha.
+            // Com a cópia do tipo amarrada à base pela FK composta abaixo, ela cabe
+            // aqui, na tabela do documento.
+            entity.ToTable("knowledge_documents", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_knowledge_documents_external_ref",
+                    "(\"KnowledgeBaseContentMode\" = 'Synced') = (\"ExternalRef\" IS NOT NULL)");
+                table.HasCheckConstraint(
+                    "CK_knowledge_documents_external_version",
+                    "(\"ExternalRef\" IS NULL) = (\"ExternalVersion\" IS NULL)");
+            });
             entity.HasKey(document => document.Id);
             entity.Property(document => document.Title).IsRequired();
             entity.Property(document => document.SourceType).IsRequired();
@@ -188,7 +275,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(document => document.IndexingStatus).IsRequired().HasConversion<string>();
             entity.Property(document => document.IndexedAt).IsRequired(false);
             entity.Property(document => document.FailureReason).IsRequired(false);
-            entity.Property(document => document.ContentRevision).IsRequired();
+            // Token de concorrência desde catalogo-base-sincronizada (D10): duas
+            // atualizações que leram a mesma revisão N não podem gravar as duas N+1.
+            // O UPDATE do EF leva a revisão original no WHERE, e a segunda escrita
+            // falha com DbUpdateConcurrencyException; o handler relê e reaplica, e o
+            // perdedor fica com N+2. Sem isso, duas escritas de textos diferentes
+            // publicavam a MESMA revisão, e o indexador de apps/workers, que descarta
+            // pela revisão, podia gravar os fragmentos de um texto sobre o outro.
+            //
+            // Continua NÃO sendo xmin (etapa 1, D7): o consumidor de indexação muta a
+            // linha sem tocar esta coluna, e por isso não invalida a escrita da API.
+            entity.Property(document => document.ContentRevision).IsRequired().IsConcurrencyToken();
             entity.Property(document => document.ContentHash).IsRequired(false);
             entity.Property(document => document.FragmentCount).IsRequired().HasDefaultValue(0);
             entity.Property(document => document.IndexingAttempts).IsRequired().HasDefaultValue(0);
@@ -216,14 +313,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             entity.HasIndex(document => document.KnowledgeBaseId);
 
+            entity.Property(document => document.KnowledgeBaseContentMode)
+                .IsRequired()
+                .HasConversion<string>()
+                .HasDefaultValue(KnowledgeBaseContentMode.Manual)
+                .HasSentinel((KnowledgeBaseContentMode)(-1));
+            entity.Property(document => document.ExternalRef).IsRequired(false);
+            entity.Property(document => document.ExternalVersion).IsRequired(false);
+
+            // Upsert idempotente sob corrida (D10): o segundo INSERT da mesma
+            // referência na mesma base perde com UniqueViolation, e o handler relê.
+            entity.HasIndex(document => new { document.KnowledgeBaseId, document.ExternalRef })
+                .IsUnique()
+                .HasFilter("\"ExternalRef\" IS NOT NULL");
+
             // Restrict, não o Cascade default do EF Core para FK obrigatória
             // (design.md, D6). KnowledgeBase não tem rota de exclusão; aceitar
             // Cascade por omissão deixaria a base pré-armada para o dia em que
             // alguém adicionasse uma, com todos os documentos sumindo em
             // silêncio. Restrict torna esse dia uma decisão explícita.
+            //
+            // Composta desde catalogo-base-sincronizada (D4): referencia a chave
+            // alternativa (Id, ContentMode) da base, e é o que garante que a cópia do
+            // tipo no documento é igual ao tipo da base. Substitui a FK simples, que
+            // ficaria redundante.
             entity.HasOne<KnowledgeBase>()
                 .WithMany()
-                .HasForeignKey(document => document.KnowledgeBaseId)
+                .HasForeignKey(document => new { document.KnowledgeBaseId, document.KnowledgeBaseContentMode })
+                .HasPrincipalKey(knowledgeBase => new { knowledgeBase.Id, knowledgeBase.ContentMode })
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

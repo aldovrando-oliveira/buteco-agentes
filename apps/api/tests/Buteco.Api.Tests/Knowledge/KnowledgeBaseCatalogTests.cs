@@ -7,7 +7,7 @@ using Buteco.Api.Tests.Support;
 
 namespace Buteco.Api.Tests.Knowledge;
 
-public class KnowledgeBaseCatalogTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>
+public partial class KnowledgeBaseCatalogTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>
 {
     private readonly HttpClient _client = factory.CreateClient();
 

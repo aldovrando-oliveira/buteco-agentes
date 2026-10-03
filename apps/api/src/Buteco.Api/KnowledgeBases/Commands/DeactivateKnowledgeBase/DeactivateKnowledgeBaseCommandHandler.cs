@@ -12,6 +12,8 @@ namespace Buteco.Api.KnowledgeBases.Commands.DeactivateKnowledgeBase;
 public sealed class DeactivateKnowledgeBaseCommandHandler(AppDbContext dbContext)
     : ICommandHandler<DeactivateKnowledgeBaseCommand, KnowledgeBaseResponse?>
 {
+    // Desativar continua liberado em base sincronizada (catalogo-base-sincronizada,
+    // D7): impede o uso pelo agente, não a sincronização (#105).
     public async ValueTask<KnowledgeBaseResponse?> Handle(DeactivateKnowledgeBaseCommand command, CancellationToken cancellationToken)
     {
         var knowledgeBase = await dbContext.KnowledgeBases

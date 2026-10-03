@@ -12,6 +12,7 @@ namespace Buteco.Api.KnowledgeBases.Commands.ActivateKnowledgeBase;
 public sealed class ActivateKnowledgeBaseCommandHandler(AppDbContext dbContext)
     : ICommandHandler<ActivateKnowledgeBaseCommand, KnowledgeBaseResponse?>
 {
+    // Ativar continua liberado em base sincronizada (catalogo-base-sincronizada, D7).
     public async ValueTask<KnowledgeBaseResponse?> Handle(ActivateKnowledgeBaseCommand command, CancellationToken cancellationToken)
     {
         var knowledgeBase = await dbContext.KnowledgeBases

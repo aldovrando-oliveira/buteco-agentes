@@ -297,6 +297,23 @@ o versionamento pretende seguir
   documento. O histórico começa vazio na implantação: documentos que já
   existiam não ganham evento retroativo (#98).
 
+- Catálogo de base sincronizada, em `apps/api` (#102). A base ganha tipo de
+  conteúdo (`Manual` ou `Synced`, imutável, `Manual` para as bases que já
+  existiam), origem (provedor e pasta, imutáveis, e o nome e a URL da pasta na
+  última sincronização concluída) e estado da sincronização (última concluída,
+  último ciclo terminado, último erro como código, desde quando está falhando e os
+  arquivos ignorados com o motivo). A resposta da base traz `contentMode`,
+  `syncSource` e `syncState`, nulos em base manual. Uma pasta só pode estar em uma
+  base, inclusive inativa. O documento ganha `ExternalRef`, único por base e
+  presente se e somente se a base é sincronizada, garantido pelo banco, e
+  `ExternalVersion`, o marcador do provedor. Rotas de serviço sob
+  `/sync/knowledge-bases` para o app que sincroniza, com o subject
+  `service:connectors`: listar as bases sincronizadas (inclusive inativas) e as
+  referências dos documentos, upsert e exclusão por referência, e gravação do
+  resultado de um ciclo. As escritas entram no histórico com autor
+  `service:connectors`; upsert com o mesmo texto e título não gera evento nem
+  reindexa. Nenhuma rota do operador cria base sincronizada ainda.
+
 **Entrega containerizada**
 
 - `Dockerfile` multi-stage por app, com build context na raiz do monorepo.
@@ -604,6 +621,16 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **O operador recebe `409` ao criar, editar ou excluir documento numa base
+  sincronizada** (#102). Reindexar, editar nome e descrição da base e ativar ou
+  desativar continuam liberados. O cadastro de base com
+  `contentMode: "Synced"` responde `400`.
+- **Token com subject desconhecido passa a receber `403` em `apps/api`** (#102).
+  Antes, qualquer subject diferente de `service:inbox`, assinado com a chave
+  compartilhada, tinha o acesso do operador. Agora `operator` passa em tudo, cada
+  subject de serviço só nas rotas da sua lista, conferida no boot, e o resto é
+  recusado. Os chamadores que existiam (`operator` e `service:inbox`) não mudam.
+
 - **No detalhe da base de conhecimento, a Descrição e os agentes que consultam a
   base ficam acima das abas, e aparecem em qualquer uma** (#99). Antes os dois
   cards ficavam dentro da aba Documentos e sumiam ao abrir o Diagnóstico do
@@ -751,6 +778,15 @@ o versionamento pretende seguir
   "manter a atual".
 
 ### Fixed
+
+- **Duas atualizações simultâneas do mesmo documento de conhecimento não gravam mais
+  a mesma revisão** (#102). Antes, as duas liam a revisão N e gravavam N+1, e a
+  indexação de um texto podia terminar por último e deixar no índice os fragmentos
+  do texto que perdeu, com o documento marcado como indexado. Valia para a edição
+  pelo operador desde a etapa de catálogo, e para o upsert da sincronização. Agora a
+  revisão é token de concorrência: a escrita que perde é reaplicada sobre a outra e
+  fica com a revisão seguinte. Duas perdas seguidas respondem `503` com
+  `Retry-After`, sem gravar nada.
 
 - **O card "Agentes que consultam esta base" dizia que não tinha conseguido
   carregar os agentes enquanto eles ainda estavam carregando** (#99). A página
