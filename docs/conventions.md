@@ -43,10 +43,12 @@ apps/
   api/                      # ASP.NET Core Minimal API
   workers/                  # .NET Worker Service
   inbox/                    # ASP.NET Core Minimal API, banco próprio
+  connectors/               # ASP.NET Core Minimal API, sem banco
   frontend/                 # Vite + React + TypeScript + Mantine
 tests/
   CrossAppTaskStoreCompatibility.Tests/   # acordo de schema api ↔ workers
   InboxOrchestratorRoundTrip.Tests/       # round-trip inbox → api → workers
+  ApiConnectorsRoundTrip.Tests/           # validação de pasta api → connectors
 deploy/
   migrate/                  # migration bundle one-shot
 docs/                       # esta documentação
@@ -55,7 +57,7 @@ scripts/                    # utilitários de verificação
 ```
 
 Cada app .NET tem sua própria solution (`Api.sln`, `Workers.sln`,
-`Inbox.sln`), com `src/` e `tests/` dentro da pasta do app.
+`Inbox.sln`, `Connectors.sln`), com `src/` e `tests/` dentro da pasta do app.
 
 ---
 
@@ -72,7 +74,7 @@ justificativa explícita no `design.md` da mudança que a criar. Hoje há um
 provedor de LLM e o nome da seção de configuração — o mínimo que os dois
 processos precisam concordar, não um mecanismo geral de código compartilhado.
 
-Os dois projetos em `tests/` são exceções de natureza diferente: referenciam
+Os três projetos em `tests/` são exceções de natureza diferente: referenciam
 múltiplos apps de propósito, só para verificar acordos que nenhum app
 sozinho consegue verificar. Nenhum app referencia esses projetos de volta,
 nem eles são publicados junto.

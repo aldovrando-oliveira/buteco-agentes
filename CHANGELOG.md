@@ -327,6 +327,20 @@ o versionamento pretende seguir
   A chave da service account entra em base64 por variável de ambiente e só o
   e-mail da conta sai do processo. Ainda não está no stack de servidor (#119).
 
+- Criação de base sincronizada pela rota do operador, em `apps/api` (#104).
+  `POST /knowledge-bases` aceita `contentMode: "Synced"` com `provider` e
+  `folderId`, valida a pasta na rota de descrição do `apps/connectors` assinando o
+  subject `service:api`, e grava o nome e a URL da pasta que vêm da validação,
+  nunca os do corpo. Pasta já usada por outra base, ativa ou inativa, responde
+  `409` com o código `folder-in-use` e a base que a usa, inclusive na corrida entre
+  dois cadastros. A falha do `apps/connectors` chega ao cliente como código, com o
+  detalhe (o e-mail da conta no `access-denied`) e o status por natureza; sem
+  resposta é `503` `connectors-unavailable`, e resposta fora do contrato é `502`
+  `connectors-error`. Configuração nova e opcional, `Connectors__BaseUrl`: sem ela o
+  `apps/api` sobe e só o cadastro sincronizado responde `503`
+  `connectors-not-configured`. Teste de ida e volta entre os dois apps reais em
+  `tests/ApiConnectorsRoundTrip.Tests`.
+
 **Entrega containerizada**
 
 - `Dockerfile` multi-stage por app, com build context na raiz do monorepo.
@@ -637,7 +651,9 @@ o versionamento pretende seguir
 - **O operador recebe `409` ao criar, editar ou excluir documento numa base
   sincronizada** (#102). Reindexar, editar nome e descrição da base e ativar ou
   desativar continuam liberados. O cadastro de base com
-  `contentMode: "Synced"` responde `400`.
+  `contentMode: "Synced"` respondia `400` até a #104, que passou a criá-la.
+- **O cadastro de base manual recusa `provider` e `folderId`** (#104): qualquer
+  valor não nulo, inclusive vazio, responde `400`; `null` conta como ausente.
 - **Token com subject desconhecido passa a receber `403` em `apps/api`** (#102).
   Antes, qualquer subject diferente de `service:inbox`, assinado com a chave
   compartilhada, tinha o acesso do operador. Agora `operator` passa em tudo, cada
