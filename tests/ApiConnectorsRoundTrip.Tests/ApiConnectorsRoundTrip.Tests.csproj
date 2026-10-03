@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Pgvector.EntityFrameworkCore" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    Ida e volta entre apps/api e apps/connectors reais (design.md da change
+    criacao-base-sincronizada, D8), no molde de tests/InboxOrchestratorRoundTrip.Tests.
+    Nenhum dos dois apps referencia este projeto de volta, e ele nunca é publicado
+    com nenhum deles. Os dois têm o próprio tipo público `Program` (top-level
+    statements), por isso os Aliases. O de apps/connectors fica TAMBÉM no alias global,
+    para o FakeConnector.cs linkado abaixo compilar sem mudança; o de apps/api fica só
+    no próprio alias, e é isso que evita a colisão dos dois `Program`.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\apps\api\src\Buteco.Api\Buteco.Api.csproj">
+      <Aliases>ApiAssembly</Aliases>
+    </ProjectReference>
+    <ProjectReference Include="..\..\apps\connectors\src\Buteco.Connectors\Buteco.Connectors.csproj">
+      <Aliases>global,ConnectorsAssembly</Aliases>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!--
+    O conector falso do apps/connectors, por LINK e não por cópia (D8): uma cópia
+    divergiria sem sintoma. Nada muda no apps/connectors por causa do link.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\apps\connectors\tests\Buteco.Connectors.Tests\Support\FakeConnector.cs" Link="Support\FakeConnector.cs" />
+  </ItemGroup>
+
+</Project>

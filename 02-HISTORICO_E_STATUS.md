@@ -14659,3 +14659,114 @@ executando").
 `PushNotificationSender` e os `HttpClient` de saída (#46, #47); `stop_grace_period`
 do deploy; a push notification não reenviada quando a parada cai entre o estado
 terminal e o envio (janela estreita, registrada no `design.md`).
+
+## `criacao-base-sincronizada` — criação de base sincronizada validada pelo `apps/connectors` (#104)
+
+**Change proposta, revisada, implementada, sincronizada e arquivada em 03/10/2026
+(`openspec/changes/archive/2026-10-03-criacao-base-sincronizada/`).** A #104 está em
+`In progress` até a abertura do PR. Branch
+`feat/104-criacao-base-sincronizada`, criada de `9904999` e atualizada com a `main`
+em `a7960d9` (merge da #49, PR #128), sem conflito de código; só o `02` conflitou,
+por acréscimo das duas seções.
+
+### O que entrou
+
+`POST /knowledge-bases` aceita `contentMode: "Synced"` com `provider` e `folderId`. O
+`apps/api` valida a pasta na rota de descrição do `apps/connectors`, assinando
+`service:api` com um `DelegatingHandler` próprio (cópia do do `apps/inbox`, sem
+`libs/`), e grava o nome e a URL da resposta, nunca os do corpo. Pasta em uso é `409`
+`folder-in-use` com a base dona, também na corrida. A falha do `apps/connectors` chega
+como código; os do próprio `apps/api` são `connectors-not-configured`,
+`connectors-unavailable` e `connectors-error`. `Connectors__BaseUrl` é opcional.
+Projeto novo `tests/ApiConnectorsRoundTrip.Tests`, com fonte de contêiner autorizada
+pelo mantenedor. Nenhum pacote novo, nenhuma migração, nenhuma linha no
+`apps/connectors`.
+
+**Em produção, até a #119, o cadastro sincronizado responde `503`
+`connectors-not-configured`:** o `apps/api` sobe sem a variável, e nenhuma outra rota
+muda. A variável de produção ficou registrada na #119, por comentário.
+
+### O que a implementação mediu
+
+**Suítes, baseline em `9904999` e fechamento na árvore de trabalho:**
+
+| suíte | baseline | fechamento | estado da máquina no fechamento |
+|---|---|---|---|
+| `apps/api` | 607/607, 1 min 56 s | **697/697**, 1 min 36 s | `load average` 8,0 no início e 19,8 no fim; nenhuma outra sessão de teste |
+| `apps/connectors` | 137 + 1 ignorado / 138 | 137 + 1 ignorado / 138 | sem mudança, como previsto |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 4/4 | 4/4 | |
+| `tests/ApiConnectorsRoundTrip.Tests` | — | **4/4** | |
+
+A diferença do `apps/api`, conferida por nome de teste nos `.trx`: **93 entradas novas
+e 3 saídas**. Das 3, duas são os mesmos casos de `contentMode` desconhecido sob o nome
+novo do método, e uma é o caso `Synced`, retirado com o requisito que ele afirmava. As
+93 por classe: 43 em `KnowledgeBaseCatalogTests` (41 novas mais as 2 renomeadas), 37
+em `ConnectorsFolderClientTests`, 10 em `ConnectorsConfigurationStartupValidationTests`,
+2 em `ServiceTokenDelegatingHandlerTests` e 1 em `ServiceScopeAuthorizationTests`.
+
+**Régua de contêineres do `apps/api`** (critério do `02`, contando as fixtures
+aninhadas que derivam de uma fixture de contêiner): **44 classes e 42 fontes antes e
+depois**, igual ao fechamento da #102. Os casos novos com contêiner entraram num
+`partial` de `KnowledgeBaseCatalogTests`, e as três classes novas não sobem contêiner.
+**Em `tests/`: +1 fonte**, a fixture da ida e volta, com um Postgres.
+
+**Corrida de dois cadastros da mesma pasta:** 20 iterações, **20 de 20 pelo `catch`
+de `UniqueViolation`**, contadas pelo evento de log `1024`. O `apps/connectors` falso
+segura as duas validações numa barreira, então as duas requisições passam pela
+consulta de pasta em uso antes de qualquer gravação; nenhum `500`.
+
+**Verificação manual, com o `apps/connectors` e o `apps/api` locais e o Postgres de
+desenvolvimento**, contra o Drive real com a service account da etapa 0:
+
+| o que | resultado |
+|---|---|
+| cadastro `Synced` com a pasta de teste da etapa 0, com nome e URL forjados no corpo | `201`; nome e URL vindos do Drive (URL em `drive.google.com` com o id da pasta), os do corpo ignorados; `syncState` de "nunca sincronizou" |
+| a mesma pasta de novo | `409` `folder-in-use` com o nome da base criada; nada sobre excluir |
+| pasta que a conta não lê (id no formato do Drive, fora do alcance da conta) | `422` `access-denied`, com o `detail` igual ao e-mail da service account |
+| `apps/connectors` sem a chave do Google | `422` `provider-not-configured` |
+| `apps/connectors` parado | `503` `connectors-unavailable`, em 36 ms |
+| `apps/api` com `Connectors__BaseUrl` vazio | `503` `connectors-not-configured`; o aviso no log de boot; o cadastro manual `201` e a listagem `200` |
+
+**Três condições do ambiente, que não são do código:** o banco de desenvolvimento
+estava duas migrações atrás (a da #98 e a da #102) e foi atualizado com
+`dotnet ef database update` antes da verificação; a porta 5017 estava ocupada por um
+`apps/api` antigo, iniciado em 02/10, que não foi tocado, e o da verificação rodou na
+5117; e o Postgres local avisa de divergência de versão de collation do volume
+(2.41 contra 2.36), anterior a esta change. As bases criadas na verificação foram
+apagadas por SQL no banco local, e só a base que já existia antes continua lá.
+
+**Não testável de forma automática, e registrado:** a relação dos 35 s com os 60 s
+padrão do nginx do painel, que não sobe na suíte (D2). Fica no comentário do limite e
+no `docs/architecture.md`.
+
+### Guardas contra o defeito real (convenção 15)
+
+Oito, cada um aplicado sobre uma cópia, visto reprovar no teste previsto e desfeito; o
+teste que reprovou está no `tasks.md` da change. Snapshot do corpo; sem o `catch` da
+corrida (`500`); sem a consulta prévia (os quatro casos de pasta em uso reprovam, a
+corrida fica verde pelo índice); mensagem mandando excluir; limite de 5 s; token
+assinado como `operator` (reprovou também a ida e volta, com `502` vindo do `403` real
+do `apps/connectors`); endereço obrigatório no boot (94 de 94 casos de duas classes
+caíram na fixture); `401` repassado como `401`.
+
+### Achados fora do escopo (convenção 23)
+
+- **#127**, `docs/conventions.md` não lista o `apps/connectors` na árvore do
+  monorepo nem o `Connectors.sln`, desde a #103. **Corrigida nesta change**, que já
+  editava o mesmo bloco do arquivo; o PR a fecha com `Closes #127`, por decisão do
+  mantenedor.
+- **Ajuste da regra do `Closes` (convenção 24 do `01`):** achado corrigido por
+  inteiro no mesmo PR passa a entrar como `Closes #N`, em linha própria. O motivo
+  da regra antiga, `Refs` para não apagar da fila trabalho não feito, continua
+  valendo para o achado que fica na fila; o achado corrigido não tem trabalho a
+  apagar. A #127 é o caso de origem.
+- A **#122** (`SECURITY.md` dizendo que o `apps/api` emite o token de serviço) passa a
+  ter mais um caso para a mesma frase: o `apps/api` agora também assina um token de
+  serviço, o `service:api`.
+
+### O que ficou de fora, e é decisão
+
+- Telas (#106), ciclo (#105), exclusão de base (#108), implantação do
+  `apps/connectors` em produção (#119).
+- A conferência pelo mantenedor, contra o Drive real, continua pendente
+  (convenção 14).

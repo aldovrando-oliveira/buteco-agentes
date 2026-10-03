@@ -14,6 +14,7 @@ using Buteco.Api.KnowledgeBases.Endpoints;
 using Buteco.Api.KnowledgeDocuments.Endpoints;
 using Buteco.Api.KnowledgeDocuments.Extraction;
 using Buteco.Api.KnowledgeFragments.Endpoints;
+using Buteco.Api.KnowledgeSync.Connectors;
 using Buteco.Api.KnowledgeSync.Endpoints;
 using Buteco.Api.McpServers.Connectivity;
 using Buteco.Api.McpServers.Endpoints;
@@ -82,6 +83,27 @@ builder.Services.AddKeyedSingleton<IKnowledgeSourceExtractor, MarkdownSourceExtr
 builder.Services.AddScoped<KnowledgeContentProcessor>();
 builder.Services.ValidateKnowledgeExtractorRegistrations();
 builder.Services.AddHttpClient(McpConnectionTester.HttpClientName);
+
+// Validação de pasta de base sincronizada no apps/connectors (design.md da change
+// criacao-base-sincronizada, D1, D2 e D4). Registrado SEMPRE, e opcional por
+// configuração: sem Connectors:BaseUrl o cliente recusa com connectors-not-configured
+// antes de criar o HttpClient, e nada mais muda. O endereço é lido das options na
+// criação do cliente, e não aqui, para valer o que a configuração final do host diz.
+builder.Services.Configure<ConnectorsOptions>(builder.Configuration.GetSection(ConnectorsOptions.SectionName));
+// Transient: AddHttpMessageHandler<T> não registra o handler no contêiner.
+builder.Services.AddTransient<ServiceTokenDelegatingHandler>();
+builder.Services.AddHttpClient(ConnectorsFolderClient.HttpClientName, (services, client) =>
+    {
+        var connectors = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ConnectorsOptions>>().Value;
+        if (connectors.IsConfigured)
+        {
+            client.BaseAddress = new Uri(connectors.BaseUrl!);
+        }
+
+        client.Timeout = ConnectorsFolderClient.Timeout;
+    })
+    .AddHttpMessageHandler<ServiceTokenDelegatingHandler>();
+builder.Services.AddSingleton<IConnectorsFolderClient, ConnectorsFolderClient>();
 builder.Services.AddSingleton<IMcpConnectionTester, McpConnectionTester>();
 builder.Services.AddSingleton<AgentA2AServerRegistry>();
 builder.Services.AddSingleton<IAgentA2AServerRegistry>(sp => sp.GetRequiredService<AgentA2AServerRegistry>());
@@ -126,6 +148,12 @@ app.ValidateTimeZoneConfiguration();
 // composição real. Remover esta linha reprova
 // MetricsRegimeStartupValidationTests.RealComposition_WithMissingRegime_FailsToStart.
 app.ValidateMetricsRegimeConfiguration();
+
+// Convenção 8: Connectors:BaseUrl presente e inválido derruba o boot; ausente sobe
+// com aviso (design.md da change criacao-base-sincronizada, D1). Provado pela
+// composição real em ConnectorsConfigurationStartupValidationTests
+// .RealComposition_WithInvalidBaseUrl_FailsToStart.
+app.ValidateConnectorsConfiguration();
 
 // Sem UseHttpsRedirection: no compose de servidor (containerizacao-stack-servidor),
 // apps/api só recebe tráfego HTTP puro do nginx interno do stack — TLS termina

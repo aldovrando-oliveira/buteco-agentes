@@ -39,7 +39,7 @@ aparece longe da causa.
 
 | Segredo | Processos | O que quebra se divergir |
 |---|---|---|
-| `Auth:TokenSigningKey` | `apps/api` + `apps/inbox` + `apps/connectors` | Um token emitido no login por `apps/api` é rejeitado por `apps/inbox` ou `apps/connectors`, e vice-versa. Também quebra o token de serviço que `apps/inbox` assina para chamar `apps/api` |
+| `Auth:TokenSigningKey` | `apps/api` + `apps/inbox` + `apps/connectors` | Um token emitido no login por `apps/api` é rejeitado por `apps/inbox` ou `apps/connectors`, e vice-versa. Também quebra os tokens de serviço: o que `apps/inbox` assina para chamar `apps/api`, e o que `apps/api` assina para chamar `apps/connectors` (o cadastro de base sincronizada responde `502` com o código `connectors-error`) |
 | `Mcp:CredentialEncryptionKey` | `apps/api` + `apps/workers` | `apps/api` cifra a credencial do servidor MCP ao salvar; `apps/workers` não consegue decifrá-la para conectar durante uma execução |
 | Chaves de provedor de LLM | `apps/api` + `apps/workers` | `apps/api` anuncia o provedor como disponível em `GET /providers`, mas a task termina `failed` no worker |
 
@@ -125,6 +125,18 @@ restrito, a extensão precisa ser criada antes, por fora da migração.
 | `OpenAI__BaseUrl` / `OpenAI__ApiKey` / `OpenAI__Model` | não | Presença habilita o provedor em `GET /providers` |
 | `Anthropic__ApiKey` | não | Idem, para Claude |
 | `Gemini__ApiKey` | não | Idem, para Gemini |
+| `Connectors__BaseUrl` | não | Endereço do `apps/connectors`, usado só para validar a pasta no cadastro de base sincronizada. Em desenvolvimento, `http://localhost:5037`. Ver abaixo |
+
+`Connectors__BaseUrl` tem três estados, e só um deles derruba o processo:
+
+| valor | boot | cadastro de base `Synced` | demais rotas |
+|---|---|---|---|
+| ausente ou vazio | sobe, com um aviso no log | `503` com o código `connectors-not-configured`, sem chamada de rede | sem mudança |
+| URI absoluta `http` ou `https` | sobe | valida a pasta no `apps/connectors` | sem mudança |
+| presente e inválido | **falha**, nomeando a chave sem mostrar o valor | — | — |
+
+O `apps/api` assina o token `service:api` dessa chamada com a mesma
+`Auth__TokenSigningKey` dos outros apps; não há segredo novo.
 
 `apps/api` **nunca chama o LLM** — apenas verifica a presença das chaves para
 montar a lista de provedores disponíveis.

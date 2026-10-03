@@ -119,8 +119,11 @@ Há exatamente três exceções, todas deliberadas:
   implementações de `ITaskStore` concordam no schema.
 - **`tests/InboxOrchestratorRoundTrip.Tests`** — referencia os três apps
   backend, só para o teste de round-trip ponta a ponta do orquestrador.
+- **`tests/ApiConnectorsRoundTrip.Tests`** — referencia `Buteco.Api` e
+  `Buteco.Connectors`, só para provar a validação de pasta pela chamada real entre
+  os dois, com o conector falso do `apps/connectors` incluído por link.
 
-Em nenhum dos dois casos de teste algum app referencia o projeto de teste de
+Em nenhum dos três casos de teste algum app referencia o projeto de teste de
 volta, nem ele é publicado junto.
 
 A régua para criar uma nova `libs/` está em [conventions.md](conventions.md).
@@ -653,15 +656,48 @@ sem transformar; e ignora atalho, subpasta, tipo não suportado e arquivo com do
 bloqueado para leitores, cada um com o seu código. Erros do Google são distinguidos
 pelo `reason`, não pelo status. Um conector falso existe só nos testes.
 
+### O `apps/api` como cliente da descrição de pasta
+
+A base sincronizada nasce por `POST /knowledge-bases` com `contentMode: "Synced"`,
+`provider` e `folderId`. O `apps/api` valida a pasta chamando
+`GET /connectors/providers/{provider}/folder?id=` e grava **o nome e a URL que vêm
+da resposta**, nunca os do corpo enviado pelo painel.
+
+- **`Connectors:BaseUrl` é opcional.** Sem ele o `apps/api` sobe, nenhuma outra
+  rota muda, e o cadastro sincronizado responde `503` com o código
+  `connectors-not-configured`. Presente e inválido, o boot falha.
+- **Código, não frase.** A falha do `apps/connectors` chega ao cliente com o
+  `code` e o `detail` que ele deu, e com o status por natureza dele (só `404`
+  `provider-not-configured` vira `422`). Os códigos próprios do `apps/api` são
+  `connectors-unavailable` (`503`: sem resposta) e `connectors-error` (`502`:
+  resposta fora do contrato, inclusive `401` e `403` do outro app, que nunca são
+  repassados com o mesmo status para o painel não deslogar o operador).
+- **Pasta em uso** responde `409` com o código `folder-in-use` e a base que já a usa,
+  ativa ou inativa, antes de chamar o `apps/connectors` e também na corrida entre
+  dois cadastros, pelo índice único da pasta.
+- **Cadeia de limites de tempo, amarrada entre três lugares:** 30 s por chamada de
+  metadado no `apps/connectors` (`GoogleDriveHttp.MetadataTimeout`) < **35 s** no
+  `HttpClient` do `apps/api` (`ConnectorsFolderClient.Timeout`) < 60 s, o
+  `proxy_read_timeout` padrão do nginx do painel, que não fixa a diretiva. Assim o
+  código mais preciso do `apps/connectors` chega ao painel, e o painel recebe o
+  código do `apps/api` e não um `504` do proxy. Mudar um dos três exige rever os
+  outros.
+
+A chamada real entre os dois apps é provada por `tests/ApiConnectorsRoundTrip.Tests`.
+Change `criacao-base-sincronizada` (#104).
+
 ---
 
 ## Autenticação
 
 **Token stateless assinado com HMAC**, sem biblioteca JWT e sem sessão em
-banco. `apps/api` emite **só o token do operador**, no login; cada serviço assina
-o **próprio** token de serviço com a mesma chave — o `apps/inbox` faz isso em
-`apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs:24`, a cada
-requisição de saída. `apps/api` e `apps/inbox` validam **localmente**,
+banco. `apps/api` emite o token do operador, no login; cada serviço assina
+o **próprio** token de serviço com a mesma chave, a cada requisição de saída —
+o `apps/inbox` com `service:inbox` em
+`apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs`, e o
+`apps/api` com `service:api` em
+`apps/api/src/Buteco.Api/Auth/ServiceTokenDelegatingHandler.cs`, só para chamar o
+`apps/connectors`. Os dois handlers são cópias com o subject trocado, sem `libs/`. `apps/api` e `apps/inbox` validam **localmente**,
 compartilhando apenas a chave de assinatura via configuração. Não há chamada de rede entre os processos para
 validar token — foi o que permitiu autenticar dois apps com bancos isolados
 sem introduzir um store compartilhado.
@@ -713,9 +749,10 @@ sem introduzir um store compartilhado.
   - `operator` só na listagem de provedores e na navegação de pastas
     (`/connectors/providers` e `/connectors/providers/{providerKey}/folders`);
   - `service:api` só na descrição de pasta
-    (`/connectors/providers/{providerKey}/folder`), que o `apps/api` vai chamar
-    para validar a pasta de uma base sincronizada (#104), assinando o próprio
-    token como o `apps/inbox` faz;
+    (`/connectors/providers/{providerKey}/folder`), que o `apps/api` chama para
+    validar a pasta de uma base sincronizada, assinando o próprio token. Esse
+    subject **não** está na tabela do `apps/api`: um token `service:api` que chegue
+    lá recebe `403`;
   - qualquer outro subject recebe `403`.
 
   A tabela é conferida no boot nos dois sentidos: entrada sem rota mapeada, e rota

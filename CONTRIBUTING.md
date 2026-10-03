@@ -115,11 +115,12 @@ dotnet test apps/inbox/Inbox.sln
 dotnet test apps/connectors/Connectors.sln
 dotnet test tests/CrossAppTaskStoreCompatibility.Tests
 dotnet test tests/InboxOrchestratorRoundTrip.Tests
+dotnet test tests/ApiConnectorsRoundTrip.Tests
 
 cd apps/frontend && npm run lint && npm run format:check && npm run test && npm run build
 ```
 
-Se sua mudança toca o contrato entre dois apps, rode também os dois projetos
+Se sua mudança toca o contrato entre dois apps, rode também os três projetos
 cruzados em `tests/` — são a única verificação de acordo real entre eles.
 
 ### 2. Integridade da documentação

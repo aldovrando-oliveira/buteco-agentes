@@ -487,7 +487,7 @@ sessão.
 ## Rodar os testes
 
 Os testes de integração de `apps/api`, `apps/workers`, `apps/inbox` e dos
-dois projetos cruzados em `tests/` sobem Postgres e RabbitMQ efêmeros via
+três projetos cruzados em `tests/` sobem Postgres e RabbitMQ efêmeros via
 Testcontainers. Eles **não** precisam do `docker compose up` acima rodando,
 mas precisam de Docker ou Podman disponível — se você usa Podman, veja
 [Testcontainers com Podman](#testcontainers-com-podman).
@@ -515,6 +515,10 @@ dotnet test tests/CrossAppTaskStoreCompatibility.Tests
 # -> apps/api -> apps/workers -> push notification
 dotnet test tests/InboxOrchestratorRoundTrip.Tests
 
+# ida e volta: apps/api valida a pasta no apps/connectors real (conector falso,
+# sem Google); sobe só um Postgres
+dotnet test tests/ApiConnectorsRoundTrip.Tests
+
 # apps/frontend
 cd apps/frontend
 npm run lint
@@ -528,7 +532,7 @@ menos que `GoogleDrive__ServiceAccountKeyBase64` e `CONNECTORS_MANUAL_FOLDER_ID`
 estejam no ambiente: ele lista a raiz de uma pasta real e baixa o markdown de cada
 arquivo, imprimindo só nomes, códigos e tamanhos.
 
-Os dois projetos em `tests/` são as únicas exceções ao isolamento entre apps,
+Os três projetos em `tests/` são as únicas exceções ao isolamento entre apps,
 e existem exatamente para verificar acordos que nenhum app sozinho consegue
 verificar — ver [conventions.md](conventions.md).
 

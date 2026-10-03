@@ -442,9 +442,12 @@ um laço que falharia pelo mesmo motivo.
 ## Autenticação
 
 **Token stateless assinado com HMAC**, sem biblioteca JWT e sem sessão em
-banco. `apps/api` emite **só o token do operador**, no login; cada serviço
-assina o **próprio** token de serviço com a mesma chave (o `apps/inbox` em
-`apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs:24`).
+banco. `apps/api` emite o token do operador, no login; cada serviço
+assina o **próprio** token de serviço com a mesma chave (o `apps/inbox` com
+`service:inbox` em `apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs`,
+e, desde a #104, o `apps/api` com `service:api` em
+`apps/api/src/Buteco.Api/Auth/ServiceTokenDelegatingHandler.cs`, só para chamar o
+`apps/connectors`; os dois são cópias com o subject trocado, sem `libs/`).
 A frase anterior dizia que o `apps/api` emitia os dois, e não é o que o
 código faz; corrigida em `catalogo-base-sincronizada`. `apps/api`
 e `apps/inbox` validam **localmente**, compartilhando apenas a chave de
@@ -693,6 +696,18 @@ toda operação sobre uma pasta a lê antes (consulta em pasta sem acesso devolv
 vazia). Autorização por tabela de subjects **sem operador em tudo**: `operator` em
 provedores e navegação, `service:api` (#104) na descrição de pasta, o resto `403`,
 conferida no boot nos dois sentidos. Change `apps-connectors-google-drive` (#103).
+
+**Primeiro consumidor da descrição de pasta: o cadastro de base sincronizada do
+`apps/api`** (change `criacao-base-sincronizada`, #104). O nome e a URL da pasta vêm
+da resposta, nunca do corpo do painel. `Connectors:BaseUrl` é opcional: sem ele o
+`apps/api` sobe e só esse cadastro responde `503` `connectors-not-configured`. O
+código do `apps/connectors` passa como veio, com o status por natureza dele (só
+`404` vira `422`); os do `apps/api` são `connectors-unavailable` (`503`) e
+`connectors-error` (`502`, inclusive para `401`/`403` do outro app, que repassados
+deslogariam o operador). Os limites de tempo formam uma cadeia entre três lugares:
+30 s de metadado no `apps/connectors` < 35 s no `apps/api` < 60 s padrão do nginx do
+painel. Pasta em uso é `409` `folder-in-use` com a base dona, e a mensagem não manda
+excluir nada enquanto a #108 não existir.
 
 ## Convenções estabelecidas (o "estilo da casa")
 
@@ -1830,17 +1845,33 @@ de propor algo nesta base:
 
     **`Closes #<issue>` no corpo do PR**
 
-    Todo PR carrega `Closes #<issue>`, e a issue fecha junto com o merge. Duas
+    Todo PR carrega `Closes #<issue>`, e a issue fecha junto com o merge. Três
     precisões que a regra precisa carregar, porque sem elas ela é lida errado
     nos dois sentidos:
 
     - **`Closes` fecha no merge, não na aprovação.** Aprovar não fecha nada e
       não move cartão nenhum.
-    - **Uma issue por PR** — a que originou a change. Achado descoberto dentro
-      da change que virou issue própria entra como `Refs #N`, **nunca** como
-      `Closes`. Ele é fila, não escopo deste PR; fechá-lo junto apagaria da fila
-      um trabalho que não foi feito, que é o oposto do que a 23 existe para
-      garantir.
+    - **A issue que originou a change entra como `Closes`; achado entra pelo
+      que aconteceu com ele no PR.**
+      - Achado descoberto dentro da change que virou issue própria e **ficou na
+        fila**, sem ser corrigido neste PR, entra como `Refs #N`, **nunca** como
+        `Closes`. Ele é fila, não escopo deste PR; fechá-lo junto apagaria da fila
+        um trabalho que não foi feito, que é o oposto do que a 23 existe para
+        garantir.
+      - Achado descoberto dentro da change e **corrigido por inteiro no mesmo PR**
+        entra como `Closes #N`. Fechá-lo não apaga trabalho da fila, porque o
+        trabalho foi feito. O caso que originou este ajuste é a **#127**: a
+        `criacao-base-sincronizada` (#104) já editava o bloco do
+        `docs/conventions.md` em que faltava o `apps/connectors`, e corrigiu a
+        lacuna inteira ali.
+    - **Uma palavra-chave por issue, em linha própria.** `Closes #104, #127` fecha
+      só a primeira; cada issue fechada leva o próprio `Closes`, numa linha só
+      dela:
+
+      ```
+      Closes #104
+      Closes #127
+      ```
 
     **O que é automático, e o que não é**
 
