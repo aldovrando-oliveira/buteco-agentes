@@ -14094,3 +14094,158 @@ comportamento especificado.
 
 - A #112.
 - Commit, push e PR — decisão do dono.
+
+## Etapa `0` do Google Drive — exportação, acesso, listagem e versão, medidos (02-03/10/2026 · issue #100)
+
+Rodada de medição, não change: nada em `apps/`, nenhuma change OpenSpec, saídas em
+`~/.cache/buteco-agents/drive-0/`. Ela existe porque a linha de bases
+sincronizadas (#102, #103, #105) dependia de comportamentos do Drive que ninguém
+tinha observado. Sem commit, sem push e sem PR. A #100 está em `In progress` e
+fechá-la é decisão do dono.
+
+**Instrumento:** Python 3.14.6, `google-api-python-client` 2.201.0 e
+`google-auth` 2.59.1, as duas na última versão do PyPI, conferidas na fonte no
+dia. Drive API v3, service account **só** com `drive.readonly`. Toda alteração no
+Drive foi feita pelo dono, uma por vez, confirmada no chat antes da leitura.
+Cerca de 60 chamadas no total, nenhuma em laço.
+
+**Bar declarado às 16:05 de 02/10, antes da primeira chamada**, pergunta por
+pergunta (o que mede, que decisão muda, em qual issue). Com ele veio a cláusula
+que esta lista já usou em `0d`: **a linha de bases sincronizadas segue de
+qualquer jeito; a rodada decide a forma, não se ela acontece.**
+
+**Mudança de instrumento depois do bar, registrada com horário:** o dono não tem
+Drive Compartilhado nem acesso de admin. P1, P3 e P6 foram medidas numa pasta de
+Meu Drive, e a P4 e metade da P2 saíram da rodada para a **#114**
+(`aguardando gatilho`). Duas perguntas foram **acrescentadas pelo mantenedor**
+(P6, e o bloqueio de download na P1) e registradas na #100 por comentário. Um
+achado de instrumento só apareceu na sonda: **as duas pastas eram de conta
+pessoal** (@gmail.com). "Meu Drive de conta Workspace", que é onde política de
+organização bloqueia compartilhamento, também ficou não medido.
+
+##### P1 — a imagem vem embutida, e é ela que estoura o teto
+
+| documento | markdown exportado | bytes de imagem |
+|---|---|---|
+| Doc com 1 imagem | 785.917 B (75% de 1 MiB) | **99,8%**, `data:image/png;base64` |
+| Doc com tabela e listas | 5.729 B | 0 |
+| `02` convertido em Doc (~850 KB de texto) | 849.530 B (81%) | 0 |
+
+- A imagem sai em estilo de referência: `![][image1]` no corpo e
+  `[image1]: <data:image/png;base64,…>` no fim. **Uma imagem leva o documento a
+  75% do teto.** Com texto, nem o `02` inteiro chega lá.
+- Títulos, listas aninhadas (`*` com 2 espaços por nível), tabela GFM, negrito e
+  código inline sobrevivem. Os títulos saem embrulhados em negrito
+  (`# **Visão Geral**`). **Bloco de código não vira cerca**, e o escape é
+  agressivo: na ida e volta do `02`, de 4 para **713** escapes (`\_`, `\-`,
+  `\=`), e as quebras manuais de linha viram parágrafos (14.096 → 5.899 linhas).
+- `.md` por download direto: **idêntico byte a byte** ao repositório (HEAD
+  `505ea24`). O `mimeType` dele é `text/x-markdown`.
+- **Bloqueio de download para leitores ligado → `403 cannotExportFile`, "This
+  file cannot be exported by the user."** A listagem já traz
+  `capabilities.canDownload=false`, então o conector sabe antes de exportar.
+
+##### P2 — Meu Drive não pede nada, e o primeiro erro foi de implantação
+
+As duas pastas de conta pessoal, compartilhadas como Leitor, listam com
+`files.list` simples. Os parâmetros de Drive Compartilhado não mudam o
+resultado. **O primeiro erro da rodada foi `403 accessNotConfigured`**: a Drive API
+desligada no projeto da service account. É o mesmo status de "sem acesso", de
+"export bloqueado" e de cota estourada (P5). **O conector precisa ler o
+`reason`, não o status.**
+
+##### P3 — tudo é ausência, nada aparece marcado
+
+| ação do dono | listagem da raiz | `get` pelo id |
+|---|---|---|
+| lixeira | **some**, com ou sem `trashed=false` | `trashed: true`, mesmo pai |
+| restaurar | volta, **mesmo id** | `trashed: false` |
+| mover para subpasta | **some** | mesmo id, pai = subpasta |
+| outro dono manda para a lixeira | **some** | `trashed: true` |
+
+Para quem não é dono, item na lixeira não aparece **nem sem o filtro**. Subpasta
+não traz conteúdo para a raiz. Atalho é `application/vnd.google-apps.shortcut`
+com `shortcutDetails.targetId`, e o nome terminado em `.docx` aponta para um
+`document`. Suporte se decide por `mimeType`, nunca por extensão. A primeira
+leitura da ação 4 não mostrou mudança porque o dono tinha descartado o arquivo
+errado. Corrigido e relido uma vez.
+
+##### P6 — nenhum metadado de Google Doc acompanha só o conteúdo
+
+| ação | `version` | `modifiedTime` | `.md` `md5Checksum` | Doc: hash do export |
+|---|---|---|---|---|
+| editar texto | muda | muda | muda | muda |
+| renomear | muda | **muda** | igual | igual |
+| alterar compartilhamento | muda | **muda** | igual | igual |
+| abrir sem editar | **muda** | igual | igual | igual |
+
+`version` sobe até ao abrir, e em cada ação da P3. O `modifiedTime` muda com
+renomear e compartilhar, e mudou uma vez com o editor aberto sem diferença no
+markdown, por causa não confirmada. **No `.md`, `md5Checksum` (e
+`headRevisionId`) mudam com o conteúdo e só com ele.** No Doc não existe
+equivalente: não há `md5Checksum` nem `headRevisionId`, e `revisions.list`
+devolve **lista vazia** para Leitor. O mais perto é o **hash do markdown
+exportado**.
+
+##### P5 — a cota não decide o intervalo; a carga inicial, sim
+
+Pela documentação oficial (página de limites atualizada em 11/09/2026): leitura
+5 unidades, listagem 100, download 200. **325.000 unidades/min por usuário**, e a
+service account inteira conta como um usuário. 400 milhões por dia por projeto.
+O excesso volta como `403`/`429`, e está **anunciado para virar cobrança ainda em
+2026**. Um ciclo sem mudança custa 105 unidades por base de até 1000 arquivos:
+cerca de 3.000 bases no mesmo minuto, ou cerca de 13.000 com ciclo de 5 min no
+teto diário. **O que vira restrição é baixar: cerca de 1.600 arquivos por
+minuto**, ou seja, a primeira sincronização de uma base grande, ou um
+renomear/recompartilhar em massa, que força export (P6). A página não diz em que
+classe entra `files.export`, e foi contado como download. Não medido por carga.
+
+##### O que as issues #102, #103 e #105 herdam
+
+- **#102:** `ExternalVersion` é **hash de conteúdo**, não campo do Drive: o
+  `md5Checksum` para `.md` e o hash do markdown exportado para Doc.
+- **#103:**
+  - retirar as imagens embutidas antes de medir contra 1 MiB;
+  - decidir sobre os escapes e o código sem cerca;
+  - `.md` por download direto;
+  - suporte por `mimeType`;
+  - `canDownload=false` → ignorado com motivo, sem export;
+  - os `403` distinguidos por `reason`;
+  - `deployment.md` com três pré-requisitos: ativar a Drive API no projeto,
+    compartilhar como Leitor e permitir download para leitores.
+- **#105:**
+  - **ausente da listagem = exclusão**, sem caso de "marcado";
+  - para Doc, `modifiedTime` como **filtro** (igual → pula) e hash como
+    **versão** (só manda upsert se mudou). Assim renomear ou compartilhar custa
+    um export e não gera evento, que é o aceite;
+  - backoff para `403`/`429` de cota, sem gravar isso como erro de acesso;
+  - intervalo de 5 min com folga.
+- **#107:** a mensagem de falha de export precisa dizer "permita download para
+  leitores".
+
+**Dois resultados contrariam o texto das issues:**
+1. **#105, "compara por `ExternalRef` e `ExternalVersion`, e baixa só o que
+   mudou":** pressupõe um marcador de metadado que **só o `.md` tem**. Para Doc,
+   saber se mudou exige exportar quando o `modifiedTime` muda.
+2. **#103, "exportação de Google Docs como `text/markdown`" como entrega
+   direta:** sem retirar as imagens, um Doc com duas ou três imagens vira
+   "ignorado" por tamanho, e o índice recebe base64.
+
+##### O que ficou aberto
+
+- **Na #114:** Drive Compartilhado (parâmetros, membro externo, política da
+  organização) e a P4, id da pasta ao mover entre drives. Essa medição sustenta
+  a imutabilidade da pasta na #102, que segue **sem evidência**.
+- **Não medidos nesta rodada:**
+  - Meu Drive de conta Workspace;
+  - links no export (nenhum documento tinha);
+  - falha de export por tamanho (o limite documentado é 10 MB; o maior
+    exportado foi 849.530 B);
+  - o outro dono *mover* o arquivo em vez de mandar para a lixeira;
+  - a causa da deriva de `modifiedTime` com o editor aberto.
+- **Desvios:**
+  - 7 chamadas antes de uma sonda, com a API desligada;
+  - a edição do `.md` na P6 foi por "nova versão" de uma cópia fora do
+    repositório, a pedido do dono, para não tocar no original.
+
+Relatório completo: `~/.cache/buteco-agents/drive-0/RELATORIO.md`.
