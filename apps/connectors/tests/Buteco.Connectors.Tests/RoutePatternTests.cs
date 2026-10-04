@@ -24,6 +24,8 @@ public class RoutePatternTests
 
         Assert.Equal(
             [
+                // "Sincronizar agora" (change ciclo-de-sincronizacao, D9).
+                "/connectors/knowledge-bases/{knowledgeBaseId:guid}/sync",
                 "/connectors/providers",
                 "/connectors/providers/{providerKey}/folder",
                 "/connectors/providers/{providerKey}/folders",

@@ -16,8 +16,15 @@ public sealed class ConnectorsFactory(
     bool withFakeConnector = true,
     string? googleKeyBase64 = null,
     IReadOnlyDictionary<string, string?>? extraConfiguration = null,
-    string environment = "Development") : WebApplicationFactory<Program>
+    string environment = "Development",
+    Action<IServiceCollection>? configureServices = null) : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// O apps/api falso, ligado ao cliente do ciclo de sincronização. Só é chamado quando o
+    /// teste configura Api:BaseUrl.
+    /// </summary>
+    public FakeSyncApiHandler SyncApi { get; } = new();
+
     public GoogleDriveFakeHandler Google { get; } = new();
 
     public FakeConnector Fake { get; } = new();
@@ -42,6 +49,11 @@ public sealed class ConnectorsFactory(
         {
             ["Auth:TokenSigningKey"] = TestAuthentication.TokenSigningKey,
             ["Cors:AllowedOrigins:0"] = "http://painel.test",
+            // Vazio conta como ausente: o ciclo de sincronização não roda (design.md da
+            // change ciclo-de-sincronizacao, D2). Sem isto, o Api:BaseUrl do
+            // appsettings.Development.json valeria para a suíte inteira, e cada teste
+            // ligaria o ciclo contra localhost:5017. Só os testes do ciclo o configuram.
+            ["Api:BaseUrl"] = string.Empty,
         };
         if (googleKeyBase64 is not null)
         {
@@ -75,6 +87,9 @@ public sealed class ConnectorsFactory(
 
             services.AddHttpClient(GoogleDriveHttp.DriveClientName).ConfigurePrimaryHttpMessageHandler(() => Google);
             services.AddHttpClient(GoogleDriveHttp.OAuthClientName).ConfigurePrimaryHttpMessageHandler(() => Google);
+            services.AddHttpClient(Buteco.Connectors.Sync.SyncApiClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => SyncApi);
+
+            configureServices?.Invoke(services);
         });
     }
 }
