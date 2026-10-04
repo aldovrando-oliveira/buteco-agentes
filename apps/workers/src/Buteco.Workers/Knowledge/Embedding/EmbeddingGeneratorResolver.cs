@@ -1,4 +1,5 @@
 using System.ClientModel;
+using Buteco.Workers.Http;
 using Buteco.Workers.Options;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -43,12 +44,14 @@ public sealed class EmbeddingGeneratorResolver(
             //
             // LEIA ANTES DE ACRESCENTAR UM SEGUNDO PROVEDOR AQUI. Este resolvedor
             // constrói um cliente NOVO a cada chamada, e isso é seguro hoje por um
-            // motivo que vale só para o caminho `openai`: `System.ClientModel`
-            // serve o transporte de `HttpClientPipelineTransport.Shared`, que tem
-            // um `private static readonly HttpClient` — um por processo,
-            // independentemente de quantos clientes sejam construídos (verificado
-            // por decompilação, ver C4 do design.md da change
-            // fix-vazamento-httpclient-chat).
+            // motivo que vale só para o caminho `openai`: todo `OpenAIClient` daqui
+            // recebe `OutboundConnectTimeout.OpenAiTransport`, um transporte
+            // ESTÁTICO com um `HttpClient` só — um por processo,
+            // independentemente de quantos clientes sejam construídos. Antes da
+            // change timeout-de-conexao-saida-workers a mesma propriedade vinha de
+            // `HttpClientPipelineTransport.Shared` (verificado por decompilação,
+            // C4 do design.md da change fix-vazamento-httpclient-chat); o
+            // transporte trocou para ganhar timeout de conexão, a propriedade não.
             //
             // Os dois provedores que caem neste braço NÃO têm essa propriedade no
             // lado de chat: `Google.GenAI` faz `new HttpClient()` por instância de
@@ -82,7 +85,11 @@ public sealed class EmbeddingGeneratorResolver(
 
         var client = new OpenAIClient(
             new ApiKeyCredential(options.ApiKey),
-            new OpenAIClientOptions { Endpoint = new Uri(options.BaseUrl) });
+            new OpenAIClientOptions
+            {
+                Endpoint = new Uri(options.BaseUrl),
+                Transport = OutboundConnectTimeout.OpenAiTransport,
+            });
 
         // SEM o segundo parâmetro (defaultModelDimensions), de propósito: ele
         // preenche a metadata do gerador com uma dimensão que o gateway NÃO

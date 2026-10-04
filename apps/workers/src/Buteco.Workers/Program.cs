@@ -45,17 +45,10 @@ builder.Services.AddSingleton<KnowledgeIndexingService>();
 
 builder.Services.AddSingleton<IMcpCredentialCipher, AesGcmMcpCredentialCipher>();
 
-// PooledConnectionLifetime explícito (default do SocketsHttpHandler é
-// infinito) — sem isso, conexões deste client de longa duração (reusado
-// entre execuções via IHttpClientFactory) podem ficar presas a um
-// McpServer atrás de proxy/CDN (ex.: Cloudflare) que derruba conexões
-// ociosas do lado dele sem avisar; a próxima tentativa de reuso trava até
-// estourar o timeout de inicialização do MCP em vez de abrir conexão nova.
-builder.Services.AddHttpClient(McpTransportFactory.HttpClientName)
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-    {
-        PooledConnectionLifetime = TimeSpan.FromSeconds(30),
-    });
+// O registro do HttpClient do MCP vive em McpTransportFactory.AddHttpClient,
+// e não inline aqui, para que o guarda do timeout de conexão exercite ESTE
+// registro e não uma cópia (change timeout-de-conexao-saida-workers, D3).
+McpTransportFactory.AddHttpClient(builder.Services);
 builder.Services.AddSingleton<McpTransportFactory>();
 builder.Services.AddSingleton<IMcpToolSetResolver, McpToolSetResolver>();
 

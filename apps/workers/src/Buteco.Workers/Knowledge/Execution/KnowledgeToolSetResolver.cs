@@ -133,10 +133,10 @@ public sealed class KnowledgeToolSetResolver(
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
             // Construído por invocação e NÃO descartado — mesmo tratamento de
-            // KnowledgeIndexingService. Seguro no caminho `openai` porque
-            // System.ClientModel serve o transporte de
-            // HttpClientPipelineTransport.Shared, com um HttpClient estático por
-            // processo (verificado por decompilação, C4 da change
+            // KnowledgeIndexingService. Seguro no caminho `openai` porque o
+            // cliente usa OutboundConnectTimeout.OpenAiTransport, com um
+            // HttpClient estático por processo (antes, a mesma propriedade vinha
+            // de HttpClientPipelineTransport.Shared; C4 da change
             // fix-vazamento-httpclient-chat). O gatilho para quando isso deixar
             // de valer está escrito no `default:` de EmbeddingGeneratorResolver,
             // que é onde alguém acrescentaria o segundo provedor.

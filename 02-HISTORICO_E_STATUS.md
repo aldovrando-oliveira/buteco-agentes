@@ -9993,6 +9993,9 @@ duas changes parado até alguém lhe dar posição.
     uma fila longa causada por timeout ausente se lê igual a uma causada por falta
     de instância. As duas lacunas acima (lock segurado por ninguém visível, espera
     acima de 30 s) entram como pergunta de abertura dela.
+  - **Corrigido em 03/10/2026 (#46):** timeout de conexão de 5 s nas chamadas de
+    saída; ver "`timeout-de-conexao-saida-workers`" no fim deste arquivo. As duas
+    lacunas acima seguem na #139, com a #132 como candidata ao dono invisível.
 
 - **Decisão tomada fora do repositório é decisão que a próxima sessão
   desconhece.** Forma curta, com três ocorrências nesta linha de trabalho:
@@ -14905,3 +14908,113 @@ contendo `FOR UPDATE` registrado). Os dois desfeitos e conferidos por `grep`.
 - A tela de exclusão e a mudança da mensagem do `409` de pasta em uso: #136.
 - As corridas do operador contra a exclusão (inclusão de documento e substituição de
   vínculos): risco aceito, `500` sem perda de dado, registrado no `design.md`.
+
+## `timeout-de-conexao-saida-workers` — timeout de conexão nas chamadas de saída do worker (#46)
+
+Change arquivada em
+`openspec/changes/archive/2026-10-03-timeout-de-conexao-saida-workers/`. Posição 7
+da fila de 20/09, antes da `replicas-de-worker`, sem recalibração.
+
+### O que entrou
+
+LLM dos três provedores, embedding e MCP desistem de **conectar** em **5 s por
+tentativa** (`apps/workers/src/Buteco.Workers/Http/OutboundConnectTimeout.cs`). O
+prazo cobre TCP e TLS. Cada SDK recebe o handler pelo ponto de injeção que expõe:
+`OpenAIClientOptions.Transport` (chat e embedding), a propriedade `HttpClient` do
+`AnthropicClient` e `ClientOptions.HttpClientFactory` do `Google.GenAI`. É um
+handler por SDK, por processo, preservando o que o default de cada um configurava.
+O registro do `HttpClient` do MCP saiu do `Program.cs` para
+`McpTransportFactory.AddHttpClient`, chamado pelo `Program.cs` e pelo guarda. Os
+dois `catch` de `McpToolSetResolver` passaram a separar parada de timeout.
+
+### O que a exploração e a implementação mediram
+
+- **Reprodução sobre `a7960d9`**, contra `10.255.255.1` (SYN sem resposta, conferido
+  na rede antes de rodar), macOS: chat OpenAI **300,3 s** / 4 tentativas, embedding
+  **300,0 s** / 4, Gemini 75,5 s / 1, MCP 60,1 s, Anthropic 30,3 s / 1, push 5,1 s.
+  No macOS o SYN desiste em 75,0 s (medido). Em Linux o limite passa a ser o de
+  100 s do `NetworkTimeout`/`HttpClient.Timeout`, que é o "100 s no Gemini" de
+  22/09.
+- **De onde vêm os 30 s do Anthropic:** sem streaming e sem `MaxOutputTokens`, o
+  SDK calcula `clamp(30·1024/1000, 30, 600)` = 30 s por tentativa e não repete
+  cancelamento. A premissa de "10 min × 2" que circulou na revisão não vale para o
+  caminho usado.
+- **O `ConnectTimeout` cobre TLS** (TLS mudo cortado em 3,07 s) e **lança
+  `TaskCanceledException`**, não `HttpRequestException`. A segunda propriedade
+  quebraria a degradação do MCP: o `catch ... when (exception is not
+  OperationCanceledException)` deixava o timeout escapar e a task cairia. Visto no
+  guarda: com o timeout e sem o filtro novo, reprovou aos 16,5 s **por exceção**.
+- **Valor:** simulado com os SDKs reais, 5 s deu 20,2 s no OpenAI (4 tentativas) e
+  **10 s deu 40,1 s**, acima dos 30 s em que a mensagem seguinte desiste do lock.
+  Não há tempo de conexão em `provider_calls`/`embedding_calls`; o lado "não cortar
+  conexão legítima" é argumento (RTO de SYN de 1 s, lido), não medição. Gatilho de
+  revisão: `TimeoutException` "A connection could not be established within the
+  configured ConnectTimeout" contra provedor saudável.
+- **Guardas (convenção 15),** cinco, com um listener em loopback que aceita o TCP e
+  nunca completa o TLS (independe da rede da máquina): chat OpenAI e embedding em
+  `OutboundConnectTimeoutTests`; Anthropic e Gemini numa collection sem paralelismo
+  (apontados por variável de ambiente; o cache do `ChatClientResolver` é por
+  instância, o Anthropic lê o endpoint na primeira requisição e o Gemini na
+  construção); MCP em `McpToolSetResolverTests`, pelo registro de produção. Contra o
+  código atual, os cinco reprovaram ainda esperando conexão. Com a correção, 5,3 s
+  (Anthropic), 5,4 s (Gemini), 20,1 s (chat OpenAI), 20,3 s (embedding) e 15,7 s
+  (MCP). Desfazendo cada parte da correção isoladamente, só o guarda daquela parte
+  reprovou, nas cinco reversões.
+- **Caminho que conecta, sem cobertura nos cinco caminhos (#141):** nenhum teste
+  faz ida e volta bem-sucedida pelos handlers novos. O único host com o
+  `ChatClientResolver` real (`TaskJobConsumerTests.cs:1162`) serve um teste de chave
+  ausente, sem rede; o embedding real só é construído, nunca chamado; as idas e
+  voltas de MCP (`McpToolExecutionEndToEndTests.cs:253`,
+  `AgentToolNamespaceTests.cs:557`) trocam o handler primário por um falso. O
+  cenário "conexão que se estabelece dentro do prazo não é afetada" vale por
+  construção (cada handler preserva o default do seu SDK). **O deploy precisa de um
+  smoke de uma mensagem por provedor usado no piloto**, e de uma chamada de tool MCP
+  se houver servidor vinculado.
+- **Limites dos guardas, divergência do `design.md` aprovado (convenção 9):** os de
+  OpenAI e MCP nasceram em 25 s e 20 s, colados no medido. Numa rodada com a VM
+  disputada, o de embedding reprovou aos 25,6 s com a correção presente. Passaram a
+  30 s, o limite do requisito (o lock). As duas pernas foram refeitas.
+- **Suíte de `apps/workers`:** baseline em `a7960d9`, **391/391**, 39 classes,
+  6m17s, com `--blame-hang-timeout 4m`, `podman ps` vazio no início (load 7,38) e no
+  fim (load 3,88). Fechamento: **396/396**, 41 classes, **7m45s**, com a mesma flag, na árvore de trabalho sobre `a7960d9` (o commit é do dono). Na largada (load 4,90) e no fim (4,33), três contêineres **ociosos** de outra sessão na VM (`funny_elion`, órfão de Testcontainers, e `buteco-105-verify-*`), e zero processos de teste de outras sessões nas amostras a cada 15 s: `podman ps` **não** estava vazio, e o número vem com isso dito. Por classe, só mudaram as duas classes novas
+  (`OutboundConnectTimeoutTests` 2/2, `OutboundConnectTimeoutEnvironmentTests` 2/2) e
+  `McpToolSetResolverTests`, **20 → 21**. Duas rodadas de fechamento anteriores
+  não contam: 396/396 em 7m59s (a linha principal subiu contêiner 1,5 min depois da
+  largada) e 394/396 em 13m21s (a linha principal rodou suíte no meio; as falhas
+  foram o guarda de embedding no limite antigo e a #130, comentada lá).
+- **Baselines descartadas:** a primeira (390/391) teve a linha principal entrando no
+  meio e uma falha intermitente que passa isolada (**#130**); a segunda travou aos
+  34 min com o testhost em laço (**#135**).
+
+### Decisões
+
+- **5 s, constante, sem configuração** (convenção 2): o lock limita por cima (4
+  tentativas no OpenAI), a conexão legítima por baixo.
+- **O limite é por chamada, não por execução.** Uma execução com duas chamadas
+  inalcançáveis soma os tempos e passa dos 30 s (gateway cai no meio: embedding da
+  tool ~20 s + chat ~20 s). Registrado como risco, sem correção aqui.
+- **Não conserta o caso IPv6 de 22/09:** a tentativa por IPv6 consome os 5 s e
+  falha. A correção impede a cascata no lock; o contorno
+  `DOTNET_SYSTEM_NET_DISABLEIPV6=1` continua necessário onde existe.
+- **Push notification não foi tocado:** o timeout total de 5 s já limita a conexão.
+- **Retentativas de SDK não foram alteradas.**
+
+### Issues abertas (convenção 23)
+
+- **#130** — `KnowledgeIndexingTests`: 4 de 5 fragmentos, intermitente na suíte
+  inteira.
+- **#132** — aquisição do lock que estoura na borda do `CommandTimeout` devolve ao
+  pool uma conexão segurando o lock (1–2% no arranjo medido). Candidata, com
+  mecanismo medido, ao "dono invisível" de 22/09.
+- **#134** — resposta travada depois de conectar segura o lock até 400 s no OpenAI.
+- **#135** — suíte travada com o testhost em laço.
+- **#139** (`tipo: investigação`) — a segunda metade da #46.
+- **#141** — nenhum teste faz ida e volta bem-sucedida pelos handlers novos.
+
+### O que a investigação do lock descartou
+
+O cancelamento do `CommandTimeout`, sozinho, não explica as esperas de 83,6 s e
+103,6 s: termina em 30,03 s, e em **60,02 s** com a conexão de cancelamento muda.
+Uma primeira leitura de 45 s era defeito do proxy de teste. O que continua sem
+explicação, as pistas não seguidas e a leitura de `pg_locks` para a próxima
+ocorrência estão na #139.
