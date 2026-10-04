@@ -129,6 +129,23 @@ public class ServiceScopeAuthorizationTests(ApiFactoryFixture factory) : IClassF
         Assert.Equal(0, await Knowledge.KnowledgeTestClient.CountDocumentEventsInDatabaseAsync(factory.Services, knowledgeBase.Id));
     }
 
+    // exclusao-base-conhecimento (D11): a exclusão de base é do operador, e NÃO entra
+    // no escopo de service:connectors, que só escreve pelas rotas de /sync.
+    [Fact]
+    public async Task ConnectorsToken_OnDeleteKnowledgeBase_ReturnsForbiddenAndKeepsTheBase()
+    {
+        var operatorClient = factory.CreateClient();
+        var created = await operatorClient.PostAsJsonAsync("/knowledge-bases", new { name = "Base fora do escopo", description = "Descrição." });
+        created.EnsureSuccessStatusCode();
+        var knowledgeBaseId = (await created.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        (await operatorClient.PostAsync($"/knowledge-bases/{knowledgeBaseId}/deactivate", null)).EnsureSuccessStatusCode();
+
+        var response = await Knowledge.KnowledgeSyncTestSeed.CreateConnectorsClient(factory).DeleteAsync($"/knowledge-bases/{knowledgeBaseId}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await operatorClient.GetAsync($"/knowledge-bases/{knowledgeBaseId}")).StatusCode);
+    }
+
     [Fact]
     public async Task InboxToken_OnEverySyncRoute_ReturnsForbiddenAndWritesNothing()
     {

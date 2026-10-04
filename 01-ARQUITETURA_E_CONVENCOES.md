@@ -113,7 +113,8 @@ nunca como inteiro ordinal.
 `Description` **não é campo decorativo** — é o texto que vira a descrição da
 tool exposta ao modelo, e é por ele que o modelo decide se a base é relevante
 para a pergunta; por isso é obrigatória e não vazia, ao contrário de
-`McpServer.Description`. Segue o padrão da casa: `IsActive`, sem exclusão.
+`McpServer.Description`. Tem `IsActive` e, desde a #108, exclusão real de base inativa —
+a exceção descrita em "Exclusão: catálogo × conteúdo".
 
 **Desde `catalogo-base-sincronizada` (#102), a base tem tipo, origem e estado da
 sincronização.** `ContentMode` (`Manual`/`Synced`) é enum **fechado e imutável**,
@@ -127,8 +128,8 @@ imutáveis; nome e URL da pasta são snapshot que só a gravação de um ciclo
 - **Uma pasta, uma base, inclusive inativa** — índice único parcial em
   `(SyncProvider, SyncFolderId) WHERE ContentMode = 'Synced'`, sem `IsActive`, porque
   desativar impede o uso pelo agente e não a sincronização. Id comparado como veio.
-  Sem rota de exclusão de base (#108), a mensagem de pasta em uso não pode mandar
-  excluir a base.
+  A rota de exclusão de base existe desde a #108, mas a mensagem de pasta em uso
+  continua sem mandar excluir até o botão do painel (#136).
 - **Motivo é código, não frase** — `LastSyncErrorCode` e o `code` de cada item de
   `SyncIgnoredFiles` (`jsonb`, molde de `Agent.Skills`) aceitam só a forma
   `access-denied` (regex com `\z`, não `$`). O texto é do frontend, pelo raciocínio
@@ -344,17 +345,18 @@ sobra só a truncagem em 64, que é o mesmo caminho da colisão MCP × delegaç�
 - FKs em `Cascade` nos dois lados, como `AgentMcpServer` e `AgentDelegation` — e
   deliberadamente diferente do `Restrict` de `KnowledgeDocument` para a base.
   Não há conflito: enquanto existir documento, o `Restrict` bloqueia a exclusão
-  da base antes de o `Cascade` do vínculo ser alcançado. Hoje as duas cascatas
-  são inertes (nem `Agent` nem `KnowledgeBase` têm rota de exclusão).
+  da base antes de o `Cascade` do vínculo ser alcançado. A cascata do lado da base
+  é alcançada desde a #108, pela exclusão de base, que apaga os documentos antes; a
+  do lado do agente continua inerte (`Agent` não tem rota de exclusão).
 - A lista exposta em `AgentResponse.knowledgeBases` é ordenada por nome **com
   desempate por id**. Não é preciosismo: nome de base não é único por requisito,
   e sem o desempate a ordem entre homônimas é a que o plano do Postgres
   devolver. Ver o item em aberto sobre os quatro sites que ainda não desempatam,
   em `02-HISTORICO_E_STATUS.md`.
 
-**`KnowledgeDocument` é a única entidade do repositório com exclusão real**
-(`DELETE`, primeiro `MapDelete` da base). Ver "Exclusão: catálogo × conteúdo",
-abaixo.
+**`KnowledgeDocument` foi a primeira entidade do repositório com exclusão real**
+(`DELETE`, primeiro `MapDelete` da base); `KnowledgeBase` é a segunda, desde a #108.
+Ver "Exclusão: catálogo × conteúdo", abaixo.
 
 ## Exclusão: catálogo × conteúdo
 
@@ -385,13 +387,56 @@ referenciado → `IsActive`; conteúdo sem referência → exclusão real.** Dua
 consequências práticas registradas junto:
 
 - A FK de `KnowledgeDocument` para `KnowledgeBase` usa **`Restrict`**, não o
-  `Cascade` default do EF Core. Hoje é inerte (a base não tem exclusão); a
+  `Cascade` default do EF Core. Foi inerte até a #108; a
   diferença é qual das duas falha de forma segura se alguém adicionar exclusão
   de base um dia — `Restrict` obriga a decidir o destino dos documentos em vez
   de os apagar em silêncio.
 - `DELETE` numa rota que não oferece o verbo responde **405**, não 404 — a
   distinção entre "recurso inexistente" e "operação não oferecida" é
   informação, e é ela que os testes afirmam.
+
+### A exceção: base de conhecimento tem exclusão real (#108)
+
+**Desde `exclusao-base-conhecimento`, `KnowledgeBase` tem `DELETE`**, apesar de ter
+vínculos de agente apontando para ela. O critério acima ganha uma segunda pergunta,
+e é ela que separa a base das outras entidades de catálogo: **alguém lê o passado
+por esta entidade? Ela retém um recurso exclusivo?**
+
+- **Ninguém lê o passado pela base.** Métricas de indexação e de embedding não têm
+  FK para ela e sobrevivem à exclusão; os insights juntam com `task_executions`,
+  nunca com `knowledge_bases`; o histórico de documentos é a auditoria **da base**, e
+  morre com ela (D3 de `historico-documentos-base`).
+- **Ela retém a pasta.** Em base sincronizada a pasta é única entre as bases,
+  inclusive inativas, e imutável. Sem exclusão, uma pasta perdida ficava presa à base
+  antiga para sempre, e o fluxo de recuperação (excluir e criar outra) era impossível.
+
+`Agent` (execuções e métricas o leem pelo id), `McpServer` (execuções) e `Channel`
+(sessões e mensagens) respondem "sim" à primeira pergunta e **continuam só se
+desativando**.
+
+O que a exclusão faz, e o que não se adivinha lendo a rota:
+
+- **Só base inativa.** Ativa responde `409` `knowledge-base-active`. A perda de
+  conhecimento do agente acontece na desativação, que é reversível; a exclusão
+  depois não muda o que nenhum agente vê. Os vínculos não precisam ser removidos
+  antes: vão pela cascata.
+- **Os documentos são apagados na aplicação, e a FK continua `Restrict`.** Uma
+  transação: `FOR UPDATE` na linha da base (e a conferência de `IsActive` sob o
+  bloqueio), `DELETE` dos documentos (fragmentos pela cascata), `DELETE` da base
+  (eventos e vínculos pelas cascatas). O bloqueio vem antes porque a inclusão de
+  documento faz `FOR KEY SHARE` na base; sem ele, um upsert entre os dois `DELETE`
+  faria o `Restrict` recusar o segundo. O `Restrict` fica como rede para qualquer
+  outro caminho.
+- **Escrita de `/sync` que encontra a base excluída no meio responde `404`, nunca
+  `500`.** A gravação que falha pela FK para a base (nomes lidos do banco, um deles
+  truncado em 63 caracteres com `~`), ou que não acha mais a linha, relê a base
+  antes de decidir. As rotas do operador (inclusão de documento, vínculo com agente)
+  ficaram de fora por decisão: exigem o mesmo operador em duas abas, e o efeito é um
+  `500` sem perda de dado.
+- **O impasse com a exclusão não é alcançável, e um teste prende o porquê.** O EF
+  emite o `INSERT` do evento (que trava a base) antes do comando sobre o documento,
+  na mesma ordem da exclusão. A ordem dos comandos do EF não é contrato: o teste que
+  a afirma é o que reabre a questão se ela inverter.
 
 ## Filas de trabalho
 

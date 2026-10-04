@@ -9,7 +9,9 @@ namespace Buteco.Api.KnowledgeSync.Commands.DeleteSyncedDocument;
 /// Exclusão por <c>ExternalRef</c> (D8). Referência que a base não tem responde
 /// como sucesso, sem evento: o estado pedido já vale, e a retentativa do conector
 /// depois de uma falha de rede não vira erro. O 404 fica reservado para a base
-/// inexistente, que a #105 trata como fim do ciclo daquela base.
+/// inexistente, que a #105 trata como fim do ciclo daquela base — inclusive quando a
+/// base é excluída entre a leitura e a gravação (exclusao-base-conhecimento, D6): o
+/// 204 de referência ausente só vale com a base existindo.
 /// </summary>
 public sealed class DeleteSyncedDocumentCommandHandler(AppDbContext dbContext)
     : ICommandHandler<DeleteSyncedDocumentCommand, DeleteSyncedDocumentResult>
@@ -35,7 +37,10 @@ public sealed class DeleteSyncedDocumentCommandHandler(AppDbContext dbContext)
 
             if (document is null)
             {
-                return new DeleteSyncedDocumentResult(lookup);
+                // Referência ausente: 204 só com a base existindo. A releitura custa uma
+                // consulta, e só neste caminho.
+                return new DeleteSyncedDocumentResult(
+                    await dbContext.LookupSyncedKnowledgeBaseAsync(command.KnowledgeBaseId, cancellationToken));
             }
 
             // Mesmo SaveChanges da exclusão (historico-documentos-base, D2).
@@ -47,9 +52,12 @@ public sealed class DeleteSyncedDocumentCommandHandler(AppDbContext dbContext)
                 await dbContext.SaveChangesAsync(cancellationToken);
                 return new DeleteSyncedDocumentResult(lookup);
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateException exception) when (KnowledgeBaseWriteFailures.MayBeDeletedBase(exception))
             {
-                dbContext.ChangeTracker.Clear();
+                if (await dbContext.KnowledgeBaseIsGoneAsync(command.KnowledgeBaseId, cancellationToken))
+                {
+                    return new DeleteSyncedDocumentResult(SyncedKnowledgeBaseLookup.NotFound);
+                }
             }
         }
 
