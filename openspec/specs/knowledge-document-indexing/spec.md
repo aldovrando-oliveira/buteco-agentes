@@ -130,9 +130,16 @@ Documento criado ou atualizado com conteúdo diferente SHALL ser publicado numa
 fila de indexação **própria**, distinta da fila de execução de tarefas de
 agente. O consumidor dessa fila SHALL ser o único escritor de fragmentos.
 
-A publicação SHALL ocorrer na mesma transação que persiste o documento, ou
-depois dela — nunca antes, para que não exista mensagem apontando para
-documento que não foi gravado.
+Toda escrita do `apps/api` que pede indexação SHALL gravar um **pedido de
+indexação** (documento e revisão) **na mesma transação** que persiste o
+documento: os dois são gravados juntos ou nenhum dos dois. A mensagem SHALL ser
+publicada a partir desse pedido, depois da transação, nunca antes — para que não
+exista mensagem apontando para documento que não foi gravado. O pedido SHALL ser
+removido só depois de o broker confirmar a mensagem, e SHALL continuar sendo
+despachado, sem ação do operador, enquanto a publicação falhar.
+
+Nenhuma escrita do `apps/api` SHALL publicar na fila de indexação por outro
+caminho que não o despacho do pedido.
 
 #### Scenario: Documento criado é enfileirado e indexado
 - **WHEN** um documento é criado numa base
@@ -143,6 +150,24 @@ documento que não foi gravado.
 - **WHEN** um documento grande está sendo indexado
 - **THEN** tarefas de agente continuam sendo consumidas normalmente, porque as
   duas filas são distintas
+
+#### Scenario: Pedido gravado junto com o documento sobrevive à fila indisponível
+- **WHEN** um documento é gravado com pedido de indexação enquanto a publicação
+  na fila falha
+- **THEN** o pedido existe no banco ao lado do documento, nenhuma mensagem foi
+  publicada, e, quando a publicação volta a funcionar, exatamente uma mensagem
+  com o id e a revisão do documento é publicada sem ação do operador, e o pedido
+  é removido
+
+#### Scenario: Pedido não é removido sem confirmação do broker
+- **WHEN** o broker recusa ou não confirma a mensagem de um pedido
+- **THEN** o pedido continua no banco e é despachado de novo no ciclo seguinte
+
+#### Scenario: Nenhuma escrita publica fora do despacho
+- **WHEN** se inspecionam os tipos do `apps/api` que dependem do publisher de
+  indexação
+- **THEN** o único é o componente de despacho do pedido, e nenhum handler de
+  escrita depende do publisher
 
 ### Requirement: Substituição integral dos fragmentos em transação única
 A gravação do resultado da indexação SHALL apagar todos os fragmentos do
@@ -451,10 +476,13 @@ Em caso de sucesso a operação SHALL, numa única gravação:
 - **preservar `indexedAt` e `fragmentCount`**;
 - **não alterar `contentHash` nem `contentRevision`**.
 
-Depois de gravar, a operação SHALL publicar **exatamente uma** mensagem na fila
-de indexação, para o documento, com contagem de execução inicial — a mesma
-mensagem e o mesmo caminho de publicação que a criação e a atualização de
-documento usam. A publicação SHALL ocorrer depois da gravação, nunca antes.
+Na mesma gravação, a operação SHALL registrar **exatamente um** pedido de
+indexação para o documento, com a revisão corrente, e esse pedido SHALL resultar
+em **exatamente uma** mensagem na fila de indexação, com contagem de execução
+inicial — o mesmo pedido, a mesma mensagem e o mesmo caminho de despacho que a
+criação e a atualização de documento usam. A mensagem SHALL sair depois da
+gravação, nunca antes, e SHALL sair mesmo que a fila esteja indisponível no
+momento da operação, assim que ela voltar.
 
 A operação SHALL responder HTTP 200 com o documento já no estado novo.
 
@@ -519,6 +547,14 @@ mentindo sobre a revisão: é uma rodada nova sobre a mesma revisão.
 - **WHEN** um cliente envia `POST .../reindex` para um id de documento que não
   existe
 - **THEN** a API responde HTTP 404 e nenhuma mensagem é publicada
+
+
+#### Scenario: Reindexar com a fila indisponível responde 200 e indexa depois
+- **WHEN** um documento recebe `POST .../reindex` enquanto a publicação na fila
+  de indexação falha
+- **THEN** a API responde HTTP 200 com `indexingStatus: "Pending"`, e, quando a
+  publicação volta a funcionar, exatamente uma mensagem de indexação com a
+  revisão corrente é publicada para o documento, sem nova ação do operador
 
 ### Requirement: Resumo de indexação por base
 O sistema SHALL oferecer, via `apps/api`, um recurso que devolve o estado de
@@ -688,3 +724,83 @@ A rota SHALL exigir operador autenticado, e SHALL recusar o token de serviço de
 - **WHEN** a resposta de um índice com uma combinação é lida como **texto**
 - **THEN** o JSON contém as chaves `provider`, `model`, `dimensions` e
   `fragmentCount`, com `dimensions` e `fragmentCount` como números
+
+### Requirement: Despacho de pedido de indexação com várias instâncias
+O despacho dos pedidos de indexação SHALL ser seguro com várias instâncias do
+`apps/api`: cada pedido SHALL ser tomado por um único despacho de cada vez, e um
+pedido NÃO SHALL ser publicado por dois despachos concorrentes.
+
+O despacho SHALL ocorrer no fim da escrita que gravou o pedido, limitado a 5
+segundos, e por varredura periódica de 30 segundos. Falha do despacho na escrita
+NÃO SHALL alterar a resposta da escrita.
+
+Depois de um despacho que falha — na escrita, por erro ou pelo limite de 5
+segundos, ou numa publicação da varredura —, a instância SHALL pular o despacho
+na escrita por 30 segundos, e as escritas nesse intervalo SHALL responder sem
+esperar o limite. O pedido SHALL continuar sendo gravado na mesma transação do
+documento em todos os casos, e SHALL ser publicado pela varredura. Um despacho
+bem-sucedido, na escrita ou na varredura, SHALL encerrar o intervalo. Falha de um ciclo da varredura,
+inclusive na consulta ao banco, NÃO SHALL interromper os ciclos seguintes.
+
+A entrega SHALL ser pelo menos uma vez: um pedido publicado e não removido
+(processo interrompido entre a confirmação e o commit) SHALL ser publicado de
+novo, e a duplicata da mesma revisão NÃO SHALL produzir dado errado no índice.
+
+#### Scenario: Dois despachos concorrentes publicam cada pedido uma vez
+- **WHEN** dois despachos rodam ao mesmo tempo sobre os mesmos pedidos
+- **THEN** cada pedido é publicado exatamente uma vez, e a consulta que toma os
+  pedidos é emitida com `FOR UPDATE SKIP LOCKED`
+
+#### Scenario: Depois de um despacho que falhou, as escritas seguintes não esperam o limite
+- **WHEN** com a publicação sem responder, uma sequência de escritas grava
+  pedidos de indexação, e o despacho da primeira falha pelo limite de 5 segundos
+- **THEN** só a primeira escrita espera o limite; as seguintes respondem sem
+  esperá-lo, cada uma com o documento e o pedido gravados; e, quando a
+  publicação volta, a varredura publica exatamente uma mensagem por pedido
+
+#### Scenario: Despacho bem-sucedido encerra o intervalo
+- **WHEN** a varredura publica com sucesso enquanto o intervalo aberto por uma
+  falha ainda não venceu
+- **THEN** a escrita seguinte volta a despachar o próprio pedido antes de
+  responder
+
+#### Scenario: Ciclo da varredura que falha não para a varredura
+- **WHEN** a consulta de um ciclo da varredura falha
+- **THEN** o erro é logado e um ciclo seguinte publica os pedidos pendentes
+
+#### Scenario: Escrita não espera o broker inacessível além do limite
+- **WHEN** uma escrita grava um pedido e a publicação não responde
+- **THEN** a resposta da escrita sai depois de no máximo 5 segundos de despacho,
+  com o documento e o pedido gravados
+
+#### Scenario: Pedidos acima do lote são todos despachados
+- **WHEN** há mais pedidos pendentes que o tamanho do lote e a publicação volta a
+  funcionar
+- **THEN** todos são publicados, na ordem em que foram gravados
+
+#### Scenario: Mensagem repetida da mesma revisão não duplica fragmentos
+- **WHEN** o consumidor recebe duas mensagens com o mesmo documento e a mesma
+  revisão
+- **THEN** o documento termina em `Indexed` com o mesmo conjunto de fragmentos de
+  uma entrega só, sem fragmento repetido
+
+#### Scenario: Pedidos de revisões sucessivas indexam só a última
+- **WHEN** com a publicação falhando, um documento é atualizado duas vezes com
+  conteúdos diferentes, e a publicação volta
+- **THEN** são publicadas as mensagens das duas revisões, em ordem, e só a
+  revisão corrente é gravada no índice; a anterior é descartada pelo consumidor
+
+### Requirement: Documentos sem indexação enfileirada são recuperados na migração
+A migração que introduz o pedido de indexação SHALL gravar um pedido para cada
+documento em `Pending` no momento em que roda, com a revisão corrente do
+documento, e NÃO SHALL gravar pedido para documento em `Indexing`, `Indexed` ou
+`Failed`.
+
+#### Scenario: Documento órfão em Pending ganha pedido
+- **WHEN** a migração roda sobre um banco com documentos `Pending`
+- **THEN** cada um deles tem exatamente um pedido, com a sua revisão corrente
+
+#### Scenario: Documento fora de Pending não ganha pedido
+- **WHEN** a migração roda sobre um banco com documentos em `Indexing`,
+  `Indexed` e `Failed`
+- **THEN** nenhum deles tem pedido
