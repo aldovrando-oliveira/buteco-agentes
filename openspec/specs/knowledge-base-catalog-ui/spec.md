@@ -436,6 +436,23 @@ O formulário SHALL NOT bloquear navegação com alteração pendente. Nenhum
 formulário do painel usa guarda de navegação; ela protege rascunho de vínculo em
 aba, onde a troca de aba perde trabalho sem sair da rota (`design.md`, D11).
 
+A criação SHALL exibir, depois do bloco da descrição, o card "Origem dos
+documentos" com duas opções, Manual e Sincronizada, e o aviso de que a origem não
+pode ser alterada depois de criar a base. Manual SHALL vir marcada. Com Manual
+marcada, o formulário SHALL enviar exatamente o corpo de hoje, só com `name` e
+`description`, sem `contentMode`, `provider` nem `folderId`, e SHALL NOT fazer
+nenhuma chamada ao `apps/connectors`. A opção Sincronizada segue a capability
+`knowledge-base-sync-source-ui`.
+
+A nota de rodapé do formulário SHALL mudar com a origem: com Manual, a nota de hoje
+(documentos carregados na tela de detalhe, só markdown); com Sincronizada, uma
+nota que diz que os documentos não são carregados nesta tela e entram pela
+sincronização com a pasta depois de criar a base, sem afirmar prazo para a
+primeira sincronização.
+
+A edição SHALL NOT exibir o card de Origem nem permitir mudar a origem, e SHALL
+continuar enviando só `name` e `description`.
+
 #### Scenario: Criar base com nome e descrição
 - **WHEN** o operador preenche nome e descrição e confirma a criação
 - **THEN** a base é criada e o operador é levado ao detalhe dela
@@ -466,6 +483,27 @@ aba, onde a troca de aba perde trabalho sem sair da rota (`design.md`, D11).
 #### Scenario: Sair com alteração pendente não é bloqueado
 - **WHEN** o operador altera um campo do formulário e navega para outra rota
 - **THEN** a navegação acontece sem diálogo de bloqueio
+
+#### Scenario: Card de Origem na criação, com Manual marcada
+- **WHEN** o operador abre `/knowledge-bases/new`
+- **THEN** o card "Origem dos documentos" aparece com Manual marcada, Sincronizada
+  desmarcada e o aviso de que a origem não pode ser alterada depois de criar a base
+
+#### Scenario: Cadastro manual envia o corpo de hoje
+- **WHEN** o operador cria uma base com Manual marcada
+- **THEN** o corpo do `POST /knowledge-bases` tem exatamente as chaves `name` e
+  `description`, e nenhuma requisição é feita ao endereço do `apps/connectors`
+
+#### Scenario: Nota de rodapé por origem
+- **WHEN** o operador alterna entre Manual e Sincronizada
+- **THEN** com Manual a nota fala de carregar documentos na tela de detalhe, e com
+  Sincronizada a nota fala de sincronização com a pasta e não contém prazo em
+  minutos nem as palavras "imediatamente" ou "agora"
+
+#### Scenario: Edição sem card de Origem
+- **WHEN** o operador abre a edição de uma base, manual ou sincronizada
+- **THEN** o card "Origem dos documentos" não aparece, e o `PUT` leva só `name` e
+  `description`
 
 ### Requirement: Agentes que consultam a base
 O sistema SHALL exibir, no detalhe da base, quais agentes a consultam, com o nome

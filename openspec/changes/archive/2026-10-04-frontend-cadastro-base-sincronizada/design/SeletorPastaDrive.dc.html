@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Escolher pasta — dentro do drive</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#191a1c;background:#ffffff}
+a{color:#2a6ecb;text-decoration:none}a:hover{color:#1f57a4;text-decoration:underline}
+.btn{font:inherit;font-size:13px;font-weight:600;height:34px;padding:0 14px;border-radius:4px;border:1px solid #2a6ecb;background:#2a6ecb;color:#fff;cursor:pointer}
+.btn-d{background:#fff;color:#191a1c;border-color:#ced4da}
+.row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid #e9ecef;font-size:14px;color:#191a1c}
+</style>
+</helmet>
+<div style="width: 720px; height: 640px; box-sizing: border-box; background: #ffffff; border: 1px solid #dee2e6; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden">
+<div style="padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #dee2e6">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Escolher pasta</h2>
+<button aria-label="Fechar" style="border: 0; background: transparent; width: 32px; height: 32px; cursor: pointer; color: #495057"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+<nav aria-label="Caminho" style="padding: 12px 20px; font-size: 13px; color: #495057; border-bottom: 1px solid #e9ecef; display: flex; gap: 6px; align-items: center">
+<a href="SeletorPasta.dc.html">Início</a><span>›</span><a href="#">Suporte</a><span>›</span><span style="color: #191a1c; font-weight: 500">Documentação</span>
+</nav>
+<div style="flex-grow: 1; overflow: auto">
+<div style="padding: 10px 16px; font-size: 12px; color: #495057">3 pastas</div>
+<div class="row" style="background: #e7f0fb; border-top-color: #cfe0f6">
+<span style="display: flex; align-items: center; gap: 10px">
+<input type="radio" name="pasta" checked aria-label="Selecionar FAQ Suporte">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2a6ecb" stroke-width="1.8"><path d="M3 7h6l2 2h10v10H3z"></path></svg>
+<span style="font-weight: 600">FAQ Suporte</span>
+</span>
+<a href="#" aria-label="Abrir FAQ Suporte"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#495057" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg></a>
+</div>
+<div class="row">
+<span style="display: flex; align-items: center; gap: 10px">
+<input type="radio" name="pasta" aria-label="Selecionar Manuais antigos">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#495057" stroke-width="1.8"><path d="M3 7h6l2 2h10v10H3z"></path></svg>
+<span>Manuais antigos</span>
+</span>
+<a href="#" aria-label="Abrir Manuais antigos"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#495057" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg></a>
+</div>
+<div class="row" style="color: #868e96">
+<span style="display: flex; align-items: center; gap: 10px">
+<input type="radio" name="pasta" disabled aria-label="Políticas RH, já em uso">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#adb5bd" stroke-width="1.8"><path d="M3 7h6l2 2h10v10H3z"></path></svg>
+<span style="display: flex; flex-direction: column">
+<span style="color: #495057">Políticas RH</span>
+<span style="font-size: 12px; color: #495057">Já sincronizada pela base <a href="#">Políticas internas de RH</a></span>
+</span>
+</span>
+<a href="#" aria-label="Abrir Políticas RH"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#495057" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg></a>
+</div>
+</div>
+<div style="padding: 14px 20px; border-top: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; gap: 10px">
+<span style="font-size: 12px; color: #495057">Os arquivos da raiz de “FAQ Suporte” entram na base.</span>
+<div style="display: flex; gap: 10px">
+<button class="btn btn-d">Cancelar</button>
+<a class="btn" href="NovaBase.dc.html" style="display: inline-flex; align-items: center; text-decoration: none; color: #ffffff">Selecionar “FAQ Suporte”</a>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":720,"height":640}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
