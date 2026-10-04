@@ -12,7 +12,7 @@ namespace Buteco.Api.KnowledgeDocuments.Commands.UpdateKnowledgeDocument;
 public sealed class UpdateKnowledgeDocumentCommandHandler(
     AppDbContext dbContext,
     KnowledgeContentProcessor contentProcessor,
-    IKnowledgeIndexingJobPublisher indexingPublisher,
+    KnowledgeIndexingRequestDispatcher indexingDispatcher,
     ILogger<UpdateKnowledgeDocumentCommandHandler> logger)
     : ICommandHandler<UpdateKnowledgeDocumentCommand, UpdateKnowledgeDocumentResult>
 {
@@ -113,12 +113,20 @@ public sealed class UpdateKnowledgeDocumentCommandHandler(
             dbContext.KnowledgeDocumentEvents.Add(KnowledgeDocumentEvent.Updated(document, outcome, command.Author));
         }
 
+        // Pedido de indexação no mesmo SaveChanges (indexacao-sem-job-orfao, D1), com a
+        // revisão já incrementada. A tentativa que perde para a concorrência não grava:
+        // o ChangeTracker.Clear() do chamador solta o pedido junto com o resto.
+        var indexingRequest = outcome.NeedsIndexing ? KnowledgeIndexingRequest.For(document) : null;
+        if (indexingRequest is not null)
+        {
+            dbContext.KnowledgeIndexingRequests.Add(indexingRequest);
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        if (outcome.NeedsIndexing)
+        if (indexingRequest is not null)
         {
-            await indexingPublisher.PublishAsync(
-                new KnowledgeIndexingJobMessage(document.Id, document.ContentRevision), cancellationToken);
+            await indexingDispatcher.DispatchAfterWriteAsync([indexingRequest.Id], cancellationToken);
         }
 
         return UpdateKnowledgeDocumentResult.Success(KnowledgeDocumentResponse.FromEntity(document));

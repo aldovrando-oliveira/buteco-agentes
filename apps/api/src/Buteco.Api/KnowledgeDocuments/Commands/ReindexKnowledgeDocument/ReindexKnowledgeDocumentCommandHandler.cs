@@ -8,7 +8,7 @@ namespace Buteco.Api.KnowledgeDocuments.Commands.ReindexKnowledgeDocument;
 
 public sealed class ReindexKnowledgeDocumentCommandHandler(
     AppDbContext dbContext,
-    IKnowledgeIndexingJobPublisher indexingPublisher)
+    KnowledgeIndexingRequestDispatcher indexingDispatcher)
     : ICommandHandler<ReindexKnowledgeDocumentCommand, ReindexKnowledgeDocumentResult>
 {
     // Reindexar continua liberado em base sincronizada (catalogo-base-sincronizada, D7):
@@ -68,24 +68,28 @@ public sealed class ReindexKnowledgeDocumentCommandHandler(
         // RequestReindex(), inclusive por que anular ContentHash aqui seria
         // armadilha.
         document.RequestReindex();
+
+        // Pedido de indexação no mesmo SaveChanges — mesma forma de Create e Update
+        // (indexacao-sem-job-orfao, D1). A mensagem que sai dele leva Attempt no
+        // default 1: é a abertura de uma rodada nova, e o limite de execuções viaja
+        // na mensagem, não na coluna do documento.
+        //
+        // ContentRevision vai inalterada, de propósito: o conteúdo não mudou, e
+        // ela é o token de descarte do consumidor.
+        var indexingRequest = KnowledgeIndexingRequest.For(document);
+        dbContext.KnowledgeIndexingRequests.Add(indexingRequest);
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
+            // O Clear() do laço solta o pedido desta tentativa junto com o documento.
             return null;
         }
 
-        // Publica DEPOIS do SaveChanges, nunca antes — mesma ordem e mesma forma
-        // de Create e Update (design.md, V4). Attempt fica no default 1: é a
-        // abertura de uma rodada nova, e o limite de execuções viaja na
-        // mensagem, não na coluna do documento.
-        //
-        // ContentRevision vai inalterada, de propósito: o conteúdo não mudou, e
-        // ela é o token de descarte do consumidor.
-        await indexingPublisher.PublishAsync(
-            new KnowledgeIndexingJobMessage(document.Id, document.ContentRevision), cancellationToken);
+        // Despacha DEPOIS do SaveChanges, nunca antes (design.md, V4).
+        await indexingDispatcher.DispatchAfterWriteAsync([indexingRequest.Id], cancellationToken);
 
         return new ReindexKnowledgeDocumentResult(KnowledgeDocumentResponse.FromEntity(document));
     }

@@ -67,6 +67,14 @@ builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
 builder.Services.AddSingleton<IKnowledgeIndexingJobPublisher, RabbitMqKnowledgeIndexingJobPublisher>();
+
+// Pedido de indexação durável (design.md da change indexacao-sem-job-orfao, D1, D3 e
+// D8): o despacho é o ÚNICO dependente do publisher acima no apps/api, chamado no fim
+// de cada escrita e pela varredura — o primeiro BackgroundService deste app.
+builder.Services.AddSingleton(new KnowledgeIndexingRequestSchedule());
+builder.Services.AddSingleton<KnowledgeIndexingDispatchWindow>();
+builder.Services.AddSingleton<KnowledgeIndexingRequestDispatcher>();
+builder.Services.AddHostedService<KnowledgeIndexingRequestSweepService>();
 builder.Services.AddSingleton<ProviderCatalogService>();
 
 // Escritor da métrica de recusa (design.md da change recusa-motivo-coleta, D8).

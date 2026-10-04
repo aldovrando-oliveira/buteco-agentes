@@ -11,7 +11,7 @@ using RabbitMQ.Client;
 
 namespace Buteco.Api.Tests;
 
-public class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IClassFixture<A2ATaskLifecycleFixture>
+public partial class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IClassFixture<A2ATaskLifecycleFixture>
 {
     private readonly HttpClient _client = fixture.CreateClient();
 

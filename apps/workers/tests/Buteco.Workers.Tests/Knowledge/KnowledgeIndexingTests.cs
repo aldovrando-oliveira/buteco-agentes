@@ -60,6 +60,50 @@ public class KnowledgeIndexingTests(WorkerInfrastructureFixture fixture) : IClas
         Assert.All(fragments, f => Assert.Equal(KnowledgeIndexingHarness.Model, f.EmbeddingModel));
     }
 
+    /// <summary>
+    /// Reentrega da MESMA revisão (design.md da change indexacao-sem-job-orfao, R1): o
+    /// despacho do <c>apps/api</c> entrega pelo menos uma vez, e a migração que recupera
+    /// os órfãos (D6) publica de novo os <c>Pending</c> que já tinham mensagem na fila.
+    /// O descarte por <c>ContentRevision</c> não pega este caso — a revisão é a mesma —,
+    /// e o que o torna seguro é o commit substituir o conjunto inteiro de fragmentos. É
+    /// isso que este teste prende: a segunda entrega termina com o conjunto de uma só.
+    /// </summary>
+    [Fact]
+    public async Task SameRevisionDeliveredTwice_EndsIndexedWithTheFragmentSetOfASingleDelivery()
+    {
+        var harness = KnowledgeIndexingHarness.Build(fixture.Postgres.GetConnectionString());
+        await using var dbContext = harness.NewDbContext(fixture.Postgres.GetConnectionString());
+        var (_, documentId) = await KnowledgeIndexingHarness.SeedDocumentAsync(dbContext, Markdown);
+        var message = new KnowledgeIndexingJobMessage(documentId, 1);
+
+        Assert.Equal(KnowledgeIndexingOutcome.Indexed, await harness.Service.IndexAsync(message, default));
+        var first = await FragmentSnapshotAsync(dbContext, documentId);
+
+        Assert.Equal(KnowledgeIndexingOutcome.Indexed, await harness.Service.IndexAsync(message, default));
+        var second = await FragmentSnapshotAsync(dbContext, documentId);
+
+        Assert.NotEmpty(first);
+        Assert.Equal(first, second);
+        Assert.Equal(second.Count, second.Select(fragment => fragment.Ordinal).Distinct().Count());
+
+        var after = await ReadAsync(dbContext, documentId);
+        Assert.Equal(KnowledgeIndexingStatus.Indexed, after.IndexingStatus);
+        Assert.Equal(second.Count, after.FragmentCount);
+        Assert.Equal(2, harness.Embeddings.CallCount);
+    }
+
+    private static async Task<List<(int Ordinal, string Text)>> FragmentSnapshotAsync(
+        Buteco.Workers.Infrastructure.AppDbContext dbContext, Guid documentId)
+    {
+        dbContext.ChangeTracker.Clear();
+        var fragments = await dbContext.KnowledgeFragments.AsNoTracking()
+            .Where(fragment => fragment.KnowledgeDocumentId == documentId)
+            .OrderBy(fragment => fragment.Ordinal)
+            .Select(fragment => new { fragment.Ordinal, fragment.Text })
+            .ToListAsync();
+        return fragments.Select(fragment => (fragment.Ordinal, fragment.Text)).ToList();
+    }
+
     // O embedding é gerado em LOTE — a interface é batch-nativa, e isso casa com
     // indexação. Uma chamada por fragmento seria N vezes o custo e a latência.
     //
