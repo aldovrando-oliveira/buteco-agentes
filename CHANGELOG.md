@@ -838,6 +838,19 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Uma chamada de saída do worker presa na conexão segurava a conversa e
+  derrubava a mensagem seguinte** (#46). Nenhuma chamada HTTP de `apps/workers`
+  tinha timeout de conexão: se o SYN ficava sem resposta ou o TLS não completava, a
+  chamada esperava o timeout total, vezes as retentativas do SDK (300 s no chat e
+  no embedding OpenAI, 100 s no Gemini, 60 s no MCP), com o lock de contexto em
+  posse, e a próxima mensagem da conversa desistia em 30 s. Agora LLM dos três
+  provedores, embedding e MCP desistem de conectar em 5 s por tentativa: ~20 s no
+  OpenAI (4 tentativas), ~15 s no MCP, ~5 s no Anthropic e no Gemini, por chamada.
+  O servidor MCP inalcançável continua saindo do conjunto de tools em vez de
+  derrubar a task. A chamada que não conecta continua falhando, só que no prazo:
+  com IPv6 com rota e sem conectividade, o contorno
+  `DOTNET_SYSTEM_NET_DISABLEIPV6=1` segue necessário onde já é usado.
+
 - **Parar o worker com uma execução em voo levava 60 s e terminava com o processo
   morto no meio** (#49). `TaskJobConsumer.StopAsync` fechava canal e conexão do
   RabbitMQ antes de cancelar a execução; o fechamento do canal esperava o callback,

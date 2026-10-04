@@ -50,7 +50,8 @@ public readonly record struct EmbeddingCallMeasurement(
 /// <b><see cref="Dispose"/> é no-op</b>, pelo mesmo motivo que
 /// <c>CompactionCallChatClient</c> não deriva de <c>DelegatingChatClient</c>: o
 /// inner é o cliente que o resolvedor construiu sobre o transporte estático de
-/// <c>HttpClientPipelineTransport.Shared</c>, e descarte em cascata é o
+/// <c>OutboundConnectTimeout.OpenAiTransport</c> (antes,
+/// <c>HttpClientPipelineTransport.Shared</c>), e descarte em cascata é o
 /// vazamento que <c>fix-vazamento-httpclient-chat</c> corrigiu.
 /// </para>
 ///

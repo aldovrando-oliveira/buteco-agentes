@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Buteco.Workers.Infrastructure;
 using Buteco.Workers.Mcp;
@@ -6,6 +7,7 @@ using Buteco.Workers.Tests.Mcp.Support;
 using Buteco.Workers.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Buteco.Workers.Tests.Mcp;
@@ -224,6 +226,58 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
         await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
 
         Assert.Empty(toolSet.Tools);
+    }
+
+    /// <summary>
+    /// GUARDA DO TIMEOUT DE CONEXÃO (change timeout-de-conexao-saida-workers, #46).
+    /// Usa o REGISTRO DE PRODUÇÃO (<see cref="McpTransportFactory.AddHttpClient"/>,
+    /// o mesmo que o <c>Program.cs</c> chama), não o handler falso dos outros
+    /// testes desta classe, e aponta o servidor para um listener que aceita o TCP e
+    /// nunca completa o TLS.
+    ///
+    /// <para>
+    /// Reprova de duas formas distintas: <b>sem timeout de conexão</b>, pelo tempo
+    /// (o servidor só sai do conjunto no <c>InitializationTimeout</c> de 60 s);
+    /// <b>com o timeout e sem o filtro do D4</b>, por exceção, porque o
+    /// <c>ConnectTimeout</c> chega como <c>TaskCanceledException</c> e o
+    /// <c>catch</c> que só excluía <c>OperationCanceledException</c> o deixava
+    /// escapar. A task cairia em vez de degradar.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task ResolveAsync_ServerWhoseConnectionNeverCompletes_IsExcludedWithinTheConnectTimeout()
+    {
+        using var listener = new SilentTlsListener();
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+        var serverId = await SeedMcpServerAsync("Servidor Mudo", $"{listener.Url}/mcp");
+        await SeedAgentMcpServerAsync(agentId, serverId, ["search"]);
+
+        var services = new ServiceCollection();
+        McpTransportFactory.AddHttpClient(services);
+        await using var provider = services.BuildServiceProvider();
+        var cipher = new AesGcmMcpCredentialCipher(Microsoft.Extensions.Options.Options.Create(new McpCryptoOptions { CredentialEncryptionKey = EncryptionKey }));
+        var resolver = new McpToolSetResolver(
+            cipher,
+            new McpTransportFactory(provider.GetRequiredService<IHttpClientFactory>()),
+            NullLogger<McpToolSetResolver>.Instance);
+
+        // O limite é o do lock (30 s), não o medido: sonda server/discover (5 s) +
+        // initialize, com a tentativa de conexão da sonda ainda pendente, deu
+        // 15,7 s com a correção. Sem ela, 60 s (InitializationTimeout).
+        var limit = TimeSpan.FromSeconds(30);
+        using var budget = new CancellationTokenSource(limit + TimeSpan.FromSeconds(5));
+        var stopwatch = Stopwatch.StartNew();
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await resolver.ResolveAsync(dbContext, agentId, budget.Token);
+        stopwatch.Stop();
+
+        Assert.Empty(toolSet.Tools);
+        Assert.True(
+            stopwatch.Elapsed < limit,
+            $"O servidor saiu do conjunto em {stopwatch.Elapsed.TotalSeconds:0.0} s; o limite é {limit.TotalSeconds:0} s.");
+        Assert.True(listener.AcceptedConnections > 0, "O resolvedor nem chegou a abrir conexão com o listener.");
     }
 
     [Fact]

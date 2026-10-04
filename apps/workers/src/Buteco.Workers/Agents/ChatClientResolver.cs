@@ -1,6 +1,7 @@
 using System.ClientModel;
 using Anthropic;
 using Buteco.ProviderCatalog;
+using Buteco.Workers.Http;
 using Buteco.Workers.Options;
 using Google.GenAI;
 using Microsoft.Extensions.AI;
@@ -20,10 +21,14 @@ namespace Buteco.Workers.Agents;
 /// explícito, registrando o gatilho: <i>"simples de trocar por cache depois, se
 /// perfilamento mostrar necessidade"</i> (Decision 7). O perfilamento mostrou —
 /// ~44 descritores de arquivo vazados por mensagem processada, sem retorno, até
-/// o worker parar de responder. Os SDKs de Gemini e de Anthropic instanciam um
-/// <c>HttpClient</c> próprio por client (o da OpenAI não: usa
+/// o worker parar de responder. Os SDKs de Gemini e de Anthropic instanciavam um
+/// <c>HttpClient</c> próprio por client (o da OpenAI não: usava
 /// <c>HttpClientPipelineTransport.Shared</c>, estático — e é por isso que só o
 /// chat degradava), então cada mensagem vazava um pool de conexões inteiro.
+/// Desde a change <c>timeout-de-conexao-saida-workers</c> os três recebem o
+/// handler de <see cref="OutboundConnectTimeout"/>, um por SDK por processo; cada
+/// client do Anthropic e do Gemini continua com o seu <c>HttpClient</c>, mas sobre
+/// o handler compartilhado.
 /// Esta classe dispara aquele gatilho; não contraria aquela decisão.
 /// </para>
 ///
@@ -142,7 +147,11 @@ public sealed class ChatClientResolver(
 
         var client = new OpenAIClient(
             new ApiKeyCredential(options.ApiKey),
-            new OpenAIClientOptions { Endpoint = new Uri(options.BaseUrl) });
+            new OpenAIClientOptions
+            {
+                Endpoint = new Uri(options.BaseUrl),
+                Transport = OutboundConnectTimeout.OpenAiTransport,
+            });
 
         return client.GetChatClient(model).AsIChatClient();
     }
@@ -155,7 +164,7 @@ public sealed class ChatClientResolver(
             throw new InvalidOperationException("Provedor 'anthropic' não está configurado (Anthropic:ApiKey ausente).");
         }
 
-        AnthropicClient client = new() { ApiKey = options.ApiKey };
+        AnthropicClient client = new() { ApiKey = options.ApiKey, HttpClient = OutboundConnectTimeout.CreateAnthropicHttpClient() };
         return client.AsIChatClient(model);
     }
 
@@ -167,7 +176,9 @@ public sealed class ChatClientResolver(
             throw new InvalidOperationException("Provedor 'gemini' não está configurado (Gemini:ApiKey ausente).");
         }
 
-        var client = new Client(apiKey: options.ApiKey);
+        var client = new Client(
+            apiKey: options.ApiKey,
+            clientOptions: new Google.GenAI.Types.ClientOptions { HttpClientFactory = OutboundConnectTimeout.CreateGeminiHttpClient });
         return client.AsIChatClient(model);
     }
 }

@@ -1,4 +1,6 @@
+using Buteco.Workers.Http;
 using Buteco.Workers.Mcp.Entities;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Client;
 
 namespace Buteco.Workers.Mcp;
@@ -19,6 +21,32 @@ namespace Buteco.Workers.Mcp;
 public sealed class McpTransportFactory(IHttpClientFactory httpClientFactory)
 {
     public const string HttpClientName = "McpToolExecution";
+
+    /// <summary>
+    /// Registra o <c>HttpClient</c> nomeado usado pelo transporte. Chamado pelo
+    /// <c>Program.cs</c> e pelo guarda do timeout de conexão
+    /// (<c>McpToolSetResolverTests</c>): os dois exercitam o MESMO registro (change
+    /// timeout-de-conexao-saida-workers, D3).
+    /// </summary>
+    public static void AddHttpClient(IServiceCollection services) =>
+        // PooledConnectionLifetime explícito (default do SocketsHttpHandler é
+        // infinito) — sem isso, conexões deste client de longa duração (reusado
+        // entre execuções via IHttpClientFactory) podem ficar presas a um
+        // McpServer atrás de proxy/CDN (ex.: Cloudflare) que derruba conexões
+        // ociosas do lado dele sem avisar; a próxima tentativa de reuso trava até
+        // estourar o timeout de inicialização do MCP em vez de abrir conexão nova.
+        //
+        // ConnectTimeout: sem ele, um servidor cujo TLS nunca completa só sai do
+        // conjunto no InitializationTimeout de 60 s do cliente MCP, com o lock de
+        // contexto em posse (medido: 60,1 s; com o timeout, 15,1 s em simulação,
+        // porque a sonda server/discover e o initialize esperam cada um a sua
+        // conexão). Ver OutboundConnectTimeout.Value para o valor.
+        services.AddHttpClient(HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromSeconds(30),
+                ConnectTimeout = OutboundConnectTimeout.Value,
+            });
 
     public HttpClientTransport BuildTransport(string url, McpServerAuthType authType, string? credential, string transportName)
     {

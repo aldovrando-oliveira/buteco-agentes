@@ -75,7 +75,7 @@ public sealed class McpToolSetResolver(
                 transport = transportFactory.BuildTransport(server.Url, server.AuthType, credential, $"mcp-tool-execution-{server.Id:N}");
                 client = await McpClient.CreateAsync(transport, McpTransportFactory.BuildClientOptions(), cancellationToken: cancellationToken);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (!IsShutdownCancellation(exception, cancellationToken))
             {
                 // Degradação por servidor (design.md, Decision 5): host
                 // inalcançável, timeout, handshake falho, ou credencial que
@@ -111,7 +111,7 @@ public sealed class McpToolSetResolver(
                     }
                 }
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (!IsShutdownCancellation(exception, cancellationToken))
             {
                 logger.LogWarning(
                     exception,
@@ -123,6 +123,21 @@ public sealed class McpToolSetResolver(
 
         return new McpToolSet(tools, connections);
     }
+
+    // CANCELAMENTO NÃO É SÓ PARADA. O ConnectTimeout do SocketsHttpHandler chega
+    // como TaskCanceledException (⊃ TimeoutException "A connection could not be
+    // established within the configured ConnectTimeout"), com o token da execução
+    // INTACTO. Um filtro `exception is not OperationCanceledException` deixava esse
+    // timeout escapar da degradação por servidor: o servidor inalcançável derrubava
+    // a TASK em vez de sair do conjunto. Medido no guarda
+    // ResolveAsync_ServerWhoseConnectionNeverCompletes_IsExcludedWithinTheConnectTimeout,
+    // que reprovou por exceção com o timeout aplicado e este filtro ausente
+    // (change timeout-de-conexao-saida-workers, D4).
+    //
+    // Só é parada quando o token DESTA execução foi cancelado — a mesma regra de
+    // AgentExecutionService.IsShutdownCancellation.
+    private static bool IsShutdownCancellation(Exception exception, CancellationToken cancellationToken) =>
+        exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
 
     private static string BuildSafeToolName(string serverName, string toolName) =>
         ToolNameSanitizer.Sanitize($"{serverName}{ToolNameSeparator}{toolName}");
