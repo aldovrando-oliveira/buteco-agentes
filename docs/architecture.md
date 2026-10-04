@@ -247,6 +247,26 @@ Quatro pontos que não se deduzem lendo os campos:
   texto extraído e o título: um upsert com o marcador novo e o mesmo texto e título
   grava só o marcador, sem evento, sem indexação e sem tocar `UpdatedAt`.
 
+### `KnowledgeIndexingRequest` (`apps/api`)
+
+`KnowledgeDocumentId`, `ContentRevision`, `CreatedAt`, na tabela
+`knowledge_indexing_requests`. É o pedido de indexação que ainda não chegou à fila
+(change `indexacao-sem-job-orfao`, #138): toda escrita que pede indexação o grava no
+mesmo `SaveChanges` do documento, e o despacho o apaga depois de o broker confirmar a
+mensagem. Só o `apps/api` lê e escreve; o `apps/workers` não espelha a tabela.
+
+- **Existe porque `Pending` não diz se há mensagem na fila.** Documento esperando na
+  fila e documento cuja publicação falhou eram a mesma linha. O pedido é o registro
+  do que falta entregar.
+- **FK em cascata para o documento**: excluir documento, ou base, leva os pedidos
+  junto.
+- **O despacho é o único dependente do publisher de indexação no `apps/api`**, e roda
+  no fim de cada escrita e numa varredura de 30 s
+  (`KnowledgeIndexingRequestSweepService`, o primeiro `BackgroundService` deste app),
+  com `FOR UPDATE SKIP LOCKED`, seguro com várias instâncias. Com o broker fora do ar
+  a escrita responde o sucesso de sempre e o documento fica `Pending` até a varredura
+  publicar.
+
 ### `KnowledgeDocumentEvent` (`apps/api`)
 
 `KnowledgeBaseId`, `DocumentId`, `DocumentTitle`, `Type` (`Created`,

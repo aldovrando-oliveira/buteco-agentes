@@ -12,7 +12,7 @@ namespace Buteco.Api.KnowledgeDocuments.Commands.CreateKnowledgeDocument;
 public sealed class CreateKnowledgeDocumentCommandHandler(
     AppDbContext dbContext,
     KnowledgeContentProcessor contentProcessor,
-    IKnowledgeIndexingJobPublisher indexingPublisher)
+    KnowledgeIndexingRequestDispatcher indexingDispatcher)
     : ICommandHandler<CreateKnowledgeDocumentCommand, CreateKnowledgeDocumentResult>
 {
     public async ValueTask<CreateKnowledgeDocumentResult> Handle(CreateKnowledgeDocumentCommand command, CancellationToken cancellationToken)
@@ -50,15 +50,20 @@ public sealed class CreateKnowledgeDocumentCommandHandler(
         // O evento entra no MESMO SaveChanges do documento (historico-documentos-base,
         // D2): os dois são gravados juntos ou nenhum. As recusas acima retornam
         // antes daqui, e por isso cadastro recusado não deixa evento.
+        //
+        // O pedido de indexação também (indexacao-sem-job-orfao, D1): documento e
+        // pedido gravados juntos ou nenhum dos dois.
+        var indexingRequest = KnowledgeIndexingRequest.For(document);
         dbContext.KnowledgeDocuments.Add(document);
         dbContext.KnowledgeDocumentEvents.Add(KnowledgeDocumentEvent.Created(document, command.Author));
+        dbContext.KnowledgeIndexingRequests.Add(indexingRequest);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // Publica DEPOIS do SaveChanges, nunca antes: uma mensagem publicada
-        // antes da gravação apontaria para um documento que o consumidor não
-        // acharia, e o SaveChanges ainda pode falhar.
-        await indexingPublisher.PublishAsync(
-            new KnowledgeIndexingJobMessage(document.Id, document.ContentRevision), cancellationToken);
+        // Despacha DEPOIS do SaveChanges, nunca antes: uma mensagem publicada antes
+        // da gravação apontaria para um documento que o consumidor não acharia. Não
+        // lança: com a fila fora do ar o pedido fica para a varredura, e a resposta é
+        // o 201 de sempre (D2).
+        await indexingDispatcher.DispatchAfterWriteAsync([indexingRequest.Id], cancellationToken);
 
         // ContentLengthBytes é coluna gerada pelo banco: o EF a lê de volta no
         // próprio SaveChanges, sem Reload() explícito (design.md, D14).

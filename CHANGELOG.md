@@ -859,6 +859,16 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Com o RabbitMQ fora do ar, documento gravado ficava sem indexação, e na base
+  sincronizada para sempre** (#138). Cadastro, atualização, reindexação e upsert de
+  `/sync` gravavam o documento, respondiam `500` e não enfileiravam nada; no upsert,
+  o ciclo seguinte respondia `Unchanged` e o documento nunca era indexado. Agora a
+  escrita grava um pedido de indexação junto com o documento e responde o sucesso de
+  sempre, e o pedido é publicado com confirmação do broker no fim da escrita ou por
+  uma varredura de 30 s, quando a fila volta. Os documentos que já estavam em
+  `Pending` ganham pedido na migração, e os que tinham mensagem na fila são
+  indexados uma segunda vez, na mesma revisão, sem dado errado.
+
 - **Uma chamada de saída do worker presa na conexão segurava a conversa e
   derrubava a mensagem seguinte** (#46). Nenhuma chamada HTTP de `apps/workers`
   tinha timeout de conexão: se o SYN ficava sem resposta ou o TLS não completava, a

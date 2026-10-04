@@ -20,7 +20,7 @@ namespace Buteco.Api.KnowledgeSync.Commands.UpsertSyncedDocument;
 public sealed class UpsertSyncedDocumentCommandHandler(
     AppDbContext dbContext,
     KnowledgeContentProcessor contentProcessor,
-    IKnowledgeIndexingJobPublisher indexingPublisher,
+    KnowledgeIndexingRequestDispatcher indexingDispatcher,
     ILogger<UpsertSyncedDocumentCommandHandler> logger)
     : ICommandHandler<UpsertSyncedDocumentCommand, UpsertSyncedDocumentResult>
 {
@@ -70,9 +70,13 @@ public sealed class UpsertSyncedDocumentCommandHandler(
         var document = KnowledgeDocument.CreateSynced(
             command.KnowledgeBaseId, command.Title, command.SourceType, extractedText, command.ExternalRef, command.ExternalVersion);
 
-        // Mesmo SaveChanges do documento (historico-documentos-base, D2).
+        // Mesmo SaveChanges do documento (historico-documentos-base, D2), e o pedido de
+        // indexação também (indexacao-sem-job-orfao, D1 e D4): se o documento foi
+        // gravado, o pedido foi, e o ciclo seguinte não precisa reenviar nada.
+        var indexingRequest = KnowledgeIndexingRequest.For(document);
         dbContext.KnowledgeDocuments.Add(document);
         dbContext.KnowledgeDocumentEvents.Add(KnowledgeDocumentEvent.Created(document, command.Author));
+        dbContext.KnowledgeIndexingRequests.Add(indexingRequest);
 
         try
         {
@@ -82,7 +86,7 @@ public sealed class UpsertSyncedDocumentCommandHandler(
         {
             // Outro upsert da mesma referência venceu entre a leitura e este
             // SaveChanges (D10). Detach das entidades Added desta tentativa
-            // (documento e evento) e UMA releitura, não um laço: o Postgres só
+            // (documento, evento e pedido de indexação) e UMA releitura, não um laço: o Postgres só
             // libera a violação para quem perde depois que o vencedor fez commit,
             // então o vencedor já está gravado. É o idioma de ContactSessionResolver
             // (apps/inbox). O log é a única evidência observável de que a corrida
@@ -110,9 +114,8 @@ public sealed class UpsertSyncedDocumentCommandHandler(
                 : UpsertSyncedDocumentResult.ConcurrentWrite();
         }
 
-        // Publica DEPOIS do SaveChanges que deu certo, nunca antes.
-        await indexingPublisher.PublishAsync(
-            new KnowledgeIndexingJobMessage(document.Id, document.ContentRevision), cancellationToken);
+        // Despacha DEPOIS do SaveChanges que deu certo, nunca antes. Não lança (D2).
+        await indexingDispatcher.DispatchAfterWriteAsync([indexingRequest.Id], cancellationToken);
 
         return UpsertSyncedDocumentResult.Success(document.Id, SyncedDocumentUpsertOutcome.Created);
     }
@@ -196,14 +199,25 @@ public sealed class UpsertSyncedDocumentCommandHandler(
             dbContext.KnowledgeDocumentEvents.Add(KnowledgeDocumentEvent.Updated(document, outcome, command.Author));
         }
 
+        // O pedido de indexação viaja no MESMO SaveChanges que grava o externalVersion
+        // novo (indexacao-sem-job-orfao, D4). Era a separação dos dois que deixava o
+        // documento sincronizado sem indexação para sempre: o marcador gravado, a
+        // publicação falhando, e o ciclo seguinte respondendo Unchanged. Unchanged não
+        // grava pedido. A tentativa perdida para a concorrência também não: o
+        // KnowledgeBaseIsGoneAsync do chamador limpa o ChangeTracker antes de reler.
+        var indexingRequest = outcome.NeedsIndexing ? KnowledgeIndexingRequest.For(document) : null;
+        if (indexingRequest is not null)
+        {
+            dbContext.KnowledgeIndexingRequests.Add(indexingRequest);
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // Publica DEPOIS do SaveChanges que deu certo: a falha de concorrência
-        // acontece antes daqui, e a tentativa perdida não publica nada.
-        if (outcome.NeedsIndexing)
+        // Despacha DEPOIS do SaveChanges que deu certo: a falha de concorrência
+        // acontece antes daqui, e a tentativa perdida não despacha nada.
+        if (indexingRequest is not null)
         {
-            await indexingPublisher.PublishAsync(
-                new KnowledgeIndexingJobMessage(document.Id, document.ContentRevision), cancellationToken);
+            await indexingDispatcher.DispatchAfterWriteAsync([indexingRequest.Id], cancellationToken);
         }
 
         return UpsertSyncedDocumentResult.Success(

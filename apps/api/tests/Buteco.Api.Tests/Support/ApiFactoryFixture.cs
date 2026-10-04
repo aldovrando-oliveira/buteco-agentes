@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Testcontainers.PostgreSql;
 using Buteco.Api.Tests.Support;
@@ -85,6 +86,14 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
             }
 
             services.AddSingleton<IKnowledgeIndexingJobPublisher>(IndexingPublisher);
+
+            // A varredura de pedidos de indexação (indexacao-sem-job-orfao, D3) a cada
+            // hora, não a cada 30 s: um tique automático no meio de um teste publicaria
+            // o pedido de outra requisição fora da ordem que o teste afirma. Os testes
+            // da varredura a chamam direto, e o que prova o serviço rodando sozinho
+            // deriva um host com intervalo curto.
+            services.RemoveAll<KnowledgeIndexingRequestSchedule>();
+            services.AddSingleton(new KnowledgeIndexingRequestSchedule { SweepInterval = TimeSpan.FromHours(1) });
         });
 
         // Sink do SQL emitido pelo EF Core. Inerte para quem não usa

@@ -460,6 +460,21 @@ revisão: publica com `Attempt = 1`, e limpa `FailureReason`, `IndexingAttempts`
 `LastAttemptAt` para que o documento não leia como rodada encerrada enquanto a
 mensagem espera na fila. Não toca `ContentHash` nem `ContentRevision`.
 
+**Os publicadores não publicam: gravam um pedido** (change `indexacao-sem-job-orfao`,
+#138). Cada escrita que pede indexação — as três acima e o upsert de `/sync` — grava
+uma linha em `knowledge_indexing_requests` (documento e revisão) **no mesmo
+`SaveChanges`** do documento, e um despacho único publica com **confirmação do
+broker** e só então apaga a linha. O despacho roda no fim da escrita (limite de 5 s,
+falha só logada, resposta de sempre) e numa varredura de 30 s, o primeiro
+`BackgroundService` do `apps/api`; depois de uma falha, as escritas pulam o despacho
+por 30 s e deixam o pedido para a varredura. `FOR UPDATE SKIP LOCKED`: o `FOR UPDATE`
+impede duas instâncias de publicarem o mesmo pedido, o `SKIP LOCKED` faz a segunda
+pular em vez de esperar. A entrega é pelo menos uma vez, e a duplicata da mesma
+revisão é inofensiva porque o commit do consumidor substitui o conjunto inteiro de
+fragmentos. Antes, com o broker fora do ar, a escrita gravava o documento e
+respondia `500`, e no upsert de base sincronizada o documento ficava sem indexação
+para sempre: o ciclo seguinte responde `Unchanged`, que não pede nada.
+
 É o **primeiro consumidor do repositório com política de tentativas**, e não
 havia molde a herdar. A forma: **três execuções**, espaçadas por 1 e 5 minutos,
 por **duas filas de espera** (`knowledge-indexing-wait-60s` e

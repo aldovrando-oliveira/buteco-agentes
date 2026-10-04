@@ -6,6 +6,7 @@ using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Entities;
 using Buteco.Api.EmbeddingMetrics.Entities;
 using Buteco.Api.ExecutionMetrics.Entities;
+using Buteco.Api.Knowledge.Indexing;
 using Buteco.Api.KnowledgeBases.Entities;
 using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeFragments.Entities;
@@ -33,6 +34,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
 
     public DbSet<KnowledgeDocumentEvent> KnowledgeDocumentEvents => Set<KnowledgeDocumentEvent>();
+
+    public DbSet<KnowledgeIndexingRequest> KnowledgeIndexingRequests => Set<KnowledgeIndexingRequest>();
 
     public DbSet<AgentKnowledgeBase> AgentKnowledgeBases => Set<AgentKnowledgeBase>();
 
@@ -388,6 +391,29 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne<KnowledgeBase>()
                 .WithMany()
                 .HasForeignKey(documentEvent => documentEvent.KnowledgeBaseId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Pedido de indexação ainda não entregue à fila (design.md da change
+        // indexacao-sem-job-orfao, D1). Só apps/api escreve e lê; apps/workers não
+        // espelha esta tabela.
+        modelBuilder.Entity<KnowledgeIndexingRequest>(entity =>
+        {
+            entity.ToTable("knowledge_indexing_requests");
+            entity.HasKey(request => request.Id);
+            entity.Property(request => request.ContentRevision).IsRequired();
+            entity.Property(request => request.CreatedAt).IsRequired();
+
+            // A ordem de despacho (D3): ORDER BY "CreatedAt", "Id".
+            entity.HasIndex(request => new { request.CreatedAt, request.Id });
+
+            // Cascade, ao contrário do Restrict documento → base: o pedido não tem
+            // significado sem o documento. Excluir documento, ou base (que apaga os
+            // documentos na aplicação), leva os pedidos junto, e um pedido para
+            // documento excluído nunca chega à fila.
+            entity.HasOne<KnowledgeDocument>()
+                .WithMany()
+                .HasForeignKey(request => request.KnowledgeDocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

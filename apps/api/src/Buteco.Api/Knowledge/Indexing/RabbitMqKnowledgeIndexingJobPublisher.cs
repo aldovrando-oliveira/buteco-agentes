@@ -6,9 +6,21 @@ using RabbitMQ.Client;
 namespace Buteco.Api.Knowledge.Indexing;
 
 /// <summary>
-/// Publisher de pedidos de indexação, no molde exato de
+/// Publisher de pedidos de indexação, no molde de
 /// <c>RabbitMqTaskJobPublisher</c>: canal preguiçoso protegido por
 /// <see cref="SemaphoreSlim"/>, mensagem persistente e <c>mandatory</c>.
+///
+/// <para>
+/// <b>Com confirmação do broker</b> (design.md da change indexacao-sem-job-orfao,
+/// D5), e é nisso que deixa de seguir o molde. O despacho apaga o pedido de
+/// indexação depois de publicar; sem confirmação, o retorno de
+/// <c>BasicPublishAsync</c> só diria que a mensagem foi escrita no socket, e o
+/// pedido seria apagado por uma mensagem que o broker pode não ter recebido.
+/// Conferido no 7.2.1 decompilado: com as duas opções, a chamada espera o
+/// <c>ack</c> e lança <c>PublishException</c> em <c>nack</c> e em
+/// <c>basic.return</c> — este último só correlacionado com o <i>tracking</i>
+/// ligado, por isso as duas.
+/// </para>
 /// </summary>
 public sealed class RabbitMqKnowledgeIndexingJobPublisher : IKnowledgeIndexingJobPublisher, IAsyncDisposable
 {
@@ -70,7 +82,9 @@ public sealed class RabbitMqKnowledgeIndexingJobPublisher : IKnowledgeIndexingJo
                 _connection = await factory.CreateConnectionAsync(cancellationToken);
             }
 
-            _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
+            _channel = await _connection.CreateChannelAsync(
+                new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true),
+                cancellationToken);
             await KnowledgeIndexingQueues.DeclareAsync(_channel, cancellationToken);
             return _channel;
         }
