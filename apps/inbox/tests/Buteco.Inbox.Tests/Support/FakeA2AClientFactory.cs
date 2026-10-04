@@ -23,6 +23,20 @@ public sealed class FakeA2AClientFactory : IA2AClientFactory
 
     public Func<SendMessageRequest, SendMessageResponse> Handler { get; set; } = DefaultHandler;
 
+    // Roda depois de Handler e antes de a resposta voltar ao chamador — o
+    // intervalo em que apps/api já aceitou o SendMessage e apps/inbox ainda não
+    // gravou o TaskId (#47). Nulo por padrão.
+    public Func<SendMessageRequest, SendMessageResponse, CancellationToken, Task>? BeforeReturn { get; set; }
+
+    // GetTask da reconciliação (#47). Por padrão a task não existe, como
+    // apps/api responde (A2AException TaskNotFound). Reatribuível por teste.
+    public Func<GetTaskRequest, CancellationToken, Task<AgentTask>> GetTaskHandler { get; set; } = TaskNotFoundHandler;
+
+    public ConcurrentDictionary<string, int> GetTaskCalls { get; } = new();
+
+    public static Task<AgentTask> TaskNotFoundHandler(GetTaskRequest request, CancellationToken cancellationToken) =>
+        throw new A2AException($"Task '{request.Id}' not found.", A2AErrorCode.TaskNotFound);
+
     public IA2AClient CreateForAgent(Guid agentId)
     {
         RequestedAgentIds.Add(agentId);
@@ -51,17 +65,26 @@ public sealed class FakeA2AClientFactory : IA2AClientFactory
 
     private sealed class FakeA2AClient(FakeA2AClientFactory owner) : IA2AClient
     {
-        public Task<SendMessageResponse> SendMessageAsync(SendMessageRequest request, CancellationToken cancellationToken = default)
+        public async Task<SendMessageResponse> SendMessageAsync(SendMessageRequest request, CancellationToken cancellationToken = default)
         {
             owner.Requests.Add(request);
-            return Task.FromResult(owner.Handler(request));
+            var response = owner.Handler(request);
+            if (owner.BeforeReturn is { } beforeReturn)
+            {
+                await beforeReturn(request, response, cancellationToken);
+            }
+
+            return response;
         }
 
         public IAsyncEnumerable<StreamResponse> SendStreamingMessageAsync(SendMessageRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<AgentTask> GetTaskAsync(GetTaskRequest request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public Task<AgentTask> GetTaskAsync(GetTaskRequest request, CancellationToken cancellationToken = default)
+        {
+            owner.GetTaskCalls.AddOrUpdate(request.Id, 1, (_, count) => count + 1);
+            return owner.GetTaskHandler(request, cancellationToken);
+        }
 
         public Task<ListTasksResponse> ListTasksAsync(ListTasksRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();

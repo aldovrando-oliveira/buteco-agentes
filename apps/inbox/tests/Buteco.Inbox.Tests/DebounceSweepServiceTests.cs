@@ -163,9 +163,15 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
 
         await PollUntilNoPendingDispatchAsync(sessionId, TimeSpan.FromSeconds(3));
 
+        // A partir da #47 o desfecho de falha também grava a saída do aviso à
+        // conversa (pending-dispatch-orfa, D6): exatamente duas mensagens — a
+        // entrada, Failed, e a saída do aviso.
         var messages = await GetMessagesAsync(sessionId);
-        Assert.Single(messages);
-        Assert.Equal(MessageDispatchStatus.Failed, messages[0].DispatchStatus);
+        Assert.Equal(2, messages.Count);
+        var inbound = Assert.Single(messages, m => m.Direction == MessageDirection.Inbound);
+        Assert.Equal(MessageDispatchStatus.Failed, inbound.DispatchStatus);
+        var notice = Assert.Single(messages, m => m.Direction == MessageDirection.Outbound);
+        Assert.Equal(DispatchOutcomeProcessor.FailureNoticeText, notice.Content);
     }
 
     [Fact]
@@ -181,9 +187,15 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
 
         await PollUntilNoPendingDispatchAsync(sessionId, TimeSpan.FromSeconds(3));
 
+        // A partir da #47 o desfecho de falha também grava a saída do aviso à
+        // conversa (pending-dispatch-orfa, D6): exatamente duas mensagens — a
+        // entrada, Failed, e a saída do aviso.
         var messages = await GetMessagesAsync(sessionId);
-        Assert.Single(messages);
-        Assert.Equal(MessageDispatchStatus.Failed, messages[0].DispatchStatus);
+        Assert.Equal(2, messages.Count);
+        var inbound = Assert.Single(messages, m => m.Direction == MessageDirection.Inbound);
+        Assert.Equal(MessageDispatchStatus.Failed, inbound.DispatchStatus);
+        var notice = Assert.Single(messages, m => m.Direction == MessageDirection.Outbound);
+        Assert.Equal(DispatchOutcomeProcessor.FailureNoticeText, notice.Content);
     }
 
     [Fact]
@@ -239,9 +251,15 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
 
         // DispatchStatus permanece consultável mesmo com a PendingDispatch
         // já removida (design.md, Decisão 6).
+        // A partir da #47 o desfecho de falha também grava a saída do aviso à
+        // conversa (pending-dispatch-orfa, D6): exatamente duas mensagens — a
+        // entrada, Failed, e a saída do aviso.
         var messages = await GetMessagesAsync(sessionId);
-        Assert.Single(messages);
-        Assert.Equal(MessageDispatchStatus.Failed, messages[0].DispatchStatus);
+        Assert.Equal(2, messages.Count);
+        var inbound = Assert.Single(messages, m => m.Direction == MessageDirection.Inbound);
+        Assert.Equal(MessageDispatchStatus.Failed, inbound.DispatchStatus);
+        var notice = Assert.Single(messages, m => m.Direction == MessageDirection.Outbound);
+        Assert.Equal(DispatchOutcomeProcessor.FailureNoticeText, notice.Content);
     }
 
     // inbox-sweep-service-resiliencia, tasks.md 2.3/2.4: DebounceSweepService

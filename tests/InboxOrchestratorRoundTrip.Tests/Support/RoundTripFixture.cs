@@ -94,6 +94,13 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
     public WebApplicationFactory<InboxProgram> InboxFactory => _inboxFactory!;
 
+    // Controles das fontes de PendingDispatch órfã (#47). Neutros por padrão:
+    // push passa direto, LLM responde — os testes que não os tocam continuam
+    // exercitando o round-trip normal.
+    public PushNotificationGate PushGate { get; } = new();
+
+    public bool ChatClientFails { get; set; }
+
     public async Task InitializeAsync()
     {
         await Task.WhenAll(_apiAndWorkersPostgres.StartAsync(), _inboxPostgres.StartAsync(), _rabbitMq.StartAsync());
@@ -197,6 +204,17 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     ["Debounce:Window"] = "00:00:00.300",
                     ["Debounce:SweepInterval"] = "00:00:00.050",
                     ["Debounce:MaxDispatchAttempts"] = "3",
+                    // Reconciliação curta (#47): a carência de 1 s cobre com folga
+                    // o push em processo, que aqui não atravessa rede.
+                    ["DispatchReconciliation:Interval"] = "00:00:00.200",
+                    ["DispatchReconciliation:TerminalGrace"] = "00:00:01",
+                    // Longe de qualquer instante que os testes daqui fixam: o
+                    // teste de messageInstant recebe uma mensagem com
+                    // receivedAt de 10/03/2026, e o D7 mede a idade pelo
+                    // LastMessageAt. Com 30 s, a reconciliação encerrava a linha
+                    // recém-reivindicada como perda antes de o TaskId ser gravado
+                    // (medido em 04/10/2026). O D7 tem guardas em apps/inbox.
+                    ["DispatchReconciliation:UntrackedDispatchMaxAge"] = "3650.00:00:00",
                     ["Auth:TokenSigningKey"] = TokenSigningKey,
                 }));
 
@@ -237,7 +255,9 @@ public sealed class RoundTripFixture : IAsyncLifetime
         var chatClientMock = new Mock<IChatClient>();
         chatClientMock
             .Setup(client => client.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, MockedAgentReplyText)));
+            .Returns(() => ChatClientFails
+                ? Task.FromException<ChatResponse>(new HttpRequestException("Falha simulada do provedor."))
+                : Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, MockedAgentReplyText))));
 
         var chatClientResolverMock = new Mock<IChatClientResolver>();
         chatClientResolverMock
@@ -253,7 +273,8 @@ public sealed class RoundTripFixture : IAsyncLifetime
         // TestServer de apps/inbox, sem rede real — mesma técnica do
         // A2AClientFactory acima, na outra ponta do round-trip.
         builder.Services.AddHttpClient(PushNotificationSender.HttpClientName)
-            .ConfigurePrimaryHttpMessageHandler(() => InboxFactory.Server.CreateHandler());
+            .ConfigurePrimaryHttpMessageHandler(() => InboxFactory.Server.CreateHandler())
+            .AddHttpMessageHandler(() => new PushNotificationGateHandler(PushGate));
         builder.Services.AddSingleton<PushNotificationSender>();
 
         // AgentExecutionService/TaskJobConsumer passaram a exigir
@@ -264,6 +285,18 @@ public sealed class RoundTripFixture : IAsyncLifetime
         builder.Services.AddHostedService<TaskJobConsumer>();
 
         return builder.Build();
+    }
+
+    /// <summary>
+    /// Para o host de apps/workers e sobe outro, contra a mesma fila — o que um
+    /// deploy faz. Mensagem devolvida à fila pela parada é reentregue ao novo.
+    /// </summary>
+    public async Task RestartWorkersAsync()
+    {
+        await _workersHost!.StopAsync();
+        _workersHost.Dispose();
+        _workersHost = BuildWorkersHost();
+        await _workersHost.StartAsync();
     }
 
     // Login real contra apps/api (não um token forjado com a mesma
