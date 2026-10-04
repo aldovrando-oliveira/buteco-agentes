@@ -270,6 +270,22 @@ Ambas são resolvidas em **tempo de build** e embutidas no bundle. O build
 Os valores vazios existem para o cenário do stack de servidor, em que o nginx
 interno serve o SPA e faz proxy para os dois backends no mesmo domínio.
 
+### `VITE_CONNECTORS_BASE_URL` (opcional)
+
+Base de `apps/connectors`, também resolvida em build, mas **opcional**: o build
+não falha sem ela. Três estados (change `frontend-cadastro-base-sincronizada`,
+D1):
+
+| Valor no build | Efeito no painel |
+|---|---|
+| ausente | a origem "Sincronizada" do cadastro de base aparece indisponível, com uma explicação, e o painel não faz nenhuma chamada a `apps/connectors` |
+| `""` | caminho relativo (`/connectors/...` no mesmo domínio), como os outros dois |
+| URL absoluta | aquele endereço; em desenvolvimento, `http://localhost:5037` |
+
+No stack de servidor ela fica ausente até `apps/connectors` entrar em produção
+(#119), e entra como `""` junto com o bloco `/connectors` do nginx, nunca antes:
+com `""` e sem o bloco, as chamadas caem no SPA.
+
 ---
 
 ## Stack de servidor (`.env.prod.example`)

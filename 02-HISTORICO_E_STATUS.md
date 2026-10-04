@@ -1890,8 +1890,8 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **quinze**, achadas em oito etapas diferentes (a décima quinta, da #99, está
-no fim da lista). A décima quarta vem primeiro
+São **vinte e cinco**, achadas em nove etapas diferentes (a décima quinta, da #99,
+e as dez da #106 estão no fim da lista). A décima quarta vem primeiro
 porque é de **tipo novo** e muda o critério de detecção da lista inteira; depois
 a oitava, que também era de tipo novo quando entrou; depois as duas da 5c, depois
 as três da 5a-3, depois as duas da 5a-2, que **corrigiram duas das cinco
@@ -2159,6 +2159,32 @@ família da 5a-1 (convenção 13 na direção da OMISSÃO):
   negativa contra a volta de `Ativo` em todo chip (`design.md`, D2). O protótipo
   também não desenha o estado "agentes indisponíveis" (`GET /agents` falhando),
   que continua existindo com o texto de antes.
+
+**Da décima sexta à vigésima quinta, da #106 (`frontend-cadastro-base-sincronizada`,
+03/10/2026), do mesmo canvas, pranchas 2a, 2b, 2c e 2d.** A tabela inteira, com o
+porquê de cada uma, está na D6 do `design.md` da change; aqui, o que cada uma é:
+
+- **C1–C2, prancha simplificada onde o painel já mediu:** o bloco da descrição
+  resumido (a própria prancha diz "sem mudança") e a prosa a 760px contra os
+  620px da régua do formulário. Prevalece o código de hoje.
+- **C3, o caso mais comum sem escolha:** a prancha 2c não deixa escolher pasta
+  compartilhada direto com a conta no nível de cima, e é exatamente o caminho que a
+  etapa 0 documentou (compartilhar a pasta como Leitor). Escolhível. A raiz de
+  Drive Compartilhado continua só navegável, por não ter sido medida (#114).
+- **C4, link que descarta o formulário:** o nome da base que usa a pasta vira texto,
+  sem link, no seletor e no erro `folder-in-use`.
+- **C5, prazo insinuado (convenção 13):** "a primeira sincronização começa depois
+  de criar a base" virou nota sem prazo; a rodada é periódica e depende de
+  `Api__BaseUrl` no `apps/connectors` (#105, #119).
+- **C6, nome que a rota não devolve:** "Google Drive" sai de um mapa local, e
+  provedor desconhecido aparece pela chave.
+- **C7, paleta só do claro (convenção 16):** o modal usa o `Modal` do Mantine e os
+  tokens do tema.
+- **C8, estados não desenhados:** Sincronizada indisponível, provedores e seletor
+  carregando, com erro e vazios, listagem de bases indisponível e erro do cadastro.
+- **C9, o manual continua igual:** a nota de documentos mantém o `Paper` com borda.
+- **C10, achada na conferência:** a orientação "compartilhe e recarregue" saiu do
+  fim da lista rolável para uma faixa fixa com o botão "Recarregar".
 
 **Para a 5b, o que já está pronto — e o que a 5a-1 já entregou:**
 
@@ -15092,3 +15118,53 @@ teste verde; foi refeita.
 - Telas (#106, #107), exclusão de base (#108), implantação em produção (#119), chave por
   serviço (#117).
 - Várias instâncias (D10): uma réplica só, registrada na #119.
+
+## `frontend-cadastro-base-sincronizada` — cadastro de base sincronizada com seletor de pasta (#106)
+
+**Change proposta e revisada em 03/10/2026, implementada, validada pelo dono,
+sincronizada e arquivada em 04/10/2026
+(`openspec/changes/archive/2026-10-04-frontend-cadastro-base-sincronizada/`).** A #106
+vai para `In review` com a abertura do PR. Branch `feat/106-cadastro-base-sincronizada`,
+criada sem upstream de `ffc6a7b`, num worktree próprio. Validação manual (convenção 14)
+feita pelo dono em 04/10/2026 — "testes manuais realizados e fluxos funcionando
+corretamente" —, com `apps/api`, `apps/connectors` (chave da service account de
+validação) e o painel deste worktree, sem ajuste pedido. Specs sincronizadas: o
+requisito "Criação e edição de base de conhecimento" de `knowledge-base-catalog-ui` e a
+capability nova `knowledge-base-sync-source-ui`.
+
+### O que entrou
+
+No `apps/frontend`: o card "Origem dos documentos" no cadastro de base, com o cadastro
+manual enviando o mesmo corpo de antes; na origem sincronizada, provedor, e-mail da
+conta com "Copiar", pasta com "Abrir no Drive" e o seletor de pasta em modal (Drives
+Compartilhados, pastas compartilhadas com a conta, descida por subpastas, pasta em uso
+desabilitada pelo cruzamento com a listagem de bases); texto próprio para cada código
+de erro do cadastro (#104) e da navegação (#103); o cliente do `apps/connectors`
+(`features/knowledge-bases/api/connectorsApi.ts`), que a #107 reaproveita. Nenhuma
+linha em outro app.
+
+### O que a implementação mediu
+
+- **`ARG` sem valor chega ausente, não vazio.** Medido com Podman antes do código: sem
+  `--build-arg`, `sh` e Node veem a variável **ausente**; com `X=`, veem `""`. Por isso
+  `VITE_CONNECTORS_BASE_URL` é opcional no `Dockerfile` sem `ENV`, e a imagem sem ela
+  compila a leitura do endereço como `return null` (Sincronizada indisponível,
+  conferida na tela da imagem servida), e não como cadeia vazia (caminho relativo, que
+  cairia no SPA antes da #119).
+- **Suíte do frontend:** 1444/1444 na baseline em `ffc6a7b`, **1580/1580** no fechamento,
+  +136 testes em 7 arquivos novos e 2 alterados. `format:check` com a mesma lista de 52
+  arquivos da baseline.
+- **Conferência visual:** duas rodadas de 56 capturas (14 estados × 2 esquemas × 2
+  larguras), com as respostas do `apps/api` e do `apps/connectors` montadas pelo CDP;
+  seis achados de medida na primeira, nenhum na segunda.
+
+### Guardas contra o defeito real (convenção 15)
+
+"Excluir" no texto de `folder-in-use` e comparação de pasta sem caixa: cada um aplicado,
+visto reprovando exatamente o teste dele, e desfeito (`tasks.md`, 4.4).
+
+### O que ficou de fora, e é decisão
+
+- Detalhe, listagem, filtro "Com falha" e "Sincronizar agora" (#107); a orientação de
+  excluir no `folder-in-use` (#136); a variável no compose de produção (#119, comentário
+  feito na abertura da change).

@@ -386,6 +386,12 @@ Abra `http://localhost:5173`. A aplicação redireciona para `/login` — entre
 com o operador configurado em `apps/api` (default de dev: `operator` /
 `changeme`).
 
+O cadastro de base sincronizada chama `apps/connectors` direto do navegador, e só
+quando o painel conhece o endereço dele: copie `apps/frontend/.env.example` para
+`apps/frontend/.env`, que já traz `VITE_CONNECTORS_BASE_URL=http://localhost:5037`.
+Sem a variável, a origem "Sincronizada" aparece indisponível e o resto do painel
+funciona igual.
+
 ---
 
 ## Autenticação em desenvolvimento
@@ -580,6 +586,12 @@ bundle) e **obrigatórias**: o build do frontend falha se não forem passadas,
 mesmo que vazias. Vazio (`""`) significa caminho relativo, para quando o
 nginx do stack serve o SPA e faz proxy para `apps/api` e `apps/inbox` no
 mesmo domínio.
+
+`VITE_CONNECTORS_BASE_URL` é a exceção: **opcional**, e o build da imagem passa
+sem ela. Ausente, o painel publica a origem "Sincronizada" indisponível; o
+`Dockerfile` declara o `ARG` sem a checagem de presença dos outros dois e sem
+`ENV`, porque `ENV` com o argumento ausente gravaria `""`, que é caminho
+relativo ([configuration.md](configuration.md#vite_connectors_base_url-opcional)).
 
 Todas as imagens finais usam a variante **default** das imagens
 `mcr.microsoft.com/dotnet/*`, nunca a `-alpine`. A `-alpine` não traz a tz
