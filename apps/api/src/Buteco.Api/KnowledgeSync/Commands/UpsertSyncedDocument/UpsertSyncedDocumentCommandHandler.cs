@@ -100,6 +100,15 @@ public sealed class UpsertSyncedDocumentCommandHandler(
 
             return await ApplyToExistingAsync(winner, command, extractedText, cancellationToken);
         }
+        catch (DbUpdateException exception) when (KnowledgeBaseWriteFailures.MayBeDeletedBase(exception))
+        {
+            // A base foi excluída entre a leitura e a gravação: a FK do evento ou a do
+            // documento recusa a linha (exclusao-base-conhecimento, D6). 404, que a #105
+            // lê como fim do ciclo. Com a base existindo, é contenção: o conector repete.
+            return await dbContext.KnowledgeBaseIsGoneAsync(command.KnowledgeBaseId, cancellationToken)
+                ? UpsertSyncedDocumentResult.NotSynced(SyncedKnowledgeBaseLookup.NotFound)
+                : UpsertSyncedDocumentResult.ConcurrentWrite();
+        }
 
         // Publica DEPOIS do SaveChanges que deu certo, nunca antes.
         await indexingPublisher.PublishAsync(
@@ -124,6 +133,12 @@ public sealed class UpsertSyncedDocumentCommandHandler(
     /// vencedor, publicando a própria indexação. Uma segunda falha seguida não vira
     /// 500: responde que a escrita concorrente impediu a gravação e que ela pode ser
     /// repetida.
+    ///
+    /// <para>
+    /// Desde a exclusão de base (exclusao-base-conhecimento, D6), toda falha — de
+    /// concorrência, de FK para a base ou impasse — pergunta antes se a base ainda
+    /// existe: sem ela, 404, nunca 503 nem 500.
+    /// </para>
     /// </summary>
     private async Task<UpsertSyncedDocumentResult> ApplyToExistingAsync(
         KnowledgeDocument document, UpsertSyncedDocumentCommand command, string extractedText, CancellationToken cancellationToken)
@@ -132,32 +147,40 @@ public sealed class UpsertSyncedDocumentCommandHandler(
         {
             return await ApplyOnceAsync(document, command, extractedText, cancellationToken);
         }
-        catch (DbUpdateConcurrencyException)
+        catch (DbUpdateException exception) when (KnowledgeBaseWriteFailures.MayBeDeletedBase(exception))
         {
+            if (await dbContext.KnowledgeBaseIsGoneAsync(command.KnowledgeBaseId, cancellationToken))
+            {
+                return UpsertSyncedDocumentResult.NotSynced(SyncedKnowledgeBaseLookup.NotFound);
+            }
+
             logger.LogInformation(
                 ConcurrentUpdateRetriedEvent,
                 "Atualização concorrente do documento sincronizado {ExternalRef} da base {KnowledgeBaseId}: relido e reaplicado.",
                 command.ExternalRef,
                 command.KnowledgeBaseId);
-            dbContext.ChangeTracker.Clear();
         }
 
         var current = await FindAsync(command, cancellationToken);
         if (current is null)
         {
             // Excluído entre as duas tentativas: não há o que reaplicar sem decidir
-            // por conta própria recriar o documento. O conector repete.
-            return UpsertSyncedDocumentResult.ConcurrentWrite();
+            // por conta própria recriar o documento. O conector repete — a menos que a
+            // base inteira tenha sumido nesse meio-tempo.
+            return await dbContext.KnowledgeBaseIsGoneAsync(command.KnowledgeBaseId, cancellationToken)
+                ? UpsertSyncedDocumentResult.NotSynced(SyncedKnowledgeBaseLookup.NotFound)
+                : UpsertSyncedDocumentResult.ConcurrentWrite();
         }
 
         try
         {
             return await ApplyOnceAsync(current, command, extractedText, cancellationToken);
         }
-        catch (DbUpdateConcurrencyException)
+        catch (DbUpdateException exception) when (KnowledgeBaseWriteFailures.MayBeDeletedBase(exception))
         {
-            dbContext.ChangeTracker.Clear();
-            return UpsertSyncedDocumentResult.ConcurrentWrite();
+            return await dbContext.KnowledgeBaseIsGoneAsync(command.KnowledgeBaseId, cancellationToken)
+                ? UpsertSyncedDocumentResult.NotSynced(SyncedKnowledgeBaseLookup.NotFound)
+                : UpsertSyncedDocumentResult.ConcurrentWrite();
         }
     }
 

@@ -225,24 +225,6 @@ public partial class KnowledgeBaseCatalogTests(ApiFactoryFixture factory) : ICla
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    // Base de conhecimento não tem exclusão (design.md, D6) — só documento tem.
-    // Responde 405, não 404: a rota /knowledge-bases/{id} existe para GET e
-    // PUT, e o que falta é o verbo. É a resposta mais informativa das duas, e
-    // afirmá-la é o que impede alguém acrescentar um MapDelete aqui sem
-    // reabrir D6.
-    [Fact]
-    public async Task DeleteKnowledgeBase_IsNotAllowedAndBaseSurvives()
-    {
-        var created = await CreateBaseAsync("Base sem delete");
-
-        var response = await _client.DeleteAsync($"/knowledge-bases/{created.Id}");
-
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
-
-        var reread = await _client.GetAsync($"/knowledge-bases/{created.Id}");
-        Assert.Equal(HttpStatusCode.OK, reread.StatusCode);
-    }
-
     // --- A resposta de base não carrega contagem agregada -------------------
 
     /// <summary>

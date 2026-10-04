@@ -13,11 +13,40 @@ namespace Buteco.Api.KnowledgeSync.Commands.RecordSyncResult;
 /// relógio do <c>apps/api</c> no momento da gravação, nunca um campo do conector:
 /// dois relógios, e uma gravação atrasada poderia mover o estado para trás.
 /// </summary>
-/// <remarks>Não toca documentos nem o histórico.</remarks>
+/// <remarks>
+/// Não toca documentos nem o histórico. A base pode ser excluída entre a leitura e o
+/// <c>UPDATE</c>, que então não acha a linha: 404, nunca 500
+/// (exclusao-base-conhecimento, D6).
+/// </remarks>
 public sealed class RecordSyncResultCommandHandler(AppDbContext dbContext, TimeProvider timeProvider)
     : ICommandHandler<RecordSyncResultCommand, RecordSyncResultResult>
 {
     public async ValueTask<RecordSyncResultResult> Handle(RecordSyncResultCommand command, CancellationToken cancellationToken)
+    {
+        // Sem token de concorrência na base: o UPDATE só deixa de achar a linha se ela
+        // foi apagada. Um impasse com a base existindo repete UMA vez.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await RecordOnceAsync(command, cancellationToken);
+            }
+            catch (DbUpdateException exception) when (KnowledgeBaseWriteFailures.MayBeDeletedBase(exception))
+            {
+                if (await dbContext.KnowledgeBaseIsGoneAsync(command.KnowledgeBaseId, cancellationToken))
+                {
+                    return new RecordSyncResultResult(SyncedKnowledgeBaseLookup.NotFound, null);
+                }
+
+                if (attempt == 2)
+                {
+                    throw;
+                }
+            }
+        }
+    }
+
+    private async Task<RecordSyncResultResult> RecordOnceAsync(RecordSyncResultCommand command, CancellationToken cancellationToken)
     {
         var knowledgeBase = await dbContext.KnowledgeBases
             .FirstOrDefaultAsync(knowledgeBase => knowledgeBase.Id == command.KnowledgeBaseId, cancellationToken);

@@ -1,6 +1,7 @@
 using Buteco.Api.KnowledgeBases.Commands.ActivateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Commands.CreateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Commands.DeactivateKnowledgeBase;
+using Buteco.Api.KnowledgeBases.Commands.DeleteKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Commands.UpdateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Entities;
 using Buteco.Api.KnowledgeBases.Queries.GetKnowledgeBaseById;
@@ -38,11 +39,12 @@ public static class KnowledgeBaseEndpoints
         group.MapPost("/{id:guid}/activate", ActivateKnowledgeBaseAsync);
         group.MapPost("/{id:guid}/deactivate", DeactivateKnowledgeBaseAsync);
 
-        // Sem MapDelete: base de conhecimento é entidade de catálogo e, a
-        // partir da etapa de vínculo, terá agentes apontando para ela — mesmo
-        // caso que formou o padrão IsActive de McpServer (design.md, D6).
-        // Documento, que é conteúdo, tem exclusão real; ver
-        // KnowledgeDocumentEndpoints.
+        // Base de conhecimento é a exceção à regra "catálogo só se desativa"
+        // (design.md da change exclusao-base-conhecimento, D1): ninguém lê o passado
+        // pelo id dela, e ela retém um recurso exclusivo — a pasta de uma base
+        // sincronizada, que sem exclusão ficaria presa para sempre. Agent, McpServer e
+        // Channel continuam só se desativando. Só base inativa (D2).
+        group.MapDelete("/{id:guid}", DeleteKnowledgeBaseAsync);
 
         return app;
     }
@@ -81,8 +83,10 @@ public static class KnowledgeBaseEndpoints
     /// <summary>
     /// 409 de pasta em uso (design.md da change criacao-base-sincronizada, D5). A frase
     /// nomeia a base e diz que a pasta continua ocupada mesmo com a base inativa, e NÃO
-    /// manda excluir a base: não existe rota de exclusão de base até a #108. Quando ela
-    /// existir, esta frase e o teste que afirma a ausência dessa instrução mudam juntos.
+    /// manda excluir a base. A rota de exclusão existe desde a #108, mas o botão no
+    /// painel só chega com a #136, e a frase mandaria o operador a uma ação que a tela
+    /// não oferece (design.md da change exclusao-base-conhecimento, D8). Ela muda junto
+    /// com o botão, na #136, com o teste que afirma a ausência dessa instrução.
     /// </summary>
     private static ProblemHttpResult FolderInUse(Guid knowledgeBaseId, string knowledgeBaseName) =>
         TypedResults.Problem(
@@ -155,6 +159,43 @@ public static class KnowledgeBaseEndpoints
         return result is null
             ? TypedResults.NotFound()
             : TypedResults.Ok(result);
+    }
+
+    private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> DeleteKnowledgeBaseAsync(
+        Guid id,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new DeleteKnowledgeBaseCommand(id), cancellationToken);
+
+        return result switch
+        {
+            DeleteKnowledgeBaseResult.Deleted => TypedResults.NoContent(),
+            DeleteKnowledgeBaseResult.Active => KnowledgeBaseActive(),
+            DeleteKnowledgeBaseResult.ConcurrentWrite => DeletionContended(httpContext),
+            _ => TypedResults.NotFound(),
+        };
+    }
+
+    /// <summary>
+    /// 409 de base ativa (D2, D11): o operador tem permissão e a rota oferece o verbo;
+    /// o que impede é o estado da base. O painel escolhe o texto pelo código.
+    /// </summary>
+    private static ProblemHttpResult KnowledgeBaseActive() =>
+        TypedResults.Problem(
+            title: "A base de conhecimento está ativa.",
+            detail: "Só uma base inativa pode ser excluída. Desative a base antes de excluí-la.",
+            statusCode: StatusCodes.Status409Conflict,
+            extensions: new Dictionary<string, object?> { ["code"] = "knowledge-base-active" });
+
+    /// <summary>Dois impasses seguidos (D6, D11): nada foi apagado, e repetir resolve.</summary>
+    private static ProblemHttpResult DeletionContended(HttpContext httpContext)
+    {
+        httpContext.Response.Headers.RetryAfter = "1";
+        return TypedResults.Problem(
+            title: "Outra escrita impediu a exclusão desta base duas vezes seguidas. Nada foi excluído; repita a operação.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
     private static async Task<Results<Ok<KnowledgeBaseResponse>, NotFound>> ActivateKnowledgeBaseAsync(
