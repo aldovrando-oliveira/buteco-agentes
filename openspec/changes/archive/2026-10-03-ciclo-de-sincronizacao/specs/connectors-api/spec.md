@@ -1,13 +1,4 @@
-# connectors-api Specification
-
-## Purpose
-
-As rotas HTTP do `apps/connectors` sob `/connectors`, o formato de fio delas, o
-status de cada falha e quem pode chamar cada uma: uma tabela explícita de subjects em
-que o operador não passa em tudo e qualquer subject fora dela recebe `403`, conferida
-no boot nos dois sentidos.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Rotas sob o prefixo /connectors
 `apps/connectors` SHALL servir as rotas abaixo, todas sob `/connectors`, com JSON em
@@ -100,23 +91,3 @@ implícito a todas as rotas.
 #### Scenario: Subjects nas próprias rotas
 - **WHEN** `operator` chama as três rotas dele e `service:api` chama a dele
 - **THEN** nenhuma das respostas é `401` nem `403`
-
-### Requirement: Tabela de subjects conferida no boot nos dois sentidos
-No boot, depois de todos os `Map*`, o sistema SHALL conferir que toda entrada
-(método, padrão de rota) da tabela corresponde a um endpoint mapeado, comparando
-pelo `RoutePattern.RawText`, e que todo endpoint mapeado que exige autenticação
-aparece na lista de pelo menos um subject. Qualquer divergência SHALL derrubar o
-processo com mensagem que nomeia a entrada ou o endpoint.
-
-#### Scenario: Entrada da tabela sem rota
-- **WHEN** a tabela lista `GET /connectors/providers/{providerKey}/pastas`, que não é
-  mapeada
-- **THEN** a inicialização falha nomeando o subject, o método e o padrão
-
-#### Scenario: Rota autenticada sem dono
-- **WHEN** um endpoint autenticado é mapeado sem constar em nenhuma lista
-- **THEN** a inicialização falha nomeando o padrão do endpoint
-
-#### Scenario: Composição real
-- **WHEN** o host de produção é construído
-- **THEN** a checagem passa sem divergência
