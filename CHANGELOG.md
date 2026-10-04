@@ -371,6 +371,15 @@ o versionamento pretende seguir
   e opcional no `apps/connectors`, `Api__BaseUrl`: sem ela o ciclo não roda e o resto do
   app não muda. O `apps/connectors` passa a assinar `service:connectors` para chamar o
   `apps/api`.
+- Cadastro de base sincronizada no painel, em `apps/frontend` (#106). O formulário de
+  nova base ganha o card "Origem dos documentos": Manual, que continua enviando o mesmo
+  corpo de antes, ou Sincronizada, com o provedor, o e-mail da conta de serviço para
+  compartilhar a pasta como Leitor e um seletor de pasta em modal (Drives
+  Compartilhados, pastas compartilhadas com a conta, descida por subpastas). A pasta já
+  usada por outra base aparece desabilitada com o nome dela, e cada código de erro do
+  cadastro e da navegação tem texto próprio. Variável de build nova e **opcional**,
+  `VITE_CONNECTORS_BASE_URL`: sem ela, a origem Sincronizada aparece indisponível e o
+  painel não chama o `apps/connectors`.
 
 **Entrega containerizada**
 

@@ -47,3 +47,16 @@ body {
 [data-agent-chip] a:focus-visible {
   outline: none;
 }
+
+/* Opção do card "Origem dos documentos" (frontend-cadastro-base-sincronizada).
+   O Radio.Card do Mantine não estiliza o estado marcado; as pranchas 2a e 2b
+   desenham borda de 2px na cor de destaque e fundo sutil. Os dois tokens são
+   declarados pelo Mantine nos dois esquemas (convenção 16). */
+.buteco-origin-option {
+  background-color: var(--mantine-color-body);
+}
+
+.buteco-origin-option[data-checked] {
+  border: 2px solid var(--mantine-primary-color-filled);
+  background-color: var(--mantine-primary-color-light);
+}

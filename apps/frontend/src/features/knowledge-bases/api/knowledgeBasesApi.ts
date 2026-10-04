@@ -15,6 +15,13 @@ export interface ValidationProblemDetails {
   title?: string;
   status?: number;
   errors?: Record<string, string[]>;
+  // Extensões do cadastro de base sincronizada (#104): `code` em toda falha de
+  // validação da pasta, `detail` com o dado do código, e a base que ocupa a pasta
+  // no 409 `folder-in-use`. A tela traduz pelo `code`, nunca pelo `title`
+  // (frontend-cadastro-base-sincronizada, D3).
+  code?: string;
+  detail?: string;
+  knowledgeBaseName?: string;
 }
 
 export class ApiError extends Error {

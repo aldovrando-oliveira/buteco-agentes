@@ -30,6 +30,8 @@ function base(overrides: Partial<KnowledgeBase>): KnowledgeBase {
     isActive: true,
     createdAt: '2026-09-01T00:00:00Z',
     updatedAt: '2026-09-02T00:00:00Z',
+    contentMode: 'Manual',
+    syncSource: null,
     ...overrides,
   };
 }

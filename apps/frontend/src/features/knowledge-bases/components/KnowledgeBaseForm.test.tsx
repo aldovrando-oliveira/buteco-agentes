@@ -371,3 +371,68 @@ describe('KnowledgeBaseForm', () => {
     expect(screen.getByText('O nome da base de conhecimento é obrigatório.')).toBeInTheDocument();
   });
 });
+
+// frontend-cadastro-base-sincronizada (D8): o card de Origem e a nota de rodapé
+// entram por props. Sem elas — a edição —, o formulário é o de antes.
+describe('KnowledgeBaseForm — origem e nota de rodapé', () => {
+  it('sem origin nem footerNote, renderiza como antes: a nota de documentos e nenhum texto de origem', () => {
+    renderForm();
+
+    expect(screen.getByTestId('documents-note')).toHaveTextContent(
+      'Documentos são carregados depois de criar a base, na tela de detalhe.',
+    );
+    expect(screen.queryByText(/Origem dos documentos/)).not.toBeInTheDocument();
+  });
+
+  it('renderiza o origin depois do bloco da descrição', () => {
+    renderForm({ origin: <div data-testid="origem">origem</div> });
+
+    const description = screen.getByTestId('description-block');
+    const origin = screen.getByTestId('origem');
+    expect(
+      description.compareDocumentPosition(origin) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('footerNote substitui a nota de documentos', () => {
+    renderForm({ footerNote: 'Nota da base sincronizada.' });
+
+    expect(screen.getByTestId('documents-note')).toHaveTextContent('Nota da base sincronizada.');
+    expect(screen.getByTestId('documents-note')).not.toHaveTextContent('Documentos são carregados');
+  });
+
+  it('validateExtra falso barra o envio, mesmo com nome e descrição válidos', async () => {
+    const user = userEvent.setup();
+    const validateExtra = vi.fn().mockReturnValue(false);
+    const { onSubmit } = renderForm({ validateExtra });
+
+    await user.type(screen.getByLabelText(/Nome/), 'Base');
+    await user.type(screen.getByLabelText(/Descrição/), longDescription);
+    await user.click(screen.getByRole('button', { name: 'Criar base' }));
+
+    expect(validateExtra).toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('validateExtra roda também quando nome e descrição falham, para os erros aparecerem juntos', async () => {
+    const user = userEvent.setup();
+    const validateExtra = vi.fn().mockReturnValue(false);
+    renderForm({ validateExtra });
+
+    await user.click(screen.getByRole('button', { name: 'Criar base' }));
+
+    expect(validateExtra).toHaveBeenCalled();
+    expect(screen.getByText('O nome da base de conhecimento é obrigatório.')).toBeInTheDocument();
+  });
+
+  it('validateExtra verdadeiro deixa o envio seguir', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm({ validateExtra: () => true });
+
+    await user.type(screen.getByLabelText(/Nome/), 'Base');
+    await user.type(screen.getByLabelText(/Descrição/), longDescription);
+    await user.click(screen.getByRole('button', { name: 'Criar base' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({ name: 'Base', description: longDescription });
+  });
+});

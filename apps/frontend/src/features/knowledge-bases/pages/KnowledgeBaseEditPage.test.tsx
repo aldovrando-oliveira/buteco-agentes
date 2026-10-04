@@ -22,6 +22,8 @@ const knowledgeBase: KnowledgeBase = {
   isActive: true,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-02T00:00:00Z',
+  contentMode: 'Manual',
+  syncSource: null,
 };
 
 function renderPage() {
@@ -150,5 +152,34 @@ describe('KnowledgeBaseEditPage', () => {
     expect(await screen.findByText('Detalhe da base')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(`/knowledge-bases/${knowledgeBase.id}`);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // frontend-cadastro-base-sincronizada (D8): a origem não muda depois do
+  // cadastro, então a edição não mostra o card de Origem, nem em base
+  // sincronizada, e o PUT continua só com nome e descrição.
+  it('base sincronizada: sem card de Origem, e o PUT leva só nome e descrição', async () => {
+    const user = userEvent.setup();
+    const synced: KnowledgeBase = {
+      ...knowledgeBase,
+      contentMode: 'Synced',
+      syncSource: {
+        provider: 'google-drive',
+        folderId: 'f-faq',
+        folderName: 'FAQ Suporte',
+        folderUrl: 'https://drive.google.com/drive/folders/f-faq',
+      },
+    };
+    vi.mocked(getKnowledgeBase).mockResolvedValue(synced);
+    vi.mocked(updateKnowledgeBase).mockResolvedValue(synced);
+
+    renderPage();
+    await screen.findByLabelText(/Nome/);
+    expect(screen.queryByText(/Origem dos documentos/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /Sincronizada/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Salvar/ }));
+
+    await screen.findByText('Detalhe da base');
+    const [, input] = vi.mocked(updateKnowledgeBase).mock.calls[0];
+    expect(input).toEqual({ name: synced.name, description: synced.description });
   });
 });

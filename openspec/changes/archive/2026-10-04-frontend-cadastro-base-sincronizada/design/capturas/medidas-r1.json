@@ -1,0 +1,3199 @@
+{
+  "measures": {
+    "manual_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 162
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "manual_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 162
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "manual_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 162
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "manual_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 162
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "indisponivel_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 196
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 104,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 104,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        33,
+        15
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "indisponivel_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 180
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        15
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "indisponivel_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 196
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 104,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 104,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        33,
+        15
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "indisponivel_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 180
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        15
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "provedores-carregando_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 226
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "provedores-carregando_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 209
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "provedores-carregando_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 226
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "provedores-carregando_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 209
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "provedores-fora-do-ar_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 299
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "provedores-fora-do-ar_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 282
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "provedores-fora-do-ar_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 299
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "provedores-fora-do-ar_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 282
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "nenhum-provedor_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 245
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "nenhum-provedor_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 228
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "nenhum-provedor_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 245
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "nenhum-provedor_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 228
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": null,
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "sem-pasta_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "sem-pasta_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "sem-pasta_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "sem-pasta_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "pasta-escolhida_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "pasta-escolhida_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "pasta-escolhida_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "pasta-escolhida_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "erro-pasta-em-uso_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 565
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "erro-pasta-em-uso_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 547
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "erro-pasta-em-uso_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 565
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "erro-pasta-em-uso_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 547
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": null,
+      "rows": [],
+      "breadcrumb": null,
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-inicio_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        53,
+        53,
+        53
+      ],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-inicio_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        53,
+        53,
+        53
+      ],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-inicio_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        53,
+        53,
+        53
+      ],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-inicio_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        53,
+        53,
+        53
+      ],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-drive_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        57
+      ],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-drive_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        57
+      ],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-drive_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        57
+      ],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-drive_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        57
+      ],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-carregando_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-carregando_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-carregando_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-carregando_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-erro_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-erro_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-erro_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-erro_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-vazio_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-vazio_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-vazio_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-vazio_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-bases-indisponivel_claro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        53
+      ],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-bases-indisponivel_claro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(229, 229, 229)",
+          "radius": "9px",
+          "bg": "rgb(255, 255, 255)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(42, 110, 203)",
+          "radius": "9px",
+          "bg": "rgb(238, 243, 251)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        53
+      ],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(246, 245, 243)",
+      "scheme": "light",
+      "hScroll": false
+    },
+    "seletor-bases-indisponivel_escuro_1440": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1184,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1184,
+        "h": 500
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 838,
+          "y": 721,
+          "w": 565,
+          "h": 88,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        25,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1067,
+        "w": 1142,
+        "h": 62
+      },
+      "modal": {
+        "x": 360,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        53
+      ],
+      "breadcrumb": {
+        "x": 360,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    },
+    "seletor-bases-indisponivel_escuro_1860": {
+      "descriptionBlock": {
+        "x": 240,
+        "y": 216,
+        "w": 1604,
+        "h": 419
+      },
+      "originCard": {
+        "x": 240,
+        "y": 651,
+        "w": 1604,
+        "h": 482
+      },
+      "options": [
+        {
+          "x": 261,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "1px",
+          "borderColor": "rgb(52, 54, 57)",
+          "radius": "9px",
+          "bg": "rgb(27, 29, 33)"
+        },
+        {
+          "x": 1048,
+          "y": 721,
+          "w": 775,
+          "h": 70,
+          "border": "2px",
+          "borderColor": "rgb(100, 149, 219)",
+          "radius": "9px",
+          "bg": "rgb(13, 32, 60)"
+        }
+      ],
+      "optionContentOffsetTop": [
+        16,
+        16
+      ],
+      "optionGap": 12,
+      "folderField": {
+        "x": 261,
+        "y": 1050,
+        "w": 1562,
+        "h": 62
+      },
+      "modal": {
+        "x": 570,
+        "y": 45,
+        "w": 720,
+        "h": 543
+      },
+      "rows": [
+        53,
+        53,
+        53
+      ],
+      "breadcrumb": {
+        "x": 570,
+        "y": 106,
+        "w": 720,
+        "h": 37,
+        "padding": "12px 20px"
+      },
+      "bodyBg": "rgb(18, 19, 22)",
+      "scheme": "dark",
+      "hScroll": false
+    }
+  },
+  "connectorRequestsWithoutVar": [
+    "http://127.0.0.1:56112/src/features/knowledge-bases/api/connectorsApi.ts",
+    "http://127.0.0.1:56112/src/features/knowledge-bases/api/connectorsApi.ts",
+    "http://127.0.0.1:56112/src/features/knowledge-bases/api/connectorsApi.ts",
+    "http://127.0.0.1:56112/src/features/knowledge-bases/api/connectorsApi.ts",
+    "http://127.0.0.1:56112/src/features/knowledge-bases/api/connectorsApi.ts"
+  ]
+}

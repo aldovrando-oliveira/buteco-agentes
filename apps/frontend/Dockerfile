@@ -29,6 +29,16 @@ RUN test -n "${VITE_INBOX_BASE_URL+x}" || (echo "VITE_INBOX_BASE_URL não foi pa
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 ENV VITE_INBOX_BASE_URL=${VITE_INBOX_BASE_URL}
 
+# VITE_CONNECTORS_BASE_URL é OPCIONAL (change frontend-cadastro-base-sincronizada,
+# D1): o apps/connectors só chega em produção com a #119, e sem a variável o
+# painel publica a origem "Sincronizada" indisponível. Por isso o ARG não tem o
+# `test -n` dos outros dois, e também NÃO tem `ENV`: `ENV X=${X}` com o argumento
+# não passado grava X="", que o painel lê como caminho relativo — o estado
+# errado. O ARG declarado já chega ao `RUN npm run build` como variável de
+# ambiente quando passado, e AUSENTE quando não passado (medido com Podman,
+# tarefa 1.2 da change).
+ARG VITE_CONNECTORS_BASE_URL
+
 RUN npm run build
 
 # Imagem final — nginx estável corrente (verificado, não assumido:
