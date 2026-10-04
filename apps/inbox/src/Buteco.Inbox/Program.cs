@@ -29,6 +29,7 @@ builder.Services.Configure<InboxCryptoOptions>(builder.Configuration.GetSection(
 builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptions.SectionName));
 builder.Services.Configure<PublicUrlOptions>(builder.Configuration.GetSection(PublicUrlOptions.SectionName));
 builder.Services.Configure<DebounceOptions>(builder.Configuration.GetSection(DebounceOptions.SectionName));
+builder.Services.Configure<DispatchReconciliationOptions>(builder.Configuration.GetSection(DispatchReconciliationOptions.SectionName));
 builder.Services.Configure<TokenSigningOptions>(builder.Configuration.GetSection(TokenSigningOptions.SectionName));
 builder.Services.AddSingleton<ITokenService, TokenService>();
 // Transient — AddHttpMessageHandler<T> não registra o handler
@@ -114,7 +115,15 @@ builder.Services
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = SubjectAuthorization.BuildFallbackPolicy());
 
+// O desfecho de um ciclo de disparo, num lugar só para o push, a reconciliação e
+// as falhas do debounce (#47, design.md da change pending-dispatch-orfa, D5).
+// Scoped: compartilha o AppDbContext do escopo de quem o usa.
+builder.Services.AddScoped<DispatchOutcomeProcessor>();
 builder.Services.AddHostedService<DebounceSweepService>();
+// Registrado DEPOIS do debounce, então para antes dele; o Kestrel, registrado no
+// Build(), para antes dos dois. A ordem não decide o orçamento da parada: os dois
+// conferem ApplicationStopping antes de reivindicar (D11).
+builder.Services.AddHostedService<DispatchReconciliationService>();
 
 // Mesmo padrão de apps/api (Buteco.Api.Options.CorsOptions) — apps/inbox
 // nunca tinha consumidor via browser antes de frontend-inbox-catalogo-canais.

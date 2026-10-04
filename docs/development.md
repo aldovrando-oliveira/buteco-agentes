@@ -330,7 +330,10 @@ webhook de cada adapter (`IInboundWebhookHandler`, despachados pela rota
 genérica `POST /webhooks/{channelId}`). Mensagens bufferizadas por sessão
 aguardam a janela de debounce (`Debounce:Window`, varrida periodicamente por
 um `BackgroundService` a cada `Debounce:SweepInterval`) antes de disparar um
-`SendMessage` real contra `apps/api`.
+`SendMessage` real contra `apps/api`. Um segundo `BackgroundService`, a cada
+`DispatchReconciliation:Interval`, resolve pelo `GetTask` os disparos cujo push
+não chegou; em dev, com o push falhando, a resposta aparece com até ~3 min de
+atraso, e não nunca.
 
 ### apps/connectors
 

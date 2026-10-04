@@ -331,6 +331,31 @@ disparar um `SendMessage` real contra `apps/api`. Concorrência otimista via
 
 É **buffer, não histórico** — some quando o ciclo de disparo termina.
 
+**Ciclo de vida.** `Pending` (bufferizando) → `Dispatching` (reivindicada por
+uma instância, `SendMessage` enviado) → removida quando o ciclo termina. Uma
+falha de transporte reintentável a devolve a `Pending`. O que encerra um ciclo
+em `Dispatching` (#47, `pending-dispatch-orfa`):
+
+- **o push de `apps/workers`**, aceito pelo token, entrega a resposta ou o
+  aviso de falha e remove a linha;
+- **a reconciliação** (`DispatchReconciliationService`, 1 min), quando o push
+  não chega: consulta a task pelo `GetTask` e, se ela terminou há mais que a
+  carência (2 min), resolve a linha **com o mesmo processamento do push**
+  (`DispatchOutcomeProcessor`). Antes de entregar, reivindica a linha: troca o
+  token sob `xmin` (o push que chega depois recebe 401) e grava
+  `ReconciliationClaimedAt`, que as outras instâncias respeitam por um prazo de
+  posse de 2 min. Linha sem `TaskId` há mais de 10 min é encerrada como perda;
+- **os desfechos de falha do debounce** (rejeição síncrona, rejeição de
+  protocolo, esgotamento de tentativas), pelo mesmo processador.
+
+Todo desfecho em que nenhuma resposta virá manda ao contato um **aviso de
+falha** de texto fixo, persistido como mensagem de saída. Na parada do
+processo, nenhum serviço reivindica trabalho novo depois de
+`ApplicationStopping`, e o trabalho já reivindicado (o `SendMessage` até a
+gravação do `TaskId`, ou a entrega em voo da reconciliação) tem até 8 s, abaixo
+dos 10 s do `stop_grace_period` padrão do Compose. O Kestrel para primeiro e
+espera os pushes em voo.
+
 > **Área sensível.** A coleção de mensagens do `PendingDispatch` é owned/JSON
 > e já produziu perda silenciosa de mensagem sob concorrência real (aliasing
 > de change tracker do EF Core após re-leitura na mesma instância de
@@ -356,8 +381,11 @@ Guarda `Direction`, `Content`, `ContentType` (`Text`, `Image`, `Audio`,
   `Dispatching`, `Failed`, `Completed`). Esse status é espelhado dos pontos
   que mutam ou removem o `PendingDispatch` e **sobrevive à remoção dele** —
   é o que torna o silêncio de uma conversa legível na interface. `Failed`
-  agrupa três causas distintas de "não haverá resposta" sob um valor só,
-  por decisão.
+  agrupa sob um valor só, por decisão, todas as causas de "não haverá
+  resposta": rejeição síncrona ou de protocolo, esgotamento de tentativas,
+  task terminal que não concluiu e disparo encerrado como perda pela
+  reconciliação. Em cada uma delas o contato recebe o aviso de falha, gravado
+  como mensagem de saída.
 - **saída**: `DeliveryStatus` (`Sent` ou `Failed`, com motivo) — sucesso ou
   falha do **envio ao provedor**, nunca recibo de entrega ou de leitura pelo
   destinatário final. Essa distinção é de contrato, não de interface: o

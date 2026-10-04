@@ -859,6 +859,26 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Conversa ficava sem resposta e sem aviso quando o push da task não chegava ao
+  inbox** (#47). A `PendingDispatch` em `Dispatching` só saía desse estado pelo push de
+  `apps/workers`; quando ele falhava, chegava antes de o inbox gravar o `TaskId`, ou
+  nunca era enviado (parada do worker logo depois do estado terminal), a conversa
+  ficava parada para sempre, e uma parada do inbox com mensagem em voo perdia a
+  resposta do agente. Agora:
+  - uma varredura de `apps/inbox` consulta pelo `GetTask` a task de cada disparo em
+    `Dispatching` e, quando ela terminou há mais de 2 min sem push, resolve o disparo
+    exatamente como o push resolveria;
+  - disparo sem `TaskId` há mais de 10 min é encerrado como perda;
+  - a parada do inbox espera o envio em voo (até 8 s) e não reivindica trabalho novo;
+  - todo desfecho em que nenhuma resposta virá — task em falha, rejeição, esgotamento
+    de tentativas, perda — manda ao contato o aviso *«Não consegui responder agora.
+    Pode tentar de novo em instantes?»*, e as mensagens de entrada de task em falha
+    passam a `Failed` no painel, em vez de "Concluído".
+
+  O deploy tem uma migration (`AddReconciliationClaimedAt`) e segue o runbook de
+  redeploy com migration. As linhas que já estão em `Dispatching` precisam ser lidas
+  e limpas antes do primeiro boot, ou a primeira varredura entrega o acúmulo.
+
 - **Com o RabbitMQ fora do ar, documento gravado ficava sem indexação, e na base
   sincronizada para sempre** (#138). Cadastro, atualização, reindexação e upsert de
   `/sync` gravavam o documento, respondiam `500` e não enfileiravam nada; no upsert,

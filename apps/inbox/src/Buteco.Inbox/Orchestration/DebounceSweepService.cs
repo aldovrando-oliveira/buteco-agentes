@@ -11,17 +11,51 @@ using Microsoft.Extensions.Options;
 
 namespace Buteco.Inbox.Orchestration;
 
-// Único componente orientado a timer/scheduling do projeto (design.md,
-// Context) — varre pending_dispatches periodicamente, não usa Timer por
-// conversa (design.md, Decisão 2), porque o buffer persistido precisa
-// funcionar igual entre múltiplas instâncias (Decisão 1).
+// Primeiro componente orientado a timer/scheduling do projeto (design.md,
+// Context) — hoje não é o único: NonTerminalTaskDetectorService (apps/workers)
+// e DispatchReconciliationService (#47) têm a mesma forma. Varre
+// pending_dispatches periodicamente, não usa Timer por conversa (design.md,
+// Decisão 2), porque o buffer persistido precisa funcionar igual entre
+// múltiplas instâncias (Decisão 1).
 public sealed class DebounceSweepService(
     IServiceScopeFactory scopeFactory,
     IA2AClientFactory a2AClientFactory,
+    IHostApplicationLifetime applicationLifetime,
     IOptions<DebounceOptions> debounceOptions,
     IOptions<PublicUrlOptions> publicUrlOptions,
     ILogger<DebounceSweepService> logger) : BackgroundService
 {
+    /// <summary>
+    /// Prazo do trabalho que já estava em voo quando a parada foi pedida — o
+    /// trecho entre a reivindicação e a gravação do TaskId aqui, e a entrega em
+    /// voo em <see cref="DispatchReconciliationService"/> (design.md da change
+    /// pending-dispatch-orfa, D11).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A derivação:</b> 5 s do timeout do cliente A2A (Program.cs, no
+    /// <c>AddHttpClient(A2AClientFactory.HttpClientName)</c>) mais folga para as
+    /// gravações, abaixo dos 10 s padrão do <c>stop_grace_period</c> do Compose
+    /// (o serviço <c>inbox</c> do <c>docker-compose.prod.yml</c> não o define). O
+    /// <c>ShutdownTimeout</c> do host (30 s) não é o limite que vale: o
+    /// <c>SIGKILL</c> do Compose chega antes.
+    /// </para>
+    /// <para>
+    /// <b>Medido em 04/10/2026</b> (<c>InboxShutdownUnderKestrelTests</c>): o
+    /// trabalho em voo corre em PARALELO com a parada dos outros serviços; só
+    /// as esperas são em série. O que estourava os 10 s era reivindicar trabalho
+    /// novo depois do pedido de parada (10,9 s), e é por isso que
+    /// <see cref="IHostApplicationLifetime.ApplicationStopping"/> é conferido
+    /// antes de cada reivindicação.
+    /// </para>
+    /// <para>
+    /// <b>Gatilho de recalibração:</b> mudança no timeout do cliente A2A, um
+    /// <c>stop_grace_period</c> explícito no inbox, ou um <c>ShutdownTimeout</c>
+    /// explícito.
+    /// </para>
+    /// </remarks>
+    public static readonly TimeSpan InFlightWorkDeadline = TimeSpan.FromSeconds(8);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(debounceOptions.Value.SweepInterval);
@@ -63,6 +97,18 @@ public sealed class DebounceSweepService(
 
         foreach (var candidateId in candidateIds)
         {
+            // ApplicationStopping, e não o stoppingToken: o host para os serviços
+            // em série, e o Kestrel para ANTES deste serviço, esperando as
+            // requisições em voo. Durante essa espera o stoppingToken daqui
+            // ainda não foi cancelado, e uma janela de debounce que vencesse
+            // abriria uma unidade nova de 8 s depois do pedido de parada —
+            // medido: 10,9 s (design.md, D11). O candidato fica Pending para o
+            // boot seguinte.
+            if (applicationLifetime.ApplicationStopping.IsCancellationRequested)
+            {
+                return;
+            }
+
             try
             {
                 await TryDispatchAsync(candidateId, cancellationToken);
@@ -112,6 +158,16 @@ public sealed class DebounceSweepService(
             return;
         }
 
+        // Daqui até a gravação do TaskId, a unidade NÃO obedece à parada, só ao
+        // próprio prazo (design.md da change pending-dispatch-orfa, D11). Antes,
+        // a parada cancelava o SendMessage em voo; se ele já tinha chegado a
+        // apps/api, a task rodava, o push chegava com TaskId desconhecido (401) e
+        // a resposta se perdia — em todo deploy com mensagem em voo. Medido: a
+        // parada passou de 6 ms (TaskId nulo) para ~1.009 ms (TaskId gravado) com
+        // um SendMessage de 1 s.
+        using var unit = new CancellationTokenSource(InFlightWorkDeadline);
+        cancellationToken = unit.Token;
+
         var dispatchInfo = await (
             from session in dbContext.Sessions
             join contact in dbContext.Contacts on session.ContactId equals contact.Id
@@ -139,18 +195,16 @@ public sealed class DebounceSweepService(
                 exception,
                 "SendMessage rejeitado no nível de protocolo A2A para a sessão {SessionId}",
                 pendingDispatch.SessionId);
-            dbContext.Remove(pendingDispatch);
-            await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Failed, cancellationToken);
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await GetOutcomeProcessor(scope).FailAsync(pendingDispatch, cancellationToken);
             return;
         }
         catch (Exception exception) when (IsTransportFailure(exception, cancellationToken))
         {
-            await HandleTransportFailureAsync(dbContext, pendingDispatch, exception, cancellationToken);
+            await HandleTransportFailureAsync(scope, dbContext, pendingDispatch, exception, cancellationToken);
             return;
         }
 
-        await HandleResponseAsync(dbContext, pendingDispatch, response, cancellationToken);
+        await HandleResponseAsync(scope, dbContext, pendingDispatch, response, cancellationToken);
     }
 
     // Chave de Message.Metadata que carrega o instante de recebimento da
@@ -221,6 +275,7 @@ public sealed class DebounceSweepService(
         JsonSerializer.SerializeToElement(value, A2AJsonUtilities.DefaultOptions);
 
     private async Task HandleResponseAsync(
+        IServiceScope scope,
         AppDbContext dbContext,
         PendingDispatch pendingDispatch,
         SendMessageResponse response,
@@ -238,18 +293,16 @@ public sealed class DebounceSweepService(
                 "SendMessage para a sessão {SessionId} encerrou de forma síncrona com estado {State}",
                 pendingDispatch.SessionId,
                 response.Task?.Status.State);
-            dbContext.Remove(pendingDispatch);
-            await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Failed, cancellationToken);
-        }
-        else
-        {
-            pendingDispatch.RegisterTaskId(response.Task.Id);
+            await GetOutcomeProcessor(scope).FailAsync(pendingDispatch, cancellationToken);
+            return;
         }
 
+        pendingDispatch.RegisterTaskId(response.Task.Id);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task HandleTransportFailureAsync(
+        IServiceScope scope,
         AppDbContext dbContext,
         PendingDispatch pendingDispatch,
         Exception exception,
@@ -265,22 +318,19 @@ public sealed class DebounceSweepService(
                 pendingDispatch.AttemptCount,
                 pendingDispatch.SessionId);
             pendingDispatch.MarkFailed();
-            dbContext.Remove(pendingDispatch);
-            await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Failed, cancellationToken);
-        }
-        else
-        {
-            logger.LogWarning(
-                exception,
-                "Falha de transporte ao disparar SendMessage para a sessão {SessionId} (tentativa {AttemptCount}/{MaxAttempts}) — reintentará na próxima varredura",
-                pendingDispatch.SessionId,
-                pendingDispatch.AttemptCount,
-                debounceOptions.Value.MaxDispatchAttempts);
-            // RegisterTransportFailure devolveu PendingDispatch a Pending —
-            // mesmo espelhamento em Message (design.md, Decisão 6).
-            await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Pending, cancellationToken);
+            await GetOutcomeProcessor(scope).FailAsync(pendingDispatch, cancellationToken);
+            return;
         }
 
+        logger.LogWarning(
+            exception,
+            "Falha de transporte ao disparar SendMessage para a sessão {SessionId} (tentativa {AttemptCount}/{MaxAttempts}) — reintentará na próxima varredura",
+            pendingDispatch.SessionId,
+            pendingDispatch.AttemptCount,
+            debounceOptions.Value.MaxDispatchAttempts);
+        // RegisterTransportFailure devolveu PendingDispatch a Pending —
+        // mesmo espelhamento em Message (design.md, Decisão 6).
+        await UpdateMessageDispatchStatusesAsync(dbContext, pendingDispatch.Id, MessageDispatchStatus.Pending, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -299,6 +349,11 @@ public sealed class DebounceSweepService(
             message.UpdateDispatchStatus(status);
         }
     }
+
+    // Resolvido só nos caminhos de falha, no escopo do candidato: o processador
+    // compartilha o mesmo AppDbContext, que já rastreia a linha reivindicada.
+    private static DispatchOutcomeProcessor GetOutcomeProcessor(IServiceScope scope) =>
+        scope.ServiceProvider.GetRequiredService<DispatchOutcomeProcessor>();
 
     private static bool IsTransportFailure(Exception exception, CancellationToken cancellationToken) =>
         exception switch

@@ -203,6 +203,39 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
         Assert.Equal(MessageDispatchStatus.Completed, inbound.DispatchStatus);
     }
 
+    // ── Task em falha (#47, design.md D5/D6) ────────────────────────────────
+
+    [Fact]
+    public async Task ReceiveAsync_ForFailedTask_DeliversTheFailureNotice()
+    {
+        var (sessionId, externalId, taskId, token) = await SeedDispatchingPendingDispatchAsync();
+        var client = factory.CreateClient();
+
+        var response = await PostPushNotificationAsync(client, taskId, token, BuildAgentTask(taskId, state: TaskState.Failed));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(await FindPendingDispatchAsync(sessionId));
+        var sender = (TestOutboundMessageSender)factory.Services.GetRequiredKeyedService<IOutboundMessageSender>(ChannelType);
+        var captured = Assert.Single(sender.CapturedMessages, message => message.ContactExternalId == externalId);
+        Assert.Equal("Não consegui responder agora. Pode tentar de novo em instantes?", captured.ResponseText);
+    }
+
+    [Fact]
+    public async Task ReceiveAsync_ForFailedTask_MarksInboundMessagesFailed_AndPersistsTheNoticeAsOutbound()
+    {
+        var (sessionId, _, taskId, token) = await SeedDispatchingPendingDispatchAsync();
+        var client = factory.CreateClient();
+
+        await PostPushNotificationAsync(client, taskId, token, BuildAgentTask(taskId, state: TaskState.Failed));
+
+        var messages = await GetMessagesAsync(sessionId);
+        var inbound = Assert.Single(messages, m => m.Direction == MessageDirection.Inbound);
+        Assert.Equal(MessageDispatchStatus.Failed, inbound.DispatchStatus);
+        var outbound = Assert.Single(messages, m => m.Direction == MessageDirection.Outbound);
+        Assert.Equal("Não consegui responder agora. Pode tentar de novo em instantes?", outbound.Content);
+        Assert.Equal(MessageDeliveryStatus.Sent, outbound.DeliveryStatus);
+    }
+
     private static Task<HttpResponseMessage> PostPushNotificationAsync(HttpClient client, string taskId, string token, AgentTask task)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, PushNotificationEndpoints.RoutePattern)
@@ -217,13 +250,13 @@ public class PushNotificationEndpointsTests(InboxFactoryFixture factory) : IClas
     // (apps/workers): a resposta vira um Artifact via AddArtifactAsync,
     // CompleteAsync() é chamado sem mensagem final — Status.Message nunca é
     // preenchido em produção.
-    private static AgentTask BuildAgentTask(string taskId, string? responseText = null) => new()
+    private static AgentTask BuildAgentTask(string taskId, string? responseText = null, TaskState state = TaskState.Completed) => new()
     {
         Id = taskId,
         ContextId = Guid.NewGuid().ToString("N"),
         Status = new TaskStatus
         {
-            State = TaskState.Completed,
+            State = state,
             Timestamp = DateTimeOffset.UtcNow,
         },
         Artifacts = responseText is null

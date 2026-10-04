@@ -224,6 +224,10 @@ runtime.
 | `Debounce__Window` | não | Janela de agrupamento de mensagens da mesma sessão. Default `00:00:10` |
 | `Debounce__SweepInterval` | não | Cadência de varredura do `BackgroundService` que dispara buffers vencidos. Default `00:00:02` |
 | `Debounce__MaxDispatchAttempts` | não | Teto de retentativas em falha de transporte. Default `3` |
+| `DispatchReconciliation__Interval` | não | Cadência da varredura que resolve disparos em `Dispatching` sem push (#47). Um `GetTask` em `apps/api` por linha por ciclo. Default `00:01:00` |
+| `DispatchReconciliation__TerminalGrace` | não | Quanto tempo depois do estado terminal da task a varredura espera um push que ainda pode estar em processamento: 5 s do push + 100 s do envio ao canal. Recalibrar se algum desses timeouts mudar. Default `00:02:00` |
+| `DispatchReconciliation__UntrackedDispatchMaxAge` | não | Idade da última mensagem além da qual um disparo em `Dispatching` **sem** `TaskId` é encerrado como perda, com aviso ao contato. Mede o `receivedAt` que o adapter passa, que tem de ser o relógio do inbox. Default `00:10:00` |
+| `DispatchReconciliation__ClaimLease` | não | Prazo de posse de uma reivindicação da varredura: enquanto ele não vence, nenhuma outra instância reivindica o mesmo disparo. Mesma derivação de `TerminalGrace`. Default `00:02:00` |
 | `Session__InactivityTimeout` | não | Tempo de inatividade que fecha a fronteira de uma `Session`. Default `01:00:00` |
 
 ---

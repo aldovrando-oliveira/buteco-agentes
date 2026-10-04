@@ -9342,6 +9342,10 @@ ocorrências dessa família.
     confiável do push (retentativa no worker) ou reconciliação do lado do inbox
     (varredura de `Dispatching` consultando o estado da task pelo `TaskId`, que a
     linha já guarda).
+  - **Corrigido em 04/10/2026 (#47):** reconciliação do lado do inbox, e não
+    retentativa do push. Ela cobre quatro fontes, e não duas. A parada normal do
+    inbox deixou de perder o `TaskId`. Ver "`pending-dispatch-orfa`" no fim deste
+    arquivo.
 
 - ~~**Ciclo de delegação `A→B→…→A` autotrava no advisory lock.**~~ —
   **RESOLVIDO NO CADASTRO em 20/09/2026, por `delegacao-ciclo-no-cadastro`, na
@@ -9404,6 +9408,12 @@ ocorrências dessa família.
     em `working` mais velhas que o máximo plausível de execução e
     `pending_dispatches` em `Dispatching`. É esse número que diz se o
     destravamento manual vira trabalho próprio ou é caso isolado.
+  - **Lido no dev em 03/10/2026 (#47):** 13 linhas em `Dispatching`, todas com
+    `TaskId` — 2 `Completed` com resposta (22/08, Telegram), 9 `Failed` e 2
+    `Submitted`. Com a reconciliação, esta inspeção virou **pré-requisito do
+    primeiro boot** do inbox novo: sem ela, a primeira varredura entrega as
+    respostas de 22/08 e manda 9 avisos de falha atrasados. São as tarefas 6.1
+    (dev) e 6.2 (produção) da `pending-dispatch-orfa`, do dono.
 
 ### Abertos por `frontend-mensagem-recusa-ciclo` (2026-09-20)
 
@@ -15247,3 +15257,150 @@ Cada um desfeito e conferido por `grep`.
 - Mostrar na tela que o pedido espera o broker: `Pending` é verdade, e nenhuma tarefa toca o
   `apps/frontend`.
 - Documento preso em `Indexing` por queda do `apps/workers` (#125).
+
+## `pending-dispatch-orfa` — `PendingDispatch` órfã em `Dispatching` (#47)
+
+**Change proposta, revisada e implementada em 03–04/10/2026, sincronizada e arquivada em
+04/10/2026 (`openspec/changes/archive/2026-10-04-pending-dispatch-orfa/`).** Trilha
+paralela, posição 8 da fila de 20/09, antes da `replicas-de-worker`, sem recalibração.
+Branch `fix/47-pending-dispatch-orfa`, de `cb74315`, atualizada por stash sobre
+`40b348d` (#105, #106, #138) sem conflito; a `main` não tocou `apps/inbox` nem as
+specs dos deltas. Specs sincronizadas: em `inbox-message-orchestration`, quatro
+requisitos acrescentados (parada que não interrompe o envio reivindicado,
+reconciliação pelo estado da task, encerramento por idade sem `TaskId`, aviso de
+falha) e "Conteúdo bufferizado é removido ao final do ciclo de disparo" alterado; em
+`inbox-message-history`, "Mensagem de saída persistida…" e "Estado de dispatch é
+espelhado…" alterados; em `inbox-channel-adapter-plugin`, "Entrega da resposta do
+agente ao canal de origem" alterado. **Esta entrada foi escrita depois do archive**,
+fora da ordem: o archive tem de esperar o `02` e o `CHANGELOG`.
+
+### As fontes, reproduzidas antes da correção
+
+A issue nomeava duas; a exploração reproduziu quatro, cada uma por teste sobre
+`cb74315`:
+
+1. **o inbox para ou lança entre o claim e a gravação do `TaskId`.** Na parada normal,
+   o `SendMessage` em voo era cancelado; se ele já tinha chegado à `apps/api`, a
+   task rodava, o push chegava com `TaskId` desconhecido (401), e a resposta se
+   perdia. A linha ficava com `TaskId` nulo;
+2. **o push falha** (5 s, sem retentativa). Round-trip com os três apps;
+3. **o worker para entre gravar o estado terminal e enviar o push.** A reentrega cai
+   na guarda terminal da #49 e não reenvia; conferido pelo log da guarda;
+4. **nova: o push chega antes do `TaskId`.** A task termina antes de a resposta do
+   `SendMessage` voltar, o endpoint responde 401, e o push não volta.
+
+**Os "7 de 7 `Failed`" de 22/09 não eram uma quinta fonte.** O caminho de falha do
+worker envia o push (medido: task `Failed`, push 200, linha removida). No dev, o push
+ia ao túnel do inbox por IPv6 sem conectividade, e todas as falhas eram de antes do
+contorno do IPv6: é a fonte 2.
+
+### O que entrou
+
+Só `apps/inbox`, mais uma migration:
+
+- **`DispatchReconciliationService`** (`BackgroundService`, 1 min). Linha **com
+  `TaskId`**: `GetTask` pelo cliente A2A que o inbox já usava; o estado terminal
+  decide, sem idade da linha. A carência é de 2 min contada do carimbo terminal (5 s
+  do push + 100 s do envio ao canal); sem carimbo, conta da primeira vez que a
+  instância viu a task terminal. Linha **sem `TaskId`** e com `LastMessageAt` mais
+  velho que 10 min: encerrada como perda, sem redisparo.
+- **Reivindicação** pela troca do token sob `xmin` **e** pela coluna nova
+  `ReconciliationClaimedAt`, com prazo de posse de 2 min (D4, ver abaixo). Push que
+  chega depois da reivindicação recebe 401.
+- **`DispatchOutcomeProcessor`**: o desfecho num lugar só, para o push, a
+  reconciliação e as falhas do `DebounceSweepService`. A entrega ao canal passou do
+  endpoint para ele sem mudança.
+- **Aviso de falha** em todo desfecho em que nenhuma resposta virá, inclusive a
+  rejeição por agente inativo (decisão do dono). Task `Failed` deixa as entradas em
+  `Failed`, e não mais em `Completed`.
+- **Parada (D11):** o trecho entre o claim e o `TaskId` roda com prazo próprio de 8 s,
+  e não com o token de parada. O debounce e a reconciliação conferem
+  `ApplicationStopping` antes de cada reivindicação. A entrega em voo na
+  reconciliação espera até 8 s contados do pedido de parada.
+- **Opções** `DispatchReconciliation:{Interval,TerminalGrace,UntrackedDispatchMaxAge,ClaimLease}`,
+  com os padrões de produção derivados e o gatilho de recalibração ao lado de cada um.
+- O contrato `IInboundMessageOrchestrator.ReceiveMessageAsync` diz agora que o
+  `receivedAt` tem de ser o relógio do inbox (o D7 mede por ele).
+
+### O que a implementação mediu
+
+| suíte | baseline em `cb74315` | portão 2 | depois da atualização (`40b348d`) |
+|---|---|---|---|
+| `apps/inbox` | 213/213, 30 s, `load` 9,41 | **241/241**, 52 s | 241/241 |
+| `apps/workers` | 396/396, 412 s, `load` 4,39 | 396/396, 441 s | **397/397** (o caso novo é da #138) |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 4/4 | **10/10** | 10/10 |
+| `tests/CrossAppTaskStoreCompatibility.Tests` | 2/2 | 2/2 | 2/2 |
+
+Iguais por classe entre o portão 2 e a atualização. Na rodada da atualização, as
+durações de `apps/inbox` e `apps/workers` foram afetadas por carga externa (`load`
+10–24, 17:57–18:02, Chrome e Warp); as contagens valem. Uma rodada anterior foi
+descartada porque a máquina suspendeu no meio da suíte de `apps/workers`.
+
+- **A ordem real de parada do inbox** (sob Kestrel, `Program` real) é inversa ao
+  registro e em série, mas o `GenericWebHostService` é registrado no `Build()` e para
+  **primeiro**, esperando as requisições em voo: Kestrel → reconciliação → debounce.
+  Durante essa espera, o `stoppingToken` dos outros serviços ainda não foi cancelado,
+  e o debounce reivindicou uma mensagem 2,95 s depois do pedido de parada:
+  **10.933 ms**, acima dos 10 s do Compose. Com o `ApplicationStopping` conferido:
+  5.982 ms, sem reivindicação. Três trabalhos em voo: 3.700 ms. Entrega na
+  reconciliação além do prazo: cancelada em 8.003 ms.
+- **A parada com `SendMessage` de 1 s em voo** passou de 6 ms, com `TaskId` nulo,
+  para ~1.009 ms (3/3), com o `TaskId` gravado.
+- **O carimbo terminal** está no JSON cru do `GetTask` em `Completed` e `Failed`; em
+  `Canceled` e `Rejected`, pelo SDK decompilado.
+
+### Guardas contra o defeito real (convenção 15)
+
+25 casos reprovaram contra o código original pelo motivo esperado. Na segunda perna,
+16 reversões de componente sobre o código final reprovaram, cada uma, os guardas
+daquele componente, com a fonte conferida por checksum depois de cada uma. **Dois
+guardas só ficaram confiáveis pela segunda perna:**
+
+- **duas instâncias** passava com a reivindicação revertida, porque a segunda só lia
+  a linha depois de a primeira removê-la. Tornado determinístico (o sender segura a
+  primeira entrega), ele deu **2 entregas com a correção como desenhada**, e daí veio
+  a divergência do D4;
+- **push depois da reivindicação** travava em vez de reprovar (o push aceito esperava
+  o sender que o teste segurava). Passou a esperar o push com prazo.
+
+### Divergências do desenho aprovado (convenção 9)
+
+- **D4, aprovada pelo dono no momento:** a troca do token sob `xmin` só exclui quem leu
+  a mesma versão da linha. Entrou a coluna `ReconciliationClaimedAt` com prazo de
+  posse. A recusa original de "coluna de estado" era por criar estado preso; a posse
+  expira.
+- **D7 mantido** sem `DispatchingSince`, por decisão do dono: os dois adapters passam
+  `UtcNow` como `receivedAt` (`TelegramInboundWebhookHandler.cs:105`,
+  `WahaInboundWebhookHandler.cs:64`). O risco que sobra é o acúmulo de mais de 120
+  candidatos lentos num ciclo do debounce, praticamente nulo. **Gatilho da coluna:**
+  um adapter que precise passar outro instante, ou o primeiro log `Error` de
+  encerramento por idade em produção.
+
+### Resíduos aceitos
+
+- **Entrega em dobro**: push cujo processamento passa da carência; instância que
+  morre entre a entrega e a remoção (a linha volta quando a posse vence); entrega
+  ainda em curso 8 s depois do pedido de parada; push em voo cuja entrega ao canal
+  passa dos 10 s do Compose (antes, órfã; agora, reconciliada).
+- **Falso aviso de D7**: crash do processo depois de o `SendMessage` chegar à
+  `apps/api`. A alternativa (procurar a task pelo `messageId`) ficou fora.
+- **Agente apagado**: a consulta falha para sempre e loga `Warning` por linha por
+  minuto. Gatilho: o mesmo da #77, a primeira rota de exclusão de agente.
+- **Task que nunca termina** (as 2 `Submitted` do dev): a linha continua em
+  `Dispatching`; é a população da `workers-nonterminal-task-detection`.
+
+### Achados fora do escopo (convenção 23)
+
+- **#145**: `TaskJobConsumer.StopAsync` lança `AlreadyClosedException` ao fechar a
+  conexão depois de `CHANNEL_ERROR` no `nack` (1 em 7 paradas do worker no
+  round-trip).
+- **#146**: `SSH.NET` 2025.1.0 com vulnerabilidade alta, via Testcontainers, nos
+  projetos de teste; já estava na baseline.
+
+### O que ficou para o deploy, e é do dono
+
+- **Tarefas 6.1 e 6.2**: ler e limpar as linhas em `Dispatching` no dev e em produção
+  antes do primeiro boot com esta change.
+- **Deploy com migration**, pelo runbook de redeploy (`stop inbox` → `migrator` →
+  `up`). O rollback mantém a coluna; linha reivindicada e ainda em `Dispatching` no
+  momento do rollback volta a ficar órfã (Migration Plan do `design.md`).

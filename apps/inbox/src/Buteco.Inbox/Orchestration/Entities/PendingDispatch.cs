@@ -34,6 +34,15 @@ public class PendingDispatch
     // perda é considerada definitiva.
     public int AttemptCount { get; private set; }
 
+    // Instante da última reivindicação pela reconciliação (#47, design.md da
+    // change pending-dispatch-orfa, D4). Enquanto for mais novo que o prazo de
+    // posse, outra instância não reivindica a linha de novo — a troca do token
+    // sob xmin só exclui quem leu a MESMA versão, e uma instância que lesse a
+    // linha depois da reivindicação entregaria em dobro (medido na segunda perna
+    // do guarda de duas instâncias). Nulo em toda linha que a reconciliação
+    // nunca tocou.
+    public DateTimeOffset? ReconciliationClaimedAt { get; private set; }
+
     private PendingDispatch()
     {
     }
@@ -76,6 +85,19 @@ public class PendingDispatch
         Status = PendingDispatchStatus.Pending;
         LastMessageAt = failedAt;
         ExpectedToken = null;
+    }
+
+    // Reivindicação pela reconciliação (#47, design.md da change
+    // pending-dispatch-orfa, D4). Uma gravação só, condicionada pelo xmin, faz
+    // três coisas: a instância concorrente que leu a mesma versão perde no
+    // SaveChanges; a que ler depois vê ReconciliationClaimedAt recente e pula a
+    // linha; e uma push notification que chegue depois com o token antigo
+    // recebe 401. O token é sempre novo, para que o UPDATE aconteça de fato
+    // mesmo numa segunda reivindicação, depois de vencido o prazo de posse.
+    public void ClaimForReconciliation(DateTimeOffset claimedAt)
+    {
+        ExpectedToken = Guid.NewGuid().ToString("N");
+        ReconciliationClaimedAt = claimedAt;
     }
 
     public void MarkFailed()
