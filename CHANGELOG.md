@@ -351,6 +351,15 @@ o versionamento pretende seguir
   continuam; a recusa de forma (campo ausente) segue sem `code`, e é a presença
   dele que distingue as duas.
 
+- Exclusão de base de conhecimento, em `apps/api` (#108).
+  `DELETE /knowledge-bases/{id}` exclui base `Manual` ou `Synced` **inativa**, com os
+  documentos, os fragmentos, os eventos de histórico e os vínculos com agentes, numa
+  transação, e responde `204`; base ativa responde `409` com o código
+  `knowledge-base-active`, sem apagar nada. A pasta de uma base sincronizada excluída
+  fica livre para outra base. As métricas de indexação e de embedding ficam. Só o
+  operador: o subject `service:connectors` recebe `403`. Sem migração. A tela é da
+  #136.
+
 **Entrega containerizada**
 
 - `Dockerfile` multi-stage por app, com build context na raiz do monorepo.
@@ -669,6 +678,12 @@ o versionamento pretende seguir
   `empty-content`, **depois** de procurar a base: numa base inexistente a resposta
   passa de `400` a `404`, e numa base sincronizada, pelas rotas do operador, de
   `400` a `409`. O `content` ausente do corpo continua recusa de forma, sem código.
+- **`DELETE /knowledge-bases/{id}` deixa de responder `405`** (#108): a rota existe,
+  com `204`, `404` e `409`.
+- **Escrita de `/sync` em base excluída no meio da requisição responde `404`**
+  (#108). O upsert, a exclusão por referência e a gravação do resultado de ciclo
+  respondiam `500` (e o upsert sem mudança de documento, `503`) quando a base sumia
+  entre a leitura e a gravação.
 - **Token com subject desconhecido passa a receber `403` em `apps/api`** (#102).
   Antes, qualquer subject diferente de `service:inbox`, assinado com a chave
   compartilhada, tinha o acesso do operador. Agora `operator` passa em tudo, cada

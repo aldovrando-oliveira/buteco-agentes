@@ -267,8 +267,8 @@ recente para o mais antigo.
   outros tipos, com o formato garantido por uma `CHECK` no banco.
 - **FK só para a base, em cascata, e nenhuma para o documento.** O evento de
   exclusão sobrevive ao documento, por isso `DocumentId` é coluna solta e
-  `DocumentTitle` é snapshot. Os eventos morrem com a base. Hoje a cascata só
-  é alcançável por SQL, porque a base não tem rota de exclusão.
+  `DocumentTitle` é snapshot. Os eventos morrem com a base, pela cascata, que a
+  exclusão de base alcança desde a #108.
 - **`Author` é o subject do token que escreveu, gravado como veio**
   (`operator`, ou `service:connectors` nas escritas da sincronização). O rótulo de
   apresentação é do frontend.
@@ -363,7 +363,8 @@ desativado continua referenciado por `AgentMcpServer`, e o histórico de
 execuções que o usou precisa continuar fazendo sentido — apagá-lo quebraria
 a leitura do passado.
 
-`KnowledgeDocument` é a única entidade do repositório com **exclusão real**.
+`KnowledgeDocument` foi a primeira entidade do repositório com **exclusão real**;
+`KnowledgeBase` é a segunda, como exceção (abaixo).
 É conteúdo, nada aponta para ele além dos seus próprios fragmentos, e o caso
 de uso concreto — o operador subiu o arquivo errado, ou um com dado que não
 devia estar ali — é exatamente aquele em que "continua no banco, invisível" é
@@ -382,13 +383,34 @@ fragmentos.
 Duas consequências práticas:
 
 - A FK de `KnowledgeDocument` para `KnowledgeBase` usa **`Restrict`**, não o
-  `Cascade` default do EF Core. Hoje é inerte, já que a base não tem
-  exclusão; a diferença é qual dos dois lados falha de forma segura se
-  alguém adicionar exclusão de base — `Restrict` obriga a decidir o destino
-  dos documentos em vez de apagá-los em silêncio.
+  `Cascade` default do EF Core. A diferença é qual dos dois lados falha de
+  forma segura quando alguém adiciona exclusão de base — `Restrict` obriga a
+  decidir o destino dos documentos em vez de apagá-los em silêncio. A #108
+  decidiu (abaixo), e a FK continua `Restrict`.
 - `DELETE` numa rota que não oferece o verbo responde **405**, não 404. A
   distinção entre "recurso inexistente" e "operação não oferecida" é
   informação.
+
+### A exceção: exclusão de base de conhecimento
+
+`DELETE /knowledge-bases/{id}` existe desde a #108, apesar de a base ter
+vínculos de agente apontando para ela. O critério acima ganha uma segunda
+pergunta: **alguém lê o passado por esta entidade, e ela retém um recurso
+exclusivo?** Ninguém lê o passado pela base (métricas de indexação e de
+embedding não têm FK para ela; o histórico de documentos é dela e morre com
+ela), e uma base sincronizada retém a pasta, que é única e imutável — sem
+exclusão, uma pasta perdida ficava presa para sempre. `Agent`, `McpServer` e
+`Channel` têm passado lido pelo id e **continuam só se desativando**.
+
+- **Só base inativa**; ativa responde `409` com `code: "knowledge-base-active"`.
+  A perda de conhecimento acontece na desativação, que é reversível.
+- **Tudo da base vai junto, numa transação:** `FOR UPDATE` na base, os
+  documentos apagados pela aplicação (fragmentos pela cascata), e a base
+  (eventos e vínculos pelas cascatas). As métricas ficam.
+- **A FK documento → base continua `Restrict`**, como rede para qualquer outro
+  caminho que esqueça os documentos.
+- **Escrita de `/sync` que encontra a base excluída no meio responde `404`**,
+  nunca `500`; o app que sincroniza lê o `404` como fim do ciclo daquela base.
 
 ### Credenciais
 

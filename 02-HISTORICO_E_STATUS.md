@@ -14838,3 +14838,70 @@ mensagens estão no `tasks.md` da change.
 
 - Ler o `code` no `apps/connectors` e gravar o arquivo ignorado: #105.
 - Mudar o que o painel mostra: #131.
+
+## `exclusao-base-conhecimento` — exclusão de base de conhecimento (#108)
+
+**Change proposta, revisada, implementada, sincronizada e arquivada em 03/10/2026
+(`openspec/changes/archive/2026-10-03-exclusao-base-conhecimento/`).** Branch `feat/108-exclusao-base`, criada de `0499161` num worktree próprio,
+em paralelo com a #105. A #108 está em `In progress`.
+
+### O que entrou
+
+`DELETE /knowledge-bases/{id}`, do operador, para base `Manual` ou `Synced`
+**inativa**: `204`, e numa transação vão os documentos (apagados pela aplicação, com
+`FOR UPDATE` na base antes), os fragmentos, os eventos de histórico e os vínculos com
+agentes (pelas cascatas que já existiam). Base ativa responde `409`
+`knowledge-base-active` sem apagar nada. A FK documento → base continua `Restrict`.
+Sem migração. As escritas de `/sync` que encontram a base excluída entre a leitura e
+a gravação respondem `404`. É a exceção à regra "catálogo só se desativa", registrada
+no `01` e no `docs/architecture.md`.
+
+### O que a implementação mediu
+
+| suíte | baseline em `0499161` | fechamento na árvore de trabalho | `load average` (início → fim) |
+|---|---|---|---|
+| `apps/api` | 717/717, 1 min 47 s | **730/730**, 3 min 1 s | baseline 7,77 → 15,60; fechamento 8,27 → 22,40 (a suíte da #105 rodava junto) |
+| `apps/workers` | — | **391/391**, 7 min 29 s | 22,40 → 3,36 |
+| `tests/ApiConnectorsRoundTrip.Tests` | — | **4/4** | 3,36 → 4,40 |
+
+**A diferença no `apps/api`, +13, fecha com 14 testes novos e 1 removido**: 9 em
+`KnowledgeBaseCatalogTests.Deletion.cs`, 4 em
+`KnowledgeDocumentCatalogTests.BaseDeletion.cs` e 1 em
+`ServiceScopeAuthorizationTests`; saiu `DeleteKnowledgeBase_IsNotAllowedAndBaseSurvives`
+(o `405`). **Nenhuma classe nova**: régua de contêineres igual antes e depois — 35
+usos de `IClassFixture` (incluindo os dois tipos aninhados), 3 pela collection, 4 que
+constroem o próprio; 44 classes contando as duas declarações aninhadas, como a #104
+registrou.
+
+**A ordem dos comandos do EF decide se há impasse, e foi medida.** Nas três escritas
+de documento de `/sync`, o EF emite um `DbCommand` em lote com o `INSERT` do evento
+**antes** do comando sobre o documento. O evento trava a base (`FOR KEY SHARE`) antes
+da linha do documento, na mesma ordem da exclusão: o impasse não é alcançável. Um
+teste prende a ordem, porque ela não é contrato do EF.
+
+**A mesma medição corrigiu a tabela da D6.** O aprovado previa `503` no upsert de
+atualização e `204` na exclusão por referência quando a base sumia no meio; com o
+evento primeiro, as duas davam **`500`** pela FK do evento. O teste de janela, com os
+handlers revertidos, mostrou os cinco caminhos: `500`, `500`, `503` (upsert sem mudança
+de documento, que não grava evento), `500`, `500`, com o interceptor disparando uma
+vez em cada.
+
+**Nomes das FKs lidos do banco migrado:** um deles tem 63 caracteres e termina em `~`
+(`FK_knowledge_documents_knowledge_bases_KnowledgeBaseId_Knowled~`), truncado pelo EF.
+Escrito de memória a partir do modelo, o reconhecimento da violação não casaria.
+
+**Tempo de exclusão:** base inativa com 100 documentos e 7.500 fragmentos
+`vector(4096)` (133 MB), buffers quentes, ~362 ms no total, 353 ms deles no `DELETE`
+dos documentos com a cascata.
+
+**Guardas (convenção 15):** sem a conferência de `IsActive`,
+`DeleteActiveBase_Returns409AndDeletesNothing` reprovou (`Conflict` esperado,
+`NoContent` obtido); sem o `FOR UPDATE`,
+`DeleteBase_LocksTheBaseRowBeforeDeletingDocuments_InOneTransaction` reprovou (nada
+contendo `FOR UPDATE` registrado). Os dois desfeitos e conferidos por `grep`.
+
+### O que ficou de fora, e é decisão
+
+- A tela de exclusão e a mudança da mensagem do `409` de pasta em uso: #136.
+- As corridas do operador contra a exclusão (inclusão de documento e substituição de
+  vínculos): risco aceito, `500` sem perda de dado, registrado no `design.md`.
