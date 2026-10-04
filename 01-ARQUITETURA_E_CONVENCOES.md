@@ -765,6 +765,17 @@ payload, defeito do conector, sem `code`). Conteúdo `""` ou só de espaços é
 conteúdo, não forma: um Google Doc vazio exporta `""`. As rotas do operador levam o
 mesmo código, e o `title` e o `errors` de antes continuam no corpo.
 
+**O ciclo de sincronização é do `apps/connectors`** (change `ciclo-de-sincronizacao`,
+#105): a cada 5 minutos e no "Sincronizar agora" (`POST
+/connectors/knowledge-bases/{id}/sync`, só do operador), uma base por vez, escrevendo no
+`apps/api` pelas rotas de `/sync` como `service:connectors`. Exclusão só do que sumiu da
+listagem inteira, com a pasta lida e depois dos upserts; falha de arquivo vira ignorado
+com código, falha de base vira `Failed`, e `rate-limited` grava `Failed` e encerra a
+rodada. Recusa de conteúdo determinística fica em memória com o marcador. `Api:BaseUrl`
+é opcional, e o processo assume uma instância só (lock e memória em memória do
+processo). O título do documento é o nome do arquivo: renomear no Drive registra
+`Updated` só de título.
+
 ## Convenções estabelecidas (o "estilo da casa")
 
 Essas regras não estão escritas em nenhum lugar do código — são o

@@ -360,6 +360,18 @@ o versionamento pretende seguir
   operador: o subject `service:connectors` recebe `403`. Sem migração. A tela é da
   #136.
 
+- Ciclo de sincronização de base sincronizada, em `apps/connectors` (#105). Logo depois
+  do boot e a cada 5 minutos, toda base `Synced`, inclusive inativa, é comparada com a
+  raiz da pasta: só o que mudou de marcador é baixado e enviado ao `apps/api`, o que
+  sumiu da pasta é excluído — só com a pasta lida e a listagem completa —, e o desfecho
+  é gravado com a lista de arquivos ignorados e o código de cada um. Falha de um arquivo
+  não derruba a base; pasta sem acesso grava `access-denied` sem excluir nada; cota
+  estourada grava `rate-limited` e espera a próxima rodada. "Sincronizar agora":
+  `POST /connectors/knowledge-bases/{id}/sync`, só do operador, `202`. Configuração nova
+  e opcional no `apps/connectors`, `Api__BaseUrl`: sem ela o ciclo não roda e o resto do
+  app não muda. O `apps/connectors` passa a assinar `service:connectors` para chamar o
+  `apps/api`.
+
 **Entrega containerizada**
 
 - `Dockerfile` multi-stage por app, com build context na raiz do monorepo.

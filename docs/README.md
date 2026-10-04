@@ -26,7 +26,7 @@ Depende do que trouxe você aqui.
 ### [development.md](development.md)
 
 Ambiente de desenvolvimento: pré-requisitos, subida da infraestrutura,
-execução dos quatro apps, autenticação em dev, checklists de round-trip manual
+execução dos cinco apps, autenticação em dev, checklists de round-trip manual
 com WAHA e Telegram, execução dos testes e construção das imagens Docker.
 
 Inclui o troubleshooting de **Testcontainers com Podman** — leitura obrigatória
@@ -43,10 +43,11 @@ configuração no sistema, porque o sintoma aparece longe da causa.
 
 ### [architecture.md](architecture.md)
 
-Os quatro apps e o papel de cada um, o isolamento estrito entre eles, o modelo
-de domínio completo, as regras de negócio transversais (exclusão de catálogo
-versus conteúdo, tratamento de credenciais), o protocolo A2A, o contexto do
-agente, o contrato de plugin de canal, autenticação e fuso horário do sistema.
+Os cinco apps (o quinto é o `apps/connectors`) e o papel de cada um, o
+isolamento estrito entre eles, o modelo de domínio completo, as regras de negócio
+transversais (exclusão de catálogo versus conteúdo, tratamento de credenciais), o
+protocolo A2A, o contexto do agente, o contrato de plugin de canal, autenticação e
+fuso horário do sistema.
 
 Descreve o estado atual do sistema, sem narrar histórico.
 

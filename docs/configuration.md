@@ -238,6 +238,18 @@ servidor ainda não existe (#119).
 | `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api` e `apps/inbox`. Ausente ou vazia, o boot falha |
 | `GoogleDrive__ServiceAccountKeyBase64` | não | O arquivo JSON da chave da service account do Google, em base64 numa linha (`base64 -i chave.json \| tr -d '\n'`). **Ausente ou vazia, o provedor `google-drive` não existe** para o processo: o app sobe e `GET /connectors/providers` não o lista. **Presente e inválida, o boot falha**, com a verificação que falhou e sem trecho do valor. Só o `client_email` sai do processo, na rota de provedores |
 | `Cors__AllowedOrigins` | não | Origens do painel autorizadas por CORS, no mesmo formato dos outros apps |
+| `Api__BaseUrl` | não | Endereço do `apps/api`, usado só pelo ciclo de sincronização. Em desenvolvimento, `http://localhost:5017`. Ver abaixo |
+
+`Api__BaseUrl` tem três estados, e só um deles derruba o processo:
+
+| valor | boot | ciclo periódico | "Sincronizar agora" |
+|---|---|---|---|
+| ausente ou vazio | sobe, com um aviso no log | não roda | `503` com o código `sync-not-configured`, sem chamada de rede |
+| URI absoluta `http` ou `https` | sobe | roda a cada 5 minutos | `202` |
+| outro valor | **falha**, nomeando a chave e sem ecoar o valor | — | — |
+
+A navegação e a descrição de pasta não dependem dele. O ciclo assina
+`service:connectors` com a mesma `Auth__TokenSigningKey`.
 
 A service account usa só o escopo `drive.readonly`. A Drive API precisa estar
 **ativada no projeto do Google Cloud dono da service account**; sem isso, toda
