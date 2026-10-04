@@ -90,7 +90,8 @@ public class SubjectRouteValidationTests
         var problems = ConnectorsSubjectRouteValidation.FindProblems(endpoints, ConnectorsSubjectAuthorizationHandler.SubjectRoutes);
 
         Assert.Empty(problems);
-        Assert.Equal(3, ConnectorsSubjectAuthorizationHandler.SubjectRoutes.Values.Sum(routes => routes.Count));
+        // Quatro desde a change ciclo-de-sincronizacao: o "Sincronizar agora" do operador.
+        Assert.Equal(4, ConnectorsSubjectAuthorizationHandler.SubjectRoutes.Values.Sum(routes => routes.Count));
     }
 
     private static WebApplication AppWith(Action<WebApplication> map)

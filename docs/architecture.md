@@ -708,6 +708,29 @@ da resposta**, nunca os do corpo enviado pelo painel.
 A chamada real entre os dois apps é provada por `tests/ApiConnectorsRoundTrip.Tests`.
 Change `criacao-base-sincronizada` (#104).
 
+### O ciclo de sincronização (`apps/connectors` → `apps/api`)
+
+O `apps/connectors` mantém cada base `Synced` igual à raiz da pasta, inclusive as
+inativas, uma base por vez: logo depois do boot e a cada 5 minutos, e na hora pelo
+"Sincronizar agora" (`POST /connectors/knowledge-bases/{id}/sync`, só do operador,
+`202`). Escreve no `apps/api` pelas rotas de `/sync`, assinando `service:connectors`;
+o `apps/api` continua sendo o único dono da escrita de documentos.
+
+- **Ordem:** descrever a pasta, listar a raiz inteira, ler referências e marcadores,
+  enviar só o que mudou de marcador, excluir o que sumiu, gravar o desfecho.
+- **Nunca exclui por leitura incompleta:** só o que sumiu da listagem (suportados e
+  ignorados), só com a pasta descrita, a listagem completa e os upserts terminados.
+  Arquivo ignorado que continua na pasta mantém o documento.
+- **Falha de arquivo é ignorado com código; falha de base é `Failed`; cota
+  (`rate-limited`) grava `Failed` e encerra a rodada.** `404` na base encerra só ela.
+- **Recusa de conteúdo determinística (#120) fica em memória** com o marcador, e não é
+  baixada de novo enquanto o marcador não mudar.
+- **`Api:BaseUrl` é opcional:** sem ela o ciclo não roda e o resto do app não muda.
+- **Uma instância só:** o lock por base e a memória de recusas são do processo.
+
+Os cenários no sentido novo também estão em `tests/ApiConnectorsRoundTrip.Tests`.
+Change `ciclo-de-sincronizacao` (#105).
+
 ---
 
 ## Autenticação
@@ -719,7 +742,10 @@ o `apps/inbox` com `service:inbox` em
 `apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs`, e o
 `apps/api` com `service:api` em
 `apps/api/src/Buteco.Api/Auth/ServiceTokenDelegatingHandler.cs`, só para chamar o
-`apps/connectors`. Os dois handlers são cópias com o subject trocado, sem `libs/`. `apps/api` e `apps/inbox` validam **localmente**,
+`apps/connectors`, e o `apps/connectors` com `service:connectors` em
+`apps/connectors/src/Buteco.Connectors/Auth/ServiceTokenDelegatingHandler.cs`, só para
+o ciclo de sincronização chamar o `apps/api`. Os três handlers são cópias com o subject
+trocado, sem `libs/`. `apps/api` e `apps/inbox` validam **localmente**,
 compartilhando apenas a chave de assinatura via configuração. Não há chamada de rede entre os processos para
 validar token — foi o que permitiu autenticar dois apps com bancos isolados
 sem introduzir um store compartilhado.
@@ -768,8 +794,10 @@ sem introduzir um store compartilhado.
 - **`apps/connectors`** valida o token localmente com a mesma
   `Auth:TokenSigningKey`, e o boot falha se ela estiver vazia. A autorização é uma
   tabela explícita de subjects, e aqui **o operador não passa em tudo**:
-  - `operator` só na listagem de provedores e na navegação de pastas
-    (`/connectors/providers` e `/connectors/providers/{providerKey}/folders`);
+  - `operator` só na listagem de provedores, na navegação de pastas e no
+    "Sincronizar agora" (`/connectors/providers`,
+    `/connectors/providers/{providerKey}/folders` e
+    `POST /connectors/knowledge-bases/{knowledgeBaseId}/sync`);
   - `service:api` só na descrição de pasta
     (`/connectors/providers/{providerKey}/folder`), que o `apps/api` chama para
     validar a pasta de uma base sincronizada, assinando o próprio token. Esse

@@ -45,6 +45,8 @@ public sealed class ConnectorsSubjectAuthorizationHandler : AuthorizationHandler
             [
                 ("GET", "/connectors/providers"),
                 ("GET", "/connectors/providers/{providerKey}/folders"),
+                // "Sincronizar agora" (design.md da change ciclo-de-sincronizacao, D9).
+                ("POST", Endpoints.SyncEndpoints.SyncNowPattern),
             ],
             [ApiSubject] =
             [

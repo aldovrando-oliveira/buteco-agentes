@@ -357,6 +357,13 @@ GoogleDrive__ServiceAccountKeyBase64="$(base64 -i caminho/da/chave.json | tr -d 
 A service account precisa da Drive API ativada no projeto dela, e cada pasta precisa
 estar compartilhada com o `client_email` da conta como Leitor.
 
+**Ciclo de sincronização.** O `appsettings.Development.json` aponta `Api:BaseUrl` para
+o `apps/api` local (`http://localhost:5017`), então, com os dois apps de pé, o ciclo roda
+logo depois do boot e a cada 5 minutos, sobre toda base `Synced` do banco local. Para
+subir o `apps/connectors` sem o ciclo, passe `Api__BaseUrl=` vazio. O "Sincronizar
+agora" é `POST /connectors/knowledge-bases/{id}/sync` com o token do operador. Os testes
+do `apps/connectors` fixam o endereço vazio, para a suíte nunca chamar o `apps/api` local.
+
 As rotas de provedores e de navegação aceitam o token do operador obtido em
 `apps/api`. A descrição de pasta é do `apps/api` (`service:api`), e o operador recebe
 `403` nela:

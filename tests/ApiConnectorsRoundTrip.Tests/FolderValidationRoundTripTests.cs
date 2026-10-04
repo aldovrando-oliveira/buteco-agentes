@@ -13,7 +13,7 @@ namespace ApiConnectorsRoundTrip.Tests;
 /// apps/connectors reais"; design.md da change criacao-base-sincronizada, D8).
 /// Nenhuma chamada ao Google: o provedor é o conector falso do <c>apps/connectors</c>.
 /// </summary>
-public class FolderValidationRoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripFixture>
+public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripFixture>
 {
     private static object SyncedRequest(string provider, string folderId) => new
     {

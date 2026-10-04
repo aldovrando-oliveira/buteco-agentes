@@ -11,18 +11,21 @@ public class SubjectAuthorizationTests : IAsyncLifetime
     private const string Folders = "/connectors/providers/fake/folders";
     private const string Folder = "/connectors/providers/fake/folder?id=pasta-1";
 
+    // "Sincronizar agora" (change ciclo-de-sincronizacao, D9): POST, só do operador.
+    private static readonly string SyncNow = $"/connectors/knowledge-bases/{Guid.NewGuid()}/sync";
+
     private readonly ConnectorsFactory _factory = new();
 
-    public static TheoryData<string, string, bool> Matrix()
+    public static TheoryData<string, string, string, bool> Matrix()
     {
-        var data = new TheoryData<string, string, bool>();
-        foreach (var route in new[] { Providers, Folders, Folder })
+        var data = new TheoryData<string, string, string, bool>();
+        foreach (var (method, route) in new[] { ("GET", Providers), ("GET", Folders), ("GET", Folder), ("POST", SyncNow) })
         {
-            data.Add("operator", route, route != Folder);
-            data.Add("service:api", route, route == Folder);
-            data.Add("service:inbox", route, false);
-            data.Add("service:connectors", route, false);
-            data.Add("qualquer", route, false);
+            data.Add("operator", method, route, route != Folder);
+            data.Add("service:api", method, route, route == Folder);
+            data.Add("service:inbox", method, route, false);
+            data.Add("service:connectors", method, route, false);
+            data.Add("qualquer", method, route, false);
         }
 
         return data;
@@ -30,11 +33,11 @@ public class SubjectAuthorizationTests : IAsyncLifetime
 
     [Theory]
     [MemberData(nameof(Matrix))]
-    public async Task SubjectXRota(string subject, string route, bool allowed)
+    public async Task SubjectXRota(string subject, string method, string route, bool allowed)
     {
         var client = TestAuthentication.CreateClientAs(_factory, subject);
 
-        var response = await client.GetAsync(route);
+        var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), route));
 
         if (allowed)
         {
@@ -64,6 +67,7 @@ public class SubjectAuthorizationTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(Providers)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(Folders)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync(SyncNow, null)).StatusCode);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;

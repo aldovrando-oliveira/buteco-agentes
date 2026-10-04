@@ -9,13 +9,17 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Pgvector.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 using ApiAppDbContext = ApiAssembly::Buteco.Api.Infrastructure.AppDbContext;
 using ApiConnectorsFolderClient = ApiAssembly::Buteco.Api.KnowledgeSync.Connectors.ConnectorsFolderClient;
 using ApiProgram = ApiAssembly::Program;
+using ApiIndexingPublisher = ApiAssembly::Buteco.Api.Knowledge.Indexing.IKnowledgeIndexingJobPublisher;
 using ApiTokenService = ApiAssembly::Buteco.Api.Auth.ITokenService;
 using ConnectorsProgram = ConnectorsAssembly::Program;
+using ConnectorsSyncApiClient = ConnectorsAssembly::Buteco.Connectors.Sync.SyncApiClient;
+using ConnectorsSyncScheduler = ConnectorsAssembly::Buteco.Connectors.Sync.SyncSchedulerService;
 
 namespace ApiConnectorsRoundTrip.Tests.Support;
 
@@ -42,6 +46,8 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
     private const string ConnectorsBaseUrl = "http://connectors.roundtrip.test";
 
+    private const string ApiBaseUrl = "http://api.roundtrip.test";
+
     private readonly PostgreSqlContainer _apiPostgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_agents_connectors_roundtrip_test")
         .WithUsername("buteco")
@@ -51,6 +57,17 @@ public sealed class RoundTripFixture : IAsyncLifetime
     private readonly List<IAsyncDisposable> _disposables = [];
 
     public FakeConnector Fake { get; } = new();
+
+    /// <summary>
+    /// Cada requisição do <c>apps/connectors</c> ao <c>apps/api</c>, como método e caminho,
+    /// com o status recebido e o token enviado: é como a ida e volta conta os upserts que
+    /// chegaram (9.4), e afirma que nenhuma recebeu <c>401</c>/<c>403</c> e que o token é
+    /// <c>service:connectors</c> para o próprio <c>apps/api</c> (9.3).
+    /// </summary>
+    public System.Collections.Concurrent.ConcurrentQueue<(string Method, string Path, int Status, string? Token)> ConnectorsToApi { get; } = new();
+
+    /// <summary>O que o <c>apps/api</c> publicou para indexação (1.2, #138).</summary>
+    public InMemoryIndexingPublisher Indexing { get; } = new();
 
     public async Task InitializeAsync()
     {
@@ -77,6 +94,10 @@ public sealed class RoundTripFixture : IAsyncLifetime
     /// </summary>
     public (WebApplicationFactory<ApiProgram> Api, WebApplicationFactory<ConnectorsProgram> Connectors) Build(string connectorsSigningKey)
     {
+        // Os dois sentidos: o apps/api chama o apps/connectors (validação de pasta, #104) e
+        // o apps/connectors chama o apps/api (ciclo de sincronização, #105). Cada handler
+        // primário é o TestServer do outro, resolvido na primeira chamada.
+        WebApplicationFactory<ApiProgram>? api = null;
         var connectors = new WebApplicationFactory<ConnectorsProgram>().WithWebHostBuilder(builder =>
         {
             // UseSetting, e não ConfigureAppConfiguration: o Program.cs do apps/connectors
@@ -85,11 +106,26 @@ public sealed class RoundTripFixture : IAsyncLifetime
             // existe neste host.
             builder.UseSetting("Auth:TokenSigningKey", connectorsSigningKey);
             builder.UseSetting("GoogleDrive:ServiceAccountKeyBase64", string.Empty);
+            // O apps/api desta fixture, e não o localhost:5017 do appsettings.Development.json
+            // do apps/connectors (design.md da change ciclo-de-sincronizacao, D2).
+            builder.UseSetting("Api:BaseUrl", ApiBaseUrl);
             builder.ConfigureServices(services =>
-                services.AddConnector(FakeConnector.Key, FakeConnector.AccountEmail, _ => Fake, _ => Fake));
+            {
+                services.AddConnector(FakeConnector.Key, FakeConnector.AccountEmail, _ => Fake, _ => Fake);
+
+                // O ciclo roda só quando o teste pede, pelo "Sincronizar agora" (D11).
+                var scheduler = services.SingleOrDefault(descriptor => descriptor.ImplementationType == typeof(ConnectorsSyncScheduler));
+                if (scheduler is not null)
+                {
+                    services.Remove(scheduler);
+                }
+
+                services.AddHttpClient(ConnectorsSyncApiClient.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => new RecordingHandler(ConnectorsToApi) { InnerHandler = api!.Server.CreateHandler() });
+            });
         });
 
-        var api = new WebApplicationFactory<ApiProgram>().WithWebHostBuilder(builder =>
+        api = new WebApplicationFactory<ApiProgram>().WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
@@ -113,6 +149,9 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
                 services.AddHttpClient(ApiConnectorsFolderClient.HttpClientName)
                     .ConfigurePrimaryHttpMessageHandler(() => connectors.Server.CreateHandler());
+
+                services.RemoveAll<ApiIndexingPublisher>();
+                services.AddSingleton<ApiIndexingPublisher>(Indexing);
             });
         });
 
@@ -140,5 +179,15 @@ public sealed class RoundTripFixture : IAsyncLifetime
             .Select(knowledgeBase => new { knowledgeBase.SyncFolderName, knowledgeBase.SyncFolderUrl })
             .ToListAsync();
         return rows.Select(row => (row.SyncFolderName, row.SyncFolderUrl)).ToList();
+    }
+
+    private sealed class RecordingHandler(System.Collections.Concurrent.ConcurrentQueue<(string Method, string Path, int Status, string? Token)> requests) : DelegatingHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = await base.SendAsync(request, cancellationToken);
+            requests.Enqueue((request.Method.Method, request.RequestUri!.AbsolutePath, (int)response.StatusCode, request.Headers.Authorization?.Parameter));
+            return response;
+        }
     }
 }

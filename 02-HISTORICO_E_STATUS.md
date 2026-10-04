@@ -15018,3 +15018,77 @@ O cancelamento do `CommandTimeout`, sozinho, não explica as esperas de 83,6 s e
 Uma primeira leitura de 45 s era defeito do proxy de teste. O que continua sem
 explicação, as pistas não seguidas e a leitura de `pg_locks` para a próxima
 ocorrência estão na #139.
+
+## `ciclo-de-sincronizacao` — ciclo de sincronização e "Sincronizar agora" (#105)
+
+**Change proposta, revisada, implementada, sincronizada e arquivada em 03/10/2026
+(`openspec/changes/archive/2026-10-03-ciclo-de-sincronizacao/`).** A #105 vai para
+`In review` com a abertura do PR.
+Branch `feat/105-ciclo-de-sincronizacao`, criada de `0499161` e atualizada com a `main` em
+`cb74315` (merge da #108, PR #140, e da #46, PR #142), sem conflito de código; o `02` e o
+`CHANGELOG.md` conflitaram só por acréscimo das duas partes. A ida e volta rodou de novo
+contra os handlers de `/sync` alterados pela #108: 7/7.
+
+### O que entrou
+
+No `apps/connectors`: o ciclo de uma base (descrever, listar, comparar marcadores,
+enviar o que mudou, excluir o que sumiu, gravar o desfecho), a rodada periódica de 5
+minutos com `PeriodicTimer`, o "Sincronizar agora" (`POST
+/connectors/knowledge-bases/{id}/sync`, só do operador), o lock por base, a memória de
+recusas determinísticas (D14), o cliente das cinco rotas de `/sync` e o
+`ServiceTokenDelegatingHandler` que assina `service:connectors`. `Api:BaseUrl` é
+opcional. Nenhuma linha no `apps/api`, nenhum pacote novo.
+
+### O que a implementação mediu
+
+| suíte | baseline em `0499161` | fechamento na árvore de trabalho |
+|---|---|---|
+| `apps/connectors` | 137 + 1 ignorado / 138 | **261 + 1 ignorado / 262** |
+| `tests/ApiConnectorsRoundTrip.Tests` | 4/4 | **7/7** |
+| `apps/api` | 717/717 (fechamento da #120) | 717/717, idêntico por nome |
+
+Por nome de teste nos `.trx`: no `apps/connectors`, 139 entradas novas e 15 saídas, e as
+15 são os casos de `SubjectXRota` renomeados (a teoria ganhou o método HTTP). Os +124
+líquidos estão por classe no `tasks.md`. `load average` entre 2,8 e 11,5 no fechamento,
+por outra carga na máquina (a #108 em paralelo); nenhuma falha a classificar.
+
+**Respostas reais do `apps/api`, lidas antes do código (1.2):** sem divergência do
+contrato. **Acréscimo:** com o RabbitMQ fora do ar, o upsert grava o documento e o
+marcador e responde `500`; na base sincronizada isso é permanente, porque o ciclo seguinte
+vê o marcador igual e não reenvia. **#138**, registrada como bloqueio da **#119**.
+
+**O que a verificação contra o Drive real corrigiu na spec:** renomear um Doc **gera**
+`Updated` só de título, porque o título é o nome do arquivo (D13). O cenário "metadado sem
+evento" passou a ser o de alterar o compartilhamento, com autorização do mantenedor. E a
+alteração de permissão medida **não mudou** o `modifiedTime` do Doc, ao contrário da P6 da
+etapa 0. Detalhe ação por ação no `tasks.md`.
+
+**Duas correções de teste que a implementação exigiu:** o `ManualTimeProvider` não tinha
+timers, e o `PeriodicTimer` sobre ele cairia no relógio real; ganhou `CreateTimer`. E "nenhum
+`401`/`403`" não prova o subject na ida e volta, porque o `apps/api` deixa o operador passar
+em tudo: o guarda 8.5 respondeu `200` com o token de `operator`, e a ida e volta passou a
+validar o token com o `ITokenService` do próprio `apps/api`.
+
+**Não hipotético:** o `appsettings.Development.json` do `apps/connectors` aponta para
+`localhost:5017`, onde há um `apps/api` antigo de pé desde 02/10. Sem o vazio fixado no
+`ConnectorsFactory`, a suíte inteira ligaria o ciclo contra ele.
+
+### Guardas contra o defeito real (convenção 15)
+
+Os oito do `tasks.md` (8.1 a 8.8), mais um extra no teste de log (nome de arquivo no aviso
+de contenção). Cada um aplicado sobre uma cópia, visto reprovar no teste previsto e
+desfeito, conferido por `grep`. A primeira aplicação do 8.6 não casou o trecho e deixou o
+teste verde; foi refeita.
+
+### Achados fora do escopo (convenção 23)
+
+- **#137**, `docs/README.md` descrevendo quatro apps (lacuna da #103). **Corrigida nesta
+  change**; o PR a fecha com `Closes #137`.
+- **#138**, documento gravado sem indexação enfileirada quando o RabbitMQ não responde;
+  bloqueia a #119.
+
+### O que ficou de fora, e é decisão
+
+- Telas (#106, #107), exclusão de base (#108), implantação em produção (#119), chave por
+  serviço (#117).
+- Várias instâncias (D10): uma réplica só, registrada na #119.

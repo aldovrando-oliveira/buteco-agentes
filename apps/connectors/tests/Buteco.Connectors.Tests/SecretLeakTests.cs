@@ -10,6 +10,74 @@ namespace Buteco.Connectors.Tests;
 // vacuidade: sem texto capturado, não há o que procurar.
 public class SecretLeakTests(ITestOutputHelper output)
 {
+    // knowledge-sync-cycle, "Nenhum log com conteúdo, token ou chave" (design.md da change
+    // ciclo-de-sincronizacao, D13). Pela composição real, com os logs de todas as
+    // categorias, inclusive os do HttpClient que chama o apps/api.
+    [Fact]
+    public async Task NenhumLogDoCicloContemConteudoTokenChaveOuNomeDeArquivo()
+    {
+        const string ContentMarker = "CONTEUDO-MARCADOR-7f3a91";
+        const string FileName = "Relatorio-Confidencial-Nome-9c2e.md";
+        await using var factory = new ConnectorsFactory(
+            extraConfiguration: new Dictionary<string, string?> { ["Api:BaseUrl"] = "http://api.test" },
+            configureServices: services =>
+            {
+                var scheduler = services.SingleOrDefault(descriptor => descriptor.ImplementationType == typeof(Buteco.Connectors.Sync.SyncSchedulerService));
+                if (scheduler is not null)
+                {
+                    services.Remove(scheduler);
+                }
+            });
+        var knowledgeBase = factory.SyncApi.AddBase();
+        var recorded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        factory.SyncApi.Override = (request, body) =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/sync-results", StringComparison.Ordinal))
+            {
+                recorded.TrySetResult();
+            }
+
+            // Uma recusa e uma contenção, para os caminhos de aviso também logarem.
+            return request.Method == HttpMethod.Put && body!.Contains("ref-grande", StringComparison.Ordinal)
+                ? FakeSyncApiHandler.ContentRefusal("too-large", 2_000_000)
+                : request.Method == HttpMethod.Put && body!.Contains("ref-contencao", StringComparison.Ordinal)
+                    ? FakeSyncApiHandler.Contention()
+                    : null;
+        };
+        factory.Fake.ListRoot = _ => new Buteco.Connectors.Connectors.RootListing(
+            [
+                new("ref-ok", FileName, "v1", "text/markdown"),
+                new("ref-grande", FileName + ".grande", "v1", "text/markdown"),
+                new("ref-contencao", FileName + ".contencao", "v1", "text/markdown"),
+            ],
+            [new("ref-atalho", FileName + ".atalho", "shortcut-not-followed", null)]);
+        factory.Fake.Markdown = _ => $"# {ContentMarker}\n\nTexto {ContentMarker}.\n";
+
+        var response = await TestAuthentication.CreateClientAs(factory, "operator")
+            .PostAsync($"/connectors/knowledge-bases/{knowledgeBase.Id}/sync", null);
+        await recorded.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var sentTokens = factory.SyncApi.Requests
+            .Select(request => request.Authorization!["Bearer ".Length..])
+            .ToList();
+        var lines = factory.Logs.Lines.ToList();
+
+        // Precondição contra vacuidade: houve tokens enviados e o ciclo logou.
+        Assert.NotEmpty(sentTokens);
+        Assert.Contains(lines, line => line.Contains(knowledgeBase.Id.ToString(), StringComparison.Ordinal));
+        Assert.Contains(factory.SyncApi.Upserts(knowledgeBase.Id), request => request.Body!.Contains(ContentMarker, StringComparison.Ordinal));
+        foreach (var line in lines)
+        {
+            Assert.DoesNotContain(ContentMarker, line, StringComparison.Ordinal);
+            Assert.DoesNotContain(FileName, line, StringComparison.Ordinal);
+            Assert.DoesNotContain(TestAuthentication.TokenSigningKey, line, StringComparison.Ordinal);
+            Assert.All(sentTokens, token => Assert.DoesNotContain(token, line, StringComparison.Ordinal));
+        }
+
+        output.WriteLine($"{lines.Count} linhas de log, {sentTokens.Count} tokens procurados.");
+    }
+
     [Fact]
     public async Task NenhumaSaidaContemAChave()
     {

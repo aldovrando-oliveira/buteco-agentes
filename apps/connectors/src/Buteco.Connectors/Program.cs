@@ -3,6 +3,7 @@ using Buteco.Connectors.Connectors;
 using Buteco.Connectors.Connectors.GoogleDrive;
 using Buteco.Connectors.Endpoints;
 using Buteco.Connectors.Options;
+using Buteco.Connectors.Sync;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 
@@ -19,6 +20,11 @@ builder.Services.AddHealthChecks();
 builder.Services.Configure<TokenSigningOptions>(builder.Configuration.GetSection(TokenSigningOptions.SectionName));
 builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddSingleton(TimeProvider.System);
+
+// Ciclo de sincronização (design.md da change ciclo-de-sincronizacao). Api:BaseUrl é
+// opcional (D2): sem ele o agendamento não é registrado e o resto do app não muda.
+// Presente e inválido derruba o boot, na checagem depois do Build().
+builder.Services.AddKnowledgeSync(builder.Configuration);
 
 // Provedores. Cada um registra os dois contratos keyed e a conta, e só quando a
 // credencial está presente (design.md, D3): sem credencial, o provedor não existe
@@ -58,12 +64,17 @@ app.MapHealthChecks("/health")
     .AllowAnonymous()
     .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.HealthProbe));
 app.MapConnectorEndpoints();
+app.MapSyncEndpoints();
 
 // Convenção 8, as duas sobre o host construído e depois de todos os Map*: rota
 // anônima sem classificação, e tabela de subjects divergente das rotas mapeadas
 // (nos dois sentidos, design.md, D1).
 app.ValidateRouteAuthenticationClassification("/health");
 app.ValidateConnectorsSubjectRoutes(ConnectorsSubjectAuthorizationHandler.SubjectRoutes);
+
+// Convenção 8, sobre o host construído: Api:BaseUrl presente e inválido derruba o boot;
+// ausente sobe com aviso. O guarda da composição real está em ApiConfigurationValidationTests.
+app.ValidateApiConfiguration();
 
 app.Run();
 
