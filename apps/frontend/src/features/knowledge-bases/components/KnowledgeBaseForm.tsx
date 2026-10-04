@@ -1,14 +1,25 @@
+import type { ReactNode } from 'react';
 import { Box, Button, Group, Paper, Stack, Text, TextInput, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import type { CreateKnowledgeBaseInput } from '../types/knowledgeBase';
+import type { CreateManualKnowledgeBaseInput } from '../types/knowledgeBase';
 
 interface KnowledgeBaseFormProps {
-  onSubmit: (values: CreateKnowledgeBaseInput) => void;
+  onSubmit: (values: CreateManualKnowledgeBaseInput) => void;
   onCancel: () => void;
   errors?: Record<string, string>;
   submitting?: boolean;
-  initialValues?: CreateKnowledgeBaseInput;
+  initialValues?: CreateManualKnowledgeBaseInput;
   submitLabel?: string;
+  // Card de Origem, só na criação, renderizado depois do bloco da descrição
+  // (pranchas 2a e 2b). A edição não passa: a origem não muda depois do cadastro
+  // (frontend-cadastro-base-sincronizada, D8).
+  origin?: ReactNode;
+  // Substitui a nota de documentos quando passada — a nota muda com a origem.
+  footerNote?: ReactNode;
+  // Validação de quem monta o card de Origem (a pasta obrigatória da base
+  // sincronizada): só a página sabe a origem marcada. Roda junto com a do nome e
+  // da descrição, para os erros aparecerem de uma vez; `false` barra o envio.
+  validateExtra?: () => boolean;
 }
 
 // Piso de "escreveu alguma coisa": abaixo disto não cabe o assunto MAIS o que
@@ -29,7 +40,7 @@ const SHORT_DESCRIPTION_THRESHOLD = 80;
 // a 600px pelo mesmo motivo.
 const PROSE_MAX_WIDTH = 620;
 
-function toFormValues(input?: CreateKnowledgeBaseInput): CreateKnowledgeBaseInput {
+function toFormValues(input?: CreateManualKnowledgeBaseInput): CreateManualKnowledgeBaseInput {
   return { name: input?.name ?? '', description: input?.description ?? '' };
 }
 
@@ -45,8 +56,11 @@ export function KnowledgeBaseForm({
   submitting,
   initialValues,
   submitLabel = 'Criar base',
+  origin,
+  footerNote,
+  validateExtra,
 }: KnowledgeBaseFormProps) {
-  const form = useForm<CreateKnowledgeBaseInput>({
+  const form = useForm<CreateManualKnowledgeBaseInput>({
     initialValues: toFormValues(initialValues),
     validate: {
       name: (value) => (value.trim() ? null : 'O nome da base de conhecimento é obrigatório.'),
@@ -65,8 +79,14 @@ export function KnowledgeBaseForm({
     // onSubmit envolvido, e não passado direto: form.onSubmit repassa
     // (values, event), e o evento vazaria para quem consome o formulário.
     <form
-      onSubmit={form.onSubmit((values) =>
-        onSubmit({ name: values.name, description: values.description }),
+      onSubmit={form.onSubmit(
+        (values) => {
+          if (validateExtra && !validateExtra()) return;
+          onSubmit({ name: values.name, description: values.description });
+        },
+        () => {
+          validateExtra?.();
+        },
       )}
     >
       <Stack>
@@ -239,6 +259,8 @@ export function KnowledgeBaseForm({
           </Stack>
         </Paper>
 
+        {origin}
+
         {/* Sequenciamento, no mesmo idioma do placeholder do detalhe: diz onde os
             documentos entram e o que a base guarda, sem afirmar contagem. */}
         <Paper
@@ -249,8 +271,12 @@ export function KnowledgeBaseForm({
           data-testid="documents-note"
         >
           <Text size="xs" c="dimmed" maw={PROSE_MAX_WIDTH} style={{ lineHeight: 1.55 }}>
-            Documentos são carregados depois de criar a base, na tela de detalhe. Por enquanto só
-            markdown: mídia binária não é armazenada, o que fica guardado é o texto.
+            {footerNote ?? (
+              <>
+                Documentos são carregados depois de criar a base, na tela de detalhe. Por enquanto
+                só markdown: mídia binária não é armazenada, o que fica guardado é o texto.
+              </>
+            )}
           </Text>
         </Paper>
 

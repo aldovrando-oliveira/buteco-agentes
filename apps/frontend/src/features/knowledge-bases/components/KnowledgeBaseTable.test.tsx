@@ -15,6 +15,8 @@ const activeBase: KnowledgeBase = {
   isActive: true,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-02T00:00:00Z',
+  contentMode: 'Manual',
+  syncSource: null,
 };
 
 const inactiveBase: KnowledgeBase = {
@@ -24,6 +26,8 @@ const inactiveBase: KnowledgeBase = {
   isActive: false,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-02T00:00:00Z',
+  contentMode: 'Manual',
+  syncSource: null,
 };
 
 function agent(overrides: Partial<Agent>): Agent {
