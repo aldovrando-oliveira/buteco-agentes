@@ -15168,3 +15168,82 @@ visto reprovando exatamente o teste dele, e desfeito (`tasks.md`, 4.4).
 - Detalhe, listagem, filtro "Com falha" e "Sincronizar agora" (#107); a orientação de
   excluir no `folder-in-use` (#136); a variável no compose de produção (#119, comentário
   feito na abertura da change).
+
+## `indexacao-sem-job-orfao` — documento gravado sem indexação enfileirada (#138)
+
+**Change proposta, revisada e implementada em 03–04/10/2026, sincronizada e arquivada em
+04/10/2026 (`openspec/changes/archive/2026-10-04-indexacao-sem-job-orfao/`).** A #138 vai
+para `In review` com a abertura do PR. Branch `fix/138-indexacao-sem-job`, de
+`ffc6a7b`, sem upstream, atualizada com a `main` em `737ec2c` (merge da #106, PR #147),
+sem conflito de código; o `02` conflitou só por acréscimo das duas seções. Specs
+sincronizadas: em `knowledge-document-indexing`, os requisitos "Indexação assíncrona por
+fila própria" e "Reindexação sob pedido do operador" alterados e dois acrescentados; um
+acrescentado em `knowledge-document-catalog` e um em `knowledge-sync-service-api`. Na
+rodada final, depois da atualização, `apps/workers` deu 397/397 (`load` 2,95 no início);
+as duas anteriores reprovaram por infraestrutura do Podman (o Testcontainers sem conseguir
+subir ou inspecionar contêiner), não por asserção.
+
+### O que entrou
+
+No `apps/api`: tabela `knowledge_indexing_requests` (documento, revisão, `CreatedAt`, FK em
+cascata), gravada no mesmo `SaveChanges` do documento pelas cinco publicações que existiam
+(cadastro, atualização, reindexação, upsert novo e upsert existente); o
+`KnowledgeIndexingRequestDispatcher`, único dependente do publisher de indexação, que publica
+com confirmação do broker e apaga o pedido na mesma transação (`FOR UPDATE SKIP LOCKED`); o
+despacho no fim da escrita (limite de 5 s, falha só logada, a resposta de sempre) e a
+`KnowledgeIndexingRequestSweepService` de 30 s, **o primeiro `BackgroundService` do
+`apps/api`**; a janela de 30 s por instância que faz as escritas pularem o despacho depois de
+uma falha (D8); a migração que dá pedido a todo documento `Pending` (D6). No `apps/workers`,
+só um teste. Nenhuma variável, contêiner ou rota nova.
+
+### O que a implementação mediu
+
+| suíte | baseline em `ffc6a7b` | fechamento |
+|---|---|---|
+| `apps/api` | 730/730, 2 min 9 s, `load` 15,45 | **756/756**, 2 min 40 s, `load` 4,00 |
+| `apps/workers` | 396/396, 8 min 35 s, `load` 13,07 | **397/397**, 7 min 8 s, `load` 4,29 (a primeira rodada, com `load` 16,45, reprovou só o teste da **#130**) |
+| `tests/ApiConnectorsRoundTrip.Tests` | — | 7/7 |
+
+Régua de contêineres de `apps/api`, critério do `02` (classes com fixture de contêiner mais
+as que constroem o próprio, excluída `Support/`, collection contada uma vez nas fontes):
+**41 → 42 classes, 39 → 39 fontes**. A classe nova com contêiner é a de migração, na
+`MigrationPostgresCollection`; os demais testes entraram como `partial` de
+`KnowledgeDocumentCatalogTests` e `A2ATaskLifecycleTests`.
+
+- **Reprodução contra o código antigo:** os seis testes de aceite reprovaram com `resposta 500`
+  e `0` mensagens depois de a publicação voltar, nos quatro caminhos e no caso permanente da
+  base sincronizada.
+- **O `FOR UPDATE` impede a duplicata; o `SKIP LOCKED` só faz pular em vez de esperar.** Sem o
+  `SKIP LOCKED`, o teste de dois despachos concorrentes passou 3/3; só sem trava nenhuma ele
+  reprovou. O guarda que pega a retirada do `SKIP LOCKED` é o do SQL emitido. Corrigido no D3.
+- **A janela se prova pela contagem:** 5 escritas com a publicação bloqueando geram 1 tentativa;
+  sem a janela, 5.
+- **Verificação manual** (portas 55100–55103): 2 `Pending` antes da migração → 2 pedidos; 8
+  escritas com o broker fora → 1 despacho falho e 7 pulados; broker de volta → tabela vazia na
+  varredura seguinte e 10 mensagens em `knowledge-indexing`, uma por pedido.
+- **A confirmação do broker** foi conferida no `RabbitMQ.Client` 7.2.1 decompilado.
+
+### Guardas contra o defeito real (convenção 15)
+
+- `SKIP LOCKED` retirado → reprova o teste do SQL emitido; retirado o `FOR UPDATE SKIP LOCKED`
+  inteiro → reprovam o do SQL e o comportamental.
+- Handler de cadastro de volta ao publisher direto → reprovam o aceite do cadastro e o teste
+  de arquitetura.
+- Janela retirada → o teste da janela reprova pela contagem (5 em vez de 1).
+
+Cada um desfeito e conferido por `grep`.
+
+### Achados fora do escopo (convenção 23)
+
+- **#144**, o mesmo "publica depois e esquece" no despacho de task A2A
+  (`EnqueueingAgentHandler.cs:83`), caminho que já atende o piloto.
+- **#130** apareceu de novo na primeira rodada do fechamento do `apps/workers`, com `load`
+  16,45, e não na segunda.
+- **Ambiente:** `rabbitmq:4.3-management` por `podman run` nesta máquina não sobe com o cookie
+  em arquivo (`.erlang.cookie: eacces`); sobe com `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS="-setcookie ..."`.
+
+### O que ficou de fora, e é decisão
+
+- Mostrar na tela que o pedido espera o broker: `Pending` é verdade, e nenhuma tarefa toca o
+  `apps/frontend`.
+- Documento preso em `Indexing` por queda do `apps/workers` (#125).
