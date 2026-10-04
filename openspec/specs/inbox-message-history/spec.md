@@ -57,9 +57,12 @@ O sistema SHALL, ao invocar o sender de entrega registrado para o
 `ChannelType` do canal de origem (ver capability
 `inbox-channel-adapter-plugin`, Requirement "Entrega da resposta do agente
 ao canal de origem"), persistir um registro de `Message` associado à
-`Session` envolvida, com direção de saída, o conteúdo da resposta, tipo de
+`Session` envolvida, com direção de saída, o conteúdo entregue, tipo de
 conteúdo `Text` e o instante da tentativa de entrega — toda mensagem de
-saída nesta fatia é textual.
+saída nesta fatia é textual. O conteúdo entregue é a resposta do agente ou,
+num desfecho sem resposta por falha, o aviso de falha (ver capability
+`inbox-message-orchestration`, Requirement "Desfecho sem resposta avisa a
+conversa"); os dois são persistidos da mesma forma.
 
 #### Scenario: Resposta do agente entregue ao canal é persistida como mensagem de saída
 - **WHEN** o sistema invoca o sender de entrega registrado para o
@@ -67,6 +70,13 @@ saída nesta fatia é textual.
 - **THEN** um registro de `Message` de saída é persistido para essa
   `Session`, com esse conteúdo, tipo de conteúdo `Text` e o instante da
   tentativa
+
+#### Scenario: Aviso de falha entregue ao canal é persistido como mensagem de saída
+- **WHEN** o sistema invoca o sender de entrega registrado para o
+  `ChannelType` de uma sessão, com o texto do aviso de falha
+- **THEN** um registro de `Message` de saída é persistido para essa
+  `Session`, com o texto do aviso, tipo de conteúdo `Text`, o instante da
+  tentativa e o status de entrega correspondente ao resultado
 
 ### Requirement: Status de entrega da mensagem de saída reflete sucesso ou falha do envio ao provedor
 O sistema SHALL persistir, na `Message` de saída correspondente, o
@@ -131,11 +141,14 @@ disparo de debounce, um status de dispatch que reflete a transição de
 estado desse ciclo — pendente enquanto bufferizando, em processamento
 quando reivindicado para disparo, falhou quando o ciclo terminar sem que
 nenhuma resposta venha a ser recebida (esgotamento das tentativas de envio
-configuradas, rejeição síncrona do disparo, ou rejeição de protocolo), e
-concluído quando a resposta correspondente for recebida e processada —
-mesmo depois que o registro do ciclo de disparo (ver capability
-`inbox-message-orchestration`, Requirement "Conteúdo bufferizado é removido
-ao final do ciclo de disparo") tiver sido removido.
+configuradas, rejeição síncrona do disparo, rejeição de protocolo, task em
+estado terminal que não é concluído — recebida por push notification ou pela
+reconciliação —, ou encerramento por idade de ciclo sem identificador de
+task), e concluído quando a task correspondente terminar concluída e for
+processada, com ou sem mensagem de resposta — mesmo depois que o registro do
+ciclo de disparo (ver capability `inbox-message-orchestration`, Requirement
+"Conteúdo bufferizado é removido ao final do ciclo de disparo") tiver sido
+removido.
 
 #### Scenario: Mensagens de um grupo em debounce mostram status pendente
 - **WHEN** uma mensagem de entrada é adicionada ao buffer de debounce de uma
@@ -164,9 +177,24 @@ ao final do ciclo de disparo") tiver sido removido.
   dispatch de falha, e esse status permanece consultável mesmo após o
   registro do ciclo de disparo ser removido
 
+#### Scenario: Mensagens de um grupo cuja task terminou em falha mostram status de falha
+- **WHEN** a task de um ciclo de disparo de debounce termina num estado
+  terminal que não é concluído, e esse desfecho é processado por push
+  notification ou pela reconciliação
+- **THEN** as `Message` de entrada desse grupo passam a refletir status de
+  dispatch de falha, e esse status permanece consultável mesmo após o
+  registro do ciclo de disparo ser removido
+
+#### Scenario: Mensagens de um grupo encerrado por idade sem identificador de task mostram status de falha
+- **WHEN** um ciclo de disparo sem identificador de task é encerrado por idade
+- **THEN** as `Message` de entrada desse grupo passam a refletir status de
+  dispatch de falha, e esse status permanece consultável mesmo após o
+  registro do ciclo de disparo ser removido
+
 #### Scenario: Mensagens de um grupo cujo disparo foi concluído mostram status concluído
-- **WHEN** a resposta correspondente a um ciclo de disparo de debounce é
-  recebida e processada com sucesso
+- **WHEN** a task correspondente a um ciclo de disparo de debounce termina
+  concluída, com ou sem mensagem de resposta, e esse desfecho é processado
+  por push notification ou pela reconciliação
 - **THEN** as `Message` de entrada desse grupo passam a refletir status de
   dispatch concluído, e esse status permanece consultável mesmo após o
   registro do ciclo de disparo ser removido
