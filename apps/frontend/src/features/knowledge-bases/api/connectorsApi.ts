@@ -7,12 +7,14 @@ import { getToken } from '../../../auth/token';
 // organiza por conceito de domínio, não por origem do dado: os consumidores são
 // telas de base (frontend-cadastro-base-sincronizada, D2).
 //
-// PARA A #107: o "Sincronizar agora" (`POST /connectors/knowledge-bases/{id}/sync`)
-// entra AQUI, como mais uma função sobre o mesmo request<T>, e reusa
-// ConnectorsError e o texto por código de utils/connectorErrors.ts.
+// O "Sincronizar agora" do detalhe (`POST /connectors/knowledge-bases/{id}/sync`,
+// #107) é mais uma função sobre o mesmo request<T>, e reusa ConnectorsError e o
+// texto por código de utils/connectorErrors.ts (contexto `sync-request`).
 //
-// O operador só acessa duas rotas do apps/connectors (connectors-api, tabela de
-// subjects); a descrição de pasta é do `service:api` e responde 403 ao operador.
+// O operador acessa três rotas do apps/connectors (connectors-api e
+// knowledge-sync-cycle, tabela de subjects): provedores, pastas e o pedido de
+// sincronização. A descrição de pasta é do `service:api` e responde 403 ao
+// operador.
 
 export class ConnectorsError extends Error {
   // "network": o fetch nem chegou a uma resposta — o "fora do ar" que a tela diz
@@ -104,6 +106,12 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   }
 
+  // 202 e 204 chegam sem corpo: o pedido de sincronização responde 202 vazio
+  // (knowledge-sync-cycle), e ler JSON dele rejeitaria uma resposta de sucesso.
+  if (response.status === 202 || response.status === 204) {
+    return undefined as T;
+  }
+
   return (await response.json()) as T;
 }
 
@@ -121,4 +129,14 @@ export function listConnectorFolders(
   const path = `/connectors/providers/${encodeURIComponent(providerKey)}/folders`;
   const query = parentId ? `?${new URLSearchParams({ parentId }).toString()}` : '';
   return request<ConnectorFolder[]>(`${path}${query}`);
+}
+
+// Dispara o ciclo da base em segundo plano. O 202 diz só que o pedido foi aceito
+// — inclusive quando um ciclo da base já está em curso, e então nenhum outro é
+// disparado (knowledge-sync-cycle, "Sincronizar agora"). O fim do ciclo se lê no
+// apps/api, pela mudança de `syncState.lastFinishedAt` (utils/syncState.ts).
+export function requestKnowledgeBaseSync(knowledgeBaseId: string): Promise<void> {
+  return request<void>(`/connectors/knowledge-bases/${encodeURIComponent(knowledgeBaseId)}/sync`, {
+    method: 'POST',
+  });
 }

@@ -40,6 +40,7 @@ function renderCard(props: Partial<Parameters<typeof KnowledgeDocumentsCard>[0]>
         documents={[doc()]}
         isLoading={false}
         error={null}
+        readOnly={false}
         {...handlers}
         {...props}
       />
@@ -204,6 +205,7 @@ describe('estado de indexação', () => {
           ]}
           isLoading={false}
           error={null}
+          readOnly={false}
           onAdd={vi.fn()}
           onUpdate={vi.fn()}
           onDelete={vi.fn()}
@@ -324,6 +326,7 @@ describe('ações e cópia', () => {
           ]}
           isLoading={false}
           error={null}
+          readOnly={false}
           onAdd={vi.fn()}
           onUpdate={vi.fn()}
           onDelete={vi.fn()}
@@ -334,5 +337,62 @@ describe('ações e cópia', () => {
 
     expect(container.textContent).not.toMatch(/grandes?\b/i);
     expect(container.textContent).not.toMatch(/limite de requisi/i);
+  });
+});
+
+// BASE SINCRONIZADA: SOMENTE LEITURA (frontend-detalhe-base-sincronizada, D1). O
+// apps/api recusa criar, atualizar e excluir documento em base sincronizada com
+// 409; a tela não oferece as três ações. Reindexar continua: o apps/api a
+// permite, e a sincronização não reenvia arquivo com o mesmo marcador.
+describe('somente leitura', () => {
+  it('não exibe adicionar, atualizar, excluir nem a coluna de ações', () => {
+    renderCard({ readOnly: true, documents: [doc({ id: 'a' }), doc({ id: 'b' })] });
+
+    expect(screen.queryByRole('button', { name: 'Adicionar documento' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Atualizar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Excluir' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ações')).not.toBeInTheDocument();
+    expect(screen.getByText('Somente leitura — o conteúdo vem da pasta')).toBeInTheDocument();
+  });
+
+  it('estado vazio diz que os documentos vêm da sincronização, sem convidar a adicionar', () => {
+    renderCard({ readOnly: true, documents: [] });
+
+    expect(screen.getByTestId('documents-empty')).toHaveTextContent('Nenhum documento nesta base.');
+    expect(screen.getByText(/entram pela sincronização com a pasta/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Adicionar documento' })).not.toBeInTheDocument();
+  });
+
+  it('reindexar continua na faixa de falha', async () => {
+    const user = userEvent.setup();
+    const handlers = renderCard({
+      readOnly: true,
+      documents: [doc({ id: 'f', indexingStatus: 'Failed', failureReason: 'motivo' })],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Reindexar documento' }));
+
+    expect(handlers.onReindex).toHaveBeenCalledTimes(1);
+  });
+
+  // Achado da conferência visual (R1-1): sem a coluna Ações, o layout automático
+  // dava 49% à coluna Documento, contra 60% na prancha 4a. As larguras da prancha
+  // (56/16/18, `table-layout: fixed`) valem só para a tabela somente leitura; a
+  // da base manual continua com o layout de hoje.
+  it('somente leitura usa as larguras da prancha 4a', () => {
+    renderCard({ readOnly: true });
+
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers.map((th) => th.style.width)).toEqual(['56%', '16%', '18%']);
+  });
+
+  it('sem readOnly, as três ações e a coluna continuam', () => {
+    renderCard({ readOnly: false, documents: [doc({ id: 'a' })] });
+
+    expect(screen.getByRole('button', { name: 'Adicionar documento' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Atualizar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Excluir' })).toBeInTheDocument();
+    expect(screen.getByText('Ações')).toBeInTheDocument();
+    expect(screen.queryByText('Somente leitura — o conteúdo vem da pasta')).not.toBeInTheDocument();
   });
 });

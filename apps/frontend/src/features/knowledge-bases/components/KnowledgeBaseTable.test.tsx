@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { MemoryRouter } from 'react-router';
 import { theme } from '../../../theme';
 import { KnowledgeBaseTable } from './KnowledgeBaseTable';
 import { statusPresentation } from '../utils/documentIndexing';
-import type { KnowledgeBase, KnowledgeBaseIndexingSummary } from '../types/knowledgeBase';
+import { formatSyncInstant } from '../utils/syncState';
+import type {
+  KnowledgeBase,
+  KnowledgeBaseIndexingSummary,
+  KnowledgeBaseSyncState,
+} from '../types/knowledgeBase';
 import type { Agent } from '../../agents/types/agent';
 
 const activeBase: KnowledgeBase = {
@@ -17,6 +22,7 @@ const activeBase: KnowledgeBase = {
   updatedAt: '2026-09-02T00:00:00Z',
   contentMode: 'Manual',
   syncSource: null,
+  syncState: null,
 };
 
 const inactiveBase: KnowledgeBase = {
@@ -28,6 +34,7 @@ const inactiveBase: KnowledgeBase = {
   updatedAt: '2026-09-02T00:00:00Z',
   contentMode: 'Manual',
   syncSource: null,
+  syncState: null,
 };
 
 function agent(overrides: Partial<Agent>): Agent {
@@ -332,5 +339,82 @@ describe('KnowledgeBaseTable', () => {
         color: `var(--mantine-color-${statusPresentation('Failed').color}-text)`,
       });
     });
+  });
+});
+
+// ORIGEM E FALHA DE SINCRONIZAÇÃO NA COLUNA BASE (frontend-detalhe-base-sincronizada,
+// D6): linha de origem em toda base, e linha de falha só com `failingSince`.
+describe('origem e falha de sincronização', () => {
+  const FAILING_SINCE = '2026-09-25T12:10:00Z';
+
+  function syncedBase(id: string, state: Partial<KnowledgeBaseSyncState> = {}): KnowledgeBase {
+    return {
+      ...activeBase,
+      id,
+      name: `Base ${id}`,
+      contentMode: 'Synced',
+      syncSource: {
+        provider: 'google-drive',
+        folderId: `f-${id}`,
+        folderName: 'FAQ Suporte',
+        folderUrl: 'https://x',
+      },
+      syncState: {
+        lastCompletedAt: null,
+        lastFinishedAt: null,
+        failingSince: null,
+        lastError: null,
+        ignoredFiles: null,
+        ...state,
+      },
+    };
+  }
+
+  function originOf(id: string) {
+    return screen.getByTestId(`origem-${id}`);
+  }
+
+  it('base manual: "Manual", e nenhuma linha de falha', () => {
+    renderTable([activeBase]);
+
+    expect(originOf(activeBase.id)).toHaveTextContent('Manual');
+    expect(screen.queryByTestId(`falha-sincronizacao-${activeBase.id}`)).not.toBeInTheDocument();
+  });
+
+  it('base sincronizada em dia: provedor e pasta, sem linha de falha', () => {
+    const base = syncedBase('s1', { lastCompletedAt: '2026-09-26T10:00:00Z' });
+    renderTable([base]);
+
+    expect(originOf('s1')).toHaveTextContent('Google Drive');
+    expect(originOf('s1')).toHaveTextContent('FAQ Suporte');
+    expect(originOf('s1')).not.toHaveTextContent('Manual');
+    expect(screen.queryByTestId('falha-sincronizacao-s1')).not.toBeInTheDocument();
+  });
+
+  it('base sincronizada falhando: linha de falha com data e hora, na cor de falha', () => {
+    renderTable([
+      syncedBase('s2', {
+        failingSince: FAILING_SINCE,
+        lastError: { code: 'access-denied', detail: null },
+      }),
+    ]);
+
+    const line = screen.getByTestId('falha-sincronizacao-s2');
+    expect(line).toHaveTextContent(
+      `Sincronização falhando desde ${formatSyncInstant(FAILING_SINCE)}`,
+    );
+    expect(within(line).getByText(/Sincronização falhando desde/)).toHaveStyle({
+      color: `var(--mantine-color-${statusPresentation('Failed').color}-text)`,
+    });
+  });
+
+  it('nunca sincronizou não tem linha de falha', () => {
+    renderTable([syncedBase('s3')]);
+    expect(screen.queryByTestId('falha-sincronizacao-s3')).not.toBeInTheDocument();
+  });
+
+  it('não acrescenta coluna', () => {
+    renderTable([syncedBase('s4')]);
+    expect(screen.getAllByRole('columnheader')).toHaveLength(5);
   });
 });

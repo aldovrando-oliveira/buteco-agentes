@@ -52,6 +52,7 @@ function kb(overrides: Partial<KnowledgeBase>): KnowledgeBase {
     updatedAt: '2026-10-03T00:00:00Z',
     contentMode: 'Manual',
     syncSource: null,
+    syncState: null,
     ...overrides,
   };
 }
@@ -66,6 +67,13 @@ const rhBase = kb({
     folderId: 'f-rh',
     folderName: 'Políticas RH',
     folderUrl: 'https://x',
+  },
+  syncState: {
+    lastCompletedAt: null,
+    lastFinishedAt: null,
+    failingSince: null,
+    lastError: null,
+    ignoredFiles: null,
   },
 });
 

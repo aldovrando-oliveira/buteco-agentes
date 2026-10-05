@@ -30,6 +30,7 @@ import {
   summaryFor,
   type StatusFilter,
 } from '../utils/indexingSummary';
+import { isSyncFailing } from '../utils/syncState';
 import type { KnowledgeBase, KnowledgeBaseIndexingSummary } from '../types/knowledgeBase';
 
 // QUATRO opções, e a quarta nasceu agora. Até a etapa 5a-1 eram três, e a razão
@@ -57,7 +58,14 @@ function matchesStatus(
     case STATUS_FAILED:
       // Inclui base inativa com falha: desativar impede o uso pelo agente, não a
       // manutenção do conteúdo, e é justamente a linha que pede atenção.
-      return hasFailure(summaryFor(summary, knowledgeBase.id));
+      //
+      // Falha de indexação OU sincronização falhando (`failingSince`, o mesmo
+      // predicado do card de origem e da linha da listagem;
+      // frontend-detalhe-base-sincronizada, D6). Sem o resumo, este ramo nem
+      // roda: `effectiveStatusFilter` cai para `todas`, MESMO havendo
+      // sincronização falhando — filtrar só por ela esconderia em silêncio as
+      // falhas de indexação.
+      return hasFailure(summaryFor(summary, knowledgeBase.id)) || isSyncFailing(knowledgeBase);
     default:
       return true;
   }

@@ -1890,8 +1890,8 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **vinte e cinco**, achadas em nove etapas diferentes (a décima quinta, da #99,
-e as dez da #106 estão no fim da lista). A décima quarta vem primeiro
+São **trinta e sete**, achadas em dez etapas diferentes (a décima quinta, da #99,
+as dez da #106 e as doze da #107 estão no fim da lista). A décima quarta vem primeiro
 porque é de **tipo novo** e muda o critério de detecção da lista inteira; depois
 a oitava, que também era de tipo novo quando entrou; depois as duas da 5c, depois
 as três da 5a-3, depois as duas da 5a-2, que **corrigiram duas das cinco
@@ -2185,6 +2185,32 @@ porquê de cada uma, está na D6 do `design.md` da change; aqui, o que cada uma 
 - **C9, o manual continua igual:** a nota de documentos mantém o `Paper` com borda.
 - **C10, achada na conferência:** a orientação "compartilhe e recarregue" saiu do
   fim da lista rolável para uma faixa fixa com o botão "Recarregar".
+
+**Da vigésima sexta à trigésima sétima, da #107 (`frontend-detalhe-base-sincronizada`,
+04/10/2026), do mesmo canvas, pranchas 1, 4a e 4b.** A tabela inteira está na D8 do
+`design.md` da change; aqui, o que cada uma é:
+
+- **C1–C2, regra que o painel já tem:** "indexando · na fila" vira "em andamento" (o
+  resumo não separa os dois), e a coluna "Consultada por" mostra a lista inteira, sem
+  "+5".
+- **C3, data sem ano:** a linha de falha da listagem leva o ano, pela mesma função do
+  detalhe.
+- **C4–C5, fora do escopo:** sem "Mais N documentos" (a rota não pagina) e sem a aba
+  Histórico (#101).
+- **C6, a garantia reescrita:** "Nenhum documento foi excluído" virou "Nenhum documento
+  saiu da base". A varredura que proíbe `exclu`, `remov` e `apag` existe para a tela não
+  mandar excluir a base (#136); aprovado pelo dono, e a #136 revê a regra com o botão.
+- **C7, paleta só do claro (convenção 16):** o alerta de falha é o `Alert` do Mantine,
+  sem a borda vermelha cravada no card.
+- **C8–C9, motivos e códigos:** os dois motivos e o único alerta desenhados viram um
+  texto por código (doze de arquivo, dez de base, quatro do pedido).
+- **C10, estados não desenhados:** nunca sincronizou, falhando sem nunca ter concluído,
+  solicitada, concluída, terminada com falha, sem resultado no limite, erro do pedido,
+  botão indisponível, ignorados nulos e vazios, documentos vazios.
+- **C11, rótulo que afirmaria uma sincronização inexistente:** com a base falhando e
+  nenhuma conclusão, o nome é "nome no cadastro".
+- **C12, provedor pelo mapa local:** "Abrir no {provedor}", e "Abrir a pasta" para
+  provedor desconhecido.
 
 **Para a 5b, o que já está pronto — e o que a 5a-1 já entregou:**
 
@@ -15404,3 +15430,58 @@ guardas só ficaram confiáveis pela segunda perna:**
 - **Deploy com migration**, pelo runbook de redeploy (`stop inbox` → `migrator` →
   `up`). O rollback mantém a coluna; linha reivindicada e ainda em `Dispatching` no
   momento do rollback volta a ficar órfã (Migration Plan do `design.md`).
+
+## `frontend-detalhe-base-sincronizada` — detalhe, listagem e filtro de base sincronizada (#107)
+
+**Change proposta e revisada em 04/10/2026, implementada em 04/10/2026, validada pelo
+dono, sincronizada e arquivada em 05/10/2026
+(`openspec/changes/archive/2026-10-05-frontend-detalhe-base-sincronizada/`).** A #107 vai
+para `In review` com a abertura do PR. Branch
+`feat/107-detalhe-base-sincronizada`, criada sem upstream de `737ec2c`, num worktree
+próprio, e atualizada com a `main` em `aff581e` (merges da #138, PR #149, e da #47, PR
+#150), sem conflito de código. **Validação manual (convenção 14) feita pelo dono em 05/10/2026**, sem ajuste pedido, numa pilha local com `apps/api`, `apps/connectors` (service account de validação), `apps/workers` (gateway de embedding) e o painel deste worktree. Specs sincronizadas: a capability nova
+`knowledge-base-sync-state-ui`; em `knowledge-base-catalog-ui`, o requisito novo "Origem
+e falha de sincronização na listagem de bases" e "Busca e filtro por estado na listagem
+de bases" modificado; em `knowledge-document-catalog-ui`, o requisito novo "Documentos
+somente leitura em base sincronizada" e "Listagem de documentos no detalhe da base"
+modificado.
+
+### O que entrou
+
+No `apps/frontend`: no detalhe de base sincronizada, o card "Origem — pasta
+sincronizada" com o estado da sincronização em quatro estados ("nunca sincronizou" em
+tom neutro), o alerta de falha com o texto por código e a garantia de que nenhum
+documento saiu da base, documentos somente leitura (sem adicionar, atualizar e excluir;
+"Reindexar" continua) e a lista de arquivos ignorados (nula e vazia com textos
+diferentes). "Sincronizar agora" pelo cliente da #106, com consulta periódica
+condicional de 4 s sobre `lastFinishedAt`, linha de base relida antes do pedido e
+limite de 5 minutos. Na listagem, a linha de origem e a de falha de sincronização, e o
+filtro "Com falha" passa a incluir sincronização falhando. Nenhuma linha em outro app.
+
+### O que a implementação mediu
+
+- **O limite do acompanhamento é necessário, e não só prudência.** O ciclo não grava
+  resultado com base `404` no meio do ciclo, com o `apps/api` fora do ar e em exceção
+  inesperada; o risco da #105 citava só o primeiro.
+- **Verde de sucesso a 3,89:1 no claro.** `--mantine-color-green-text` é o tom 6;
+  entrou `--buteco-ok-text` (tom 9 no claro, 4 no escuro), achado da conferência.
+- **Suíte do frontend:** 1580/1580 na baseline em `737ec2c`, **1685/1685** no fim,
+  +105 testes em 5 arquivos novos e 20 alterados. `format:check` com a mesma lista de
+  52 arquivos da baseline.
+- **Conferência visual:** duas rodadas de 64 capturas (16 estados × 2 esquemas × 2
+  larguras), respostas montadas pelo CDP; dois achados na primeira, nenhum na segunda.
+
+### Guardas contra o defeito real (convenção 15)
+
+Garantia com "excluído", texto de `rate-limited` falando de acesso, consulta periódica
+ignorando o pedido ou sem parar, "Adicionar documento" de volta em base sincronizada,
+conclusão no `202`, limite sem temporizador e filtro sem a sincronização: cada um
+aplicado, visto reprovando o teste dele, e desfeito (`tasks.md`). Um deles achou guarda
+no lugar errado: a negativa de `rate-limited` vinha depois de uma igualdade e nunca
+rodava.
+
+### O que ficou de fora, e é decisão
+
+- Histórico (#101), modal de documento (#131), exclusão de base (#136).
+- O contraste de 4,14:1 do texto `dimmed` na faixa de cabeçalho dos cards, anterior a
+  esta change: **#148**.

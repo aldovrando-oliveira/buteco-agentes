@@ -1,0 +1,3978 @@
+{
+  "listagem_claro_1440": {
+    "file": "listagem_claro_1440",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": [
+        437,
+        106,
+        272,
+        248,
+        118
+      ],
+      "listagemLinhas": [
+        {
+          "x": 241,
+          "y": 156,
+          "w": 1182,
+          "h": 74
+        },
+        {
+          "x": 241,
+          "y": 230,
+          "w": 1182,
+          "h": 74
+        },
+        {
+          "x": 241,
+          "y": 303,
+          "w": 1182,
+          "h": 92
+        },
+        {
+          "x": 241,
+          "y": 396,
+          "w": 1182,
+          "h": 73
+        }
+      ],
+      "origemLinhas": [
+        {
+          "x": 251,
+          "y": 207,
+          "w": 417,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 281,
+          "w": 417,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 354,
+          "w": 417,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 447,
+          "w": 417,
+          "h": 15
+        }
+      ],
+      "falhaLinhas": [
+        {
+          "x": 251,
+          "y": 373,
+          "w": 417,
+          "h": 15
+        }
+      ],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "listagem_claro_1860": {
+    "file": "listagem_claro_1860",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": [
+        593,
+        144,
+        368,
+        336,
+        160
+      ],
+      "listagemLinhas": [
+        {
+          "x": 241,
+          "y": 156,
+          "w": 1602,
+          "h": 74
+        },
+        {
+          "x": 241,
+          "y": 230,
+          "w": 1602,
+          "h": 74
+        },
+        {
+          "x": 241,
+          "y": 303,
+          "w": 1602,
+          "h": 92
+        },
+        {
+          "x": 241,
+          "y": 396,
+          "w": 1602,
+          "h": 73
+        }
+      ],
+      "origemLinhas": [
+        {
+          "x": 251,
+          "y": 207,
+          "w": 573,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 281,
+          "w": 573,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 354,
+          "w": 573,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 447,
+          "w": 573,
+          "h": 15
+        }
+      ],
+      "falhaLinhas": [
+        {
+          "x": 251,
+          "y": 373,
+          "w": 573,
+          "h": 15
+        }
+      ],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "listagem_escuro_1440": {
+    "file": "listagem_escuro_1440",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": [
+        437,
+        106,
+        272,
+        248,
+        118
+      ],
+      "listagemLinhas": [
+        {
+          "x": 241,
+          "y": 156,
+          "w": 1182,
+          "h": 74
+        },
+        {
+          "x": 241,
+          "y": 230,
+          "w": 1182,
+          "h": 74
+        },
+        {
+          "x": 241,
+          "y": 303,
+          "w": 1182,
+          "h": 92
+        },
+        {
+          "x": 241,
+          "y": 396,
+          "w": 1182,
+          "h": 73
+        }
+      ],
+      "origemLinhas": [
+        {
+          "x": 251,
+          "y": 207,
+          "w": 417,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 281,
+          "w": 417,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 354,
+          "w": 417,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 447,
+          "w": 417,
+          "h": 15
+        }
+      ],
+      "falhaLinhas": [
+        {
+          "x": 251,
+          "y": 373,
+          "w": 417,
+          "h": 15
+        }
+      ],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "listagem_escuro_1860": {
+    "file": "listagem_escuro_1860",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": [
+        593,
+        144,
+        368,
+        336,
+        160
+      ],
+      "listagemLinhas": [
+        {
+          "x": 241,
+          "y": 156,
+          "w": 1602,
+          "h": 74
+        },
+        {
+          "x": 241,
+          "y": 230,
+          "w": 1602,
+          "h": 74
+        },
+        {
+          "x": 241,
+          "y": 303,
+          "w": 1602,
+          "h": 92
+        },
+        {
+          "x": 241,
+          "y": 396,
+          "w": 1602,
+          "h": 73
+        }
+      ],
+      "origemLinhas": [
+        {
+          "x": 251,
+          "y": 207,
+          "w": 573,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 281,
+          "w": 573,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 354,
+          "w": 573,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 447,
+          "w": 573,
+          "h": 15
+        }
+      ],
+      "falhaLinhas": [
+        {
+          "x": 251,
+          "y": 373,
+          "w": 573,
+          "h": 15
+        }
+      ],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "listagem-com-falha_claro_1440": {
+    "file": "listagem-com-falha_claro_1440",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": [
+        437,
+        106,
+        272,
+        248,
+        118
+      ],
+      "listagemLinhas": [
+        {
+          "x": 241,
+          "y": 156,
+          "w": 1182,
+          "h": 92
+        },
+        {
+          "x": 241,
+          "y": 248,
+          "w": 1182,
+          "h": 73
+        }
+      ],
+      "origemLinhas": [
+        {
+          "x": 251,
+          "y": 207,
+          "w": 417,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 300,
+          "w": 417,
+          "h": 15
+        }
+      ],
+      "falhaLinhas": [
+        {
+          "x": 251,
+          "y": 226,
+          "w": 417,
+          "h": 15
+        }
+      ],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "listagem-com-falha_claro_1860": {
+    "file": "listagem-com-falha_claro_1860",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": [
+        593,
+        144,
+        368,
+        336,
+        160
+      ],
+      "listagemLinhas": [
+        {
+          "x": 241,
+          "y": 156,
+          "w": 1602,
+          "h": 92
+        },
+        {
+          "x": 241,
+          "y": 248,
+          "w": 1602,
+          "h": 73
+        }
+      ],
+      "origemLinhas": [
+        {
+          "x": 251,
+          "y": 207,
+          "w": 573,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 300,
+          "w": 573,
+          "h": 15
+        }
+      ],
+      "falhaLinhas": [
+        {
+          "x": 251,
+          "y": 226,
+          "w": 573,
+          "h": 15
+        }
+      ],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "listagem-com-falha_escuro_1440": {
+    "file": "listagem-com-falha_escuro_1440",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": [
+        437,
+        106,
+        272,
+        248,
+        118
+      ],
+      "listagemLinhas": [
+        {
+          "x": 241,
+          "y": 156,
+          "w": 1182,
+          "h": 92
+        },
+        {
+          "x": 241,
+          "y": 248,
+          "w": 1182,
+          "h": 73
+        }
+      ],
+      "origemLinhas": [
+        {
+          "x": 251,
+          "y": 207,
+          "w": 417,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 300,
+          "w": 417,
+          "h": 15
+        }
+      ],
+      "falhaLinhas": [
+        {
+          "x": 251,
+          "y": 226,
+          "w": 417,
+          "h": 15
+        }
+      ],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "listagem-com-falha_escuro_1860": {
+    "file": "listagem-com-falha_escuro_1860",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": [
+        593,
+        144,
+        368,
+        336,
+        160
+      ],
+      "listagemLinhas": [
+        {
+          "x": 241,
+          "y": 156,
+          "w": 1602,
+          "h": 92
+        },
+        {
+          "x": 241,
+          "y": 248,
+          "w": 1602,
+          "h": 73
+        }
+      ],
+      "origemLinhas": [
+        {
+          "x": 251,
+          "y": 207,
+          "w": 573,
+          "h": 15
+        },
+        {
+          "x": 251,
+          "y": 300,
+          "w": 573,
+          "h": 15
+        }
+      ],
+      "falhaLinhas": [
+        {
+          "x": 251,
+          "y": 226,
+          "w": 573,
+          "h": 15
+        }
+      ],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "em-dia_claro_1440": {
+    "file": "em-dia_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1068,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1126,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "em-dia_claro_1860": {
+    "file": "em-dia_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1068,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1109,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "em-dia_escuro_1440": {
+    "file": "em-dia_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1068,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1126,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "em-dia_escuro_1860": {
+    "file": "em-dia_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1068,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1109,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "sem-acesso_claro_1440": {
+    "file": "sem-acesso_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 264
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1167,
+        "w": 1184,
+        "h": 180
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1247,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1305,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "sem-acesso_claro_1860": {
+    "file": "sem-acesso_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 264
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1167,
+        "w": 1604,
+        "h": 163
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1247,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1288,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "sem-acesso_escuro_1440": {
+    "file": "sem-acesso_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 264
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1167,
+        "w": 1184,
+        "h": 180
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1247,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1305,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "sem-acesso_escuro_1860": {
+    "file": "sem-acesso_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 264
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1167,
+        "w": 1604,
+        "h": 163
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1247,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1288,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "nunca-sincronizou_claro_1440": {
+    "file": "nunca-sincronizou_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 137
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 71
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 71
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 71
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1040,
+        "w": 1184,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "nunca-sincronizou_claro_1860": {
+    "file": "nunca-sincronizou_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1604,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "nunca-sincronizou_escuro_1440": {
+    "file": "nunca-sincronizou_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 137
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 71
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 71
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 71
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1040,
+        "w": 1184,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "nunca-sincronizou_escuro_1860": {
+    "file": "nunca-sincronizou_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1604,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "falhando-sem-concluir_claro_1440": {
+    "file": "falhando-sem-concluir_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 264
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1167,
+        "w": 1184,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "falhando-sem-concluir_claro_1860": {
+    "file": "falhando-sem-concluir_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 264
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1167,
+        "w": 1604,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "falhando-sem-concluir_escuro_1440": {
+    "file": "falhando-sem-concluir_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 264
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1167,
+        "w": 1184,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "falhando-sem-concluir_escuro_1860": {
+    "file": "falhando-sem-concluir_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 264
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1167,
+        "w": 1604,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "rate-limited_claro_1440": {
+    "file": "rate-limited_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 241
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 101
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1144,
+        "w": 1184,
+        "h": 180
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1224,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1282,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "rate-limited_claro_1860": {
+    "file": "rate-limited_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 241
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 101
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1144,
+        "w": 1604,
+        "h": 163
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1224,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1265,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "rate-limited_escuro_1440": {
+    "file": "rate-limited_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 241
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 101
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1144,
+        "w": 1184,
+        "h": 180
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1224,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1282,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "rate-limited_escuro_1860": {
+    "file": "rate-limited_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 241
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 101
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1144,
+        "w": 1604,
+        "h": 163
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1224,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1265,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "ignorados-vazios_claro_1440": {
+    "file": "ignorados-vazios_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1184,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "ignorados-vazios_claro_1860": {
+    "file": "ignorados-vazios_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1604,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "ignorados-vazios_escuro_1440": {
+    "file": "ignorados-vazios_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1184,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "ignorados-vazios_escuro_1860": {
+    "file": "ignorados-vazios_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1027,
+        "w": 1604,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "documentos-vazios_claro_1440": {
+    "file": "documentos-vazios_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 649,
+        "w": 1184,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "documentos-vazios_claro_1860": {
+    "file": "documentos-vazios_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 649,
+        "w": 1604,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "documentos-vazios_escuro_1440": {
+    "file": "documentos-vazios_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 649,
+        "w": 1184,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "documentos-vazios_escuro_1860": {
+    "file": "documentos-vazios_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 124
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 649,
+        "w": 1604,
+        "h": 83
+      },
+      "ignoradosLinhas": [],
+      "documentosTh": null,
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "solicitada_claro_1440": {
+    "file": "solicitada_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 157
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1060,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1101,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1159,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Sincronização solicitada. Aguardando o resultado…",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 4,
+    "unmounted": []
+  },
+  "solicitada_claro_1860": {
+    "file": "solicitada_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 157
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1060,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1101,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1142,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Sincronização solicitada. Aguardando o resultado…",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 1,
+    "apiCalls": 5,
+    "unmounted": []
+  },
+  "solicitada_escuro_1440": {
+    "file": "solicitada_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 157
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1060,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1101,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1159,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Sincronização solicitada. Aguardando o resultado…",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 1,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "solicitada_escuro_1860": {
+    "file": "solicitada_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 157
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1060,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1101,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1142,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Sincronização solicitada. Aguardando o resultado…",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 4,
+    "unmounted": []
+  },
+  "concluida_claro_1440": {
+    "file": "concluida_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 157
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1060,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1101,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1159,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Sincronização concluída em 04/10/2026, 16:40.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 1,
+    "apiCalls": 9,
+    "unmounted": []
+  },
+  "concluida_claro_1860": {
+    "file": "concluida_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 157
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1060,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1101,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1142,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Sincronização concluída em 04/10/2026, 16:40.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 10,
+    "unmounted": []
+  },
+  "concluida_escuro_1440": {
+    "file": "concluida_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 157
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1060,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1101,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1159,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Sincronização concluída em 04/10/2026, 16:40.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 10,
+    "unmounted": []
+  },
+  "concluida_escuro_1860": {
+    "file": "concluida_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 157
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1060,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1101,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1142,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Sincronização concluída em 04/10/2026, 16:40.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 10,
+    "unmounted": []
+  },
+  "terminou-com-falha_claro_1440": {
+    "file": "terminou-com-falha_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 274
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 101
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1177,
+        "w": 1184,
+        "h": 180
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1257,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1315,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "A sincronização terminou com falha.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 10,
+    "unmounted": []
+  },
+  "terminou-com-falha_claro_1860": {
+    "file": "terminou-com-falha_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 274
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 101
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1177,
+        "w": 1604,
+        "h": 163
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1257,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1298,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "A sincronização terminou com falha.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 10,
+    "unmounted": []
+  },
+  "terminou-com-falha_escuro_1440": {
+    "file": "terminou-com-falha_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 274
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 101
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1177,
+        "w": 1184,
+        "h": 180
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1257,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1315,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "A sincronização terminou com falha.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 10,
+    "unmounted": []
+  },
+  "terminou-com-falha_escuro_1860": {
+    "file": "terminou-com-falha_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 274
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 101
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1177,
+        "w": 1604,
+        "h": 163
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1257,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1298,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "A sincronização terminou com falha.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 11,
+    "unmounted": []
+  },
+  "sem-resultado_claro_1440": {
+    "file": "sem-resultado_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 192
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1095,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1136,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1193,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Nenhum resultado foi gravado em 5 minutos. A sincronização pode continuar rodando, ou ter terminado sem gravar resultado; o estado acima é o último gravado.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 5,
+    "unmounted": []
+  },
+  "sem-resultado_claro_1860": {
+    "file": "sem-resultado_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 192
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1095,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1136,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1176,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Nenhum resultado foi gravado em 5 minutos. A sincronização pode continuar rodando, ou ter terminado sem gravar resultado; o estado acima é o último gravado.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 1,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "sem-resultado_escuro_1440": {
+    "file": "sem-resultado_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 192
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1095,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1136,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1193,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Nenhum resultado foi gravado em 5 minutos. A sincronização pode continuar rodando, ou ter terminado sem gravar resultado; o estado acima é o último gravado.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 5,
+    "unmounted": []
+  },
+  "sem-resultado_escuro_1860": {
+    "file": "sem-resultado_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 192
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1095,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1136,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1176,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Nenhum resultado foi gravado em 5 minutos. A sincronização pode continuar rodando, ou ter terminado sem gravar resultado; o estado acima é o último gravado.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 1,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "fora-do-ar_claro_1440": {
+    "file": "fora-do-ar_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 192
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1095,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1136,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1193,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Não foi possível falar com o serviço de conectores. Ele pode estar fora do ar; tente de novo em instantes.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 5,
+    "unmounted": []
+  },
+  "fora-do-ar_claro_1860": {
+    "file": "fora-do-ar_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 192
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1095,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1136,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1176,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Não foi possível falar com o serviço de conectores. Ele pode estar fora do ar; tente de novo em instantes.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 1,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "fora-do-ar_escuro_1440": {
+    "file": "fora-do-ar_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 192
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1095,
+        "w": 1184,
+        "h": 141
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1136,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1193,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Não foi possível falar com o serviço de conectores. Ele pode estar fora do ar; tente de novo em instantes.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 1,
+    "apiCalls": 4,
+    "unmounted": []
+  },
+  "fora-do-ar_escuro_1860": {
+    "file": "fora-do-ar_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 192
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": null,
+      "ignorados": {
+        "x": 240,
+        "y": 1095,
+        "w": 1604,
+        "h": 125
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1136,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1176,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": "Não foi possível falar com o serviço de conectores. Ele pode estar fora do ar; tente de novo em instantes.",
+      "horizontalScroll": false
+    },
+    "connectorCalls": 2,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "indisponivel_claro_1440": {
+    "file": "indisponivel_claro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 295
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1198,
+        "w": 1184,
+        "h": 180
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1278,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1335,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "indisponivel_claro_1860": {
+    "file": "indisponivel_claro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 295
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1198,
+        "w": 1604,
+        "h": 163
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1278,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1319,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "indisponivel_escuro_1440": {
+    "file": "indisponivel_escuro_1440",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1184,
+        "h": 295
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 647,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        },
+        {
+          "x": 1037,
+          "y": 263,
+          "w": 370,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1150,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1198,
+        "w": 1184,
+        "h": 180
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1278,
+          "w": 1182,
+          "h": 58
+        },
+        {
+          "x": 241,
+          "y": 1335,
+          "w": 1182,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        581,
+        280,
+        321
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "indisponivel_escuro_1860": {
+    "file": "indisponivel_escuro_1860",
+    "measures": {
+      "origem": {
+        "x": 240,
+        "y": 210,
+        "w": 1604,
+        "h": 295
+      },
+      "origemColunas": [
+        {
+          "x": 257,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 787,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        },
+        {
+          "x": 1317,
+          "y": 263,
+          "w": 510,
+          "h": 58
+        }
+      ],
+      "alerta": {
+        "x": 257,
+        "y": 338,
+        "w": 1570,
+        "h": 124
+      },
+      "ignorados": {
+        "x": 240,
+        "y": 1198,
+        "w": 1604,
+        "h": 163
+      },
+      "ignoradosLinhas": [
+        {
+          "x": 241,
+          "y": 1278,
+          "w": 1602,
+          "h": 41
+        },
+        {
+          "x": 241,
+          "y": 1319,
+          "w": 1602,
+          "h": 42
+        }
+      ],
+      "documentosTh": [
+        788,
+        379,
+        435
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "manual_claro_1440": {
+    "file": "manual_claro_1440",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        441,
+        212,
+        186,
+        342
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  },
+  "manual_claro_1860": {
+    "file": "manual_claro_1860",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        598,
+        288,
+        252,
+        463
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "manual_escuro_1440": {
+    "file": "manual_escuro_1440",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        441,
+        212,
+        186,
+        342
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 3,
+    "unmounted": []
+  },
+  "manual_escuro_1860": {
+    "file": "manual_escuro_1860",
+    "measures": {
+      "origem": null,
+      "origemColunas": [],
+      "alerta": null,
+      "ignorados": null,
+      "ignoradosLinhas": [],
+      "documentosTh": [
+        598,
+        288,
+        252,
+        463
+      ],
+      "listagemTh": null,
+      "listagemLinhas": null,
+      "origemLinhas": [],
+      "falhaLinhas": [],
+      "status": null,
+      "horizontalScroll": false
+    },
+    "connectorCalls": 0,
+    "apiCalls": 6,
+    "unmounted": []
+  }
+}

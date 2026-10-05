@@ -9,14 +9,24 @@ import { ApiError } from '../api/knowledgeBasesApi';
 //   - "create": o `POST /knowledge-bases` do apps/api, que repassa o `code` do
 //     apps/connectors como veio (404 e 422 viram 422) e acrescenta os próprios
 //     (knowledge-sync-folder-validation, #104). Todo texto deste contexto termina
-//     em "Nenhuma base foi criada.".
+//     em "Nenhuma base foi criada.";
+//   - "sync-request": o "Sincronizar agora" do detalhe
+//     (`POST /connectors/knowledge-bases/{id}/sync`, knowledge-sync-cycle), com os
+//     quatro códigos próprios da rota e as linhas de rede, 401 e 403 daqui
+//     (frontend-detalhe-base-sincronizada, D4).
+//
+// O código GRAVADO no estado da base (`syncState.lastError`, `ignoredFiles`) não
+// passa por aqui: ele não é erro de requisição, não tem status, e o remédio é
+// outro (a pasta não pode ser trocada, a próxima tentativa é automática). Ele
+// fica em syncStateMessages.ts, que reaproveita daqui as frases de
+// `sharedCodeSentence`.
 //
 // O texto vem do `code`, NUNCA do `title` (texto do servidor, que muda sem a tela
 // saber). Do `detail`, só os dados que a tabela declara: o e-mail em
 // `access-denied`, o status em `connectors-error` e o motivo em `provider-error`.
 // O nome da base em `folder-in-use` vem da extensão `knowledgeBaseName`.
 
-export type ConnectorErrorContext = 'navigation' | 'create';
+export type ConnectorErrorContext = 'navigation' | 'create' | 'sync-request';
 
 // Nome de exibição dos provedores conhecidos. A rota devolve só `key` e
 // `accountEmail`; provedor que o painel não conhece aparece pela própria chave,
@@ -68,25 +78,46 @@ function normalize(error: unknown): NormalizedError {
   return { network: false };
 }
 
-function codeMessage(
-  { status, code, detail, knowledgeBaseName }: NormalizedError,
-  providerKey?: string | null,
-): string {
+// As frases que valem igual no erro de requisição e no estado gravado da base
+// (syncStateMessages.ts). O que muda entre os dois é o remédio, e ele fica com
+// quem monta a mensagem. `null` para código sem frase compartilhada.
+export function sharedCodeSentence(
+  code: string,
+  detail: string | null | undefined,
+  providerKey: string | null | undefined,
+): string | null {
   switch (code) {
     case 'provider-not-configured':
       return `O provedor ${providerKey ? providerLabel(providerKey) : 'escolhido'} não está configurado no serviço de conectores desta instalação.`;
     case 'access-denied':
-      return `A conta ${detail ?? 'de serviço'} não tem acesso a esta pasta. Compartilhe a pasta com essa conta como Leitor e tente de novo.`;
-    case 'not-a-folder':
-      return 'O item escolhido não é uma pasta. Escolha uma pasta.';
-    case 'folder-trashed':
-      return 'Esta pasta está na lixeira do Drive. Restaure a pasta ou escolha outra.';
+      return `A conta ${detail ?? 'de serviço'} não tem acesso a esta pasta.`;
     case 'api-not-configured':
       return 'A Drive API não está ativada no projeto da conta de serviço. É configuração da instalação, não da pasta.';
     case 'provider-auth-failed':
       return 'O Google recusou a credencial da conta de serviço. É configuração da instalação, não da pasta.';
     case 'provider-error':
       return detail ? `O Google recusou a operação (${detail}).` : 'O Google recusou a operação.';
+    default:
+      return null;
+  }
+}
+
+function codeMessage(
+  { status, code, detail, knowledgeBaseName }: NormalizedError,
+  providerKey?: string | null,
+): string {
+  switch (code) {
+    case 'provider-not-configured':
+    case 'api-not-configured':
+    case 'provider-auth-failed':
+    case 'provider-error':
+      return sharedCodeSentence(code, detail, providerKey) as string;
+    case 'access-denied':
+      return `${sharedCodeSentence(code, detail, providerKey)} Compartilhe a pasta com essa conta como Leitor e tente de novo.`;
+    case 'not-a-folder':
+      return 'O item escolhido não é uma pasta. Escolha uma pasta.';
+    case 'folder-trashed':
+      return 'Esta pasta está na lixeira do Drive. Restaure a pasta ou escolha outra.';
     // Passageira, e sem falar de acesso, para não ser lida como problema de
     // permissão (comentário da #105 na #107). No cadastro, a nova tentativa é
     // manual; "a próxima tentativa é automática" é do ciclo, e fica para a #107.
@@ -106,6 +137,19 @@ function codeMessage(
       return 'O servidor não conseguiu falar com o serviço de conectores para validar a pasta. Tente de novo em instantes.';
     case 'connectors-error':
       return `O serviço de conectores respondeu de forma inesperada ao validar a pasta (status ${detail ?? status ?? 'desconhecido'}).`;
+    // Os quatro códigos do "Sincronizar agora" (knowledge-sync-cycle, D9 da
+    // ciclo-de-sincronizacao). `sync-api-error` aqui é a confirmação da base que
+    // falhou ANTES de qualquer ciclo; o mesmo código gravado em `lastError` é o
+    // ciclo que recebeu resposta fora do contrato, e tem outro texto
+    // (syncStateMessages.ts).
+    case 'knowledge-base-not-found':
+      return 'O serviço de conectores não encontrou esta base entre as bases sincronizadas do servidor. É configuração da instalação.';
+    case 'sync-not-configured':
+      return 'O serviço de conectores desta instalação não está ligado ao servidor, e não sincroniza nenhuma base. É configuração da instalação.';
+    case 'sync-api-unavailable':
+      return 'O serviço de conectores não conseguiu falar com o servidor para confirmar a base. Tente de novo em instantes.';
+    case 'sync-api-error':
+      return 'O servidor respondeu de forma inesperada ao serviço de conectores. Tente de novo em instantes; se continuar, é configuração da instalação.';
   }
 
   if (code) {

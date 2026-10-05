@@ -37,6 +37,13 @@ const rhBase: KnowledgeBase = {
     folderName: 'Políticas RH',
     folderUrl: 'https://x',
   },
+  syncState: {
+    lastCompletedAt: null,
+    lastFinishedAt: null,
+    failingSince: null,
+    lastError: null,
+    ignoredFiles: null,
+  },
 };
 
 function renderModal(props: Partial<FolderPickerModalProps> = {}) {

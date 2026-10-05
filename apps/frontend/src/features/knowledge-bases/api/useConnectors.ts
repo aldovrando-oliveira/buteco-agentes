@@ -1,5 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
-import { listConnectorFolders, listConnectorProviders } from './connectorsApi';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import {
+  listConnectorFolders,
+  listConnectorProviders,
+  requestKnowledgeBaseSync,
+} from './connectorsApi';
 
 // `retry: false` nas duas consultas, e não nos defaults: o QueryClient do app
 // (app/queryClient.ts) não tem `defaultOptions`, então valeriam três novas
@@ -29,5 +33,14 @@ export function useConnectorFoldersQuery(
     queryFn: () => listConnectorFolders(providerKey as string, parentId),
     enabled: options.enabled && providerKey !== null,
     retry: false,
+  });
+}
+
+// "Sincronizar agora". Sem `retry`: mutações não repetem por padrão, e uma nova
+// tentativa automática dispararia um segundo pedido sem o operador saber. O
+// acompanhamento do ciclo é da página (frontend-detalhe-base-sincronizada, D5).
+export function useRequestKnowledgeBaseSyncMutation() {
+  return useMutation({
+    mutationFn: (knowledgeBaseId: string) => requestKnowledgeBaseSync(knowledgeBaseId),
   });
 }

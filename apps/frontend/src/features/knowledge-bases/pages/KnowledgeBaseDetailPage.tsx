@@ -1,15 +1,27 @@
 import { Alert, Badge, Button, Group, Loader, Modal, Stack, Tabs, Text } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { DetailHeader } from '../../../components/layout/DetailHeader';
 import { useAgentsQuery } from '../../agents/api/useAgents';
 import {
+  indexingSummaryQueryKey,
   useActivateKnowledgeBaseMutation,
   useDeactivateKnowledgeBaseMutation,
   useKnowledgeBaseQuery,
 } from '../api/useKnowledgeBases';
+import { connectorsBaseUrl } from '../api/connectorsApi';
+import { useRequestKnowledgeBaseSyncMutation } from '../api/useConnectors';
+import {
+  KnowledgeBaseSyncOriginCard,
+  type SyncRequestView,
+} from '../components/KnowledgeBaseSyncOriginCard';
+import { KnowledgeBaseIgnoredFilesCard } from '../components/KnowledgeBaseIgnoredFilesCard';
+import { connectorErrorMessage } from '../utils/connectorErrors';
+import { SYNC_WAIT_LIMIT_MS, isSyncFailing, type SyncRequest } from '../utils/syncState';
+import type { KnowledgeBase } from '../types/knowledgeBase';
 import { KnowledgeBaseDescriptionCard } from '../components/KnowledgeBaseDescriptionCard';
 import { KnowledgeDocumentsCard } from '../components/KnowledgeDocumentsCard';
 import { KnowledgeDocumentModal } from '../components/KnowledgeDocumentModal';
@@ -18,6 +30,7 @@ import { KnowledgeIndexDiagnosticsTab } from '../components/KnowledgeIndexDiagno
 import { ApiError } from '../api/knowledgeBasesApi';
 import { useKnowledgeIndexDiagnosticsQuery } from '../api/useKnowledgeIndex';
 import {
+  documentsQueryKey,
   useCreateKnowledgeDocumentMutation,
   useDeleteKnowledgeDocumentMutation,
   useKnowledgeDocumentQuery,
@@ -63,11 +76,106 @@ function DocumentsTabCounter({ documents }: { documents: KnowledgeDocumentSummar
   );
 }
 
+// O pedido de "Sincronizar agora" desta visita (design.md da change
+// frontend-detalhe-base-sincronizada, D5). `requested` e `timed-out` guardam o
+// pedido; a fase exibida ("aguardando" ou "concluída") é DERIVADA no render da
+// comparação de `lastFinishedAt` com a linha de base, e não guardada: assim a
+// tela nunca diz que terminou antes de o apps/api gravar um resultado.
+type SyncRequestState =
+  | { status: 'idle' }
+  | { status: 'starting' }
+  | { status: 'requested'; request: SyncRequest }
+  | { status: 'timed-out'; request: SyncRequest }
+  | { status: 'error'; message: string };
+
+function syncRequestView(
+  state: SyncRequestState,
+  data: KnowledgeBase | undefined,
+): SyncRequestView {
+  switch (state.status) {
+    case 'requested':
+    case 'timed-out': {
+      // A mudança vence o limite: um resultado gravado nunca é lido como "sem
+      // resultado" (syncRequestPhase, utils/syncState.ts).
+      const current = data?.syncState?.lastFinishedAt;
+      if (current !== undefined && current !== state.request.baseline) {
+        return { phase: 'finished' };
+      }
+      return { phase: state.status === 'requested' ? 'waiting' : 'timed-out' };
+    }
+    case 'error':
+      return { phase: 'error', message: state.message };
+    default:
+      return { phase: state.status };
+  }
+}
+
 export function KnowledgeBaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = parseTab(searchParams.get('tab'));
-  const { data, isLoading, error } = useKnowledgeBaseQuery(id!);
+  const queryClient = useQueryClient();
+  const [syncRequestState, setSyncRequestState] = useState<SyncRequestState>({ status: 'idle' });
+  // A consulta da base só se repete com um pedido em espera; sem ele, é a de
+  // sempre (useKnowledgeBaseQuery, convenção 20).
+  const { data, isLoading, error, refetch } = useKnowledgeBaseQuery(id!, {
+    syncRequest: syncRequestState.status === 'requested' ? syncRequestState.request : null,
+  });
+  const syncMutation = useRequestKnowledgeBaseSyncMutation();
+  // `null` sem VITE_CONNECTORS_BASE_URL no build: o botão fica indisponível e
+  // nada sai para o apps/connectors (D5; frontend-cadastro-base-sincronizada, D1).
+  const syncAvailable = connectorsBaseUrl() !== null;
+  const requestView = syncRequestView(syncRequestState, data);
+  // Muda uma vez por ciclo concluído: é a chave do efeito que refaz os documentos.
+  const finishedAt =
+    requestView.phase === 'finished' ? (data?.syncState?.lastFinishedAt ?? null) : null;
+
+  // O ciclo terminado pode ter criado, atualizado ou tirado documentos: refaz a
+  // listagem e o resumo de indexação. Efeito sem estado: só invalida o cache.
+  useEffect(() => {
+    if (finishedAt === null) return;
+    void queryClient.invalidateQueries({ queryKey: documentsQueryKey(id!) });
+    void queryClient.invalidateQueries({ queryKey: indexingSummaryQueryKey });
+  }, [finishedAt, id, queryClient]);
+
+  // O limite de 5 minutos (D5). A consulta periódica para sozinha no limite
+  // (`syncWaitInterval`), mas uma resposta igual à anterior não re-renderiza a
+  // página; este temporizador é o que leva a tela ao "sem resultado". O callback
+  // lê o cache, e só declara o limite se `lastFinishedAt` continuar na linha de
+  // base.
+  const pendingRequest = syncRequestState.status === 'requested' ? syncRequestState.request : null;
+  useEffect(() => {
+    if (pendingRequest === null) return;
+    const timer = setTimeout(
+      () => {
+        const current = queryClient.getQueryData<KnowledgeBase>(['knowledge-bases', id]);
+        if (current?.syncState?.lastFinishedAt === pendingRequest.baseline) {
+          setSyncRequestState({ status: 'timed-out', request: pendingRequest });
+        }
+      },
+      Math.max(0, pendingRequest.requestedAt + SYNC_WAIT_LIMIT_MS - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [pendingRequest, id, queryClient]);
+
+  // RELÊ A BASE ANTES DO PEDIDO, e guarda o `lastFinishedAt` dela como linha de
+  // base: com o detalhe aberto há minutos, uma rodada periódica pode ter
+  // terminado desde a última leitura, e o fim dela seria lido como o do pedido.
+  const handleSync = async () => {
+    setSyncRequestState({ status: 'starting' });
+    const fresh = await refetch();
+    const baseline = (fresh.data ?? data)?.syncState?.lastFinishedAt ?? null;
+    try {
+      await syncMutation.mutateAsync(id!);
+    } catch (caught) {
+      setSyncRequestState({
+        status: 'error',
+        message: connectorErrorMessage(caught, 'sync-request'),
+      });
+      return;
+    }
+    setSyncRequestState({ status: 'requested', request: { baseline, requestedAt: Date.now() } });
+  };
   // Só para derivar quem consulta esta base. Uma falha aqui não impede o
   // detalhe de carregar (design.md, D2).
   const agentsQuery = useAgentsQuery();
@@ -226,6 +334,8 @@ export function KnowledgeBaseDetailPage() {
     return <Alert color="red">Não foi possível carregar a base de conhecimento.</Alert>;
   }
 
+  const synced = data.contentMode === 'Synced';
+
   return (
     <Stack gap="md">
       {/* `description` fica de fora de propósito: o subtítulo do cabeçalho a
@@ -269,6 +379,17 @@ export function KnowledgeBaseDetailPage() {
           ao abrir o diagnóstico, porque o painel inativo é desmontado. */}
       <KnowledgeBaseDescriptionCard description={data.description} />
 
+      {/* Só em base sincronizada, entre a descrição e os agentes (prancha 4a). */}
+      {data.contentMode === 'Synced' && data.syncSource && data.syncState && (
+        <KnowledgeBaseSyncOriginCard
+          syncSource={data.syncSource}
+          syncState={data.syncState}
+          syncAvailable={syncAvailable}
+          request={requestView}
+          onSync={() => void handleSync()}
+        />
+      )}
+
       <KnowledgeBaseAgentsCard
         knowledgeBaseId={data.id}
         agents={agentsQuery.data}
@@ -303,16 +424,39 @@ export function KnowledgeBaseDetailPage() {
         </Tabs.List>
 
         <Tabs.Panel value={DOCUMENTS_TAB} pt="md">
-          <KnowledgeDocumentsCard
-            documents={documentsQuery.data}
-            isLoading={documentsQuery.isLoading}
-            error={documentsQuery.error}
-            onAdd={handleAddDocument}
-            onUpdate={handleUpdateDocument}
-            onDelete={setDocumentToDelete}
-            onReindex={handleReindexDocument}
-            reindexingId={reindexDocument.isPending ? reindexDocument.variables : null}
-          />
+          {/* Base sincronizada: somente leitura, sem os três callbacks de
+              edição (D1). Reindexar continua. */}
+          {synced ? (
+            <Stack gap="md">
+              <KnowledgeDocumentsCard
+                documents={documentsQuery.data}
+                isLoading={documentsQuery.isLoading}
+                error={documentsQuery.error}
+                readOnly
+                onReindex={handleReindexDocument}
+                reindexingId={reindexDocument.isPending ? reindexDocument.variables : null}
+              />
+              {data.syncState && (
+                <KnowledgeBaseIgnoredFilesCard
+                  ignoredFiles={data.syncState.ignoredFiles}
+                  lastCompletedAt={data.syncState.lastCompletedAt}
+                  failing={isSyncFailing(data)}
+                />
+              )}
+            </Stack>
+          ) : (
+            <KnowledgeDocumentsCard
+              documents={documentsQuery.data}
+              isLoading={documentsQuery.isLoading}
+              error={documentsQuery.error}
+              readOnly={false}
+              onAdd={handleAddDocument}
+              onUpdate={handleUpdateDocument}
+              onDelete={setDocumentToDelete}
+              onReindex={handleReindexDocument}
+              reindexingId={reindexDocument.isPending ? reindexDocument.variables : null}
+            />
+          )}
         </Tabs.Panel>
 
         <Tabs.Panel value={DIAGNOSTICS_TAB} pt="md">
@@ -327,54 +471,60 @@ export function KnowledgeBaseDetailPage() {
         </Tabs.Panel>
       </Tabs>
 
-      <KnowledgeDocumentModal
-        opened={documentModalOpened}
-        document={editingDocumentId ? (editingDocumentQuery.data ?? null) : null}
-        loadingDocument={editingDocumentId !== null && editingDocumentQuery.isLoading}
-        onClose={() => {
-          setDocumentModalOpened(false);
-          setEditingDocumentId(null);
-        }}
-        onCreate={(input) => createDocument.mutateAsync(input)}
-        onUpdate={(input) => updateDocument.mutateAsync({ id: editingDocumentId!, input })}
-      />
+      {/* O modal de documento e a confirmação de exclusão só existem em base
+          manual: em base sincronizada o apps/api recusa as duas escritas (D1). */}
+      {!synced && (
+        <KnowledgeDocumentModal
+          opened={documentModalOpened}
+          document={editingDocumentId ? (editingDocumentQuery.data ?? null) : null}
+          loadingDocument={editingDocumentId !== null && editingDocumentQuery.isLoading}
+          onClose={() => {
+            setDocumentModalOpened(false);
+            setEditingDocumentId(null);
+          }}
+          onCreate={(input) => createDocument.mutateAsync(input)}
+          onUpdate={(input) => updateDocument.mutateAsync({ id: editingDocumentId!, input })}
+        />
+      )}
 
       {/* Exclusão de documento passa por confirmação, e a confirmação NOMEIA os
           agentes afetados — derivados de GET /agents no cliente, a mesma
           requisição que o card de agentes acima da barra usa (agentUsage.ts). */}
-      <Modal
-        opened={documentToDelete !== null}
-        onClose={() => setDocumentToDelete(null)}
-        title={documentToDelete ? `Excluir "${documentToDelete.title}"?` : ''}
-      >
-        <Stack gap="sm">
-          <Text size="sm">
-            O texto e os fragmentos deste documento saem do índice. Não há como desfazer.
-          </Text>
-          {agentsQuery.data && agentsConsultingBase(agentsQuery.data, data.id).length > 0 && (
-            <Text size="sm" data-testid="delete-document-affected-agents">
-              Afeta{' '}
-              {agentsConsultingBase(agentsQuery.data, data.id)
-                .map((agent) => agent.name)
-                .join(', ')}
-              : esses agentes deixam de encontrar este conteúdo na próxima consulta.
+      {!synced && (
+        <Modal
+          opened={documentToDelete !== null}
+          onClose={() => setDocumentToDelete(null)}
+          title={documentToDelete ? `Excluir "${documentToDelete.title}"?` : ''}
+        >
+          <Stack gap="sm">
+            <Text size="sm">
+              O texto e os fragmentos deste documento saem do índice. Não há como desfazer.
             </Text>
-          )}
-        </Stack>
+            {agentsQuery.data && agentsConsultingBase(agentsQuery.data, data.id).length > 0 && (
+              <Text size="sm" data-testid="delete-document-affected-agents">
+                Afeta{' '}
+                {agentsConsultingBase(agentsQuery.data, data.id)
+                  .map((agent) => agent.name)
+                  .join(', ')}
+                : esses agentes deixam de encontrar este conteúdo na próxima consulta.
+              </Text>
+            )}
+          </Stack>
 
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" onClick={() => setDocumentToDelete(null)}>
-            Cancelar
-          </Button>
-          <Button
-            color="red"
-            onClick={handleConfirmDeleteDocument}
-            loading={deleteDocument.isPending}
-          >
-            Excluir documento
-          </Button>
-        </Group>
-      </Modal>
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={() => setDocumentToDelete(null)}>
+              Cancelar
+            </Button>
+            <Button
+              color="red"
+              onClick={handleConfirmDeleteDocument}
+              loading={deleteDocument.isPending}
+            >
+              Excluir documento
+            </Button>
+          </Group>
+        </Modal>
+      )}
 
       {/* Desativar passa por confirmação, como agente e servidor MCP; ativar é
           imediato. A cópia não nomeia agentes afetados: a visão inversa é

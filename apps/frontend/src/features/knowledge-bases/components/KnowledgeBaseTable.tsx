@@ -1,8 +1,11 @@
 import { Anchor, Badge, Group, Stack, Table, Text } from '@mantine/core';
 import { Link } from 'react-router';
+import { CircleAlert, FileText, Folder } from 'lucide-react';
 import { SectionedCard } from '../../../components/data/SectionedCard';
 import { SectionLabel } from '../../../components/data/SectionLabel';
 import { agentsConsultingBase } from '../utils/agentUsage';
+import { providerLabel } from '../utils/connectorErrors';
+import { formatSyncInstant } from '../utils/syncState';
 import { statusPresentation } from '../utils/documentIndexing';
 import {
   documentCountLabel,
@@ -131,6 +134,57 @@ function IndexingCell({ item }: { item?: KnowledgeBaseIndexingSummary }) {
   );
 }
 
+// LINHA DE ORIGEM, sob a descrição, na coluna Base (prancha 1;
+// frontend-detalhe-base-sincronizada, D6): "Manual", ou o provedor e a pasta. O
+// nome da pasta é texto — o link do Drive fica no detalhe. Sem coluna nova: as
+// cinco larguras abaixo foram medidas contra o protótipo.
+//
+// A linha de falha aparece só com `failingSince` preenchido, o mesmo predicado
+// do filtro "Com falha" (`isSyncFailing`). "Nunca sincronizou" não tem linha: não
+// é problema, e a listagem só sinaliza o que pede atenção. A cor é a da parcela
+// de falha da coluna Indexação, para falha ter a mesma aparência nas duas.
+function OriginLines({ knowledgeBase }: { knowledgeBase: KnowledgeBase }) {
+  const failureColor = `var(--mantine-color-${statusPresentation('Failed').color}-text)`;
+  const source = knowledgeBase.syncSource;
+  const failingSince = knowledgeBase.syncState?.failingSince ?? null;
+
+  return (
+    <Stack gap={4} mt={6}>
+      <Group gap={6} wrap="nowrap" data-testid={`origem-${knowledgeBase.id}`}>
+        {source ? (
+          <>
+            <Folder size={14} aria-hidden color="var(--mantine-color-dimmed)" />
+            <Text size="xs" c="dimmed">
+              {providerLabel(source.provider)}
+            </Text>
+            <Text size="xs" c="dimmed" aria-hidden>
+              ›
+            </Text>
+            <Text size="xs" fw={500} truncate>
+              {source.folderName}
+            </Text>
+          </>
+        ) : (
+          <>
+            <FileText size={14} aria-hidden color="var(--mantine-color-dimmed)" />
+            <Text size="xs" c="dimmed">
+              Manual
+            </Text>
+          </>
+        )}
+      </Group>
+      {failingSince && (
+        <Group gap={6} wrap="nowrap" data-testid={`falha-sincronizacao-${knowledgeBase.id}`}>
+          <CircleAlert size={14} aria-hidden color={failureColor} />
+          <Text size="xs" fw={600} c={failureColor}>
+            {`Sincronização falhando desde ${formatSyncInstant(failingSince)}`}
+          </Text>
+        </Group>
+      )}
+    </Stack>
+  );
+}
+
 // Cinco colunas, as mesmas do protótipo. As duas do meio nasceram aqui: até a
 // etapa 5a-1 elas estavam proibidas porque KnowledgeBaseResponse não tem contagem
 // nenhuma e os documentos vivem em GET /knowledge-bases/{id}/documents — uma
@@ -208,6 +262,7 @@ export function KnowledgeBaseTable({
                     <Text size="xs" c="dimmed" lineClamp={1}>
                       {knowledgeBase.description}
                     </Text>
+                    <OriginLines knowledgeBase={knowledgeBase} />
                   </Stack>
                 </Table.Td>
                 <Table.Td data-testid={`documentos-${knowledgeBase.id}`}>

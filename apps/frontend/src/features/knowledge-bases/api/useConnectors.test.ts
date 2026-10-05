@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement, type PropsWithChildren } from 'react';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useConnectorFoldersQuery, useConnectorProvidersQuery } from './useConnectors';
+import {
+  useConnectorFoldersQuery,
+  useConnectorProvidersQuery,
+  useRequestKnowledgeBaseSyncMutation,
+} from './useConnectors';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -107,5 +111,30 @@ describe('useConnectorFoldersQuery', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('useRequestKnowledgeBaseSyncMutation', () => {
+  it('pede a sincronização da base e não repete depois de um erro', async () => {
+    vi.stubEnv('VITE_CONNECTORS_BASE_URL', 'http://localhost:5037');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ status: 503, code: 'sync-api-unavailable' }, 503));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useRequestKnowledgeBaseSyncMutation(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync('b-1').catch(() => undefined);
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://localhost:5037/connectors/knowledge-bases/b-1/sync',
+    );
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST');
   });
 });

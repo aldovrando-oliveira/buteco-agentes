@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Bases de conhecimento — listagem</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#191a1c;background:#f5f4f2}
+a{color:#2a6ecb;text-decoration:none}a:hover{color:#1f57a4;text-decoration:underline}
+.nav{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:6px;font-size:14px;color:#191a1c}
+.nav:hover{text-decoration:none;background:#f1f0ee;color:#191a1c}
+.nav.on{background:#e8eef8;color:#2a6ecb}
+.lbl{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#5f6166}
+.card{background:#ffffff;border:1px solid #e2e1de;border-radius:8px;overflow:hidden}
+.ch{background:#e6e5e3;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;min-height:24px}
+.badge{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 10px;border-radius:11px;font-size:12px;font-weight:600}
+.ok{background:#e6f4ea;color:#2b7a3b}
+.btn{font:inherit;font-size:13px;font-weight:600;height:36px;padding:0 16px;border-radius:6px;border:1px solid #3470c8;background:#3470c8;color:#fff;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn:hover{text-decoration:none;color:#fff}
+.btn-d{background:#fff;color:#191a1c;border-color:#d6d5d2}
+.btn-d:hover{color:#191a1c}
+.btn-r{background:#fff;color:#c92a2a;border-color:#e08a8a}
+.btn-s{height:30px;font-size:12px;padding:0 12px}
+.link-r{font:inherit;font-size:13px;font-weight:600;color:#c92a2a;background:transparent;border:0;cursor:pointer}
+.tab{font:inherit;font-size:14px;border:0;background:transparent;padding:12px 18px;border-bottom:2px solid transparent;color:#191a1c;display:inline-flex;gap:8px;align-items:center;margin-bottom:-1px;text-decoration:none}
+.tab:hover{text-decoration:none;color:#191a1c;background:#efeeec}
+.tab.on{border-bottom-color:#3470c8}
+.cnt{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:10px;background:#ffffff;border:1px solid #e2e1de;font-size:11px;font-weight:600}
+th{text-align:left;padding:10px 16px;background:#e6e5e3;font-weight:600}
+td{padding:12px 16px;border-top:1px solid #e9e8e5;font-size:14px;vertical-align:middle}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.tag{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;background:#f1f0ee;border-radius:4px;padding:2px 6px;margin-left:8px;font-weight:400}
+.sub{font-size:12px;color:#5f6166;margin-top:3px}
+.k{font-size:12px;color:#5f6166}
+.chip{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:14px;border:1px solid #e2e1de;background:#faf9f8;font-size:13px;color:#191a1c}
+.chip:hover{text-decoration:none;border-color:#3470c8;color:#2a6ecb}
+.field{display:flex;flex-direction:column;gap:4px}
+.input{box-sizing:border-box;height:40px;border:1px solid #d6d5d2;border-radius:6px;padding:0 14px;font:inherit;font-size:14px;background:#fff;width:100%}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #f5f4f2">
+<aside style="width: 224px; flex-shrink: 0; background: #ffffff; border-right: 1px solid #e2e1de; display: flex; flex-direction: column">
+<div style="padding: 14px 14px; border-bottom: 1px solid #e2e1de; display: flex; align-items: center; gap: 10px">
+<svg width="26" height="22" viewBox="0 0 26 22" aria-hidden="true"><rect x="0" y="0" width="26" height="22" rx="6" fill="#191a1c"></rect><circle cx="8.5" cy="11" r="3.2" fill="#ffffff"></circle><circle cx="17.5" cy="11" r="3.2" fill="#ffffff"></circle></svg>
+<span style="font-weight: 600; font-size: 14px; letter-spacing: -0.01em">Buteco Agentes</span>
+</div>
+<nav style="padding: 10px 8px; display: flex; flex-direction: column; gap: 2px">
+<a class="nav" href="#"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"></rect><rect x="13" y="4" width="7" height="7" rx="1"></rect><rect x="4" y="13" width="7" height="7" rx="1"></rect><rect x="13" y="13" width="7" height="7" rx="1"></rect></svg>Inventário</a>
+<a class="nav" href="#"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3"></rect><path d="M12 4v4M9.5 13h.01M14.5 13h.01"></path></svg>Agentes</a>
+<a class="nav" href="#"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="6" rx="1.5"></rect><rect x="4" y="14" width="16" height="6" rx="1.5"></rect></svg>Servidores MCP</a>
+<a class="nav on" href="#"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z"></path><path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"></path></svg>Conhecimento</a>
+<a class="nav" href="#"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h12v9H8l-4 3z"></path><path d="M16 9h4v9l-3-2h-7v-3"></path></svg>Canais</a>
+<a class="nav" href="#"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v16h16"></path><path d="M9 16v-4M13 16V8M17 16v-6"></path></svg>Insights</a>
+</nav>
+</aside>
+<main style="flex-grow: 1; min-width: 0; padding: 22px 28px 40px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600">Bases de conhecimento</h1>
+<a class="btn" href="NovaBaseManual.dc.html">Nova base</a>
+</div>
+<div style="display: flex; gap: 12px; align-items: center">
+<label style="flex-grow: 1; max-width: 420px"><span style="position: absolute; left: -9999px">Buscar base</span><input class="input" type="text" placeholder="Buscar por nome ou descrição"></label>
+<div style="display: flex; background: #e9e8e5; border-radius: 6px; padding: 3px; font-size: 13px">
+<button style="font: inherit; border: 0; background: #ffffff; border-radius: 4px; padding: 6px 12px">Todas</button>
+<button style="font: inherit; border: 0; background: transparent; padding: 6px 12px">Ativas</button>
+<button style="font: inherit; border: 0; background: transparent; padding: 6px 12px">Inativas</button>
+<button style="font: inherit; border: 0; background: transparent; padding: 6px 12px">Com falha</button>
+</div>
+</div>
+<section class="card">
+<table style="border-collapse: collapse; width: 100%; table-layout: fixed">
+<thead><tr>
+<th style="width: 36%"><span class="lbl">Base</span></th>
+<th style="width: 12%"><span class="lbl">Documentos</span></th>
+<th style="width: 20%"><span class="lbl">Indexação</span></th>
+<th style="width: 20%"><span class="lbl">Consultada por</span></th>
+<th style="width: 12%"><span class="lbl">Estado</span></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><a href="DetalheManual.dc.html" style="font-weight: 600">Processos Butecando</a>
+<div class="sub" style="font-size: 13px">Compras de mercadorias, contratação de funcionários e atrações musicais.</div>
+<div style="display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #5f6166"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M9 13h6M9 17h6"></path></svg><span>Manual</span></div>
+</td>
+<td>2 documentos</td><td>2 indexados</td><td><span style="color: #5f6166">Nenhum agente</span></td><td><span class="badge ok">Ativa</span></td>
+</tr>
+<tr>
+<td><a href="Detalhe.dc.html" style="font-weight: 600">FAQ de Suporte</a>
+<div class="sub" style="font-size: 13px">Dúvidas frequentes de clientes sobre conta, entrega e trocas.</div>
+<div style="display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #5f6166"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"></path></svg><span>Google Drive</span><span style="color: #9a9ca0">›</span><span style="color: #191a1c; font-weight: 500">FAQ Suporte</span></div>
+</td>
+<td>12 documentos</td><td>10 indexados <span style="color: #9a9ca0">·</span> 1 indexando <span style="color: #9a9ca0">·</span> 1 na fila</td><td>Atendente de Suporte, Triagem +5</td><td><span class="badge ok">Ativa</span></td>
+</tr>
+<tr>
+<td><a href="DetalheFalha.dc.html" style="font-weight: 600">Políticas internas de RH</a>
+<div class="sub" style="font-size: 13px">Férias, benefícios e código de conduta.</div>
+<div style="display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #5f6166"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"></path></svg><span>Google Drive</span><span style="color: #9a9ca0">›</span><span style="color: #191a1c; font-weight: 500">Políticas RH</span></div><div style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; color: #c92a2a; font-weight: 600"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5v.5"></path></svg><span>Sincronização falhando desde 25/09, 09:10</span></div>
+</td>
+<td>7 documentos</td><td>7 indexados</td><td>Assistente de RH</td><td><span class="badge ok">Ativa</span></td>
+</tr>
+<tr>
+<td><a href="#" style="font-weight: 600">Rotinas de fechamento</a>
+<div class="sub" style="font-size: 13px">Passo a passo do fechamento contábil mensal.</div>
+<div style="display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #5f6166"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"></path><path d="M9 13h6M9 17h6"></path></svg><span>Manual</span></div>
+</td>
+<td>3 documentos</td><td>1 indexado <span style="color: #9a9ca0">·</span> <span style="color: #c92a2a">2 falharam</span></td><td><span style="color: #5f6166">Nenhum agente</span></td><td><span class="badge" style="background: #f1f0ee; color: #5f6166">Inativa</span></td>
+</tr>
+</tbody>
+</table>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
