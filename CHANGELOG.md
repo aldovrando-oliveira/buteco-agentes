@@ -380,6 +380,14 @@ o versionamento pretende seguir
   cadastro e da navegação tem texto próprio. Variável de build nova e **opcional**,
   `VITE_CONNECTORS_BASE_URL`: sem ela, a origem Sincronizada aparece indisponível e o
   painel não chama o `apps/connectors`.
+- Detalhe, listagem e filtro de base sincronizada no painel, em `apps/frontend` (#107).
+  O detalhe mostra a origem (pasta, link para o Drive, provedor, última sincronização
+  concluída), o motivo da falha com texto por código e a garantia de que nenhum
+  documento saiu da base, os documentos somente leitura e os arquivos da pasta que não
+  entraram na base. "Sincronizar agora" acompanha o ciclo até o `apps/api` gravar o
+  resultado, com limite de 5 minutos, e fica indisponível sem
+  `VITE_CONNECTORS_BASE_URL`. Na listagem, a origem de cada base e a falha de
+  sincronização; o filtro "Com falha" passa a incluir sincronização falhando.
 
 **Entrega containerizada**
 
