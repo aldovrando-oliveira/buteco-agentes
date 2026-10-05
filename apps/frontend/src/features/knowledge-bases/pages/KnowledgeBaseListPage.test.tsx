@@ -32,6 +32,7 @@ function base(overrides: Partial<KnowledgeBase>): KnowledgeBase {
     updatedAt: '2026-09-02T00:00:00Z',
     contentMode: 'Manual',
     syncSource: null,
+    syncState: null,
     ...overrides,
   };
 }
@@ -309,6 +310,76 @@ describe('KnowledgeBaseListPage', () => {
       // manutenção do conteúdo, e é a linha que mais pede atenção.
       expect(screen.getByRole('link', { name: rotinas.name })).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: cobranca.name })).not.toBeInTheDocument();
+    });
+
+    // A sincronização falhando também é falha (frontend-detalhe-base-sincronizada,
+    // D6), inclusive em base inativa e sem documento em falha.
+    it('inclui base inativa só com sincronização falhando', async () => {
+      const rh = base({
+        id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        name: 'Políticas internas de RH',
+        isActive: false,
+        contentMode: 'Synced',
+        syncSource: {
+          provider: 'google-drive',
+          folderId: 'f-rh',
+          folderName: 'Políticas RH',
+          folderUrl: 'https://x',
+        },
+        syncState: {
+          lastCompletedAt: '2026-09-25T11:55:00Z',
+          lastFinishedAt: '2026-09-25T12:10:00Z',
+          failingSince: '2026-09-25T12:10:00Z',
+          lastError: { code: 'access-denied', detail: null },
+          ignoredFiles: [],
+        },
+      });
+      vi.mocked(listKnowledgeBases).mockResolvedValue([cobranca, rh]);
+      vi.mocked(listKnowledgeBaseIndexingSummary).mockResolvedValue([
+        summary(cobranca.id, { documentCount: 2, indexedCount: 2, failedCount: 0 }),
+        summary(rh.id, { documentCount: 7, indexedCount: 7, failedCount: 0 }),
+      ]);
+
+      renderPage();
+      await screen.findByRole('link', { name: cobranca.name });
+      await screen.findByText('7 indexados');
+
+      await userEvent.click(screen.getByRole('radio', { name: 'Com falha' }));
+
+      expect(screen.getByRole('link', { name: rh.name })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: cobranca.name })).not.toBeInTheDocument();
+    });
+
+    // Sem o resumo, a opção continua desabilitada MESMO havendo sincronização
+    // falhando: filtrar só pela sincronização esconderia as falhas de indexação.
+    it('sem o resumo, continua desabilitado mesmo com sincronização falhando', async () => {
+      const rh = base({
+        id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        name: 'Políticas internas de RH',
+        contentMode: 'Synced',
+        syncSource: {
+          provider: 'google-drive',
+          folderId: 'f-rh',
+          folderName: 'Políticas RH',
+          folderUrl: 'https://x',
+        },
+        syncState: {
+          lastCompletedAt: null,
+          lastFinishedAt: '2026-09-25T12:10:00Z',
+          failingSince: '2026-09-25T12:10:00Z',
+          lastError: { code: 'rate-limited', detail: null },
+          ignoredFiles: null,
+        },
+      });
+      vi.mocked(listKnowledgeBases).mockResolvedValue([cobranca, rh]);
+      vi.mocked(listKnowledgeBaseIndexingSummary).mockRejectedValue(new Error('rede'));
+
+      renderPage();
+      await screen.findByTestId('resumo-indisponivel');
+
+      expect(screen.getByRole('radio', { name: 'Com falha' })).toBeDisabled();
+      expect(screen.getByRole('link', { name: rh.name })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: cobranca.name })).toBeInTheDocument();
     });
 
     it('fica desabilitado quando o resumo não está disponível', async () => {

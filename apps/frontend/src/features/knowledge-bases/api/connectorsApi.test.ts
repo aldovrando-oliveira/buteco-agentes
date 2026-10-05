@@ -4,6 +4,7 @@ import {
   connectorsBaseUrl,
   listConnectorFolders,
   listConnectorProviders,
+  requestKnowledgeBaseSync,
 } from './connectorsApi';
 import { clearToken, getToken, setToken } from '../../../auth/token';
 
@@ -178,5 +179,65 @@ describe('erros', () => {
         configurable: true,
       });
     }
+  });
+});
+
+describe('requestKnowledgeBaseSync', () => {
+  const ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+  it('faz POST em /connectors/knowledge-bases/{id}/sync e resolve no 202 sem corpo', async () => {
+    vi.stubEnv('VITE_CONNECTORS_BASE_URL', 'http://localhost:5037');
+    setToken('token-do-operador');
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(requestKnowledgeBaseSync(ID)).resolves.toBeUndefined();
+
+    expect(calledUrl(fetchMock)).toBe(
+      `http://localhost:5037/connectors/knowledge-bases/${ID}/sync`,
+    );
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer token-do-operador');
+  });
+
+  it('escapa o id no caminho', async () => {
+    vi.stubEnv('VITE_CONNECTORS_BASE_URL', '');
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await requestKnowledgeBaseSync('a/b');
+
+    expect(calledUrl(fetchMock)).toBe('/connectors/knowledge-bases/a%2Fb/sync');
+  });
+
+  it('erro com code chega no ConnectorsError', async () => {
+    vi.stubEnv('VITE_CONNECTORS_BASE_URL', 'http://localhost:5037');
+    stubFetch({ status: 503, code: 'sync-not-configured' }, 503);
+
+    const error = await requestKnowledgeBaseSync(ID).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ConnectorsError);
+    expect((error as ConnectorsError).kind).toBe('http');
+    expect((error as ConnectorsError).status).toBe(503);
+    expect((error as ConnectorsError).code).toBe('sync-not-configured');
+  });
+
+  it('falha de rede vira kind "network"', async () => {
+    vi.stubEnv('VITE_CONNECTORS_BASE_URL', 'http://localhost:5037');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+
+    const error = await requestKnowledgeBaseSync(ID).catch((caught: unknown) => caught);
+
+    expect((error as ConnectorsError).kind).toBe('network');
+  });
+
+  it('sem a variável, recusa sem fazer nenhuma requisição', async () => {
+    vi.stubEnv('VITE_CONNECTORS_BASE_URL', undefined);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(requestKnowledgeBaseSync(ID)).rejects.toBeInstanceOf(ConnectorsError);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

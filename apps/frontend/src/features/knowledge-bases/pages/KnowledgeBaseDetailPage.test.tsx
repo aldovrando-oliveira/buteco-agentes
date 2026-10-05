@@ -85,6 +85,7 @@ const knowledgeBase: KnowledgeBase = {
   updatedAt: '2026-09-02T11:00:00Z',
   contentMode: 'Manual',
   syncSource: null,
+  syncState: null,
 };
 
 function documento(overrides: Partial<KnowledgeDocumentSummary> = {}): KnowledgeDocumentSummary {

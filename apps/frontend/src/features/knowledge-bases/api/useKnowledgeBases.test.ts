@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElement, type PropsWithChildren } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, type Query } from '@tanstack/react-query';
 import {
   useActivateKnowledgeBaseMutation,
   useCreateKnowledgeBaseMutation,
@@ -12,7 +12,12 @@ import {
   indexingSummaryQueryKey,
   useUpdateKnowledgeBaseMutation,
 } from './useKnowledgeBases';
-import type { KnowledgeBase, KnowledgeBaseIndexingSummary } from '../types/knowledgeBase';
+import type {
+  KnowledgeBase,
+  KnowledgeBaseIndexingSummary,
+  KnowledgeBaseSyncState,
+} from '../types/knowledgeBase';
+import { SYNC_POLL_INTERVAL_MS, SYNC_WAIT_LIMIT_MS, type SyncRequest } from '../utils/syncState';
 
 const knowledgeBase: KnowledgeBase = {
   id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
@@ -23,6 +28,7 @@ const knowledgeBase: KnowledgeBase = {
   updatedAt: '2026-09-01T00:00:00Z',
   contentMode: 'Manual',
   syncSource: null,
+  syncState: null,
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -43,6 +49,7 @@ function createWrapper() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('useKnowledgeBasesQuery', () => {
@@ -249,5 +256,147 @@ describe('useKnowledgeBaseIndexingSummaryQuery', () => {
     await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] });
 
     expect(queryClient.getQueryState(indexingSummaryQueryKey)?.isInvalidated ?? false).toBe(true);
+  });
+});
+
+// ACOMPANHAMENTO DO "SINCRONIZAR AGORA" (frontend-detalhe-base-sincronizada, D5).
+// Guarda pareado da convenção 20: a asserção determinística resolve a opção
+// `refetchInterval` REAL que o hook passou, contra a query REAL do cache; a
+// comportamental, com timers falsos, prova que a requisição se repete (e para).
+//
+// ATENÇÃO, a armadilha da convenção 20: o react-query rastreia as props LIDAS
+// (`notifyOnChangeProps: 'tracked'`). Toda primeira espera abaixo toca `.data`,
+// para que a mudança só em `data` provoque re-render.
+describe('useKnowledgeBaseQuery — acompanhamento da sincronização', () => {
+  const T1 = '2026-10-04T10:00:00Z';
+  const T2 = '2026-10-04T10:00:30Z';
+
+  function synced(lastFinishedAt: string | null): KnowledgeBase {
+    const syncState: KnowledgeBaseSyncState = {
+      lastCompletedAt: lastFinishedAt,
+      lastFinishedAt,
+      failingSince: null,
+      lastError: null,
+      ignoredFiles: lastFinishedAt ? [] : null,
+    };
+    return {
+      ...knowledgeBase,
+      contentMode: 'Synced',
+      syncSource: {
+        provider: 'google-drive',
+        folderId: 'f',
+        folderName: 'F',
+        folderUrl: 'https://x',
+      },
+      syncState,
+    };
+  }
+
+  function resolveRefetchInterval(queryClient: QueryClient): number | false | undefined {
+    const query = queryClient
+      .getQueryCache()
+      .find({ queryKey: ['knowledge-bases', knowledgeBase.id] });
+    const option = query?.observers[0]?.options.refetchInterval;
+
+    return typeof option === 'function'
+      ? (option as (q: Query) => number | false | undefined)(query as unknown as Query)
+      : option;
+  }
+
+  function fetchReturning(get: () => KnowledgeBase) {
+    return vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(get())));
+  }
+
+  it('sem pedido, a consulta é a de hoje: não se repete', async () => {
+    vi.stubGlobal(
+      'fetch',
+      fetchReturning(() => synced(T1)),
+    );
+    const { queryClient, Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useKnowledgeBaseQuery(knowledgeBase.id), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.data?.syncState?.lastFinishedAt).toBe(T1));
+    expect(resolveRefetchInterval(queryClient)).toBeFalsy();
+  });
+
+  it('determinística: 4 s enquanto lastFinishedAt é a linha de base, false quando muda', async () => {
+    let current = synced(T1);
+    vi.stubGlobal(
+      'fetch',
+      fetchReturning(() => current),
+    );
+    const { queryClient, Wrapper } = createWrapper();
+    const request: SyncRequest = { baseline: T1, requestedAt: Date.now() };
+
+    const { result } = renderHook(
+      () => useKnowledgeBaseQuery(knowledgeBase.id, { syncRequest: request }),
+      { wrapper: Wrapper },
+    );
+
+    await waitFor(() => expect(result.current.data?.syncState?.lastFinishedAt).toBe(T1));
+    expect(resolveRefetchInterval(queryClient)).toBe(SYNC_POLL_INTERVAL_MS);
+
+    current = synced(T2);
+    await result.current.refetch();
+
+    await waitFor(() => expect(result.current.data?.syncState?.lastFinishedAt).toBe(T2));
+    expect(resolveRefetchInterval(queryClient)).toBe(false);
+  });
+
+  it('comportamental: repete enquanto espera e para quando lastFinishedAt muda', async () => {
+    vi.useFakeTimers();
+    let current = synced(T1);
+    const fetchMock = fetchReturning(() => current);
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper } = createWrapper();
+    const request: SyncRequest = { baseline: T1, requestedAt: Date.now() };
+
+    const { result } = renderHook(
+      () => useKnowledgeBaseQuery(knowledgeBase.id, { syncRequest: request }),
+      { wrapper: Wrapper },
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.current.data?.syncState?.lastFinishedAt).toBe(T1);
+    const first = fetchMock.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(4500);
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(first);
+
+    current = synced(T2);
+    await vi.advanceTimersByTimeAsync(4500);
+    expect(result.current.data?.syncState?.lastFinishedAt).toBe(T2);
+    const afterChange = fetchMock.mock.calls.length;
+
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(fetchMock.mock.calls.length).toBe(afterChange);
+  });
+
+  it('comportamental: para no limite de 5 minutos sem mudança', async () => {
+    vi.useFakeTimers();
+    const fetchMock = fetchReturning(() => synced(T1));
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper } = createWrapper();
+    const request: SyncRequest = { baseline: T1, requestedAt: Date.now() };
+
+    const { result } = renderHook(
+      () => useKnowledgeBaseQuery(knowledgeBase.id, { syncRequest: request }),
+      { wrapper: Wrapper },
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.current.data?.syncState?.lastFinishedAt).toBe(T1);
+
+    await vi.advanceTimersByTimeAsync(SYNC_WAIT_LIMIT_MS + 4500);
+    const atLimit = fetchMock.mock.calls.length;
+    // 5 min a cada 4 s: perto de 75 consultas, e não mais.
+    expect(atLimit).toBeGreaterThan(60);
+    expect(atLimit).toBeLessThanOrEqual(78);
+
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(fetchMock.mock.calls.length).toBe(atLimit);
   });
 });

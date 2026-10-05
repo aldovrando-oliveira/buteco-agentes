@@ -316,4 +316,20 @@ describe('theme — padrão de componentes', () => {
     expect(contrastRatio('#ffffff', preenchido)).toBeCloseTo(esperado, 1);
     expect(contrastRatio('#ffffff', preenchido)).toBeLessThan(AA_TEXT);
   });
+
+  // TEXTO DE SUCESSO ("Sem erros no último ciclo", "Sincronização concluída em"),
+  // achado da conferência visual da change frontend-detalhe-base-sincronizada
+  // (R1-2). `--mantine-color-green-text` lê o tom 6 no claro, que dá 3,89:1 em
+  // texto pequeno — o mesmo número que o comentário do Badge registra. O `--ok`
+  // do protótipo é o tom 9 no claro e o 4 no escuro, e nenhum token do Mantine
+  // troca entre os dois.
+  it('declara o verde de texto de sucesso nos tons --ok do protótipo, por esquema', () => {
+    const resolvido = cssVariablesResolver(DEFAULT_THEME);
+
+    expect(resolvido.light?.['--buteco-ok-text']).toBe('var(--mantine-color-green-9)');
+    expect(resolvido.dark?.['--buteco-ok-text']).toBe('var(--mantine-color-green-4)');
+    expect(shades('green')[9]).toBe('#1a7a49');
+    expect(shades('green')[4]).toBe('#4cc38a');
+    expect(contrastRatio('#ffffff', shades('green')[9])).toBeGreaterThanOrEqual(AA_TEXT);
+  });
 });

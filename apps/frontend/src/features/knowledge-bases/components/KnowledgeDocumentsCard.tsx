@@ -13,9 +13,16 @@ interface KnowledgeDocumentsCardProps {
   documents: KnowledgeDocumentSummary[] | undefined;
   isLoading: boolean;
   error: unknown;
-  onAdd: () => void;
-  onUpdate: (document: KnowledgeDocumentSummary) => void;
-  onDelete: (document: KnowledgeDocumentSummary) => void;
+  // Base sincronizada: os documentos vêm da pasta e o apps/api recusa criar,
+  // atualizar e excluir com 409 (KnowledgeDocumentEndpoints.cs, `SyncedKnowledgeBaseConflict`).
+  // Sem as três ações e sem a coluna; reindexar continua, porque a rota dele não
+  // tem essa guarda e a sincronização não reenvia arquivo com o mesmo marcador
+  // (frontend-detalhe-base-sincronizada, D1). Obrigatória: quem monta o card
+  // decide pela origem da base.
+  readOnly: boolean;
+  onAdd?: () => void;
+  onUpdate?: (document: KnowledgeDocumentSummary) => void;
+  onDelete?: (document: KnowledgeDocumentSummary) => void;
   onReindex: (document: KnowledgeDocumentSummary) => void;
   reindexingId?: string | null;
 }
@@ -56,17 +63,19 @@ function FragmentCountCell({ document }: { document: KnowledgeDocumentSummary })
 // em particular, sem nenhum conselho sobre tamanho de documento, que é coisa que
 // o sistema não verifica (convenção 13).
 function FailureBand({
+  colSpan,
   document,
   onReindex,
   reindexing,
 }: {
+  colSpan: number;
   document: KnowledgeDocumentSummary;
   onReindex: () => void;
   reindexing: boolean;
 }) {
   return (
     <Table.Tr>
-      <Table.Td colSpan={4} p={0}>
+      <Table.Td colSpan={colSpan} p={0}>
         <Alert color="red" radius={0} py="xs" title="Falhou ao indexar">
           <Stack gap="xs" align="flex-start">
             {/* Medida limitada a 820px, como o protótipo especifica — e isso
@@ -98,13 +107,21 @@ export function KnowledgeDocumentsCard({
   documents,
   isLoading,
   error,
+  readOnly,
   onAdd,
   onUpdate,
   onDelete,
   onReindex,
   reindexingId,
 }: KnowledgeDocumentsCardProps) {
-  const addButton = (
+  // No lugar do botão, a explicação da prancha 4a: a propriedade é da base e
+  // permanente, e cabe no cabeçalho sem disputar atenção com a faixa de itens
+  // não utilizáveis (D1).
+  const headerAction = readOnly ? (
+    <Text size="xs" c="dimmed">
+      Somente leitura — o conteúdo vem da pasta
+    </Text>
+  ) : (
     <Button size="xs" onClick={onAdd}>
       Adicionar documento
     </Button>
@@ -143,14 +160,16 @@ export function KnowledgeDocumentsCard({
   // distingue este texto da nota de sequenciamento que a 5a-1 tinha aqui.
   if (documents.length === 0) {
     return (
-      <SectionedCard title="Documentos" action={addButton}>
+      <SectionedCard title="Documentos" action={headerAction}>
         <SectionedCard.Body>
           <Stack gap="xs" align="flex-start">
             <Text size="sm" data-testid="documents-empty">
               Nenhum documento nesta base.
             </Text>
             <Text size="xs" c="dimmed">
-              Uma consulta do agente não devolve nada até algum documento ficar indexado.
+              {readOnly
+                ? 'Os documentos entram pela sincronização com a pasta.'
+                : 'Uma consulta do agente não devolve nada até algum documento ficar indexado.'}
             </Text>
           </Stack>
         </SectionedCard.Body>
@@ -174,22 +193,28 @@ export function KnowledgeDocumentsCard({
         </Alert>
       )}
 
-      <SectionedCard title="Documentos" action={addButton}>
-        <Table>
+      <SectionedCard title="Documentos" action={headerAction}>
+        {/* Somente leitura: as larguras da prancha 4a com layout fixo. Sem a
+            coluna Ações, o layout automático dava 49% à coluna Documento contra
+            60% na prancha (conferência visual, R1-1). A tabela da base manual
+            continua com o layout de hoje. */}
+        <Table layout={readOnly ? 'fixed' : undefined}>
           <Table.Thead bg="var(--buteco-surface-subtle)">
             <Table.Tr>
-              <Table.Th>
+              <Table.Th w={readOnly ? '56%' : undefined}>
                 <SectionLabel>Documento</SectionLabel>
               </Table.Th>
-              <Table.Th>
+              <Table.Th w={readOnly ? '16%' : undefined}>
                 <SectionLabel>Fragmentos</SectionLabel>
               </Table.Th>
-              <Table.Th>
+              <Table.Th w={readOnly ? '18%' : undefined}>
                 <SectionLabel>Indexação</SectionLabel>
               </Table.Th>
-              <Table.Th>
-                <SectionLabel>Ações</SectionLabel>
-              </Table.Th>
+              {!readOnly && (
+                <Table.Th>
+                  <SectionLabel>Ações</SectionLabel>
+                </Table.Th>
+              )}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -226,25 +251,28 @@ export function KnowledgeDocumentsCard({
                       <Badge color={status.color}>{status.label}</Badge>
                     </Group>
                   </Table.Td>
-                  <Table.Td>
-                    <Group gap="xs" wrap="nowrap">
-                      <Button size="xs" variant="default" onClick={() => onUpdate(document)}>
-                        Atualizar
-                      </Button>
-                      <Button
-                        size="xs"
-                        variant="subtle"
-                        color="red"
-                        onClick={() => onDelete(document)}
-                      >
-                        Excluir
-                      </Button>
-                    </Group>
-                  </Table.Td>
+                  {!readOnly && (
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap">
+                        <Button size="xs" variant="default" onClick={() => onUpdate?.(document)}>
+                          Atualizar
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="subtle"
+                          color="red"
+                          onClick={() => onDelete?.(document)}
+                        >
+                          Excluir
+                        </Button>
+                      </Group>
+                    </Table.Td>
+                  )}
                 </Table.Tr>,
                 failed ? (
                   <FailureBand
                     key={`${document.id}-failure`}
+                    colSpan={readOnly ? 3 : 4}
                     document={document}
                     onReindex={() => onReindex(document)}
                     reindexing={reindexingId === document.id}

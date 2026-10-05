@@ -13,6 +13,7 @@ import type {
   KnowledgeBase,
   UpdateKnowledgeBaseInput,
 } from '../types/knowledgeBase';
+import { syncWaitInterval, type SyncRequest } from '../utils/syncState';
 
 // `enabled` opcional, no mesmo formato de useMcpServersQuery: a etapa do
 // vínculo (5b) vai buscar o catálogo só quando a aba de conhecimento do agente
@@ -54,8 +55,20 @@ export function useKnowledgeBaseIndexingSummaryQuery() {
   });
 }
 
-export function useKnowledgeBaseQuery(id: string) {
-  return useQuery({ queryKey: ['knowledge-bases', id], queryFn: () => getKnowledgeBase(id) });
+// `syncRequest` liga a consulta periódica CONDICIONAL do "Sincronizar agora"
+// (frontend-detalhe-base-sincronizada, D5; convenção 20): a cada 4 s enquanto
+// `syncState.lastFinishedAt` for igual à linha de base do pedido e o pedido tiver
+// menos de 5 minutos, `false` em qualquer outro caso. A condição é a função pura
+// `syncWaitInterval`; sem pedido, a consulta é a de sempre.
+export function useKnowledgeBaseQuery(id: string, options?: { syncRequest?: SyncRequest | null }) {
+  const syncRequest = options?.syncRequest ?? null;
+
+  return useQuery({
+    queryKey: ['knowledge-bases', id],
+    queryFn: () => getKnowledgeBase(id),
+    refetchInterval: (query) =>
+      syncWaitInterval(syncRequest, query.state.data as KnowledgeBase | undefined, Date.now()),
+  });
 }
 
 // Toda mutação escreve o item no cache e invalida a coleção: a resposta já traz

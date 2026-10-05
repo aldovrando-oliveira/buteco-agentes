@@ -24,6 +24,7 @@ const knowledgeBase: KnowledgeBase = {
   updatedAt: '2026-09-01T00:00:00Z',
   contentMode: 'Manual',
   syncSource: null,
+  syncState: null,
 };
 
 function jsonResponse(body: unknown, status = 200) {

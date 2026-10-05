@@ -12,6 +12,7 @@ function base(overrides: Partial<KnowledgeBase>): KnowledgeBase {
     updatedAt: '2026-10-01T00:00:00Z',
     contentMode: 'Manual',
     syncSource: null,
+    syncState: null,
     ...overrides,
   };
 }
@@ -23,6 +24,13 @@ function synced(name: string, provider: string, folderId: string, isActive = tru
     isActive,
     contentMode: 'Synced',
     syncSource: { provider, folderId, folderName: folderId, folderUrl: 'https://x' },
+    syncState: {
+      lastCompletedAt: null,
+      lastFinishedAt: null,
+      failingSince: null,
+      lastError: null,
+      ignoredFiles: null,
+    },
   });
 }
 

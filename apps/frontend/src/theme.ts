@@ -235,6 +235,13 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     // Consumido pelo componente Logo, que passa a tinta ao `currentColor` do
     // desenho (design.md da change frontend-marca-visual, D3).
     '--buteco-brand-ink': 'var(--mantine-color-gray-9)',
+    // Texto de sucesso (--ok do protótipo). `--mantine-color-green-text` lê o
+    // tom 6 no claro, que dá 3,89:1 em texto pequeno, abaixo do mínimo de 4,5:1
+    // deste tema (o mesmo número do comentário do Badge abaixo). Achado da
+    // conferência visual da change frontend-detalhe-base-sincronizada (R1-2):
+    // "Sem erros no último ciclo" e "Sincronização concluída em". Nenhuma cor
+    // nova: tom 9 no claro, tom 4 no escuro.
+    '--buteco-ok-text': 'var(--mantine-color-green-9)',
 
     // A ESCALA DE INTENSIDADE DO MAPA DE CALOR — MESMO CRITÉRIO DAS TRÊS ACIMA,
     // E O CASO MAIS LITERAL DELE.
@@ -262,6 +269,7 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--buteco-page-bg': 'var(--mantine-color-dark-9)',
     '--buteco-surface-subtle': 'var(--mantine-color-dark-4)',
     '--buteco-brand-ink': 'var(--mantine-color-dark-0)',
+    '--buteco-ok-text': 'var(--mantine-color-green-4)',
 
     // A MESMA PALETA PERCORRIDA NO SENTIDO OPOSTO: 8 → 4, cresce clareando.
     '--buteco-heat-0': 'var(--mantine-color-dark-6)',

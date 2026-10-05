@@ -24,6 +24,7 @@ const knowledgeBase: KnowledgeBase = {
   updatedAt: '2026-09-02T00:00:00Z',
   contentMode: 'Manual',
   syncSource: null,
+  syncState: null,
 };
 
 function renderPage() {
@@ -167,6 +168,13 @@ describe('KnowledgeBaseEditPage', () => {
         folderId: 'f-faq',
         folderName: 'FAQ Suporte',
         folderUrl: 'https://drive.google.com/drive/folders/f-faq',
+      },
+      syncState: {
+        lastCompletedAt: null,
+        lastFinishedAt: null,
+        failingSince: null,
+        lastError: null,
+        ignoredFiles: null,
       },
     };
     vi.mocked(getKnowledgeBase).mockResolvedValue(synced);

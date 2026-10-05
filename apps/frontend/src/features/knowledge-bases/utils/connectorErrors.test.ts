@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connectorErrorMessage, providerLabel } from './connectorErrors';
+import { connectorErrorMessage, providerLabel, sharedCodeSentence } from './connectorErrors';
 import { ConnectorsError } from '../api/connectorsApi';
 import { ApiError } from '../api/knowledgeBasesApi';
 
@@ -186,5 +186,82 @@ describe('o title do ProblemDetails nunca vira texto da tela', () => {
   it.each(codes)('%s', (code) => {
     const message = connectorErrorMessage(apiError(422, { code }), 'create');
     expect(message).not.toContain(SERVER_TITLE);
+  });
+});
+
+describe('connectorErrorMessage — Sincronizar agora (frontend-detalhe-base-sincronizada, D4)', () => {
+  const cases: Array<[string, ConnectorsError, string]> = [
+    [
+      'knowledge-base-not-found',
+      connectorsError(404, 'knowledge-base-not-found'),
+      'O serviço de conectores não encontrou esta base entre as bases sincronizadas do servidor. É configuração da instalação.',
+    ],
+    [
+      'sync-not-configured',
+      connectorsError(503, 'sync-not-configured'),
+      'O serviço de conectores desta instalação não está ligado ao servidor, e não sincroniza nenhuma base. É configuração da instalação.',
+    ],
+    [
+      'sync-api-unavailable',
+      connectorsError(503, 'sync-api-unavailable'),
+      'O serviço de conectores não conseguiu falar com o servidor para confirmar a base. Tente de novo em instantes.',
+    ],
+    [
+      'sync-api-error',
+      connectorsError(502, 'sync-api-error'),
+      'O servidor respondeu de forma inesperada ao serviço de conectores. Tente de novo em instantes; se continuar, é configuração da instalação.',
+    ],
+  ];
+
+  it.each(cases)('%s', (_name, error, expected) => {
+    expect(connectorErrorMessage(error, 'sync-request')).toBe(expected);
+  });
+
+  it('rede é a linha da #106, com o "fora do ar"', () => {
+    expect(connectorErrorMessage(new ConnectorsError('network', 'x'), 'sync-request')).toMatch(
+      /Ele pode estar fora do ar/,
+    );
+  });
+
+  it('não termina com o "Nenhuma base foi criada." do cadastro', () => {
+    for (const [, error] of cases) {
+      expect(connectorErrorMessage(error, 'sync-request')).not.toContain(CREATED_NOTHING);
+    }
+  });
+
+  it('401, 403 e código desconhecido reaproveitam as linhas da #106', () => {
+    expect(connectorErrorMessage(connectorsError(401), 'sync-request')).toBe(
+      connectorErrorMessage(connectorsError(401), 'navigation'),
+    );
+    expect(connectorErrorMessage(connectorsError(403), 'sync-request')).toBe(
+      connectorErrorMessage(connectorsError(403), 'navigation'),
+    );
+    expect(connectorErrorMessage(connectorsError(500, 'codigo-novo'), 'sync-request')).toBe(
+      'Erro inesperado (código codigo-novo).',
+    );
+  });
+});
+
+describe('sharedCodeSentence', () => {
+  it('é a frase que o cadastro já mostrava, para os códigos que valem nos dois lugares', () => {
+    expect(sharedCodeSentence('api-not-configured', null, null)).toBe(
+      'A Drive API não está ativada no projeto da conta de serviço. É configuração da instalação, não da pasta.',
+    );
+    expect(sharedCodeSentence('provider-auth-failed', null, null)).toBe(
+      'O Google recusou a credencial da conta de serviço. É configuração da instalação, não da pasta.',
+    );
+    expect(sharedCodeSentence('provider-error', 'bad-request', null)).toBe(
+      'O Google recusou a operação (bad-request).',
+    );
+    expect(sharedCodeSentence('provider-not-configured', null, 'google-drive')).toBe(
+      'O provedor Google Drive não está configurado no serviço de conectores desta instalação.',
+    );
+    expect(sharedCodeSentence('access-denied', EMAIL, null)).toBe(
+      `A conta ${EMAIL} não tem acesso a esta pasta.`,
+    );
+  });
+
+  it('devolve null para código sem frase compartilhada', () => {
+    expect(sharedCodeSentence('rate-limited', null, null)).toBeNull();
   });
 });
