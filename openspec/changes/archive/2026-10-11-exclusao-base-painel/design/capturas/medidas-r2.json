@@ -1,0 +1,4350 @@
+{
+  "ativa-tooltip_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "tooltip": {
+      "x": 1152,
+      "y": 76,
+      "w": 280,
+      "h": 62,
+      "text": "Só uma base inativa pode ser excluída. Desative a base antes; a desati",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 17.41,
+      "fontSize": "12px",
+      "bg": "rgb(25, 26, 28)"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": true,
+      "ariaDisabled": "true",
+      "bg": "rgb(241, 241, 241)",
+      "text": "Excluir",
+      "color": "rgb(139, 144, 151)",
+      "contrast": 2.85,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1161,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Desativar",
+        "x": 1245,
+        "y": 35,
+        "w": 91,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "ativa-tooltip_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "tooltip": {
+      "x": 1572,
+      "y": 76,
+      "w": 280,
+      "h": 62,
+      "text": "Só uma base inativa pode ser excluída. Desative a base antes; a desati",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 17.41,
+      "fontSize": "12px",
+      "bg": "rgb(25, 26, 28)"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": true,
+      "ariaDisabled": "true",
+      "bg": "rgb(241, 241, 241)",
+      "text": "Excluir",
+      "color": "rgb(139, 144, 151)",
+      "contrast": 2.85,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1581,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Desativar",
+        "x": 1665,
+        "y": 35,
+        "w": 91,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "ativa-tooltip_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "tooltip": {
+      "x": 1152,
+      "y": 76,
+      "w": 280,
+      "h": 62,
+      "text": "Só uma base inativa pode ser excluída. Desative a base antes; a desati",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.59,
+      "fontSize": "12px",
+      "bg": "rgb(241, 241, 241)"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": true,
+      "ariaDisabled": "true",
+      "bg": "rgb(36, 39, 44)",
+      "text": "Excluir",
+      "color": "rgb(125, 131, 139)",
+      "contrast": 3.92,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1161,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Desativar",
+        "x": 1245,
+        "y": 35,
+        "w": 91,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "ativa-tooltip_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "tooltip": {
+      "x": 1572,
+      "y": 76,
+      "w": 280,
+      "h": 62,
+      "text": "Só uma base inativa pode ser excluída. Desative a base antes; a desati",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.59,
+      "fontSize": "12px",
+      "bg": "rgb(241, 241, 241)"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": true,
+      "ariaDisabled": "true",
+      "bg": "rgb(36, 39, 44)",
+      "text": "Excluir",
+      "color": "rgb(125, 131, 139)",
+      "contrast": 3.92,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1581,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Desativar",
+        "x": 1665,
+        "y": 35,
+        "w": 91,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-manual_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 205,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-manual_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 205,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-manual_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 205,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-manual_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 205,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-sincronizada_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 253
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 150,
+      "h": 13,
+      "text": "Excluir \"FAQ de Suporte\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "O vínculo com Atendente de Suporte sai junto. Esse agente já não consu",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 201,
+        "w": 408,
+        "h": 34,
+        "text": "A pasta “FAQ Suporte” fica livre para ser usada por outra base. Os arq",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 251,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 251,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-sincronizada_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 253
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 150,
+      "h": 13,
+      "text": "Excluir \"FAQ de Suporte\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "O vínculo com Atendente de Suporte sai junto. Esse agente já não consu",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 201,
+        "w": 408,
+        "h": 34,
+        "text": "A pasta “FAQ Suporte” fica livre para ser usada por outra base. Os arq",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 251,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 251,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-sincronizada_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 253
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 150,
+      "h": 13,
+      "text": "Excluir \"FAQ de Suporte\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "O vínculo com Atendente de Suporte sai junto. Esse agente já não consu",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 201,
+        "w": 408,
+        "h": 34,
+        "text": "A pasta “FAQ Suporte” fica livre para ser usada por outra base. Os arq",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 251,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 251,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-sincronizada_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 253
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 150,
+      "h": 13,
+      "text": "Excluir \"FAQ de Suporte\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "O vínculo com Atendente de Suporte sai junto. Esse agente já não consu",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 201,
+        "w": 408,
+        "h": 34,
+        "text": "A pasta “FAQ Suporte” fica livre para ser usada por outra base. Os arq",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 251,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 251,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-vazia_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 190
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base é excluída, com o histórico. Ela não tem documentos. Não há com",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 17,
+        "text": "Nenhum agente está vinculado a esta base.",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 188,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 188,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-vazia_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 190
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base é excluída, com o histórico. Ela não tem documentos. Não há com",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 17,
+        "text": "Nenhum agente está vinculado a esta base.",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 188,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 188,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-vazia_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 190
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base é excluída, com o histórico. Ela não tem documentos. Não há com",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 17,
+        "text": "Nenhum agente está vinculado a esta base.",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 188,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 188,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-vazia_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 190
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base é excluída, com o histórico. Ela não tem documentos. Não há com",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 17,
+        "text": "Nenhum agente está vinculado a esta base.",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 188,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 188,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "confirmacao-desconhecida_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e todos os documentos dela são excluídos, com os fragmentos ind",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Não foi possível conferir os agentes vinculados; os vínculos que exist",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 205,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500"
+    ]
+  },
+  "confirmacao-desconhecida_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e todos os documentos dela são excluídos, com os fragmentos ind",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Não foi possível conferir os agentes vinculados; os vínculos que exist",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 205,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500"
+    ]
+  },
+  "confirmacao-desconhecida_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e todos os documentos dela são excluídos, com os fragmentos ind",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Não foi possível conferir os agentes vinculados; os vínculos que exist",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 205,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500"
+    ]
+  },
+  "confirmacao-desconhecida_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e todos os documentos dela são excluídos, com os fragmentos ind",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Não foi possível conferir os agentes vinculados; os vínculos que exist",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 205,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500",
+      "GET api /agents -> 500",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 500"
+    ]
+  },
+  "resposta-409_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Fechar",
+        "x": 848,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      }
+    ],
+    "alert": {
+      "x": 516,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(253, 236, 235)",
+      "text": "A base foi ativada depois que esta tela abriu, e só uma base inativa p",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.37,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": true,
+      "ariaDisabled": "true",
+      "bg": "rgb(241, 241, 241)",
+      "text": "Excluir",
+      "color": "rgb(139, 144, 151)",
+      "contrast": 2.85,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1161,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Desativar",
+        "x": 1245,
+        "y": 35,
+        "w": 91,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 409",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200"
+    ]
+  },
+  "resposta-409_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Fechar",
+        "x": 1058,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      }
+    ],
+    "alert": {
+      "x": 726,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(253, 236, 235)",
+      "text": "A base foi ativada depois que esta tela abriu, e só uma base inativa p",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.37,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": true,
+      "ariaDisabled": "true",
+      "bg": "rgb(241, 241, 241)",
+      "text": "Excluir",
+      "color": "rgb(139, 144, 151)",
+      "contrast": 2.85,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1581,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Desativar",
+        "x": 1665,
+        "y": 35,
+        "w": 91,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 409",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200"
+    ]
+  },
+  "resposta-409_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Fechar",
+        "x": 848,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 516,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(88, 21, 16)",
+      "text": "A base foi ativada depois que esta tela abriu, e só uma base inativa p",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 13.73,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": true,
+      "ariaDisabled": "true",
+      "bg": "rgb(36, 39, 44)",
+      "text": "Excluir",
+      "color": "rgb(125, 131, 139)",
+      "contrast": 3.92,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1161,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Desativar",
+        "x": 1245,
+        "y": 35,
+        "w": 91,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 409",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200"
+    ]
+  },
+  "resposta-409_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Fechar",
+        "x": 1058,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 726,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(88, 21, 16)",
+      "text": "A base foi ativada depois que esta tela abriu, e só uma base inativa p",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 13.73,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": true,
+      "ariaDisabled": "true",
+      "bg": "rgb(36, 39, 44)",
+      "text": "Excluir",
+      "color": "rgb(125, 131, 139)",
+      "contrast": 3.92,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1581,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Desativar",
+        "x": 1665,
+        "y": 35,
+        "w": 91,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 409",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200"
+    ]
+  },
+  "resposta-404_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Voltar para as bases",
+        "x": 682,
+        "y": 286,
+        "w": 151,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Fechar",
+        "x": 848,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      }
+    ],
+    "alert": {
+      "x": 516,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(253, 236, 235)",
+      "text": "Esta base já tinha sido excluída, provavelmente em outra aba. Nada mai",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.37,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 404"
+    ]
+  },
+  "resposta-404_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Voltar para as bases",
+        "x": 892,
+        "y": 286,
+        "w": 151,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Fechar",
+        "x": 1058,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      }
+    ],
+    "alert": {
+      "x": 726,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(253, 236, 235)",
+      "text": "Esta base já tinha sido excluída, provavelmente em outra aba. Nada mai",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.37,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 404"
+    ]
+  },
+  "resposta-404_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Voltar para as bases",
+        "x": 682,
+        "y": 286,
+        "w": 151,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Fechar",
+        "x": 848,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 516,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(88, 21, 16)",
+      "text": "Esta base já tinha sido excluída, provavelmente em outra aba. Nada mai",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 13.73,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 404"
+    ]
+  },
+  "resposta-404_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Voltar para as bases",
+        "x": 892,
+        "y": 286,
+        "w": 151,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Fechar",
+        "x": 1058,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 726,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(88, 21, 16)",
+      "text": "Esta base já tinha sido excluída, provavelmente em outra aba. Nada mai",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 13.73,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 404"
+    ]
+  },
+  "resposta-503_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 286,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 286,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 516,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(253, 236, 235)",
+      "text": "Outra operação nesta base impediu a exclusão. Nada foi excluído; tente",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.37,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 503"
+    ]
+  },
+  "resposta-503_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 286,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 286,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 726,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(253, 236, 235)",
+      "text": "Outra operação nesta base impediu a exclusão. Nada foi excluído; tente",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.37,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 503"
+    ]
+  },
+  "resposta-503_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 715,
+        "y": 286,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 818,
+        "y": 286,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 516,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(88, 21, 16)",
+      "text": "Outra operação nesta base impediu a exclusão. Nada foi excluído; tente",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 13.73,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 503"
+    ]
+  },
+  "resposta-503_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 925,
+        "y": 286,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir base",
+        "x": 1028,
+        "y": 286,
+        "w": 106,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 726,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(88, 21, 16)",
+      "text": "Outra operação nesta base impediu a exclusão. Nada foi excluído; tente",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 13.73,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 503"
+    ]
+  },
+  "resposta-rede_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Fechar",
+        "x": 848,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      }
+    ],
+    "alert": {
+      "x": 516,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(253, 236, 235)",
+      "text": "Não foi possível confirmar a exclusão: o servidor não respondeu. Recar",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.37,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> rede"
+    ]
+  },
+  "resposta-rede_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Fechar",
+        "x": 1058,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      }
+    ],
+    "alert": {
+      "x": 726,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(253, 236, 235)",
+      "text": "Não foi possível confirmar a exclusão: o servidor não respondeu. Recar",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 18.37,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> rede"
+    ]
+  },
+  "resposta-rede_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Fechar",
+        "x": 848,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 516,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(88, 21, 16)",
+      "text": "Não foi possível confirmar a exclusão: o servidor não respondeu. Recar",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 13.73,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> rede"
+    ]
+  },
+  "resposta-rede_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 288
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 185,
+      "h": 13,
+      "text": "Excluir \"Políticas de Cobrança\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "A base e os seus 3 documentos são excluídos, com os fragmentos indexad",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Os vínculos com Atendente de Suporte e Triagem saem junto. Esses agent",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Fechar",
+        "x": 1058,
+        "y": 286,
+        "w": 76,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "alert": {
+      "x": 726,
+      "y": 201,
+      "w": 408,
+      "h": 69,
+      "bg": "rgb(88, 21, 16)",
+      "text": "Não foi possível confirmar a exclusão: o servidor não respondeu. Recar",
+      "color": "rgb(255, 255, 255)",
+      "contrast": 13.73,
+      "fontSize": "12px"
+    },
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> rede"
+    ]
+  },
+  "listagem-depois-204_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases",
+    "notification": {
+      "x": 984,
+      "y": 928,
+      "w": 440,
+      "h": 56,
+      "text": "Base excluída\n\"Políticas de Cobrança\" foi excluída.",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 204",
+      "GET api /agents -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases -> 200",
+      "GET api /knowledge-bases/indexing-summary -> 200"
+    ]
+  },
+  "listagem-depois-204_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases",
+    "notification": {
+      "x": 1404,
+      "y": 928,
+      "w": 440,
+      "h": 56,
+      "text": "Base excluída\n\"Políticas de Cobrança\" foi excluída.",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 204",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/indexing-summary -> 200"
+    ]
+  },
+  "listagem-depois-204_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases",
+    "notification": {
+      "x": 984,
+      "y": 928,
+      "w": 440,
+      "h": 56,
+      "text": "Base excluída\n\"Políticas de Cobrança\" foi excluída.",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 12.45,
+      "fontSize": "13px"
+    },
+    "requests": [
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 204",
+      "GET api /agents -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases -> 200",
+      "GET api /knowledge-bases/indexing-summary -> 200"
+    ]
+  },
+  "listagem-depois-204_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases",
+    "notification": {
+      "x": 1404,
+      "y": 928,
+      "w": 440,
+      "h": 56,
+      "text": "Base excluída\n\"Políticas de Cobrança\" foi excluída.",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 12.45,
+      "fontSize": "13px"
+    },
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200",
+      "DELETE api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 204",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/indexing-summary -> 200"
+    ]
+  },
+  "cadastro-pasta-em-uso_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/new",
+    "originAlert": {
+      "x": 261,
+      "y": 767,
+      "w": 1127,
+      "h": 68,
+      "text": "Esta pasta já é usada pela base “Políticas internas de RH”. Uma pasta ",
+      "color": "rgb(176, 42, 31)",
+      "contrast": 5.75,
+      "fontSize": "13px"
+    },
+    "requests": [
+      "GET conn /connectors/providers -> 200",
+      "GET conn /connectors/providers/google-drive/folders -> 200",
+      "GET api /knowledge-bases -> 200",
+      "GET conn /connectors/providers/google-drive/folders?parentId=d-suporte -> 200",
+      "POST api /knowledge-bases -> 409"
+    ]
+  },
+  "cadastro-pasta-em-uso_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/new",
+    "originAlert": {
+      "x": 261,
+      "y": 768,
+      "w": 1547,
+      "h": 68,
+      "text": "Esta pasta já é usada pela base “Políticas internas de RH”. Uma pasta ",
+      "color": "rgb(176, 42, 31)",
+      "contrast": 5.75,
+      "fontSize": "13px"
+    },
+    "requests": [
+      "GET conn /connectors/providers -> 200",
+      "GET conn /connectors/providers/google-drive/folders -> 200",
+      "GET api /knowledge-bases -> 200",
+      "GET conn /connectors/providers/google-drive/folders?parentId=d-suporte -> 200",
+      "POST api /knowledge-bases -> 409"
+    ]
+  },
+  "cadastro-pasta-em-uso_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/new",
+    "originAlert": {
+      "x": 261,
+      "y": 767,
+      "w": 1127,
+      "h": 68,
+      "text": "Esta pasta já é usada pela base “Políticas internas de RH”. Uma pasta ",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 12.8,
+      "fontSize": "13px"
+    },
+    "requests": [
+      "GET conn /connectors/providers -> 200",
+      "GET conn /connectors/providers/google-drive/folders -> 200",
+      "GET api /knowledge-bases -> 200",
+      "GET conn /connectors/providers/google-drive/folders?parentId=d-suporte -> 200",
+      "POST api /knowledge-bases -> 409"
+    ]
+  },
+  "cadastro-pasta-em-uso_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/new",
+    "originAlert": {
+      "x": 261,
+      "y": 768,
+      "w": 1547,
+      "h": 68,
+      "text": "Esta pasta já é usada pela base “Políticas internas de RH”. Uma pasta ",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 12.8,
+      "fontSize": "13px"
+    },
+    "requests": [
+      "GET conn /connectors/providers -> 200",
+      "GET conn /connectors/providers/google-drive/folders -> 200",
+      "GET api /knowledge-bases -> 200",
+      "GET conn /connectors/providers/google-drive/folders?parentId=d-suporte -> 200",
+      "POST api /knowledge-bases -> 409"
+    ]
+  },
+  "regua-exclusao-documento_claro_1440": {
+    "viewport": 1440,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 228,
+      "h": 13,
+      "text": "Excluir \"Faixas de atraso e descontos\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "O texto e os fragmentos deste documento saem do índice. Não há como de",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Afeta Atendente de Suporte, Triagem: esses agentes deixam de encontrar",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 679,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir documento",
+        "x": 782,
+        "y": 205,
+        "w": 142,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "regua-exclusao-documento_claro_1860": {
+    "viewport": 1860,
+    "scheme": "light",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 228,
+      "h": 13,
+      "text": "Excluir \"Faixas de atraso e descontos\"?",
+      "color": "rgb(0, 0, 0)",
+      "contrast": 21,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "O texto e os fragmentos deste documento saem do índice. Não há como de",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Afeta Atendente de Suporte, Triagem: esses agentes deixam de encontrar",
+        "color": "rgb(0, 0, 0)",
+        "contrast": 21,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 889,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(255, 255, 255)",
+        "color": "rgb(0, 0, 0)"
+      },
+      {
+        "label": "Excluir documento",
+        "x": 992,
+        "y": 205,
+        "w": 142,
+        "h": 36,
+        "bg": "rgb(207, 58, 43)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(207, 58, 43)",
+      "contrast": 4.49,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "regua-exclusao-documento_escuro_1440": {
+    "viewport": 1440,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 500,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 516,
+      "y": 74,
+      "w": 228,
+      "h": 13,
+      "text": "Excluir \"Faixas de atraso e descontos\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 516,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "O texto e os fragmentos deste documento saem do índice. Não há como de",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 516,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Afeta Atendente de Suporte, Triagem: esses agentes deixam de encontrar",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 679,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir documento",
+        "x": 782,
+        "y": 205,
+        "w": 142,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1348,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1181,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1264,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1348,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  },
+  "regua-exclusao-documento_escuro_1860": {
+    "viewport": 1860,
+    "scheme": "dark",
+    "path": "/knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "modal": {
+      "x": 710,
+      "y": 50,
+      "w": 440,
+      "h": 207
+    },
+    "modalTitle": {
+      "x": 726,
+      "y": 74,
+      "w": 228,
+      "h": 13,
+      "text": "Excluir \"Faixas de atraso e descontos\"?",
+      "color": "rgb(233, 234, 236)",
+      "contrast": 14.02,
+      "fontSize": "13px"
+    },
+    "paragraphs": [
+      {
+        "x": 726,
+        "y": 110,
+        "w": 408,
+        "h": 34,
+        "text": "O texto e os fragmentos deste documento saem do índice. Não há como de",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      },
+      {
+        "x": 726,
+        "y": 156,
+        "w": 408,
+        "h": 34,
+        "text": "Afeta Atendente de Suporte, Triagem: esses agentes deixam de encontrar",
+        "color": "rgb(233, 234, 236)",
+        "contrast": 14.02,
+        "fontSize": "12px"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Cancelar",
+        "x": 889,
+        "y": 205,
+        "w": 87,
+        "h": 36,
+        "bg": "rgb(36, 39, 44)",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "Excluir documento",
+        "x": 992,
+        "y": 205,
+        "w": 142,
+        "h": 36,
+        "bg": "rgb(240, 118, 106)",
+        "color": "rgb(255, 255, 255)"
+      }
+    ],
+    "deleteButton": {
+      "x": 1768,
+      "y": 35,
+      "w": 76,
+      "h": 36,
+      "disabledLook": false,
+      "ariaDisabled": null,
+      "bg": "rgba(0, 0, 0, 0)",
+      "text": "Excluir",
+      "color": "rgb(254, 245, 244)",
+      "contrast": 17.32,
+      "fontSize": "12px"
+    },
+    "headerActions": [
+      {
+        "label": "Editar",
+        "x": 1601,
+        "y": 35,
+        "w": 72,
+        "h": 36
+      },
+      {
+        "label": "Ativar",
+        "x": 1684,
+        "y": 35,
+        "w": 71,
+        "h": 36
+      },
+      {
+        "label": "Excluir",
+        "x": 1768,
+        "y": 35,
+        "w": 76,
+        "h": 36
+      }
+    ],
+    "requests": [
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa -> 200",
+      "GET api /agents -> 200",
+      "GET api /knowledge-bases/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/documents -> 200"
+    ]
+  }
+}

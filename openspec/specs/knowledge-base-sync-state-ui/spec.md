@@ -13,8 +13,9 @@ A capability existe porque o ciclo roda em segundo plano e o operador só enxerg
 que ele gravou. Três regras a protegem: a tela nunca afirma mais do que o sistema
 sabe ("nunca sincronizou" não é falha, lista de ignorados nula não é lista vazia, e
 nenhum texto de conclusão aparece antes de `lastFinishedAt` mudar); o texto vem do
-`code`, nunca do `detail` como frase; e nenhum texto manda excluir a base, que é
-escopo da exclusão de base no painel.
+`code`, nunca do `detail` como frase; e nenhum texto manda excluir a base, porque
+uma falha de sincronização nunca se resolve excluindo a base (o remédio é na pasta,
+na instalação ou na próxima rodada, e o alerta aparece também em base ativa).
 
 ## Requirements
 
@@ -85,7 +86,8 @@ Com a base falhando, o card de origem SHALL exibir um alerta com o texto escolhi
 pelo `syncState.lastError.code`, nunca pelo `detail` como frase, e SHALL usar do
 `detail` só o e-mail da conta em `access-denied` e o motivo em `provider-error`.
 Todo alerta SHALL dizer que nenhum documento saiu da base. Os textos SHALL seguir a
-tabela "Falha da base" da D4 do `design.md` desta change.
+tabela "Falha da base" da D4 do `design.md` da change
+`frontend-detalhe-base-sincronizada`.
 
 O texto de `rate-limited` SHALL dizer que a falha é passageira e que a próxima
 tentativa é automática, e SHALL NOT falar de acesso nem de compartilhamento. O
@@ -94,6 +96,14 @@ pasta como Leitor. O texto de `api-not-configured` SHALL dizer que é configura�
 da instalação, e não da pasta. Código desconhecido SHALL cair num texto neutro com
 o código, sem reaproveitar o texto de outro código. Nenhum texto SHALL conter
 `exclu`, `remov` nem `apag`.
+
+A proibição continua depois de o painel passar a oferecer a exclusão de base
+(change `exclusao-base-painel`, #136), com este motivo: **uma falha de
+sincronização nunca se resolve excluindo a base.** O remédio de cada código é na
+pasta, na instalação ou na próxima rodada, e o alerta aparece também em base
+ativa, onde a exclusão nem está disponível. A orientação de desativar e excluir
+uma base existe só no `409` `folder-in-use` do cadastro, onde liberar a pasta é o
+caminho.
 
 #### Scenario: Sem acesso à pasta mostra a conta e o caminho de recuperação
 - **WHEN** a base falha com `lastError` `{ code: "access-denied", detail: "sync@exemplo.iam.gserviceaccount.com" }`
@@ -120,6 +130,11 @@ o código, sem reaproveitar o texto de outro código. Nenhum texto SHALL conter
 - **WHEN** os textos de todos os códigos de falha da base, de arquivo ignorado e
   de resposta do pedido de sincronização são montados
 - **THEN** nenhum contém `exclu`, `remov` nem `apag`, sem distinção de caixa
+
+#### Scenario: O alerta de base inativa também não manda excluir
+- **WHEN** uma base `Synced` inativa, em que a exclusão está disponível no
+  cabeçalho, falha com `lastError.code` `access-denied`
+- **THEN** o card de origem não contém `exclu`, `remov` nem `apag`
 
 ### Requirement: Arquivos da pasta que não entraram na base
 O detalhe de uma base `Synced` SHALL exibir, na aba de documentos, a lista de

@@ -333,10 +333,15 @@ SHALL ser comparado como veio, sem normalizar caixa.
 O cadastro SHALL recusar com `409` a base `Synced` cujo provedor e id de pasta já
 são usados por outra base, ativa ou inativa, respondendo com `ProblemDetails`, a extensão `code`
 igual a `folder-in-use`, as extensões `knowledgeBaseId` e `knowledgeBaseName` com
-a base que usa a pasta, e um `detail` que nomeia essa base e diz que a pasta
-continua ocupada mesmo com a base inativa. A resposta NÃO SHALL mencionar excluir,
-remover ou apagar a base, porque não há rota de exclusão de base. Nenhuma base
-SHALL ser criada.
+a base que usa a pasta, e um `detail` que nomeia essa base, diz que a pasta
+continua ocupada mesmo com a base inativa, e oferece as duas saídas, nesta ordem:
+escolher outra pasta, ou desativar e excluir essa base para liberar a pasta,
+avisando que a exclusão apaga os documentos dela e não pode ser desfeita. Nenhuma base SHALL ser criada.
+
+A orientação existe porque a base tem exclusão (requisito "Exclusão de base de
+conhecimento inativa") e o painel a oferece desde a change `exclusao-base-painel`
+(#136). Até ali o `detail` era proibido de falar em excluir, remover ou apagar,
+porque a orientação levaria a uma ação que nenhuma tela oferecia.
 
 A pasta em uso SHALL ser detectada antes da chamada ao `apps/connectors`, e por
 isso SHALL responder `409` mesmo com o `apps/connectors` fora do ar ou não
@@ -357,10 +362,10 @@ a violação desse índice SHALL virar o mesmo `409`, com a base vencedora, e NU
 - **THEN** a API responde HTTP 409 com o nome da base inativa e um `detail` que diz
   que a pasta continua ocupada mesmo com a base inativa
 
-#### Scenario: A mensagem não manda excluir a base
+#### Scenario: A mensagem orienta desativar e excluir a base
 - **WHEN** a API responde 409 por pasta em uso
-- **THEN** o texto inteiro da resposta não contém `exclu`, `remov` nem `apag`, em
-  qualquer caixa
+- **THEN** o `detail` nomeia a base que usa a pasta, oferece escolher outra pasta, e
+  contém "desative", "exclua" e "não pode ser desfeita"
 
 #### Scenario: Pasta em uso com o apps/connectors fora do ar
 - **WHEN** a pasta já é usada por outra base e o `apps/connectors` não responde,
