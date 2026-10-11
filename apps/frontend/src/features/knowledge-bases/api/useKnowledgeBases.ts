@@ -3,6 +3,7 @@ import {
   activateKnowledgeBase,
   createKnowledgeBase,
   deactivateKnowledgeBase,
+  deleteKnowledgeBase,
   getKnowledgeBase,
   listKnowledgeBaseIndexingSummary,
   listKnowledgeBases,
@@ -116,5 +117,15 @@ export function useDeactivateKnowledgeBaseMutation() {
   return useMutation({
     mutationFn: (id: string) => deactivateKnowledgeBase(id),
     onSuccess: (updated: KnowledgeBase) => cacheUpdatedKnowledgeBase(queryClient, updated),
+  });
+}
+
+// Sem onSuccess de propósito: invalidar ou remover ['knowledge-bases', id] com o
+// detalhe ainda montado repetiria a consulta, receberia 404 e trocaria a tela por
+// "não encontrada" antes da navegação. A página navega e só depois mexe no cache
+// (design.md da change exclusao-base-painel, D3.1).
+export function useDeleteKnowledgeBaseMutation() {
+  return useMutation({
+    mutationFn: (id: string) => deleteKnowledgeBase(id),
   });
 }

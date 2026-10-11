@@ -125,12 +125,17 @@ function codeMessage(
       return 'O Google limitou as chamadas por um momento. A falha é passageira: tente de novo em instantes.';
     case 'provider-unavailable':
       return 'O Google não respondeu. Tente de novo em instantes.';
-    // Nomeia a base e diz que a pasta segue ocupada com a base inativa, e NÃO
-    // manda excluir, remover nem apagar: o painel não oferece a exclusão de base,
-    // e a orientação de excluir entra com o botão, na #136, que troca este texto e
-    // a asserção negativa dele (design.md, D3).
-    case 'folder-in-use':
-      return `Esta pasta já é usada pela base “${knowledgeBaseName ?? 'sem nome'}”. Uma pasta alimenta uma base só, e continua ocupada mesmo com a base inativa. Escolha outra pasta.`;
+    // Nomeia a base, diz que a pasta segue ocupada com a base inativa, e oferece as
+    // duas saídas, na ordem do detail do apps/api: outra pasta, ou desativar e
+    // excluir a base dona para liberar esta. A orientação de excluir entrou com o
+    // botão de exclusão no detalhe da base (design.md da change
+    // exclusao-base-painel, D5); até ali a frase era proibida de falar em excluir.
+    // Sem `knowledgeBaseName`, a frase fala "da base que usa esta pasta": base sem
+    // nome não existe, porque o nome é obrigatório.
+    case 'folder-in-use': {
+      const owner = knowledgeBaseName ? `a base “${knowledgeBaseName}”` : null;
+      return `Esta pasta já é usada ${owner ? `pela base “${knowledgeBaseName}”` : 'por outra base'}. Uma pasta alimenta uma base só, e continua ocupada mesmo com a base inativa. Escolha outra pasta, ou desative e exclua ${owner ?? 'a base que usa esta pasta'} para liberar esta; a exclusão apaga os documentos dela e não pode ser desfeita.`;
+    }
     case 'connectors-not-configured':
       return 'O servidor desta instalação ainda não está ligado ao serviço de conectores. É configuração da instalação; a base manual continua disponível.';
     case 'connectors-unavailable':

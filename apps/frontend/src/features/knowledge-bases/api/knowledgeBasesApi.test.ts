@@ -4,6 +4,7 @@ import {
   activateKnowledgeBase,
   createKnowledgeBase,
   deactivateKnowledgeBase,
+  deleteKnowledgeBase,
   getKnowledgeBase,
   listKnowledgeBaseIndexingSummary,
   listKnowledgeBases,
@@ -189,6 +190,43 @@ describe('rotas do catálogo de bases', () => {
     expect(url).toMatch(new RegExp(`/knowledge-bases/${id}/deactivate$`));
     expect(init.method).toBe('POST');
     expect(init.body).toBeUndefined();
+  });
+});
+
+// Exclusão de base (#108 no apps/api; design.md da change exclusao-base-painel, D3).
+describe('exclusão de base', () => {
+  it('monta DELETE /knowledge-bases/{id} sem corpo e aceita o 204 sem corpo', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(deleteKnowledgeBase(id)).resolves.toBeUndefined();
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(new RegExp(`/knowledge-bases/${id}$`));
+    expect(init.method).toBe('DELETE');
+    expect(init.body).toBeUndefined();
+  });
+
+  it.each([
+    [409, 'knowledge-base-active'],
+    [503, undefined],
+  ])('%i chega como ApiError com o status e o code', async (status, code) => {
+    stubFetch({ title: 'Título do servidor', status, ...(code ? { code } : {}) }, status);
+
+    const error = await deleteKnowledgeBase(id).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(status);
+    expect((error as ApiError).problem?.code).toBe(code);
+  });
+
+  it('404 sem corpo chega como ApiError 404', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
+
+    const error = await deleteKnowledgeBase(id).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(404);
   });
 });
 

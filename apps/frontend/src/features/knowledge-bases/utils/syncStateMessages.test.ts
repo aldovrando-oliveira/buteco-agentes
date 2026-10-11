@@ -24,9 +24,10 @@ function allText(text: SyncFailureText): string {
   return [text.title, text.sentence, text.guarantee, text.remedy ?? ''].join(' ');
 }
 
-// A proibição existe para a tela não mandar excluir a base, que é escopo da
-// #136; a garantia foi reescrita para caber nela (design.md, D4 e C6). A #136
-// revê esta varredura junto com o botão de exclusão.
+// A proibição continua depois do botão de exclusão de base (change
+// exclusao-base-painel, D6): uma falha de sincronização nunca se resolve
+// excluindo a base, e o alerta aparece também em base ativa. A varredura é o que
+// impede a regressão bem-intencionada de sugerir "excluir e recriar" num alerta.
 const FORBIDDEN = /exclu|remov|apag/i;
 
 describe('syncFailureMessage — falha da base', () => {

@@ -1,15 +1,27 @@
-import { Alert, Badge, Button, Group, Loader, Modal, Stack, Tabs, Text } from '@mantine/core';
+import {
+  Alert,
+  Badge,
+  Button,
+  Group,
+  Loader,
+  Modal,
+  Stack,
+  Tabs,
+  Text,
+  Tooltip,
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { DetailHeader } from '../../../components/layout/DetailHeader';
 import { useAgentsQuery } from '../../agents/api/useAgents';
 import {
   indexingSummaryQueryKey,
   useActivateKnowledgeBaseMutation,
   useDeactivateKnowledgeBaseMutation,
+  useDeleteKnowledgeBaseMutation,
   useKnowledgeBaseQuery,
 } from '../api/useKnowledgeBases';
 import { connectorsBaseUrl } from '../api/connectorsApi';
@@ -19,13 +31,18 @@ import {
   type SyncRequestView,
 } from '../components/KnowledgeBaseSyncOriginCard';
 import { KnowledgeBaseIgnoredFilesCard } from '../components/KnowledgeBaseIgnoredFilesCard';
-import { connectorErrorMessage } from '../utils/connectorErrors';
+import { connectorErrorMessage, providerLabel } from '../utils/connectorErrors';
 import { SYNC_WAIT_LIMIT_MS, isSyncFailing, type SyncRequest } from '../utils/syncState';
 import type { KnowledgeBase } from '../types/knowledgeBase';
 import { KnowledgeBaseDescriptionCard } from '../components/KnowledgeBaseDescriptionCard';
 import { KnowledgeDocumentsCard } from '../components/KnowledgeDocumentsCard';
 import { KnowledgeDocumentModal } from '../components/KnowledgeDocumentModal';
 import { KnowledgeBaseAgentsCard } from '../components/KnowledgeBaseAgentsCard';
+import { KnowledgeBaseDeleteModal } from '../components/KnowledgeBaseDeleteModal';
+import {
+  deleteKnowledgeBaseFailure,
+  type DeleteKnowledgeBaseFailure,
+} from '../utils/deleteKnowledgeBaseMessages';
 import { KnowledgeIndexDiagnosticsTab } from '../components/KnowledgeIndexDiagnosticsTab';
 import { ApiError } from '../api/knowledgeBasesApi';
 import { useKnowledgeIndexDiagnosticsQuery } from '../api/useKnowledgeIndex';
@@ -182,6 +199,28 @@ export function KnowledgeBaseDetailPage() {
   const activateMutation = useActivateKnowledgeBaseMutation();
   const deactivateMutation = useDeactivateKnowledgeBaseMutation();
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
+  const navigate = useNavigate();
+  const deleteBaseMutation = useDeleteKnowledgeBaseMutation();
+  const [deleteBaseOpened, setDeleteBaseOpened] = useState(false);
+  const [deleteBaseFailure, setDeleteBaseFailure] = useState<DeleteKnowledgeBaseFailure | null>(
+    null,
+  );
+  // A base e os documentos dela saem do cache na DESMONTAGEM, depois do 204: é o
+  // único momento em que ninguém mais observa as duas chaves. Removê-las logo após
+  // o `navigate` — mesmo esperando a promessa dele — repetia a consulta da base
+  // excluída, porque o detalhe ainda estava montado (medido pelo teste do 204).
+  const deletedBaseId = useRef<string | null>(null);
+  useEffect(
+    () => () => {
+      if (deletedBaseId.current === null) return;
+      queryClient.removeQueries({
+        queryKey: ['knowledge-bases', deletedBaseId.current],
+        exact: true,
+      });
+      queryClient.removeQueries({ queryKey: documentsQueryKey(deletedBaseId.current) });
+    },
+    [queryClient],
+  );
 
   // A página busca e repassa como prop; os componentes de documento não importam
   // hook de query nem de mutation (convenção 7, design.md D11).
@@ -310,6 +349,50 @@ export function KnowledgeBaseDetailPage() {
     });
   };
 
+  const closeDeleteBase = () => {
+    setDeleteBaseOpened(false);
+    setDeleteBaseFailure(null);
+  };
+
+  // NINGUÉM MEXE NA CHAVE DA BASE COM O DETALHE MONTADO (design.md da change
+  // exclusao-base-painel, D3.1): a página observa ['knowledge-bases', id], e
+  // mexer nela repetiria a consulta, receberia 404 e trocaria a tela pelo "não
+  // encontrada" (no 204) ou desmontaria a confirmação com o texto (no 404). O 204
+  // tira a base do cache na desmontagem; o 404 invalida só a listagem.
+  const handleConfirmDeleteBase = () => {
+    if (!data) return;
+    const { name } = data;
+    setDeleteBaseFailure(null);
+    deleteBaseMutation.mutate(id!, {
+      onSuccess: () => {
+        notifications.show({
+          color: 'green',
+          title: 'Base excluída',
+          message: `"${name}" foi excluída.`,
+        });
+        deletedBaseId.current = id!;
+        // Só chaves que o detalhe não observa: a listagem (exata), o resumo e os
+        // agentes (os vínculos foram pela cascata). A base e os documentos saem na
+        // desmontagem (efeito acima).
+        void queryClient.invalidateQueries({ queryKey: ['knowledge-bases'], exact: true });
+        void queryClient.invalidateQueries({ queryKey: indexingSummaryQueryKey });
+        void queryClient.invalidateQueries({ queryKey: ['agents'] });
+        navigate('/knowledge-bases');
+      },
+      onError: (caught) => {
+        const failure = deleteKnowledgeBaseFailure(caught);
+        setDeleteBaseFailure(failure);
+        if (failure.kind === 'active') {
+          // Alguém ativou a base em outra aba: relida, o cabeçalho volta a "Ativa"
+          // e o botão fica indisponível (D1).
+          void refetch();
+        } else if (failure.kind === 'not-found') {
+          void queryClient.invalidateQueries({ queryKey: ['knowledge-bases'], exact: true });
+        }
+      },
+    });
+  };
+
   if (isLoading) {
     return (
       <Group>
@@ -369,6 +452,42 @@ export function KnowledgeBaseDetailPage() {
                 Ativar
               </Button>
             )}
+            {/* EXCLUIR SÓ COM A BASE INATIVA (design.md da change
+                exclusao-base-painel, D1): a rota recusa base ativa com 409.
+                Ativa, o botão fica indisponível e EXPLICA — `data-disabled` e
+                não `disabled`, porque o nativo tira o foco e a explicação ficaria
+                fora do alcance do teclado; o Tooltip abre no foco porque
+                `events.focus` é falso por padrão no Mantine 9 (tasks.md, 1.3).
+                O nome acessível difere do texto porque as linhas de documento
+                já têm botões "Excluir". */}
+            <Tooltip
+              label="Só uma base inativa pode ser excluída. Desative a base antes; a desativação pode ser desfeita, a exclusão não."
+              disabled={!data.isActive}
+              events={{ hover: true, focus: true, touch: false }}
+              multiline
+              w={280}
+            >
+              {/* `outline`, como o "Desativar": o vermelho cheio fica para a
+                  confirmação. Cheio, o botão era o mais pesado do cabeçalho
+                  (conferência visual, R1-1). */}
+              <Button
+                color="red"
+                variant="outline"
+                aria-label="Excluir a base"
+                data-disabled={data.isActive || undefined}
+                aria-disabled={data.isActive || undefined}
+                onClick={(event) => {
+                  if (data.isActive) {
+                    event.preventDefault();
+                    return;
+                  }
+                  setDeleteBaseFailure(null);
+                  setDeleteBaseOpened(true);
+                }}
+              >
+                Excluir
+              </Button>
+            </Tooltip>
           </>
         }
       />
@@ -525,6 +644,32 @@ export function KnowledgeBaseDetailPage() {
           </Group>
         </Modal>
       )}
+
+      {/* Os três estados de cada dado (convenção 13): o tamanho da listagem
+          respondida, a lista de agentes derivada de GET /agents, ou `null` —
+          desconhecido, que a confirmação nunca diz como zero (D2). */}
+      <KnowledgeBaseDeleteModal
+        opened={deleteBaseOpened}
+        knowledgeBaseName={data.name}
+        documentCount={documentsQuery.data ? documentsQuery.data.length : null}
+        agentNames={
+          agentsQuery.data
+            ? agentsConsultingBase(agentsQuery.data, data.id).map((agent) => agent.name)
+            : null
+        }
+        syncedFolder={
+          data.contentMode === 'Synced' && data.syncSource
+            ? {
+                folderName: data.syncSource.folderName,
+                providerLabel: providerLabel(data.syncSource.provider),
+              }
+            : null
+        }
+        pending={deleteBaseMutation.isPending}
+        failure={deleteBaseFailure}
+        onConfirm={handleConfirmDeleteBase}
+        onClose={closeDeleteBase}
+      />
 
       {/* Desativar passa por confirmação, como agente e servidor MCP; ativar é
           imediato. A cópia não nomeia agentes afetados: a visão inversa é

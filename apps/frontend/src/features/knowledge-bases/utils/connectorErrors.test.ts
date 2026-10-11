@@ -96,7 +96,7 @@ describe('connectorErrorMessage — navegação (apps/connectors)', () => {
 });
 
 describe('connectorErrorMessage — cadastro (apps/api)', () => {
-  it('folder-in-use nomeia a base, diz que segue ocupada inativa, e não manda excluir', () => {
+  it('folder-in-use nomeia a base, diz que segue ocupada inativa, e oferece outra pasta ou desativar e excluir', () => {
     const message = connectorErrorMessage(
       apiError(409, {
         code: 'folder-in-use',
@@ -108,8 +108,21 @@ describe('connectorErrorMessage — cadastro (apps/api)', () => {
     );
     expect(message).toContain('“Políticas internas de RH”');
     expect(message).toMatch(/inativa/);
-    expect(message).not.toMatch(/exclu|remov|apag/i);
+    expect(message).toContain('Escolha outra pasta');
+    expect(message).toContain('desative');
+    expect(message).toContain('exclua');
+    expect(message).toContain('não pode ser desfeita');
     expect(message).toContain(CREATED_NOTHING);
+  });
+
+  it('folder-in-use sem o nome da base fala da base que usa a pasta, nunca "sem nome"', () => {
+    const message = connectorErrorMessage(
+      apiError(409, { code: 'folder-in-use', detail: 'A pasta já é usada pela base ...' }),
+      'create',
+    );
+    expect(message).toContain('a base que usa esta pasta');
+    expect(message).not.toMatch(/sem nome/);
+    expect(message).toContain('exclua');
   });
 
   const cases: Array<[string, ApiError, RegExp]> = [
