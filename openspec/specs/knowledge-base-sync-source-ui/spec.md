@@ -213,22 +213,34 @@ próprio de serviço fora do ar.
 
 O erro do cadastro sincronizado SHALL ser exibido no card de Origem, mantendo o
 que o operador preencheu, e SHALL dizer que nenhuma base foi criada. O texto de
-`folder-in-use` SHALL nomear a base que usa a pasta e dizer que a pasta continua
-ocupada mesmo com a base inativa, e SHALL NOT conter `exclu`, `remov` nem `apag`,
-em qualquer caixa. O `401` do `apps/connectors` SHALL NOT encerrar a sessão do
-operador nem redirecionar para o login.
+`folder-in-use` SHALL nomear a base que usa a pasta, dizer que a pasta continua
+ocupada mesmo com a base inativa, e orientar escolher outra pasta ou desativar e
+excluir essa base para liberar a pasta, avisando que a exclusão apaga os documentos
+dela e não pode ser desfeita. Sem `knowledgeBaseName` na resposta, o texto SHALL se
+referir a "a base que usa esta pasta", e SHALL NOT dizer "sem nome". O `401` do
+`apps/connectors` SHALL NOT encerrar a sessão do operador nem redirecionar para o
+login.
+
+A orientação de excluir existe desde a change `exclusao-base-painel` (#136), que
+trouxe a exclusão de base ao painel; até ali o texto era proibido de falar em
+excluir, porque a tela não oferecia a ação.
 
 #### Scenario: Cada código mostra o seu texto
 - **WHEN** a navegação ou o cadastro respondem com cada código da tabela da D3
 - **THEN** o painel exibe o texto daquele código, e nenhum `title` do
   `ProblemDetails` aparece na tela
 
-#### Scenario: Pasta em uso no cadastro não manda excluir
+#### Scenario: Pasta em uso no cadastro orienta desativar e excluir a base
 - **WHEN** o `POST /knowledge-bases` responde `409` com `code: "folder-in-use"` e
   `knowledgeBaseName: "Políticas internas de RH"`
-- **THEN** o card de Origem exibe um texto com "Políticas internas de RH" e que diz
-  que a pasta continua ocupada mesmo com a base inativa, o texto não contém
-  `exclu`, `remov` nem `apag`, e os campos preenchidos continuam na tela
+- **THEN** o card de Origem exibe um texto com "Políticas internas de RH", que diz
+  que a pasta continua ocupada mesmo com a base inativa, que contém "desative",
+  "exclua" e "não pode ser desfeita", e os campos preenchidos continuam na tela
+
+#### Scenario: Pasta em uso sem o nome da base
+- **WHEN** o `POST /knowledge-bases` responde `409` com `code: "folder-in-use"` sem
+  `knowledgeBaseName`
+- **THEN** o texto se refere a "a base que usa esta pasta" e não contém "sem nome"
 
 #### Scenario: Sem acesso mostra o e-mail da conta
 - **WHEN** o cadastro responde `422` com `code: "access-denied"` e `detail` igual a

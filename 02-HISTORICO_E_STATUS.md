@@ -1890,8 +1890,8 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **trinta e sete**, achadas em dez etapas diferentes (a décima quinta, da #99,
-as dez da #106 e as doze da #107 estão no fim da lista). A décima quarta vem primeiro
+São **trinta e oito**, achadas em onze etapas diferentes (a décima quinta, da #99,
+as dez da #106, as doze da #107 e a da #136 estão no fim da lista). A décima quarta vem primeiro
 porque é de **tipo novo** e muda o critério de detecção da lista inteira; depois
 a oitava, que também era de tipo novo quando entrou; depois as duas da 5c, depois
 as três da 5a-3, depois as duas da 5a-2, que **corrigiram duas das cinco
@@ -2211,6 +2211,14 @@ porquê de cada uma, está na D6 do `design.md` da change; aqui, o que cada uma 
   nenhuma conclusão, o nome é "nome no cadastro".
 - **C12, provedor pelo mapa local:** "Abrir no {provedor}", e "Abrir a pasta" para
   provedor desconhecido.
+
+**A trigésima oitava, da #136 (`exclusao-base-painel`, 05/10/2026), do mesmo canvas,
+pranchas 3a e 4a.** Na D7 do `design.md` da change:
+
+- **C1, ação que o protótipo não desenha:** a exclusão de base não está em prancha
+  nenhuma. O botão entrou no cabeçalho, em `outline` vermelho como o `Desativar`, e a
+  confirmação segue o modal de exclusão de documento, que serviu de régua na
+  conferência visual.
 
 **Para a 5b, o que já está pronto — e o que a 5a-1 já entregou:**
 
@@ -15485,3 +15493,67 @@ rodava.
 - Histórico (#101), modal de documento (#131), exclusão de base (#136).
 - O contraste de 4,14:1 do texto `dimmed` na faixa de cabeçalho dos cards, anterior a
   esta change: **#148**.
+
+## `exclusao-base-painel` — exclusão de base de conhecimento no painel (#136)
+
+**Change proposta em 05/10/2026, revisada e aprovada pelo dono com um ajuste (o
+`detail` do `409` de pasta em uso oferece as duas saídas), implementada em
+06/10/2026.** Branch `feat/136-exclusao-base-painel`, criada sem upstream de
+`043cf69`, num worktree próprio, em paralelo com a #119. **Validação manual
+(convenção 14) feita e aprovada pelo dono em 11/10/2026**, sem ajuste pedido, numa
+pilha local com `apps/api`, `apps/connectors` (service account de validação),
+`apps/workers` e o painel deste worktree. Specs sincronizadas (um requisito novo em
+`knowledge-base-catalog-ui` e três alterados em `knowledge-base-catalog`,
+`knowledge-base-sync-source-ui` e `knowledge-base-sync-state-ui`, com o `Purpose`
+desta última corrigido à mão) e change arquivada em
+`openspec/changes/archive/2026-10-11-exclusao-base-painel/`.
+
+### O que entrou
+
+No `apps/frontend`: o botão `Excluir` no cabeçalho do detalhe da base, indisponível
+com a base ativa (`data-disabled` e `aria-disabled`, focável, com a explicação num
+`Tooltip` que abre no foco) e habilitado com a base inativa; a confirmação, que nomeia
+a base, os agentes que perdem o vínculo e a quantidade de documentos, diz que a pasta
+de uma base sincronizada fica livre e que o Drive não é tocado, e trata contagem e
+agentes desconhecidos como desconhecidos; o texto de cada resposta da rota pelo status
+e pelo `code` (`204` volta à listagem com notificação; `409`, `404`, `503` e rede ficam
+na confirmação). No `apps/api`, só o `detail` do `409` `folder-in-use`, que passa a
+oferecer escolher outra pasta ou desativar e excluir a base dona; o texto do cadastro no
+painel diz o mesmo. Os textos de estado da sincronização continuam sem `exclu`, com o
+motivo reescrito: falha de sincronização nunca se resolve excluindo a base.
+
+### O que a implementação mediu
+
+- **O `Tooltip` do Mantine 9 não abre no foco por padrão** (`events.focus: false`);
+  o botão passa `events` explícito. O `data-disabled` mantém o botão focável e não põe
+  `pointer-events: none`.
+- **A base excluída saía do cache cedo demais.** Remover a chave da base logo depois do
+  `navigate`, mesmo esperando a promessa dele, achava o detalhe ainda montado e repetia
+  a consulta (o teste do `204` contou 2 chamadas, não 1). A remoção foi para a
+  desmontagem da página.
+- **O nome acessível do botão colidia** com os botões "Excluir" das linhas de
+  documento: o texto visível ficou `Excluir`, e o nome acessível, "Excluir a base".
+- **O `AssertNoDeletionAdvice` tinha dois usos no `apps/api`**, e o `tasks.md` listava
+  um: o teste da corrida de dois cadastros também lê o `detail` do mesmo `FolderInUse`.
+  Trocado com autorização do dono, e os dois helpers saíram.
+- **Suítes:** frontend 1685/1685 na baseline em `043cf69`, **1724/1724** no fim (+39
+  testes, 3 arquivos novos); `format:check` com a mesma lista de 52 arquivos da
+  baseline. `apps/api` 756/756 antes e depois (testes alterados, nenhum novo).
+- **Conferência visual:** duas rodadas de 48 capturas (12 estados × 2 esquemas × 2
+  larguras), respostas montadas pelo CDP; um achado na primeira (o `Excluir` em vermelho
+  cheio, 2,8:1 no escuro, virou `outline`), nenhum na segunda. A confirmação mede igual
+  à régua.
+
+### Guardas contra o defeito real (convenção 15)
+
+A condição de base inativa no botão e a orientação no `detail` do `apps/api`: cada uma
+aplicada, vista reprovando o teste dela (dois da página; três casos no `apps/api`), e
+desfeita. Os testes da confirmação, escritos antes de rodar, foram vistos reprovando
+depois: 13/13 com o componente vazio, e as negativas de "desconhecido não vira zero"
+reprovando sozinhas com as frases trocadas por "0 documentos" e "nenhum agente".
+
+### Achados fora do escopo (convenção 23)
+
+- **#155**: o botão vermelho cheio das confirmações destrutivas mede 2,8:1 no escuro, e
+  o vermelho em `outline` mede 4,49:1 no claro; padrão anterior a esta change.
+

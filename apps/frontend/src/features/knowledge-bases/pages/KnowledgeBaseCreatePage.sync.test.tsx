@@ -547,7 +547,9 @@ describe('texto de cada código', () => {
     expect(screen.getByLabelText(/Descrição/)).toHaveValue(DESCRIPTION);
     if (code === 'folder-in-use') {
       expect(alert).toHaveTextContent('Políticas internas de RH');
-      expect(alert.textContent).not.toMatch(/exclu|remov|apag/i);
+      expect(alert).toHaveTextContent('Escolha outra pasta');
+      expect(alert).toHaveTextContent(/desative e exclua a base “Políticas internas de RH”/);
+      expect(alert).toHaveTextContent('não pode ser desfeita');
     }
   });
 });

@@ -82,16 +82,17 @@ public static class KnowledgeBaseEndpoints
 
     /// <summary>
     /// 409 de pasta em uso (design.md da change criacao-base-sincronizada, D5). A frase
-    /// nomeia a base e diz que a pasta continua ocupada mesmo com a base inativa, e NÃO
-    /// manda excluir a base. A rota de exclusão existe desde a #108, mas o botão no
-    /// painel só chega com a #136, e a frase mandaria o operador a uma ação que a tela
-    /// não oferece (design.md da change exclusao-base-conhecimento, D8). Ela muda junto
-    /// com o botão, na #136, com o teste que afirma a ausência dessa instrução.
+    /// nomeia a base, diz que a pasta continua ocupada mesmo com a base inativa, e
+    /// oferece as duas saídas na ordem do painel: escolher outra pasta, ou desativar e
+    /// excluir a base dona para liberar esta, avisando que a exclusão não tem volta —
+    /// quem chama a API direto não passa por confirmação nenhuma (design.md da change
+    /// exclusao-base-painel, D4). Até a #136 a frase era proibida de falar em excluir,
+    /// porque nenhuma tela oferecia a ação (exclusao-base-conhecimento, D8).
     /// </summary>
     private static ProblemHttpResult FolderInUse(Guid knowledgeBaseId, string knowledgeBaseName) =>
         TypedResults.Problem(
             title: "A pasta já é usada por outra base de conhecimento.",
-            detail: $"A pasta já é usada pela base \"{knowledgeBaseName}\". Uma pasta pertence a uma base só, e continua ocupada mesmo com a base inativa.",
+            detail: $"A pasta já é usada pela base \"{knowledgeBaseName}\". Uma pasta pertence a uma base só, e continua ocupada mesmo com a base inativa. Escolha outra pasta, ou desative e exclua a base \"{knowledgeBaseName}\" para liberar esta; a exclusão apaga os documentos dela e não pode ser desfeita.",
             statusCode: StatusCodes.Status409Conflict,
             extensions: new Dictionary<string, object?>
             {

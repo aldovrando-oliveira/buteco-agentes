@@ -128,8 +128,9 @@ imutáveis; nome e URL da pasta são snapshot que só a gravação de um ciclo
 - **Uma pasta, uma base, inclusive inativa** — índice único parcial em
   `(SyncProvider, SyncFolderId) WHERE ContentMode = 'Synced'`, sem `IsActive`, porque
   desativar impede o uso pelo agente e não a sincronização. Id comparado como veio.
-  A rota de exclusão de base existe desde a #108, mas a mensagem de pasta em uso
-  continua sem mandar excluir até o botão do painel (#136).
+  A rota de exclusão de base existe desde a #108, e desde o botão do painel (#136) a
+  mensagem de pasta em uso oferece escolher outra pasta ou desativar e excluir a base
+  dona.
 - **Motivo é código, não frase** — `LastSyncErrorCode` e o `code` de cada item de
   `SyncIgnoredFiles` (`jsonb`, molde de `Agent.Skills`) aceitam só a forma
   `access-denied` (regex com `\z`, não `$`). O texto é do frontend, pelo raciocínio
@@ -766,8 +767,8 @@ código do `apps/connectors` passa como veio, com o status por natureza dele (s�
 `connectors-error` (`502`, inclusive para `401`/`403` do outro app, que repassados
 deslogariam o operador). Os limites de tempo formam uma cadeia entre três lugares:
 30 s de metadado no `apps/connectors` < 35 s no `apps/api` < 60 s padrão do nginx do
-painel. Pasta em uso é `409` `folder-in-use` com a base dona, e a mensagem não manda
-excluir nada enquanto a #108 não existir.
+painel. Pasta em uso é `409` `folder-in-use` com a base dona, e desde a #136 a
+mensagem oferece escolher outra pasta ou desativar e excluir essa base.
 
 **A recusa de conteúdo do upsert de `/sync` sai com código** (change
 `codigo-recusa-conteudo-upsert`, #120). As quatro recusas de conteúdo do

@@ -6,6 +6,7 @@ import {
   useActivateKnowledgeBaseMutation,
   useCreateKnowledgeBaseMutation,
   useDeactivateKnowledgeBaseMutation,
+  useDeleteKnowledgeBaseMutation,
   useKnowledgeBaseIndexingSummaryQuery,
   useKnowledgeBaseQuery,
   useKnowledgeBasesQuery,
@@ -199,6 +200,44 @@ describe('mutações do catálogo de bases', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(queryClient.getQueryData(['knowledge-bases', knowledgeBase.id])).toBeUndefined();
+  });
+});
+
+// A mutação de exclusão NÃO mexe no cache: quem mexe é a página, depois de
+// navegar (design.md da change exclusao-base-painel, D3.1).
+describe('useDeleteKnowledgeBaseMutation', () => {
+  it('chama DELETE /knowledge-bases/{id} e não toca no cache', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { queryClient, Wrapper } = createWrapper();
+    queryClient.setQueryData(['knowledge-bases', knowledgeBase.id], knowledgeBase);
+    queryClient.setQueryData(['knowledge-bases'], [knowledgeBase]);
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const remove = vi.spyOn(queryClient, 'removeQueries');
+
+    const { result } = renderHook(() => useDeleteKnowledgeBaseMutation(), { wrapper: Wrapper });
+    await result.current.mutateAsync(knowledgeBase.id);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(new RegExp(`/knowledge-bases/${knowledgeBase.id}$`));
+    expect(init.method).toBe('DELETE');
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(['knowledge-bases', knowledgeBase.id])).toEqual(knowledgeBase);
+  });
+
+  it('propaga o erro da rota', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ code: 'knowledge-base-active' }, 409)),
+    );
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(() => useDeleteKnowledgeBaseMutation(), { wrapper: Wrapper });
+
+    await expect(result.current.mutateAsync(knowledgeBase.id)).rejects.toMatchObject({
+      status: 409,
+    });
   });
 });
 

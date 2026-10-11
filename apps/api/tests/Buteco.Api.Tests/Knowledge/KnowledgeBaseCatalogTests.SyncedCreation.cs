@@ -271,14 +271,19 @@ public partial class KnowledgeBaseCatalogTests
 
     // --- 4.8: pasta em uso --------------------------------------------------------
 
-    private static readonly string[] DeletionWords = ["exclu", "remov", "apag"];
-
-    private static void AssertNoDeletionAdvice(string text)
+    /// <summary>
+    /// As duas saídas do 409 de pasta em uso, na ordem do painel: escolher outra pasta,
+    /// ou desativar e excluir a base dona para liberar esta, com o aviso de que a
+    /// exclusão não tem volta (design.md da change exclusao-base-painel, D4). Até a
+    /// #136 a frase era proibida de falar em excluir, porque nenhuma tela oferecia a
+    /// ação.
+    /// </summary>
+    private static void AssertBothWaysOut(string detail)
     {
-        foreach (var word in DeletionWords)
-        {
-            Assert.DoesNotContain(word, text, StringComparison.OrdinalIgnoreCase);
-        }
+        Assert.Contains("outra pasta", detail, StringComparison.Ordinal);
+        Assert.Contains("desative", detail, StringComparison.Ordinal);
+        Assert.Contains("exclua", detail, StringComparison.Ordinal);
+        Assert.Contains("não pode ser desfeita", detail, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -302,7 +307,7 @@ public partial class KnowledgeBaseCatalogTests
         var detail = body.GetProperty("detail").GetString()!;
         Assert.Contains(existing.Name, detail, StringComparison.Ordinal);
         Assert.Contains("inativa", detail, StringComparison.Ordinal);
-        AssertNoDeletionAdvice(text);
+        AssertBothWaysOut(detail);
 
         Assert.Single(await BasesWithFolderAsync(folderId));
         Assert.Equal(0, host.Connectors.RequestCount);
@@ -378,7 +383,7 @@ public partial class KnowledgeBaseCatalogTests
             var winnerName = (await BodyAsync(created)).GetProperty("name").GetString();
             var conflictBody = await conflict.Content.ReadAsStringAsync();
             Assert.Equal(winnerName, JsonDocument.Parse(conflictBody).RootElement.GetProperty("knowledgeBaseName").GetString());
-            AssertNoDeletionAdvice(conflictBody);
+            AssertBothWaysOut(JsonDocument.Parse(conflictBody).RootElement.GetProperty("detail").GetString()!);
             Assert.Single(await BasesWithFolderAsync(folderId));
             Assert.Equal(before + 1, host.RaceCounter.Count);
         }

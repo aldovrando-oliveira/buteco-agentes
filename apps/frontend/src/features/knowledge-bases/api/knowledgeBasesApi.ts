@@ -71,8 +71,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-// As seis rotas que apps/api expõe. Não há DELETE: base é entidade de catálogo
-// e segue o padrão IsActive de McpServer.
+// As rotas que apps/api expõe para a base. Desde a #108 a base tem DELETE, a
+// exceção à regra "catálogo só se desativa" (01, "A exceção: base de conhecimento
+// tem exclusão real"): só base inativa, e documentos, histórico e vínculos vão
+// junto.
 export function listKnowledgeBases(): Promise<KnowledgeBase[]> {
   return request<KnowledgeBase[]>('/knowledge-bases');
 }
@@ -104,6 +106,13 @@ export function activateKnowledgeBase(id: string): Promise<KnowledgeBase> {
 
 export function deactivateKnowledgeBase(id: string): Promise<KnowledgeBase> {
   return request<KnowledgeBase>(`/knowledge-bases/${id}/deactivate`, { method: 'POST' });
+}
+
+// 204 sem corpo; 409 `knowledge-base-active`, 404 e 503 chegam como ApiError, e
+// a tela escolhe o texto pelo status e pelo code (design.md da change
+// exclusao-base-painel, D3).
+export function deleteKnowledgeBase(id: string): Promise<void> {
+  return request<void>(`/knowledge-bases/${id}`, { method: 'DELETE' });
 }
 
 // Recurso PRÓPRIO, e não campos em KnowledgeBaseResponse — a spec viva de

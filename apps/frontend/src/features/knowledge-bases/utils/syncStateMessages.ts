@@ -16,10 +16,13 @@ import type { KnowledgeBaseIgnoredFile, KnowledgeBaseSyncError } from '../types/
 // e a próxima tentativa é automática.
 //
 // NENHUM TEXTO CONTÉM `exclu`, `remov` NEM `apag`, inclusive onde a frase diz o
-// que NÃO aconteceu. A proibição existe para a tela não mandar excluir a base,
-// que é escopo da #136; a garantia da issue ("nada foi excluído") foi reescrita
-// como "nenhum documento saiu da base" para caber nela (D4 e C6, aprovado pelo
-// mantenedor). Quando a #136 chegar, ela revê esta regra junto com o botão.
+// que NÃO aconteceu. A regra nasceu porque o painel não oferecia a exclusão de base
+// (D4 e C6); a exclusão chegou com a change exclusao-base-painel (#136), e a regra
+// CONTINUA, com outro motivo (D6 de lá): uma falha de sincronização nunca se
+// resolve excluindo a base. O remédio é na pasta, na instalação ou na próxima
+// rodada, e o alerta aparece também em base ativa, onde a exclusão nem está
+// disponível. A orientação de excluir fica só no 409 `folder-in-use` do cadastro
+// (connectorErrors.ts). A garantia "nenhum documento saiu da base" fica como está.
 //
 // AFIRMAÇÕES SOBRE OUTRO APP (convenção 13), cada uma com a origem e o gatilho:
 //   - "a cada 5 minutos": SyncSchedulerService.Interval,
