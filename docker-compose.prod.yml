@@ -10,8 +10,9 @@
 #
 # Non-Goals explícitos (não sugerir nem alterar aqui): CI/CD, orquestrador
 # além do compose, observabilidade/métricas, múltiplas réplicas de
-# apps/workers/apps/inbox (lock hoje é pg_advisory_lock/xmin, não
-# distribuído — nunca usar `replicas > 1`/`deploy.replicas` nesses dois
+# apps/workers/apps/inbox/apps/connectors (lock hoje é pg_advisory_lock/xmin
+# nos dois primeiros e em memória no ciclo de sincronização do terceiro, #105,
+# nada distribuído — nunca usar `replicas > 1`/`deploy.replicas` nesses três
 # serviços), TLS (resolvido pelo nginx externo), WAHA (instância externa
 # já existente, não sobe aqui).
 
@@ -107,6 +108,10 @@ services:
       Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY:?defina AUTH_TOKEN_SIGNING_KEY — use --env-file .env.prod}
       Auth__OperatorUsername: ${AUTH_OPERATOR_USERNAME:?defina AUTH_OPERATOR_USERNAME — use --env-file .env.prod}
       Auth__OperatorPasswordHash: ${AUTH_OPERATOR_PASSWORD_HASH:?defina AUTH_OPERATOR_PASSWORD_HASH — use --env-file .env.prod}
+      # Endereço interno do apps/connectors, usado só na validação de pasta do
+      # cadastro de base sincronizada (#104). Fixo, não é segredo; vazio faria o
+      # cadastro Synced responder 503 connectors-not-configured.
+      Connectors__BaseUrl: "http://connectors:8080"
     # Sem porta publicada — só o nginx do stack (serviço "frontend")
     # alcança apps/api, via nome de serviço na rede do compose.
 
@@ -173,6 +178,31 @@ services:
       Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY}
     # Sem porta — apps/workers nunca serviu HTTP.
 
+  connectors:
+    # UMA réplica só: o lock que impede dois ciclos de sincronização da mesma
+    # base é em memória (#105, D10 da ciclo-de-sincronizacao). Sem banco, então
+    # sem migrator; depende do apps/api saudável porque a primeira rodada do
+    # ciclo roda logo depois do boot e chama o apps/api.
+    build:
+      context: .
+      dockerfile: apps/connectors/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # Mesma variável de api e inbox (fonte única). Terceiro processo com a
+      # chave: risco aceito na #119, ver docs/deployment.md e a #117.
+      Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY}
+      # OPCIONAL: vazia, o provedor google-drive não existe e
+      # GET /connectors/providers responde []. Presente e inválida, o processo
+      # não sobe — e por isso o frontend NÃO depende deste serviço.
+      GoogleDrive__ServiceAccountKeyBase64: ${GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64:-}
+      # Endereço interno do apps/api para o ciclo de sincronização (#105). Fixo;
+      # vazio desligaria o ciclo.
+      Api__BaseUrl: "http://api:8080"
+    # Sem porta publicada — o nginx do stack alcança pelo nome de serviço.
+
   frontend:
     build:
       context: .
@@ -185,7 +215,13 @@ services:
         # apps/frontend/Dockerfile).
         VITE_API_BASE_URL: ""
         VITE_INBOX_BASE_URL: ""
+        # Opcional no Dockerfile (#106). Entra JUNTO com o bloco /connectors do
+        # nginx.conf, nunca antes: com "" e sem o bloco, as chamadas caem no SPA.
+        VITE_CONNECTORS_BASE_URL: ""
     restart: unless-stopped
+    # Sem depends_on no connectors, de propósito: ele recusa subir com uma chave
+    # do Google inválida, e isso não pode derrubar o painel. O nginx resolve o
+    # upstream por requisição; com o connectors fora, só /connectors responde 502.
     depends_on:
       api:
         condition: service_healthy
