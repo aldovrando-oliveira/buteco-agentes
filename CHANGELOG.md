@@ -389,6 +389,14 @@ o versionamento pretende seguir
   `VITE_CONNECTORS_BASE_URL`. Na listagem, a origem de cada base e a falha de
   sincronização; o filtro "Com falha" passa a incluir sincronização falhando.
 
+- Exclusão de base de conhecimento no painel, em `apps/frontend` (#136). O detalhe da
+  base ganha `Excluir`: com a base ativa o botão fica indisponível e explica que é
+  preciso desativar antes; com a base inativa, a confirmação nomeia os agentes que
+  perdem o vínculo e a quantidade de documentos que vão junto, e, em base
+  sincronizada, diz que a pasta fica livre e que os arquivos no Drive não são tocados.
+  Excluída, a tela volta à listagem com notificação; base reativada em outra aba, já
+  excluída ou exclusão impedida por outra operação têm cada uma o seu texto.
+
 **Entrega containerizada**
 
 - `Dockerfile` multi-stage por app, com build context na raiz do monorepo.
@@ -709,6 +717,11 @@ o versionamento pretende seguir
   `400` a `409`. O `content` ausente do corpo continua recusa de forma, sem código.
 - **`DELETE /knowledge-bases/{id}` deixa de responder `405`** (#108): a rota existe,
   com `204`, `404` e `409`.
+- **A mensagem do `409` de pasta em uso orienta a liberar a pasta** (#136): o
+  `detail` do `apps/api` e o texto do cadastro no painel oferecem escolher outra pasta
+  ou desativar e excluir a base que a usa, e avisam que a exclusão não pode ser
+  desfeita. Até aqui a mensagem era proibida de falar em excluir, porque o painel não
+  oferecia a ação. O `code`, o status e as extensões não mudam.
 - **Escrita de `/sync` em base excluída no meio da requisição responde `404`**
   (#108). O upsert, a exclusão por referência e a gravação do resultado de ciclo
   respondiam `500` (e o upsert sem mudança de documento, `503`) quando a base sumia

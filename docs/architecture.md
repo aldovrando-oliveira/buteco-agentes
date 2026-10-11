@@ -459,6 +459,10 @@ exclusão, uma pasta perdida ficava presa para sempre. `Agent`, `McpServer` e
   caminho que esqueça os documentos.
 - **Escrita de `/sync` que encontra a base excluída no meio responde `404`**,
   nunca `500`; o app que sincroniza lê o `404` como fim do ciclo daquela base.
+- **O painel oferece a exclusão desde a #136**, no detalhe da base: com a base
+  ativa o botão fica indisponível e explica que é preciso desativar antes; com a
+  base inativa, a confirmação nomeia os agentes e a quantidade de documentos que
+  vão junto.
 
 ### Credenciais
 
@@ -744,7 +748,8 @@ da resposta**, nunca os do corpo enviado pelo painel.
   repassados com o mesmo status para o painel não deslogar o operador).
 - **Pasta em uso** responde `409` com o código `folder-in-use` e a base que já a usa,
   ativa ou inativa, antes de chamar o `apps/connectors` e também na corrida entre
-  dois cadastros, pelo índice único da pasta.
+  dois cadastros, pelo índice único da pasta. O `detail` oferece escolher outra
+  pasta ou desativar e excluir a base dona (#136).
 - **Cadeia de limites de tempo, amarrada entre três lugares:** 30 s por chamada de
   metadado no `apps/connectors` (`GoogleDriveHttp.MetadataTimeout`) < **35 s** no
   `HttpClient` do `apps/api` (`ConnectorsFolderClient.Timeout`) < 60 s, o
