@@ -15557,3 +15557,67 @@ reprovando sozinhas com as frases trocadas por "0 documentos" e "nenhum agente".
 - **#155**: o botão vermelho cheio das confirmações destrutivas mede 2,8:1 no escuro, e
   o vermelho em `outline` mede 4,49:1 no claro; padrão anterior a esta change.
 
+## `implantar-connectors-producao` — `apps/connectors` no stack de servidor (#119)
+
+**Change proposta em 05/10/2026, revisada e aprovada pelo dono com dois ajustes, e
+implementada em 06/10/2026 e arquivada em 11/10/2026**
+(`openspec/changes/archive/2026-10-11-implantar-connectors-producao/`). O archive veio
+antes do sync, e a spec foi sincronizada logo depois, no mesmo dia:
+`openspec/specs/server-deployment/spec.md` recebeu os três requisitos modificados e os
+três novos, e o `Purpose` passou a contar cinco apps. No cenário do stack completo, a
+lista de saudáveis troca o `apps/workers` (que não tem `/health`) pelo
+`apps/connectors`. Branch
+`feat/119-implantar-connectors`, criada sem upstream de `043cf69` e avançada em 11/10
+para `4b33ac5` (#136), num worktree próprio. **Nenhum deploy:** a change prepara a configuração e o roteiro; implantar é do
+dono. A divergência da tarefa 5.8 foi decidida pelo dono em 11/10/2026 (abaixo).
+
+### O que entrou
+
+Serviço `connectors` no `docker-compose.prod.yml`, em réplica única, depois do
+`apps/api` saudável; `Auth__TokenSigningKey` pela mesma variável dos outros dois
+processos, `GoogleDrive__ServiceAccountKeyBase64` opcional, `Api__BaseUrl` e, no `api`,
+`Connectors__BaseUrl` fixos pela rede interna. Bloco `/connectors` no `nginx.conf`, com
+o desvio de navegação e o upstream resolvido por requisição, e
+`VITE_CONNECTORS_BASE_URL=""` no build do frontend, no mesmo diff. **Ajuste da revisão:**
+o `frontend` não depende do `apps/connectors`, porque uma chave do Google inválida
+derrubaria o painel. Runbook: variáveis, pré-requisitos da etapa 0, passo 0 da migração
+da #138 (contar os `Pending`), réplica única, verificação depois de implantar, IPv6 e o
+roteiro do `access-denied` em pasta de organização (#114). Nenhum código de app.
+
+**Decisão do dono sobre a #117 (opção 1):** chave de assinatura compartilhada entre os
+três processos, risco aceito, registrado no `deployment.md` e na #117, que segue com
+`aguardando gatilho`.
+
+### O que a verificação local mediu
+
+Compose de produção em Podman (`podman-compose` 1.6.0, imagens em formato `docker`),
+projeto `buteco-prod-verify-119`, porta 58119, `load average` externo alto (chegou a 94,9).
+
+- Oito serviços; `api`, `inbox` e `connectors` `healthy`; sem a chave do Google,
+  `/connectors/providers` `200 []`; os dois avisos de endereço interno ausentes.
+- Prefixo e navegação pelo nginx, bundle sem endereço de desenvolvimento, e o painel
+  chamando `/connectors/providers` no próprio domínio.
+- Rede interna nos dois sentidos: `422 provider-not-configured` no cadastro
+  sincronizado sem chave, `404 knowledge-base-not-found` no "Sincronizar agora".
+- Com a chave real (só no shell, apagada depois do `up`): provedor listado, navegação
+  em 1,39 s, cadastro `201`, primeira rodada com 5 documentos e 3 ignorados. Nenhum
+  trecho da chave nos logs, nos arquivos da verificação nem na sessão.
+- Chave inválida: o `connectors` não sobe, o painel e os outros apps respondem.
+
+### Divergências e limites da verificação
+
+- **`/connectors` responde `502 text/html` com o `apps/connectors` fora**: é a página de
+  erro padrão do nginx, a mesma do `api` e do `inbox` fora do ar, e o cenário da spec e
+  a checagem do runbook diziam "sem `text/html`". **Decisão do dono em 11/10/2026:**
+  comportamento igual ao dos outros dois blocos; o `nginx.conf` não muda, e o texto do
+  cenário, do `deployment.md` e do `design.md` foi ajustado. Tarefa 5.8 concluída.
+- O `podman-compose` não espera as condições de `depends_on`: a ordem de subida fica
+  para o Docker de produção.
+- No Podman, o `resolver 127.0.0.11` do `nginx.conf` foi trocado pelo gateway da rede,
+  numa cópia posta no contêiner da verificação; o arquivo versionado não muda.
+
+### Achados sequenciados
+
+`/sync` do `apps/api` sem bloco no nginx: **#152**. `frontend` `unhealthy`, com o
+`HEALTHCHECK` em `::1` e o nginx só em IPv4: **#153**. Painel sem página de rota
+desconhecida: **#154**.

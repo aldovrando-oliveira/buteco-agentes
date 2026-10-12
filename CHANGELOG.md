@@ -405,6 +405,15 @@ o versionamento pretende seguir
 - `docker-compose.prod.yml` com Postgres e RabbitMQ próprios e nginx interno
   servindo o SPA e fazendo proxy.
 - Runbook de deploy em [`docs/deployment.md`](docs/deployment.md).
+- `apps/connectors` no stack de servidor (#119): serviço no
+  `docker-compose.prod.yml` em réplica única, depois do `apps/api` saudável, com
+  a chave do Google **opcional** e os endereços internos `Connectors__BaseUrl` e
+  `Api__BaseUrl` fixos; prefixo `/connectors` no nginx do stack; o frontend
+  construído com `VITE_CONNECTORS_BASE_URL=""` e **sem** depender da saúde do
+  `apps/connectors`, para que uma chave inválida derrube só a sincronização. O
+  runbook ganha o passo da migração da #138, os pré-requisitos do Google e a
+  verificação depois de implantar. A chave de assinatura passa a três processos,
+  com o risco aceito registrado (#117).
 
 **Painel — identidade visual e navegação**
 

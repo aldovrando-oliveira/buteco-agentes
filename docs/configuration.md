@@ -50,7 +50,7 @@ processo que o gerou.
 
 No stack de servidor, `docker-compose.prod.yml` garante essa igualdade por
 construção: uma única variável do `.env.prod` é interpolada nos blocos
-`environment:` dos dois serviços. Nunca copie o valor manualmente para
+`environment:` de cada serviço que a usa (três, no caso da chave de assinatura). Nunca copie o valor manualmente para
 chaves separadas.
 
 > **Perder uma chave de criptografia torna irrecuperável toda credencial já
@@ -286,9 +286,9 @@ D1):
 | `""` | caminho relativo (`/connectors/...` no mesmo domínio), como os outros dois |
 | URL absoluta | aquele endereço; em desenvolvimento, `http://localhost:5037` |
 
-No stack de servidor ela fica ausente até `apps/connectors` entrar em produção
-(#119), e entra como `""` junto com o bloco `/connectors` do nginx, nunca antes:
-com `""` e sem o bloco, as chamadas caem no SPA.
+No stack de servidor ela é `""`, fixa no `build.args` do compose, e existe só
+junto com o bloco `/connectors` do nginx (#119): com `""` e sem o bloco, as
+chamadas cairiam no SPA.
 
 ---
 
@@ -310,9 +310,15 @@ de configuração que o processo enxerga.
 | `EMBEDDING_BATCH_SIZE` | `Embedding__BatchSize` de `apps/workers`. **Opcional, default 250** — diferente das duas acima, a ausência não quebra nada. É o parâmetro a ajustar quando a indexação de documento grande falhar no gateway |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` — byte-idêntica entre `apps/api` e `apps/workers` |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` — só `apps/inbox` |
-| `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` — byte-idêntica entre `apps/api` e `apps/inbox` |
+| `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` — byte-idêntica entre `apps/api`, `apps/inbox` e `apps/connectors` (risco aceito, ver [deployment.md](deployment.md)) |
+| `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` de `apps/connectors`. **Opcional**: vazia, o provedor `google-drive` não aparece. Inválida, só o `apps/connectors` não sobe; o painel continua no ar |
 | `AUTH_OPERATOR_USERNAME` / `AUTH_OPERATOR_PASSWORD_HASH` | `Auth__OperatorUsername` / `Auth__OperatorPasswordHash` |
 | `STACK_HTTP_PORT` | porta interna do host onde o nginx do stack escuta. Nunca 80 ou 443 diretamente — o proxy externo faz `proxy_pass` para cá |
+
+Três valores do stack não vêm do `.env.prod`, porque não são segredo nem variam
+por ambiente: `Connectors__BaseUrl` (`http://connectors:8080`, no `apps/api`),
+`Api__BaseUrl` (`http://api:8080`, no `apps/connectors`, como no `apps/inbox`) e
+`VITE_CONNECTORS_BASE_URL` (`""`, build do frontend). Ficam fixos no compose.
 
 Nenhum `.env` real é versionado; `.gitignore` cobre `.env` e `.env.*`,
 com exceção explícita dos dois arquivos de exemplo.
