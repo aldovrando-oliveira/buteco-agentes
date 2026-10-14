@@ -3,6 +3,7 @@ import {
   createKnowledgeDocument,
   deleteKnowledgeDocument,
   getKnowledgeDocument,
+  listKnowledgeDocumentEvents,
   listKnowledgeDocuments,
   reindexKnowledgeDocument,
   updateKnowledgeDocument,
@@ -202,5 +203,68 @@ describe('erros', () => {
       status: 400,
       problem: { errors: { content: expect.any(Array) } },
     });
+  });
+});
+
+// O corpo é TEXTO JSON escrito à mão com as chaves e os valores de `type` que
+// KnowledgeDocumentCatalogTests.cs:653-674 (apps/api) afirma sobre o texto da
+// resposta real — e não um objeto do próprio tipo serializado aqui, que passaria
+// igual com o tipo errado dos dois lados (convenção 12).
+const EVENTS_WIRE = `{"items":[
+  {"id":"e-3","documentId":"${documentId}","documentTitle":"Renomeado","type":"Deleted","contentChanged":null,"titleChanged":null,"author":"operator","occurredAt":"2026-10-02T12:00:03.123456+00:00"},
+  {"id":"e-2","documentId":"${documentId}","documentTitle":"Renomeado","type":"Updated","contentChanged":false,"titleChanged":true,"author":"operator","occurredAt":"2026-10-02T12:00:02.123456+00:00"},
+  {"id":"e-1","documentId":"${documentId}","documentTitle":"Documento","type":"Created","contentChanged":null,"titleChanged":null,"author":"service:connectors","occurredAt":"2026-10-02T12:00:01.123456+00:00"}
+],"nextCursor":"AAAA-_bb"}`;
+
+function stubFetchText(text: string) {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(text, { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+describe('listKnowledgeDocumentEvents', () => {
+  const eventsPath = `/knowledge-bases/${knowledgeBaseId}/document-events`;
+
+  it('a primeira página é pedida sem query string', async () => {
+    const fetchMock = stubFetchText(EVENTS_WIRE);
+
+    await listKnowledgeDocumentEvents(knowledgeBaseId, null);
+
+    const { url, init } = callOf(fetchMock);
+    expect(url.endsWith(eventsPath)).toBe(true);
+    expect(url).not.toContain('?');
+    expect(init?.method ?? 'GET').toBe('GET');
+  });
+
+  it('a página seguinte leva o cursor codificado', async () => {
+    const fetchMock = stubFetchText(EVENTS_WIRE);
+
+    await listKnowledgeDocumentEvents(knowledgeBaseId, 'a+b/c=');
+
+    expect(callOf(fetchMock).url.endsWith(`${eventsPath}?cursor=a%2Bb%2Fc%3D`)).toBe(true);
+  });
+
+  it('lê os campos do fio, com type como string', async () => {
+    stubFetchText(EVENTS_WIRE);
+
+    const page = await listKnowledgeDocumentEvents(knowledgeBaseId, null);
+
+    expect(page.nextCursor).toBe('AAAA-_bb');
+    expect(page.items.map((event) => event.type)).toEqual(['Deleted', 'Updated', 'Created']);
+    expect(page.items[1]).toEqual({
+      id: 'e-2',
+      documentId,
+      documentTitle: 'Renomeado',
+      type: 'Updated',
+      contentChanged: false,
+      titleChanged: true,
+      author: 'operator',
+      occurredAt: '2026-10-02T12:00:02.123456+00:00',
+    });
+    expect(page.items[2].author).toBe('service:connectors');
   });
 });

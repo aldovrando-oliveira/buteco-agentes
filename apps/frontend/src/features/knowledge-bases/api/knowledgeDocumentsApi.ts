@@ -1,4 +1,5 @@
 import { request } from './knowledgeBasesApi';
+import type { KnowledgeDocumentEventPage } from '../types/knowledgeDocumentEvent';
 import type {
   CreateKnowledgeDocumentInput,
   KnowledgeDocument,
@@ -71,4 +72,23 @@ export function reindexKnowledgeDocument(
   return request<KnowledgeDocument>(`${documentsPath(knowledgeBaseId)}/${id}/reindex`, {
     method: 'POST',
   });
+}
+
+// Histórico de documentos da base (#98; aba Histórico, frontend-aba-historico).
+// Fica neste módulo porque a rota é aninhada na base como as de documento, e o
+// `request<T>` é o mesmo (convenção 7). O caminho é `document-events`, e não
+// `documents/events`: o evento de um documento excluído não é sub-recurso de
+// documento nenhum (D8 da #98).
+//
+// `cursor` nulo pede a primeira página, sem query string. O cursor é opaco e vem
+// do `nextCursor` da página anterior; é codificado mesmo sendo base64url, porque
+// o painel não deve depender do alfabeto que o apps/api escolheu.
+export function listKnowledgeDocumentEvents(
+  knowledgeBaseId: string,
+  cursor: string | null,
+): Promise<KnowledgeDocumentEventPage> {
+  const query = cursor === null ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+  return request<KnowledgeDocumentEventPage>(
+    `/knowledge-bases/${knowledgeBaseId}/document-events${query}`,
+  );
 }

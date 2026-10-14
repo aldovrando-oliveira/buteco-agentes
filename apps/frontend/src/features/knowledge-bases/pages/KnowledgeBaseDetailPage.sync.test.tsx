@@ -11,6 +11,7 @@ import { KnowledgeBaseDetailPage } from './KnowledgeBaseDetailPage';
 import { SYNC_WAIT_LIMIT_MS } from '../utils/syncState';
 import type { KnowledgeBase, KnowledgeBaseSyncState } from '../types/knowledgeBase';
 import type { KnowledgeDocumentSummary } from '../types/knowledgeDocument';
+import type { KnowledgeDocumentEvent } from '../types/knowledgeDocumentEvent';
 
 // ACEITES DA #107 (frontend-detalhe-base-sincronizada, D10). SEM mock de módulo,
 // ao contrário de KnowledgeBaseDetailPage.test.tsx: o `fetch` global é
@@ -86,6 +87,20 @@ function documento(overrides: Partial<KnowledgeDocumentSummary> = {}): Knowledge
   };
 }
 
+function evento(overrides: Partial<KnowledgeDocumentEvent> = {}): KnowledgeDocumentEvent {
+  return {
+    id: 'e-1',
+    documentId: 'doc-1',
+    documentTitle: 'Política de trocas',
+    type: 'Created',
+    contentChanged: null,
+    titleChanged: null,
+    author: 'operator',
+    occurredAt: '2026-10-04T12:00:00Z',
+    ...overrides,
+  };
+}
+
 type Reply = Response | 'network';
 
 interface Call {
@@ -106,6 +121,8 @@ function installFetch(options: {
   base: () => KnowledgeBase;
   sync?: () => Reply;
   documents?: KnowledgeDocumentSummary[];
+  // A aba Histórico (frontend-aba-historico): uma página só, sem próxima.
+  events?: () => KnowledgeDocumentEvent[];
 }) {
   const calls: Call[] = [];
   const fetchMock = vi.fn((input: string, init?: RequestInit) => {
@@ -120,6 +137,8 @@ function installFetch(options: {
       reply = json(options.base());
     } else if (url.origin === API && path === `/knowledge-bases/${ID}/documents`) {
       reply = json(options.documents ?? [documento()]);
+    } else if (url.origin === API && path === `/knowledge-bases/${ID}/document-events`) {
+      reply = json({ items: options.events ? options.events() : [], nextCursor: null });
     } else if (url.origin === API && path === `/knowledge-bases/${ID}/documents/doc-f/reindex`) {
       reply = json(documento({ id: 'doc-f', indexingStatus: 'Pending', indexedAt: null }));
     } else if (url.origin === API && path === '/agents') {
@@ -138,19 +157,26 @@ const connectorCalls = (calls: Call[]) =>
   calls.filter((call) => call.url.startsWith(CONNECTORS) || call.url.includes('/connectors/'));
 const baseGets = (calls: Call[]) =>
   calls.filter((call) => call.method === 'GET' && call.url === `${API}/knowledge-bases/${ID}`);
+const eventGets = (calls: Call[]) =>
+  calls
+    .filter(
+      (call) =>
+        call.method === 'GET' && call.url.includes(`/knowledge-bases/${ID}/document-events`),
+    )
+    .map((call) => call.url);
 const documentGets = (calls: Call[]) =>
   calls.filter(
     (call) => call.method === 'GET' && call.url === `${API}/knowledge-bases/${ID}/documents`,
   );
 
-function renderPage() {
+function renderPage(search = '') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createMemoryRouter(
     [
       { path: '/knowledge-bases/:id', element: <KnowledgeBaseDetailPage /> },
       { path: '/knowledge-bases', element: <p>listagem de bases</p> },
     ],
-    { initialEntries: [`/knowledge-bases/${ID}`] },
+    { initialEntries: [`/knowledge-bases/${ID}${search}`] },
   );
   render(
     <MantineProvider theme={theme}>
@@ -446,5 +472,58 @@ describe('base manual', () => {
 
     expect(baseGets(calls).length).toBeGreaterThan(0);
     expect(connectorCalls(calls)).toEqual([]);
+  });
+});
+
+// ACEITE DA #101 (frontend-aba-historico, D9): a aba Histórico funciona em base
+// manual sem nenhuma dependência da sincronização, com e sem a variável dos
+// conectores. Mesmo molde dos aceites acima: o `fetch` inteiro é interceptado, e
+// a negativa confere antes que as chamadas ao apps/api saíram.
+describe('aba Histórico em base manual', () => {
+  it.each([
+    ['sem', undefined],
+    ['com', CONNECTORS],
+  ])(
+    '%s VITE_CONNECTORS_BASE_URL: lista os eventos, e nenhuma chamada ao apps/connectors',
+    async (_com, env) => {
+      vi.stubEnv('VITE_CONNECTORS_BASE_URL', env);
+      const calls = installFetch({ base: () => manual, events: () => [evento()] });
+      renderPage('?tab=historico');
+
+      expect(await screen.findByText('Política de trocas')).toBeInTheDocument();
+      expect(baseGets(calls).length).toBeGreaterThan(0);
+      expect(eventGets(calls)).toEqual([`${API}/knowledge-bases/${ID}/document-events`]);
+      expect(connectorCalls(calls)).toEqual([]);
+    },
+  );
+});
+
+// D6: o card de origem fica acima da barra, então o operador pede a
+// sincronização com o histórico aberto. O fim do ciclo relê a primeira página.
+describe('aba Histórico e o Sincronizar agora', () => {
+  it('o fim do ciclo com a aba aberta relê o histórico, sem cursor', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.stubEnv('VITE_CONNECTORS_BASE_URL', CONNECTORS);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    let current = upToDate(T0);
+    const calls = installFetch({ base: () => current, events: () => [evento()] });
+    renderPage('?tab=historico');
+    const card = await screen.findByTestId('sync-origin-card');
+    await screen.findByText('Política de trocas');
+
+    await user.click(within(card).getByRole('button', { name: 'Sincronizar agora' }));
+    await within(card).findByText('Sincronização solicitada. Aguardando o resultado…');
+    const eventsBefore = eventGets(calls).length;
+
+    current = upToDate(T2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4500);
+    });
+
+    expect(await within(card).findByTestId('sync-request-status')).toHaveTextContent(
+      'Sincronização concluída em',
+    );
+    await waitFor(() => expect(eventGets(calls).length).toBeGreaterThan(eventsBefore));
+    expect(eventGets(calls).every((url) => !url.includes('cursor='))).toBe(true);
   });
 });
