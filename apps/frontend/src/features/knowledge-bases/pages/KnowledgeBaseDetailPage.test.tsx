@@ -17,6 +17,7 @@ import { listAgents } from '../../agents/api/agentsApi';
 import { listKnowledgeIndexDiagnostics } from '../api/knowledgeIndexApi';
 import {
   deleteKnowledgeDocument,
+  listKnowledgeDocumentEvents,
   listKnowledgeDocuments,
   reindexKnowledgeDocument,
 } from '../api/knowledgeDocumentsApi';
@@ -50,6 +51,7 @@ vi.mock('../api/knowledgeDocumentsApi', async (importOriginal) => {
   return {
     ...actual,
     listKnowledgeDocuments: vi.fn(),
+    listKnowledgeDocumentEvents: vi.fn(),
     getKnowledgeDocument: vi.fn(),
     deleteKnowledgeDocument: vi.fn(),
     reindexKnowledgeDocument: vi.fn(),
@@ -151,6 +153,8 @@ describe('KnowledgeBaseDetailPage', () => {
     vi.mocked(reindexKnowledgeDocument).mockReset();
     vi.mocked(listKnowledgeIndexDiagnostics).mockReset();
     vi.mocked(listKnowledgeIndexDiagnostics).mockResolvedValue([]);
+    vi.mocked(listKnowledgeDocumentEvents).mockReset();
+    vi.mocked(listKnowledgeDocumentEvents).mockResolvedValue({ items: [], nextCursor: null });
   });
 
   it('exibe indicador de carregamento enquanto a base não chega', () => {
@@ -234,14 +238,21 @@ describe('KnowledgeBaseDetailPage', () => {
 
     it.each([
       ['Documentos', ''],
+      ['Histórico', '?tab=historico'],
       ['Diagnóstico do índice', '?tab=diagnostico'],
     ])(
       'com a aba %s ativa, os dois cards ficam antes da barra e fora do painel',
-      async (_aba, search) => {
+      async (aba, search) => {
         vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
 
         renderPage(search);
 
+        // A aba do caso é a selecionada: sem isto, um endereço que caísse na
+        // primeira aba passaria por qualquer linha.
+        expect(await screen.findByRole('tab', { name: aba })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
         const description = await screen.findByTestId('knowledge-base-description');
         const agentsCard = await screen.findByTestId('knowledge-base-agents-card');
         const tablist = screen.getByRole('tablist');
@@ -436,11 +447,14 @@ describe('KnowledgeBaseDetailPage', () => {
   // A ASSERÇÃO QUE MORREU AQUI era a negativa da 5a-1: "não apresenta controle de
   // abas", com o gatilho registrado de que ela cairia quando existisse a segunda
   // aba de verdade. A segunda chegou, e o gatilho foi exercido — não removido por
-  // conveniência. Ela é a ÚNICA asserção existente desta suíte que mudou; as
-  // outras 22 continuam valendo palavra por palavra, porque `Documentos` é a aba
-  // default e a tela default é a que era.
+  // conveniência. Ela foi a ÚNICA asserção existente desta suíte que mudou ali.
+  //
+  // A TERCEIRA ABA (`Histórico`, frontend-aba-historico, D11) mudou de valor uma
+  // asserção só: a contagem de abas, de 2 para 3, com a ordem afirmada. As outras
+  // mudanças da D11 acrescentam (a linha do `it.each` acima, a negativa da aba
+  // inativa); o resto continua valendo palavra por palavra.
   describe('barra de abas', () => {
-    it('apresenta as duas abas, com Documentos ativa por padrão', async () => {
+    it('apresenta as três abas, nesta ordem, com Documentos ativa por padrão', async () => {
       vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
 
       renderPage();
@@ -450,7 +464,12 @@ describe('KnowledgeBaseDetailPage', () => {
         'true',
       );
       expect(tab(/diagnóstico do índice/i)).toBeInTheDocument();
-      expect(screen.getAllByRole('tab')).toHaveLength(2);
+      expect(screen.getAllByRole('tab')).toHaveLength(3);
+      expect(screen.getAllByRole('tab').map((element) => element.textContent)).toEqual([
+        'Documentos',
+        'Histórico',
+        'Diagnóstico do índice',
+      ]);
     });
 
     it('a aba selecionada vai para o endereço', async () => {
@@ -511,6 +530,8 @@ describe('KnowledgeBaseDetailPage', () => {
       await screen.findByRole('tab', { name: /documentos/i });
       expect(screen.queryByTestId('diagnostics-readonly-note')).not.toBeInTheDocument();
       expect(screen.queryByText('Volume desta base')).not.toBeInTheDocument();
+      expect(screen.queryByText('Mudanças nos documentos')).not.toBeInTheDocument();
+      expect(listKnowledgeDocumentEvents).not.toHaveBeenCalled();
     });
 
     it('não busca a proveniência com a aba de documentos ativa', async () => {

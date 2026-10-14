@@ -44,12 +44,16 @@ import {
   type DeleteKnowledgeBaseFailure,
 } from '../utils/deleteKnowledgeBaseMessages';
 import { KnowledgeIndexDiagnosticsTab } from '../components/KnowledgeIndexDiagnosticsTab';
+import { KnowledgeDocumentHistoryTab } from '../components/KnowledgeDocumentHistoryTab';
 import { ApiError } from '../api/knowledgeBasesApi';
 import { useKnowledgeIndexDiagnosticsQuery } from '../api/useKnowledgeIndex';
 import {
   documentsQueryKey,
+  restartDocumentEvents,
+  trimDocumentEvents,
   useCreateKnowledgeDocumentMutation,
   useDeleteKnowledgeDocumentMutation,
+  useKnowledgeDocumentEventsQuery,
   useKnowledgeDocumentQuery,
   useKnowledgeDocumentsQuery,
   useReindexKnowledgeDocumentMutation,
@@ -67,13 +71,17 @@ import type { KnowledgeDocumentSummary } from '../types/knowledgeDocument';
 // não reinventado: a aba ativa vive no endereço, a PRIMEIRA é a forma canônica e
 // não carrega parâmetro, e valor desconhecido cai nela SEM reescrever o endereço
 // — reescrever só poluiria o histórico.
+//
+// A TERCEIRA ABA, `Histórico`, chegou com a #101 (frontend-aba-historico, D1),
+// entre as duas, no mesmo desenho: endereço próprio, montada só quando ativa.
 const DOCUMENTS_TAB = 'documentos';
+const HISTORY_TAB = 'historico';
 const DIAGNOSTICS_TAB = 'diagnostico';
 
-type KnowledgeBaseDetailTab = typeof DOCUMENTS_TAB | typeof DIAGNOSTICS_TAB;
+type KnowledgeBaseDetailTab = typeof DOCUMENTS_TAB | typeof HISTORY_TAB | typeof DIAGNOSTICS_TAB;
 
 function parseTab(value: string | null): KnowledgeBaseDetailTab {
-  return value === DIAGNOSTICS_TAB ? value : DOCUMENTS_TAB;
+  return value === HISTORY_TAB || value === DIAGNOSTICS_TAB ? value : DOCUMENTS_TAB;
 }
 
 // CONTADOR SÓ COM A LISTAGEM RESPONDIDA, e a diferença em relação ao detalhe do
@@ -149,10 +157,16 @@ export function KnowledgeBaseDetailPage() {
 
   // O ciclo terminado pode ter criado, atualizado ou tirado documentos: refaz a
   // listagem e o resumo de indexação. Efeito sem estado: só invalida o cache.
+  //
+  // E o histórico, que o ciclo pode ter acrescentado: o card de origem fica
+  // acima da barra, então o pedido sai com a aba Histórico aberta. Recomeça da
+  // primeira página, e não por invalidação, que releria todas as carregadas
+  // (frontend-aba-historico, D6). Com a aba fechada, só apara.
   useEffect(() => {
     if (finishedAt === null) return;
     void queryClient.invalidateQueries({ queryKey: documentsQueryKey(id!) });
     void queryClient.invalidateQueries({ queryKey: indexingSummaryQueryKey });
+    void restartDocumentEvents(queryClient, id!);
   }, [finishedAt, id, queryClient]);
 
   // O limite de 5 minutos (D5). A consulta periódica para sozinha no limite
@@ -239,6 +253,26 @@ export function KnowledgeBaseDetailPage() {
     enabled: activeTab === DIAGNOSTICS_TAB,
     documents: documentsQuery.data,
   });
+
+  // O histórico também só é buscado com a aba ativa (D1, D6). A consulta mora
+  // aqui, e o componente recebe tudo por prop (convenção 7).
+  const historyQuery = useKnowledgeDocumentEventsQuery(id!, {
+    enabled: activeTab === HISTORY_TAB,
+  });
+
+  // A VOLTA À ABA RECOMEÇA DA PRIMEIRA PÁGINA (D6). Ao SAIR da aba, o cache é
+  // aparado para a primeira página, sem reler (`trimDocumentEvents`). A volta
+  // habilita o observador, e a busca é de uma página, sem cursor — e não a
+  // releitura de todas as que estavam carregadas. Efeito pelo `activeTab`, e não
+  // no `handleTabChange`, para valer também com o voltar do navegador. Em
+  // StrictMode esta limpeza roda logo após a montagem: por isso ela não cancela a
+  // busca da primeira página (conferência visual, R1-1).
+  useEffect(() => {
+    if (activeTab !== HISTORY_TAB) return;
+    return () => {
+      void trimDocumentEvents(queryClient, id!);
+    };
+  }, [activeTab, id, queryClient]);
 
   const handleTabChange = (value: string | null) => {
     const next = parseTab(value);
@@ -537,6 +571,11 @@ export function KnowledgeBaseDetailPage() {
           >
             Documentos
           </Tabs.Tab>
+          {/* Sem contador: a rota de eventos não tem total, e o número de eventos
+              carregados seria a contagem das páginas pedidas (D1). */}
+          <Tabs.Tab value={HISTORY_TAB} h={40}>
+            Histórico
+          </Tabs.Tab>
           <Tabs.Tab value={DIAGNOSTICS_TAB} h={40}>
             Diagnóstico do índice
           </Tabs.Tab>
@@ -576,6 +615,23 @@ export function KnowledgeBaseDetailPage() {
               reindexingId={reindexDocument.isPending ? reindexDocument.variables : null}
             />
           )}
+        </Tabs.Panel>
+
+        <Tabs.Panel value={HISTORY_TAB} pt="md">
+          <KnowledgeDocumentHistoryTab
+            events={historyQuery.data?.pages.flatMap((page) => page.items)}
+            firstPageFailed={historyQuery.isLoadingError}
+            hasNextPage={historyQuery.hasNextPage}
+            isFetchingNextPage={historyQuery.isFetchingNextPage}
+            nextPageFailed={historyQuery.isFetchNextPageError}
+            isRefreshing={historyQuery.isRefetching}
+            refreshFailed={historyQuery.isRefetchError}
+            synced={synced}
+            onRetry={() => void historyQuery.refetch()}
+            onLoadMore={() => void historyQuery.fetchNextPage()}
+            onRetryNextPage={() => void historyQuery.fetchNextPage()}
+            onRefresh={() => void restartDocumentEvents(queryClient, id!)}
+          />
         </Tabs.Panel>
 
         <Tabs.Panel value={DIAGNOSTICS_TAB} pt="md">

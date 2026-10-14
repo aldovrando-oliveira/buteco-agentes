@@ -397,6 +397,13 @@ o versionamento pretende seguir
   Excluída, a tela volta à listagem com notificação; base reativada em outra aba, já
   excluída ou exclusão impedida por outra operação têm cada uma o seu texto.
 
+- Aba Histórico no detalhe da base de conhecimento, em `apps/frontend` (#101). Lista
+  as mudanças nos documentos da base, do histórico gravado pela #98, agrupadas por
+  dia: horário, tipo (incluído, atualizado, excluído), título do documento como foi
+  gravado, o que mudou numa atualização, e quem fez (operador ou sincronização).
+  "Carregar mais" para os eventos mais antigos e `Atualizar` para os mais novos;
+  funciona igual em base manual e sincronizada, sem depender da sincronização.
+
 **Entrega containerizada**
 
 - `Dockerfile` multi-stage por app, com build context na raiz do monorepo.

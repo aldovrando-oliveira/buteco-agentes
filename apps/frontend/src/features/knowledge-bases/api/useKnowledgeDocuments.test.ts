@@ -3,9 +3,12 @@ import { createElement, type PropsWithChildren } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, type Query } from '@tanstack/react-query';
 import {
+  documentEventsQueryKey,
   documentsQueryKey,
+  restartDocumentEvents,
   useCreateKnowledgeDocumentMutation,
   useDeleteKnowledgeDocumentMutation,
+  useKnowledgeDocumentEventsQuery,
   useKnowledgeDocumentsQuery,
   useReindexKnowledgeDocumentMutation,
   useUpdateKnowledgeDocumentMutation,
@@ -337,5 +340,115 @@ describe('mutações', () => {
     result.current.mutate(documentId);
 
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe('useKnowledgeDocumentEventsQuery', () => {
+  function page(id: string, nextCursor: string | null) {
+    return {
+      items: [
+        {
+          id,
+          documentId,
+          documentTitle: 'Doc',
+          type: 'Created',
+          contentChanged: null,
+          titleChanged: null,
+          author: 'operator',
+          occurredAt: '2026-10-02T12:00:00Z',
+        },
+      ],
+      nextCursor,
+    };
+  }
+
+  // Responde pelo cursor da URL, como a rota.
+  function fetchByCursor() {
+    return vi
+      .fn()
+      .mockImplementation((url: string) =>
+        Promise.resolve(
+          jsonResponse(url.includes('cursor=c1') ? page('e-2', null) : page('e-1', 'c1')),
+        ),
+      );
+  }
+
+  it('desabilitada, não faz requisição', async () => {
+    const fetchMock = fetchByCursor();
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(
+      () => useKnowledgeDocumentEventsQuery(knowledgeBaseId, { enabled: false }),
+      { wrapper: Wrapper },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(result.current.data).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('pede a primeira sem cursor, e a seguinte com o cursor da primeira', async () => {
+    const fetchMock = fetchByCursor();
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(
+      () => useKnowledgeDocumentEventsQuery(knowledgeBaseId, { enabled: true }),
+      { wrapper: Wrapper },
+    );
+
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+    expect(fetchMock.mock.calls[0][0]).not.toContain('cursor=');
+    expect(result.current.hasNextPage).toBe(true);
+
+    await result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
+    expect(fetchMock.mock.calls[1][0]).toContain('cursor=c1');
+    expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it('a chave fica fora do prefixo das bases', () => {
+    expect(documentEventsQueryKey(knowledgeBaseId)[0]).not.toBe('knowledge-bases');
+  });
+
+  // Sem `refetchInterval` (D6, convenção 20): o tempo passar não relê.
+  it('não relê com o tempo', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = fetchByCursor();
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper } = createWrapper();
+
+    const { result } = renderHook(
+      () => useKnowledgeDocumentEventsQuery(knowledgeBaseId, { enabled: true }),
+      { wrapper: Wrapper },
+    );
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // D6: os três recomeços aparam para a primeira página e relêem UMA.
+  it('restartDocumentEvents relê só a primeira página, sem cursor', async () => {
+    const fetchMock = fetchByCursor();
+    vi.stubGlobal('fetch', fetchMock);
+    const { Wrapper, queryClient } = createWrapper();
+
+    const { result } = renderHook(
+      () => useKnowledgeDocumentEventsQuery(knowledgeBaseId, { enabled: true }),
+      { wrapper: Wrapper },
+    );
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+    await result.current.fetchNextPage();
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
+    fetchMock.mockClear();
+
+    await restartDocumentEvents(queryClient, knowledgeBaseId);
+
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).not.toContain('cursor=');
   });
 });

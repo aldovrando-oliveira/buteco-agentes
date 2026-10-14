@@ -28,6 +28,11 @@ function allText(text: SyncFailureText): string {
 // exclusao-base-painel, D6): uma falha de sincronização nunca se resolve
 // excluindo a base, e o alerta aparece também em base ativa. A varredura é o que
 // impede a regressão bem-intencionada de sugerir "excluir e recriar" num alerta.
+//
+// ALCANCE (change frontend-aba-historico, D5): a varredura é sobre as FONTES dos
+// textos de estado da sincronização, e não sobre a página. O `Excluído` da aba
+// Histórico registra um fato e não orienta ação; ele mora em documentHistory.ts,
+// fora daqui, para esta varredura nunca precisar de exceção.
 const FORBIDDEN = /exclu|remov|apag/i;
 
 describe('syncFailureMessage — falha da base', () => {

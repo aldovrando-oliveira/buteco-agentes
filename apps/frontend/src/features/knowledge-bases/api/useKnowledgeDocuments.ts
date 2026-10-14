@@ -1,13 +1,22 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+} from '@tanstack/react-query';
 import {
   createKnowledgeDocument,
   deleteKnowledgeDocument,
   getKnowledgeDocument,
+  listKnowledgeDocumentEvents,
   listKnowledgeDocuments,
   reindexKnowledgeDocument,
   updateKnowledgeDocument,
 } from './knowledgeDocumentsApi';
 import { hasNonTerminalDocument } from '../utils/documentIndexing';
+import type { KnowledgeDocumentEventPage } from '../types/knowledgeDocumentEvent';
 import type {
   CreateKnowledgeDocumentInput,
   KnowledgeDocumentSummary,
@@ -111,4 +120,74 @@ export function useReindexKnowledgeDocumentMutation(knowledgeBaseId: string) {
     mutationFn: (id: string) => reindexKnowledgeDocument(knowledgeBaseId, id),
     onSuccess: () => invalidateDocuments(queryClient, knowledgeBaseId),
   });
+}
+
+// HISTÓRICO DE DOCUMENTOS (design.md da change frontend-aba-historico, D6).
+//
+// CHAVE FORA DO PREFIXO DAS BASES, e isso é escolha, pelo mesmo motivo da
+// chave do diagnóstico (useKnowledgeIndex.ts): `cacheUpdatedKnowledgeBase`
+// (useKnowledgeBases.ts) invalida `['knowledge-bases']` SEM `exact` a cada
+// criar, editar, ativar e desativar, e uma consulta infinita alcançada por essa
+// invalidação é relida INTEIRA, página por página. Mudar a base não muda o
+// histórico: nenhuma dessas escritas gera evento de documento (#98, D2).
+export const documentEventsQueryKey = (knowledgeBaseId: string) =>
+  ['knowledge-document-events', knowledgeBaseId] as const;
+
+// Primeira paginação do painel. `nextCursor` nulo vira `undefined`, que é o que
+// faz `hasNextPage` falso (query-core 5.101.4, infiniteQueryBehavior.js:113-116).
+//
+// SEM `refetchInterval`: o histórico não é processo em andamento (convenção 20).
+// E SEM releitura no foco: o refetch de uma consulta infinita relê TODAS as
+// páginas carregadas (infiniteQueryBehavior.js:70-78); eventos novos aparecem
+// pelo `Atualizar` e pela volta à aba, que recomeçam da primeira (abaixo).
+//
+// `enabled` vem da página: só com a aba Histórico ativa.
+export function useKnowledgeDocumentEventsQuery(
+  knowledgeBaseId: string,
+  options: { enabled: boolean },
+) {
+  return useInfiniteQuery({
+    queryKey: documentEventsQueryKey(knowledgeBaseId),
+    queryFn: ({ pageParam }) => listKnowledgeDocumentEvents(knowledgeBaseId, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page: KnowledgeDocumentEventPage) => page.nextCursor ?? undefined,
+    enabled: options.enabled,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// APARAR PARA A PRIMEIRA PÁGINA, SEM RELER. É o que a saída da aba faz: a volta
+// habilita o observador, e a busca que isso dispara é de uma página só
+// (queryObserver.js:457-459), porque só há uma no cache.
+//
+// Cancela SÓ um "Carregar mais" em voo: se ele terminasse depois do corte,
+// gravaria as duas páginas de novo. Cancelado, ele reverte o estado para o de
+// antes dele (query.js, `#revertState`), e o corte vem depois. A busca da
+// primeira página NÃO é cancelada: com o painel em StrictMode, a limpeza do
+// efeito de saída roda logo após a montagem, e o cancelamento incondicional da
+// primeira versão fazia a entrada na aba pedir duas vezes (conferência visual,
+// R1-1; medido pela guarda 7.17, que volta a cancelar sempre e reprova o teste
+// em StrictMode).
+export async function trimDocumentEvents(queryClient: QueryClient, knowledgeBaseId: string) {
+  const queryKey = documentEventsQueryKey(knowledgeBaseId);
+  const state = queryClient.getQueryState(queryKey);
+  if (state?.fetchStatus === 'fetching' && state.fetchMeta?.fetchMore) {
+    await queryClient.cancelQueries({ queryKey, exact: true });
+  }
+  queryClient.setQueryData<InfiniteData<KnowledgeDocumentEventPage, string | null>>(
+    queryKey,
+    (data) => data && { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) },
+  );
+}
+
+// OS RECOMEÇOS COM A ABA ABERTA (fim do "Sincronizar agora", `Atualizar`): apara
+// e relê só a primeira. Aparada, a releitura é de UMA requisição sem cursor,
+// porque o refetch relê `pages.length` páginas. `resetQueries` não serve: ele
+// apaga `data` antes de reler (queryClient.js:126-139), e o `Atualizar` não pode
+// devolver a tela ao carregamento. `type: 'active'` só relê com o observador
+// habilitado (query.js:97-101): com a aba fechada, equivale a aparar.
+export async function restartDocumentEvents(queryClient: QueryClient, knowledgeBaseId: string) {
+  const queryKey = documentEventsQueryKey(knowledgeBaseId);
+  await trimDocumentEvents(queryClient, knowledgeBaseId);
+  await queryClient.refetchQueries({ queryKey, type: 'active', exact: true });
 }

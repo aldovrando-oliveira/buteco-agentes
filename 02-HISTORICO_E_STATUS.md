@@ -1890,8 +1890,8 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **trinta e oito**, achadas em onze etapas diferentes (a décima quinta, da #99,
-as dez da #106, as doze da #107 e a da #136 estão no fim da lista). A décima quarta vem primeiro
+São **quarenta e oito**, achadas em doze etapas diferentes (a décima quinta, da #99,
+as dez da #106, as doze da #107, a da #136 e as dez da #101 estão no fim da lista). A décima quarta vem primeiro
 porque é de **tipo novo** e muda o critério de detecção da lista inteira; depois
 a oitava, que também era de tipo novo quando entrou; depois as duas da 5c, depois
 as três da 5a-3, depois as duas da 5a-2, que **corrigiram duas das cinco
@@ -2219,6 +2219,29 @@ pranchas 3a e 4a.** Na D7 do `design.md` da change:
   nenhuma. O botão entrou no cabeçalho, em `outline` vermelho como o `Desativar`, e a
   confirmação segue o modal de exclusão de documento, que serviu de régua na
   conferência visual.
+
+**Da trigésima nona à quadragésima oitava, da #101 (`frontend-aba-historico`,
+14/10/2026), do mesmo canvas, pranchas 3b e 4c.** Na D10 do `design.md` da change:
+
+- **C1, título anterior que a rota não devolve:** "Título alterado: antes …" virou
+  `Título alterado`. Deduzir o anterior do evento de antes falha quando ele está numa
+  página não carregada ou é anterior à implantação.
+- **C2, motivo da exclusão que a rota não devolve:** "Removido da pasta" saiu; o
+  `Excluído` da sincronização fica sem detalhe.
+- **C3, data relativa que envelhece:** sem "Hoje" e "Ontem"; o dia sai como
+  `dd/mm/aaaa`, com ano.
+- **C4, a palavra da issue:** "Conteúdo substituído" virou `Conteúdo alterado`.
+- **C5, paleta só do claro (convenção 16):** badges `light` do Mantine, sem as cores
+  cravadas da prancha.
+- **C6, nota do começo do histórico também na base sincronizada.**
+- **C7, estados não desenhados:** carregando, falha, vazio, fim da lista, falha da
+  página seguinte e falha do `Atualizar`.
+- **C8, badge sem ícone:** o painel não tem biblioteca de ícones nem badge com ícone.
+- **C9, faixa do dia sem fundo** (conferência R1-2): com o tom do cabeçalho, o primeiro
+  dia grudava na faixa do card, e nenhuma variável do tema fica entre os dois tons nos
+  dois esquemas.
+- **C10, "Mais recentes primeiro" na cor padrão** (conferência R2-1): `dimmed` sobre a
+  faixa do cabeçalho mede 4,14:1 no claro.
 
 **Para a 5b, o que já está pronto — e o que a 5a-1 já entregou:**
 
@@ -15621,3 +15644,75 @@ projeto `buteco-prod-verify-119`, porta 58119, `load average` externo alto (cheg
 `/sync` do `apps/api` sem bloco no nginx: **#152**. `frontend` `unhealthy`, com o
 `HEALTHCHECK` em `::1` e o nginx só em IPv4: **#153**. Painel sem página de rota
 desconhecida: **#154**.
+
+## `frontend-aba-historico` — aba Histórico no detalhe da base (#101)
+
+**Change proposta em 13/10/2026, revisada pelo dono com dois ajustes (a chave da
+consulta fora do prefixo das bases e o botão `Atualizar`), implementada em
+14/10/2026.** Branch `feat/101-aba-historico`, criada sem upstream de `7559924`, num
+worktree próprio. **Validação manual (convenção 14) feita pelo dono em 14/10/2026**,
+sem ajuste pedido, contra o `apps/api` deste worktree e uma base manual com 57 eventos
+criados pela API (50 + 7 em duas páginas, todos no mesmo dia: a rota não aceita data
+retroativa). Specs sincronizadas no archive, pedido pelo dono em 14/10/2026: o
+requisito do detalhe em `knowledge-base-catalog-ui` (três abas, com o `Purpose` já
+corrigido antes), o alcance da proibição de `exclu` em `knowledge-base-sync-state-ui`
+e a capability nova `knowledge-document-history-ui`, com o `Purpose` escrito à mão.
+Change arquivada em `openspec/changes/archive/2026-10-14-frontend-aba-historico/`.
+
+### O que entrou
+
+No `apps/frontend`, a aba `Histórico` entre `Documentos` e `Diagnóstico do índice`, em
+`?tab=historico`, montada só quando ativa e sem contador (a rota não tem total). Ela
+consome `GET /knowledge-bases/{id}/document-events` da #98 como ele existe: eventos
+agrupados por dia no fuso do navegador, com horário, tipo (`Incluído`, `Atualizado`,
+`Excluído`; desconhecido em indicador neutro com o valor), o título gravado no evento,
+o detalhe da atualização e o autor (`Operador`, `Sincronização`; desconhecido com o
+valor gravado). "Carregar mais" pelo cursor; `Atualizar`, a volta à aba e o fim de um
+"Sincronizar agora" recomeçam da primeira página, numa requisição. Carregando, falha,
+vazio, fim da lista, falha da página seguinte e falha do `Atualizar` têm cada um o seu
+texto. A nota do começo do histórico em toda base, e a de ignorados só na
+sincronizada. Nenhuma mudança no `apps/api`.
+
+**A chave da consulta fica fora de `['knowledge-bases']`** (D6): a invalidação por
+prefixo de `cacheUpdatedKnowledgeBase` (criar, editar, ativar, desativar) releria a
+consulta infinita inteira. **A proibição de `exclu`, `remov` e `apag`** continua nos
+textos de estado da sincronização e não alcança o histórico (D5): as varreduras ficam
+sobre as fontes e o card, e um teste põe o `Excluído` do painel e o card limpo na
+mesma tela.
+
+### O que a implementação mediu
+
+- **`@tanstack/query-core` 5.101.4:** o refetch de consulta infinita relê todas as
+  páginas carregadas, e `resetQueries` apaga os dados antes de reler. Por isso os
+  recomeços aparam o cache para a primeira página e relêem só ela.
+- **Mantine 9.4.2:** a seta do teclado seleciona a aba vizinha (`activateTabWithKeyboard`
+  e `loop` ligados por padrão).
+- **Pedido duplo em StrictMode (R1-1):** a primeira versão cancelava a busca ao aparar,
+  e a limpeza do efeito de saída, que o StrictMode roda logo após a montagem, fazia a
+  entrada pedir duas vezes. Medida a causa pelos dois lados (guarda 7.17): é o
+  cancelamento, e não a releitura. Agora só um "Carregar mais" em voo é cancelado.
+- **A linha `Histórico` do `it.each` dos cards acima da barra passava com a página de
+  duas abas**: o endereço caía em Documentos. Ganhou a asserção de que a aba do caso é
+  a selecionada.
+- **Suítes:** frontend 1724/1724 na baseline em `7559924`, **1783/1783** no fim
+  (1724 − 1 renomeado + 60 novos, em 3 arquivos novos e 4 alterados, comparado por
+  nome); `format:check` com a mesma lista de 52 arquivos da baseline.
+- **Conferência visual:** três rodadas de 44 capturas (11 estados × 2 esquemas × 2
+  larguras), respostas montadas pelo CDP, portas 59310–59312 encerradas ao fim. Achados
+  R1-1, R1-2 e R2-1, corrigidos; a terceira rodada sem achado desta change.
+
+### Guardas contra o defeito real (convenção 15)
+
+Dezessete, cada uma aplicada, vista reprovando o teste nomeado e desfeita (`tasks.md`,
+grupo 7): rótulos de autor e tipo, fuso do dia, dia partido, os estados, foco, consulta
+só com a aba, recomeço na volta, contador, releitura no fim do ciclo, independência da
+sincronização, intervalo, a varredura de `exclu` (que reprova no card e não no painel),
+a chave no prefixo, o `Atualizar` relendo tudo e o cancelamento em StrictMode.
+
+### Achados fora do escopo
+
+- O rótulo `dimmed` da faixa de cabeçalho dos cards mede 4,14:1 no claro: já é a
+  **#148**.
+- O `Tentar novamente` vermelho `outline` dentro do `Alert` de falha mede 4,28:1 no
+  claro: mesma família da **#155**.
+
