@@ -16,9 +16,7 @@ nenhum texto de conclusão aparece antes de `lastFinishedAt` mudar); o texto vem
 `code`, nunca do `detail` como frase; e nenhum texto manda excluir a base, porque
 uma falha de sincronização nunca se resolve excluindo a base (o remédio é na pasta,
 na instalação ou na próxima rodada, e o alerta aparece também em base ativa).
-
 ## Requirements
-
 ### Requirement: Card de origem no detalhe de base sincronizada
 O detalhe de uma base com `contentMode` `Synced`, em `apps/frontend`, SHALL exibir
 um card de origem, entre a descrição e os agentes, com o nome da pasta
@@ -105,6 +103,18 @@ ativa, onde a exclusão nem está disponível. A orientação de desativar e exc
 uma base existe só no `409` `folder-in-use` do cadastro, onde liberar a pasta é o
 caminho.
 
+**O alcance da proibição é o texto de estado e de remédio da sincronização, e não
+o histórico** (change `frontend-aba-historico`, #101). A proibição alcança os textos
+de falha da base, de arquivo ignorado, de resposta do pedido de sincronização e o
+card de origem que os exibe. Ela NÃO SHALL ser estendida à aba `Histórico`
+(`knowledge-document-history-ui`), cujo rótulo `Excluído` registra um fato gravado
+pelo `apps/api` e não orienta ação nenhuma: o motivo da proibição é que uma falha
+nunca se resolve excluindo a base, e um registro do que já aconteceu não é
+remédio. A varredura SHALL continuar sobre as fontes desses textos e sobre o card
+de origem, nunca sobre a página nem sobre o painel de uma aba, e os rótulos do
+histórico SHALL morar fora dessas fontes, para a varredura não precisar de
+exceção.
+
 #### Scenario: Sem acesso à pasta mostra a conta e o caminho de recuperação
 - **WHEN** a base falha com `lastError` `{ code: "access-denied", detail: "sync@exemplo.iam.gserviceaccount.com" }`
 - **THEN** o alerta contém o e-mail, a orientação de compartilhar a pasta com essa
@@ -135,6 +145,12 @@ caminho.
 - **WHEN** uma base `Synced` inativa, em que a exclusão está disponível no
   cabeçalho, falha com `lastError.code` `access-denied`
 - **THEN** o card de origem não contém `exclu`, `remov` nem `apag`
+
+#### Scenario: O histórico na tela não relaxa a proibição do card de origem
+- **WHEN** uma base `Synced` inativa falha com `lastError.code` `access-denied`, e
+  o operador abre a aba `Histórico` com um evento `Deleted`
+- **THEN** o painel da aba exibe `Excluído`, e o card de origem, na mesma tela,
+  não contém `exclu`, `remov` nem `apag`
 
 ### Requirement: Arquivos da pasta que não entraram na base
 O detalhe de uma base `Synced` SHALL exibir, na aba de documentos, a lista de
@@ -269,3 +285,4 @@ ignorados SHALL continuar sendo exibidos a partir da resposta do `apps/api`.
 - **THEN** o botão está desabilitado com a explicação, o alerta de falha com o
   e-mail da conta continua aparecendo, e o `fetch` interceptado, que registrou as
   chamadas ao `apps/api`, não registrou nenhuma chamada ao `apps/connectors`
+

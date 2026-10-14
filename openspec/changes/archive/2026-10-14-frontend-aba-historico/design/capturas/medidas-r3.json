@@ -1,0 +1,8678 @@
+{
+  "manual-lista_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "manual-lista_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "manual-lista_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "manual-lista_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "manual-fim-foco_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026",
+      "20/09/2026"
+    ],
+    "focus": {
+      "tag": "LI",
+      "text": "16:30ExcluídoRascunho de convençõesOperador"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "20/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Rascunho de convenções",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "manual-fim-foco_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026",
+      "20/09/2026"
+    ],
+    "focus": {
+      "tag": "LI",
+      "text": "16:30ExcluídoRascunho de convençõesOperador"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "20/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Rascunho de convenções",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "manual-fim-foco_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026",
+      "20/09/2026"
+    ],
+    "focus": {
+      "tag": "LI",
+      "text": "16:30ExcluídoRascunho de convençõesOperador"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "20/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Rascunho de convenções",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "manual-fim-foco_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026",
+      "20/09/2026"
+    ],
+    "focus": {
+      "tag": "LI",
+      "text": "16:30ExcluídoRascunho de convençõesOperador"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "20/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Rascunho de convenções",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "sincronizada-fim_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 500,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 500,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 500,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 646,
+            "w": 56,
+            "h": 17,
+            "text": "14:32"
+          },
+          {
+            "x": 325,
+            "y": 644,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 646,
+            "w": 818,
+            "h": 17,
+            "text": "Formas de pagamento"
+          },
+          {
+            "x": 1287,
+            "y": 647,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 698,
+            "w": 56,
+            "h": 17,
+            "text": "14:32"
+          },
+          {
+            "x": 325,
+            "y": 696,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 689,
+            "w": 818,
+            "h": 34,
+            "text": "Política de trocasConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 699,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 749,
+            "w": 56,
+            "h": 17,
+            "text": "09:05"
+          },
+          {
+            "x": 325,
+            "y": 748,
+            "w": 120,
+            "h": 20,
+            "text": "Excluído"
+          },
+          {
+            "x": 457,
+            "y": 749,
+            "w": 818,
+            "h": 17,
+            "text": "Promoção de inverno"
+          },
+          {
+            "x": 1287,
+            "y": 750,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Excluído",
+          "contrast": 16.56
+        }
+      }
+    ],
+    "headings": [
+      "26/09/2026",
+      "25/09/2026",
+      "23/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "26/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Formas de pagamento",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Política de trocas",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Promoção de inverno",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "25/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Garantia estendida",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Prazos de entrega",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Como redefinir a senha",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      },
+      {
+        "tag": "P",
+        "text": "Arquivos ignorados e falhas de acesso não entram no históric",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "sincronizada-fim_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 500,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 500,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 500,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 646,
+            "w": 56,
+            "h": 17,
+            "text": "14:32"
+          },
+          {
+            "x": 325,
+            "y": 644,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 646,
+            "w": 1238,
+            "h": 17,
+            "text": "Formas de pagamento"
+          },
+          {
+            "x": 1707,
+            "y": 647,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 698,
+            "w": 56,
+            "h": 17,
+            "text": "14:32"
+          },
+          {
+            "x": 325,
+            "y": 696,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 689,
+            "w": 1238,
+            "h": 34,
+            "text": "Política de trocasConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 699,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 749,
+            "w": 56,
+            "h": 17,
+            "text": "09:05"
+          },
+          {
+            "x": 325,
+            "y": 748,
+            "w": 120,
+            "h": 20,
+            "text": "Excluído"
+          },
+          {
+            "x": 457,
+            "y": 749,
+            "w": 1238,
+            "h": 17,
+            "text": "Promoção de inverno"
+          },
+          {
+            "x": 1707,
+            "y": 750,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Excluído",
+          "contrast": 16.56
+        }
+      }
+    ],
+    "headings": [
+      "26/09/2026",
+      "25/09/2026",
+      "23/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "26/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Formas de pagamento",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Política de trocas",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Promoção de inverno",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "25/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Garantia estendida",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Prazos de entrega",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Como redefinir a senha",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      },
+      {
+        "tag": "P",
+        "text": "Arquivos ignorados e falhas de acesso não entram no históric",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "sincronizada-fim_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 500,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 500,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 500,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 646,
+            "w": 56,
+            "h": 17,
+            "text": "14:32"
+          },
+          {
+            "x": 325,
+            "y": 644,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 646,
+            "w": 818,
+            "h": 17,
+            "text": "Formas de pagamento"
+          },
+          {
+            "x": 1287,
+            "y": 647,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 698,
+            "w": 56,
+            "h": 17,
+            "text": "14:32"
+          },
+          {
+            "x": 325,
+            "y": 696,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 689,
+            "w": 818,
+            "h": 34,
+            "text": "Política de trocasConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 699,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 749,
+            "w": 56,
+            "h": 17,
+            "text": "09:05"
+          },
+          {
+            "x": 325,
+            "y": 748,
+            "w": 120,
+            "h": 20,
+            "text": "Excluído"
+          },
+          {
+            "x": 457,
+            "y": 749,
+            "w": 818,
+            "h": 17,
+            "text": "Promoção de inverno"
+          },
+          {
+            "x": 1287,
+            "y": 750,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Excluído",
+          "contrast": 18.92
+        }
+      }
+    ],
+    "headings": [
+      "26/09/2026",
+      "25/09/2026",
+      "23/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "26/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Formas de pagamento",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Política de trocas",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Promoção de inverno",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "25/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Garantia estendida",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Prazos de entrega",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Como redefinir a senha",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      },
+      {
+        "tag": "P",
+        "text": "Arquivos ignorados e falhas de acesso não entram no históric",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "sincronizada-fim_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 500,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 500,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 500,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 646,
+            "w": 56,
+            "h": 17,
+            "text": "14:32"
+          },
+          {
+            "x": 325,
+            "y": 644,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 646,
+            "w": 1238,
+            "h": 17,
+            "text": "Formas de pagamento"
+          },
+          {
+            "x": 1707,
+            "y": 647,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 698,
+            "w": 56,
+            "h": 17,
+            "text": "14:32"
+          },
+          {
+            "x": 325,
+            "y": 696,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 689,
+            "w": 1238,
+            "h": 34,
+            "text": "Política de trocasConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 699,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 749,
+            "w": 56,
+            "h": 17,
+            "text": "09:05"
+          },
+          {
+            "x": 325,
+            "y": 748,
+            "w": 120,
+            "h": 20,
+            "text": "Excluído"
+          },
+          {
+            "x": 457,
+            "y": 749,
+            "w": 1238,
+            "h": 17,
+            "text": "Promoção de inverno"
+          },
+          {
+            "x": 1707,
+            "y": 750,
+            "w": 120,
+            "h": 15,
+            "text": "Sincronização"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Excluído",
+          "contrast": 18.92
+        }
+      }
+    ],
+    "headings": [
+      "26/09/2026",
+      "25/09/2026",
+      "23/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "26/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Formas de pagamento",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Política de trocas",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Promoção de inverno",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "25/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Garantia estendida",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Prazos de entrega",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Como redefinir a senha",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Sincronização",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      },
+      {
+        "tag": "P",
+        "text": "Arquivos ignorados e falhas de acesso não entram no históric",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "desconhecidos_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 474,
+            "w": 56,
+            "h": 17,
+            "text": "11:00"
+          },
+          {
+            "x": 325,
+            "y": 473,
+            "w": 120,
+            "h": 20,
+            "text": "Archived"
+          },
+          {
+            "x": 457,
+            "y": 474,
+            "w": 698,
+            "h": 17,
+            "text": "Manual de abertura do bar"
+          },
+          {
+            "x": 1167,
+            "y": 475,
+            "w": 240,
+            "h": 15,
+            "text": "Autor que o painel não reconhece (servic"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Archived",
+          "contrast": 5.21
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 519,
+            "w": 56,
+            "h": 17,
+            "text": "10:00"
+          },
+          {
+            "x": 325,
+            "y": 518,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 519,
+            "w": 818,
+            "h": 17,
+            "text": "Cardápio de inverno"
+          },
+          {
+            "x": 1287,
+            "y": 520,
+            "w": 120,
+            "h": 15,
+            "text": "Autor não registrado"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      }
+    ],
+    "headings": [
+      "24/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "24/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Manual de abertura do bar",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Autor que o painel não reconhece (service:outro)",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Cardápio de inverno",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Autor não registrado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "desconhecidos_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 474,
+            "w": 56,
+            "h": 17,
+            "text": "11:00"
+          },
+          {
+            "x": 325,
+            "y": 473,
+            "w": 120,
+            "h": 20,
+            "text": "Archived"
+          },
+          {
+            "x": 457,
+            "y": 474,
+            "w": 1118,
+            "h": 17,
+            "text": "Manual de abertura do bar"
+          },
+          {
+            "x": 1587,
+            "y": 475,
+            "w": 240,
+            "h": 15,
+            "text": "Autor que o painel não reconhece (servic"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Archived",
+          "contrast": 5.21
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 519,
+            "w": 56,
+            "h": 17,
+            "text": "10:00"
+          },
+          {
+            "x": 325,
+            "y": 518,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 519,
+            "w": 1238,
+            "h": 17,
+            "text": "Cardápio de inverno"
+          },
+          {
+            "x": 1707,
+            "y": 520,
+            "w": 120,
+            "h": 15,
+            "text": "Autor não registrado"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      }
+    ],
+    "headings": [
+      "24/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "24/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Manual de abertura do bar",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Autor que o painel não reconhece (service:outro)",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Cardápio de inverno",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Autor não registrado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "desconhecidos_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 474,
+            "w": 56,
+            "h": 17,
+            "text": "11:00"
+          },
+          {
+            "x": 325,
+            "y": 473,
+            "w": 120,
+            "h": 20,
+            "text": "Archived"
+          },
+          {
+            "x": 457,
+            "y": 474,
+            "w": 698,
+            "h": 17,
+            "text": "Manual de abertura do bar"
+          },
+          {
+            "x": 1167,
+            "y": 475,
+            "w": 240,
+            "h": 15,
+            "text": "Autor que o painel não reconhece (servic"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Archived",
+          "contrast": 16.44
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 519,
+            "w": 56,
+            "h": 17,
+            "text": "10:00"
+          },
+          {
+            "x": 325,
+            "y": 518,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 519,
+            "w": 818,
+            "h": 17,
+            "text": "Cardápio de inverno"
+          },
+          {
+            "x": 1287,
+            "y": 520,
+            "w": 120,
+            "h": 15,
+            "text": "Autor não registrado"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      }
+    ],
+    "headings": [
+      "24/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "24/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Manual de abertura do bar",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Autor que o painel não reconhece (service:outro)",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Cardápio de inverno",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Autor não registrado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "desconhecidos_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 474,
+            "w": 56,
+            "h": 17,
+            "text": "11:00"
+          },
+          {
+            "x": 325,
+            "y": 473,
+            "w": 120,
+            "h": 20,
+            "text": "Archived"
+          },
+          {
+            "x": 457,
+            "y": 474,
+            "w": 1118,
+            "h": 17,
+            "text": "Manual de abertura do bar"
+          },
+          {
+            "x": 1587,
+            "y": 475,
+            "w": 240,
+            "h": 15,
+            "text": "Autor que o painel não reconhece (servic"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Archived",
+          "contrast": 16.44
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 519,
+            "w": 56,
+            "h": 17,
+            "text": "10:00"
+          },
+          {
+            "x": 325,
+            "y": 518,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 519,
+            "w": 1238,
+            "h": 17,
+            "text": "Cardápio de inverno"
+          },
+          {
+            "x": 1707,
+            "y": 520,
+            "w": 120,
+            "h": 15,
+            "text": "Autor não registrado"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      }
+    ],
+    "headings": [
+      "24/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "24/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Manual de abertura do bar",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Autor que o painel não reconhece (service:outro)",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Cardápio de inverno",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Autor não registrado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Não há eventos mais antigos.",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "carregando_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "P",
+        "text": "Carregando histórico…",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "carregando_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "P",
+        "text": "Carregando histórico…",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "carregando_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "P",
+        "text": "Carregando histórico…",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "carregando_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "P",
+        "text": "Carregando histórico…",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "falha_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível carregar o histórico desta base.Tentar nova",
+        "contrast": 5.75
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Tentar novamente",
+        "contrast": 4.28
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 4
+  },
+  "falha_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível carregar o histórico desta base.Tentar nova",
+        "contrast": 5.75
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Tentar novamente",
+        "contrast": 4.28
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 4
+  },
+  "falha_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível carregar o histórico desta base.Tentar nova",
+        "contrast": 12.8
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Tentar novamente",
+        "contrast": 12.8
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 4
+  },
+  "falha_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível carregar o histórico desta base.Tentar nova",
+        "contrast": 12.8
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Tentar novamente",
+        "contrast": 12.8
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 4
+  },
+  "vazio_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Nenhuma mudança foi registrada nesta base.",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "vazio_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Nenhuma mudança foi registrada nesta base.",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "vazio_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "Nenhuma mudança foi registrada nesta base.",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "vazio_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [],
+    "headings": [],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "Nenhuma mudança foi registrada nesta base.",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 1
+  },
+  "falha-pagina-seguinte_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível carregar mais eventos.Tentar novamente",
+        "contrast": 5.75
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Tentar novamente",
+        "contrast": 4.28
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 5
+  },
+  "falha-pagina-seguinte_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível carregar mais eventos.Tentar novamente",
+        "contrast": 5.75
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Tentar novamente",
+        "contrast": 4.28
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 5
+  },
+  "falha-pagina-seguinte_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível carregar mais eventos.Tentar novamente",
+        "contrast": 12.8
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Tentar novamente",
+        "contrast": 12.8
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 5
+  },
+  "falha-pagina-seguinte_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível carregar mais eventos.Tentar novamente",
+        "contrast": 12.8
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Tentar novamente",
+        "contrast": 12.8
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 5
+  },
+  "carregando-mais_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "carregando-mais_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "carregando-mais_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "carregando-mais_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "atualizando_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "atualizando_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "atualizando_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "atualizando_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 481,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 480,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 473,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 482,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 533,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 532,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 533,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 534,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 585,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 583,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 577,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 586,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 2
+  },
+  "falha-atualizar_claro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 557,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 555,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 548,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 558,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 609,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 607,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 609,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 609,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 660,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 659,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 652,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 661,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível atualizar o histórico.",
+        "contrast": 5.75
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 5
+  },
+  "falha-atualizar_claro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 557,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 555,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 548,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 558,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 609,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 607,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 609,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 609,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 4.81
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 660,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 659,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 652,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 661,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 5.21,
+        "title": 21,
+        "author": 5.21,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 4.93
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.14
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 16.67
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 21
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível atualizar o histórico.",
+        "contrast": 5.75
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 5.21
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 5.21
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 21
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 4.78
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 5
+  },
+  "falha-atualizar_escuro_1440": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 557,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 555,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 548,
+            "w": 818,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1287,
+            "y": 558,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 609,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 607,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 609,
+            "w": 818,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1287,
+            "y": 609,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 660,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 659,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 652,
+            "w": 818,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1287,
+            "y": 661,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível atualizar o histórico.",
+        "contrast": 12.8
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 5
+  },
+  "falha-atualizar_escuro_1860": {
+    "tabs": [
+      {
+        "text": "Documentos",
+        "selected": "false",
+        "x": 240,
+        "y": 328,
+        "w": 110,
+        "h": 40
+      },
+      {
+        "text": "Histórico",
+        "selected": "true",
+        "x": 350,
+        "y": 328,
+        "w": 80,
+        "h": 40
+      },
+      {
+        "text": "Diagnóstico do índice",
+        "selected": "false",
+        "x": 430,
+        "y": 328,
+        "w": 147,
+        "h": 40
+      }
+    ],
+    "tablistH": 40,
+    "rows": [
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 557,
+            "w": 56,
+            "h": 17,
+            "text": "18:40"
+          },
+          {
+            "x": 325,
+            "y": 555,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 548,
+            "w": 1238,
+            "h": 34,
+            "text": "02 HISTORICO E STATUSConteúdo alterado"
+          },
+          {
+            "x": 1707,
+            "y": 558,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 609,
+            "w": 56,
+            "h": 17,
+            "text": "10:15"
+          },
+          {
+            "x": 325,
+            "y": 607,
+            "w": 120,
+            "h": 20,
+            "text": "Incluído"
+          },
+          {
+            "x": 457,
+            "y": 609,
+            "w": 1238,
+            "h": 17,
+            "text": "02 HISTORICO E STATUS"
+          },
+          {
+            "x": 1707,
+            "y": 609,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Incluído",
+          "contrast": 11.58
+        }
+      },
+      {
+        "cells": [
+          {
+            "x": 257,
+            "y": 660,
+            "w": 56,
+            "h": 17,
+            "text": "10:02"
+          },
+          {
+            "x": 325,
+            "y": 659,
+            "w": 120,
+            "h": 20,
+            "text": "Atualizado"
+          },
+          {
+            "x": 457,
+            "y": 652,
+            "w": 1238,
+            "h": 34,
+            "text": "01 ARQUITETURA E CONVENCOESTítulo altera"
+          },
+          {
+            "x": 1707,
+            "y": 661,
+            "w": 120,
+            "h": 15,
+            "text": "Operador"
+          }
+        ],
+        "time": 6.4,
+        "title": 14.02,
+        "author": 6.4,
+        "badge": {
+          "text": "Atualizado",
+          "contrast": 11.77
+        }
+      }
+    ],
+    "headings": [
+      "23/09/2026",
+      "21/09/2026"
+    ],
+    "focus": {
+      "tag": "BODY",
+      "text": "\n    :root, :host{--mantine-line-height: 1.45;--mantine-font"
+    },
+    "texts": [
+      {
+        "tag": "P",
+        "text": "Mudanças nos documentos",
+        "contrast": 4.6
+      },
+      {
+        "tag": "P",
+        "text": "Mais recentes primeiro",
+        "contrast": 10.07
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Atualizar",
+        "contrast": 14.98
+      },
+      {
+        "tag": "DIV",
+        "text": "Não foi possível atualizar o histórico.",
+        "contrast": 12.8
+      },
+      {
+        "tag": "H3",
+        "text": "23/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "02 HISTORICO E STATUS",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "01 ARQUITETURA E CONVENCOES",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Título alterado",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "H3",
+        "text": "21/09/2026",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Contratação de garçons",
+        "contrast": 14.02
+      },
+      {
+        "tag": "P",
+        "text": "Conteúdo e título alterados",
+        "contrast": 6.4
+      },
+      {
+        "tag": "P",
+        "text": "Operador",
+        "contrast": 6.4
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Carregar mais",
+        "contrast": 14.98
+      },
+      {
+        "tag": "P",
+        "text": "O histórico é registrado a partir da implantação desta funci",
+        "contrast": 7.05
+      }
+    ],
+    "overflowX": false,
+    "eventCalls": 5
+  }
+}

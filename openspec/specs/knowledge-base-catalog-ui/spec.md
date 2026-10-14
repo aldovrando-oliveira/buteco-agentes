@@ -39,8 +39,9 @@ quarto, distinguindo a parte do todo.
 capability.** A barra nasceu quando existiu a segunda aba de verdade, e é esta
 capability que a especifica — a aba ativa no endereço, a primeira canônica sem
 parâmetro, apenas a ativa montada. O **conteúdo** da aba `Documentos` é de
-`knowledge-document-catalog-ui`, e o da aba `Diagnóstico do índice` é de
-`knowledge-index-diagnostics-ui`. Quem for mexer numa das duas abas procura o
+`knowledge-document-catalog-ui`, o da aba `Histórico` é de
+`knowledge-document-history-ui`, e o da aba `Diagnóstico do índice` é de
+`knowledge-index-diagnostics-ui`. Quem for mexer numa das três abas procura o
 requisito na capability dela, não aqui.
 
 Nenhuma das duas contagens vem de `KnowledgeBaseResponse`, que continua sem
@@ -48,9 +49,7 @@ campo de contagem nenhum. Elas vêm de um recurso próprio,
 `GET /knowledge-bases/indexing-summary`, cujo custo é **independente do número de
 bases** — é essa propriedade, e não uma mudança de regra, que permitiu ao
 catálogo exibi-las.
-
 ## Requirements
-
 ### Requirement: Listagem de bases de conhecimento no painel
 O sistema SHALL exibir, em `apps/frontend`, uma listagem de todas as bases de
 conhecimento cadastradas, incluindo as inativas, com nome, descrição e estado de
@@ -346,9 +345,11 @@ estrutura que a tela não tinha (`design.md` de
 aba, e ela chegou — o diagnóstico do índice, cuja rota de backend entrou em
 13/09/2026.
 
-O detalhe SHALL apresentar uma barra com **duas** abas: `Documentos`, que reúne
-a listagem de documentos, e `Diagnóstico do índice`, especificada em
-`knowledge-index-diagnostics-ui`.
+O detalhe SHALL apresentar uma barra com **três** abas, nesta ordem:
+`Documentos`, que reúne a listagem de documentos; `Histórico`, especificada em
+`knowledge-document-history-ui`; e `Diagnóstico do índice`, especificada em
+`knowledge-index-diagnostics-ui`. A terceira aba chegou com a #101: o histórico
+de documentos, cuja rota de backend entrou com a #98.
 
 **O que é da base fica acima da barra, e o que é de uma aba fica no painel
 dela.** A seção de descrição e a seção de agentes que consultam a base SHALL
@@ -359,9 +360,9 @@ uma aba; dentro do painel de `Documentos` elas sumiam ao abrir outra aba
 (issue #99).
 
 A aba ativa SHALL estar refletida no endereço, no mesmo desenho do detalhe do
-agente: a primeira aba é a forma canônica e **não** carrega parâmetro; a outra
-carrega. Valor de aba desconhecido no endereço SHALL cair na primeira aba, **sem**
-reescrever o endereço.
+agente: a primeira aba é a forma canônica e **não** carrega parâmetro; as outras
+carregam (`?tab=historico` e `?tab=diagnostico`). Valor de aba desconhecido no
+endereço SHALL cair na primeira aba, **sem** reescrever o endereço.
 
 Apenas a aba ativa SHALL estar montada. Aba inativa não mantém consulta viva nem
 acompanhamento em intervalo.
@@ -370,7 +371,9 @@ A barra SHALL exibir contador apenas na aba `Documentos`, e apenas quando a
 listagem de documentos tiver respondido com pelo menos um documento. Enquanto a
 listagem carrega, quando ela falha, e quando a base não tem documento, nenhum
 contador SHALL ser exibido — exibir `0` durante o carregamento afirmaria uma
-contagem que ainda não foi feita.
+contagem que ainda não foi feita. A aba `Histórico` SHALL NOT exibir contador em
+nenhum estado: a rota de eventos não devolve total, e a quantidade de eventos
+carregados é a de páginas pedidas, não a do histórico.
 
 #### Scenario: Detalhe exibe os campos que a API devolve
 - **WHEN** o operador acessa o detalhe de uma base existente
@@ -393,10 +396,10 @@ contagem que ainda não foi feita.
 - **WHEN** o operador aciona `Ativar` no detalhe de uma base inativa
 - **THEN** a base é ativada sem confirmação intermediária
 
-#### Scenario: Detalhe apresenta as duas abas
+#### Scenario: Detalhe apresenta as três abas, nesta ordem
 - **WHEN** o operador visualiza o detalhe de uma base
-- **THEN** a tela apresenta as abas `Documentos` e `Diagnóstico do índice`, com
-  `Documentos` ativa por padrão
+- **THEN** a tela apresenta exatamente as abas `Documentos`, `Histórico` e
+  `Diagnóstico do índice`, nessa ordem, com `Documentos` ativa por padrão
 
 #### Scenario: Descrição e agentes ficam acima da barra de abas, nessa ordem
 - **WHEN** o operador visualiza o detalhe de uma base
@@ -406,6 +409,11 @@ contagem que ainda não foi feita.
 #### Scenario: Descrição e agentes aparecem com a aba de diagnóstico ativa
 - **WHEN** o operador abre o detalhe com a aba `Diagnóstico do índice` ativa
 - **THEN** a seção de descrição e a seção de agentes são exibidas
+
+#### Scenario: Descrição e agentes aparecem com a aba de histórico ativa
+- **WHEN** o operador abre o detalhe com a aba `Histórico` ativa
+- **THEN** a seção de descrição e a seção de agentes são exibidas, antes da barra
+  e fora do painel da aba
 
 #### Scenario: Descrição e agentes não estão dentro de painel de aba
 - **WHEN** o operador visualiza o detalhe com qualquer aba ativa
@@ -417,6 +425,17 @@ contagem que ainda não foi feita.
 - **THEN** o endereço passa a identificar essa aba, e abrir esse endereço
   diretamente abre a mesma aba
 
+#### Scenario: A aba de histórico está no endereço
+- **WHEN** o operador seleciona a aba `Histórico`
+- **THEN** o endereço passa a ter `?tab=historico`, e abrir esse endereço
+  diretamente abre a aba `Histórico`
+
+#### Scenario: A barra se percorre pelo teclado
+- **WHEN** o foco está na aba `Documentos` e o operador pressiona a seta para a
+  direita
+- **THEN** a aba `Histórico` fica selecionada, e o endereço passa a ter
+  `?tab=historico`
+
 #### Scenario: A aba canônica não carrega parâmetro
 - **WHEN** o operador volta para a aba `Documentos`
 - **THEN** o endereço volta à forma sem parâmetro de aba
@@ -427,12 +446,17 @@ contagem que ainda não foi feita.
 
 #### Scenario: Aba inativa não está montada
 - **WHEN** o operador está na aba `Documentos`
-- **THEN** o conteúdo da aba de diagnóstico não está no documento
+- **THEN** o conteúdo da aba de diagnóstico e o da aba de histórico não estão no
+  documento, e nenhuma requisição à rota de eventos foi feita
 
 #### Scenario: Contador só aparece com a listagem respondida
 - **WHEN** a listagem de documentos ainda não respondeu, falhou, ou respondeu sem
   nenhum documento
 - **THEN** a aba `Documentos` não exibe contador
+
+#### Scenario: A aba de histórico não tem contador
+- **WHEN** o histórico da base respondeu com eventos
+- **THEN** a aba `Histórico` não exibe contador
 
 ### Requirement: A descrição da base é apresentada como texto lido pelo modelo
 O sistema SHALL apresentar a descrição da base em seção própria do detalhe,
@@ -909,3 +933,4 @@ Em todas as respostas que não são `204`, o painel NÃO SHALL navegar.
 #### Scenario: Texto pelo código, nunca pelo servidor
 - **WHEN** a rota responde `409`, `404` ou `503` com `title` e `detail` próprios
 - **THEN** nem o `title` nem o `detail` aparecem na tela
+
