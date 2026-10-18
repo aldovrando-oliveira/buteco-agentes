@@ -20,9 +20,10 @@ public sealed class UpdateMcpServerCommandHandler(AppDbContext dbContext, IMcpCr
             return UpdateMcpServerResult.NotFound();
         }
 
-        // Limpa a credencial anteriormente persistida quando AuthType
-        // transiciona para None (Decision 6 do design.md).
-        mcpServer.UpdateDetails(command.Name, command.Description, command.Url, command.AuthType);
+        // Limpa a credencial persistida quando o AuthType muda ou vai para None
+        // (D4 da change mcp-autenticacao-header-customizado, que estende a
+        // Decision 6 de backend-mcp-catalogo-vinculo — ver McpServer.UpdateDetails).
+        mcpServer.UpdateDetails(command.Name, command.Description, command.Url, command.AuthType, command.AuthHeaderName);
 
         if (command.AuthType != McpServerAuthType.None && !string.IsNullOrWhiteSpace(command.Credential))
         {

@@ -43,7 +43,11 @@ jsonb por vínculo), `DelegatesTo` (via `AgentDelegation`, **unidirecional**
 — A→B não implica B→A) e `KnowledgeBases` (via `AgentKnowledgeBase`).
 
 **`McpServer`** (`apps/api`): `Name`, `Description`, `Url`, `AuthType`
-(`None`/`BearerToken`), `EncryptedCredential` (AES-GCM).
+(`None`/`BearerToken`/`CustomHeader`), `EncryptedCredential` (AES-GCM) e
+`AuthHeaderName` (em claro, só no `CustomHeader`: o nome do header em que a
+credencial vai crua, sem `Authorization`). A credencial está vinculada ao tipo:
+trocar entre `BearerToken` e `CustomHeader` exige credencial nova
+(`mcp-autenticacao-header-customizado`, #160).
 
 **`Channel`** (`apps/inbox`): `ChannelType` (string aberta, validada em
 runtime contra adapters efetivamente registrados via DI — não enum

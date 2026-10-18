@@ -9,6 +9,6 @@ public sealed class TestUnsavedMcpServerConnectionCommandHandler(IMcpConnectionT
     public ValueTask<McpConnectionTestResult> Handle(TestUnsavedMcpServerConnectionCommand command, CancellationToken cancellationToken)
     {
         return new ValueTask<McpConnectionTestResult>(
-            connectionTester.TestAsync(command.Url, command.AuthType, command.Credential, cancellationToken));
+            connectionTester.TestAsync(command.Url, command.AuthType, command.Credential, command.AuthHeaderName, cancellationToken));
     }
 }

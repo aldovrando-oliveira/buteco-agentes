@@ -18,11 +18,22 @@ public class McpServer
 
     public string Url { get; private set; } = null!;
 
-    public McpServerAuthType AuthType { get; private set; }
+    // Anulável SÓ no modelo: a coluna continua NOT NULL. Nulo aqui significa
+    // "valor que esta versão de apps/workers não conhece" — gravado por um
+    // apps/api mais novo, num deploy fora de ordem ou depois de um rollback só
+    // deste app —, nunca "ausente" (D5 da change mcp-autenticacao-header-customizado;
+    // conversor em AppDbContext). O resolver exclui esse servidor sem decifrar
+    // nem conectar.
+    public McpServerAuthType? AuthType { get; private set; }
 
     // Já criptografada (ver IMcpCredentialCipher) — a entidade nunca vê o
     // valor em texto claro. Nula quando AuthType == None.
     public string? EncryptedCredential { get; private set; }
+
+    // Nome do header do tipo CustomHeader (configuração, em claro), nulo nos
+    // demais. Validado por apps/api; aqui só a regra que fecha o vazamento é
+    // reconferida (ver McpToolSetResolver).
+    public string? AuthHeaderName { get; private set; }
 
     public bool IsActive { get; private set; }
 

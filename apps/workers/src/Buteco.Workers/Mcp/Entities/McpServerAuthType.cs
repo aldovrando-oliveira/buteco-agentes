@@ -11,4 +11,10 @@ public enum McpServerAuthType
 {
     None,
     BearerToken,
+
+    // Mesmo nome do membro de apps/api: o nome É o contrato na coluna AuthType
+    // (change mcp-autenticacao-header-customizado, D1). O teste de acordo em
+    // tests/CrossAppTaskStoreCompatibility.Tests lê, por este contexto, cada
+    // valor gravado pelo de apps/api e compara o NOME.
+    CustomHeader,
 }

@@ -9,4 +9,5 @@ public sealed record CreateMcpServerCommand(
     string Description,
     string Url,
     McpServerAuthType AuthType,
-    string? Credential) : ICommand<McpServerResponse>;
+    string? Credential,
+    string? AuthHeaderName) : ICommand<McpServerResponse>;

@@ -15716,3 +15716,89 @@ a chave no prefixo, o `Atualizar` relendo tudo e o cancelamento em StrictMode.
 - O `Tentar novamente` vermelho `outline` dentro do `Alert` de falha mede 4,28:1 no
   claro: mesma família da **#155**.
 
+
+## `mcp-autenticacao-header-customizado` — token fixo em header customizado (#160)
+
+**Change proposta em 17/10/2026, revisada pelo dono em 18/10/2026 (revalidação no
+`McpConnectionTester`, credencial obrigatória no teste não salvo do `CustomHeader`,
+frontend como issue própria), implementada em 18/10/2026** na branch
+`feat/160-mcp-autenticacao-header-customizado`, a partir de `18a2f3b`, **sincronizada
+e arquivada em 18/10/2026** a pedido do dono: 4 requisitos modificados e 5 novos em
+`mcp-server-catalog`, 1 modificado e 1 novo em `mcp-tool-execution`. Change
+arquivada em `openspec/changes/archive/2026-10-18-mcp-autenticacao-header-customizado/`.
+Só backend; o painel é a **#168**.
+
+### O que entrou
+
+- **`apps/api`:** tipo `CustomHeader` em `McpServerAuthType` e coluna
+  `AuthHeaderName` (`text NULL`, migração `AddMcpServerAuthHeaderName`), devolvida
+  como `authHeaderName`. O token vai cru no header configurado, sem
+  `Authorization`. Validação do nome (token HTTP; o mesmo
+  `TryAddWithoutValidation` que o SDK chama; prefixo `Mcp-` e headers de controle
+  do HTTP) e do valor (ASCII visível, sem espaço nas pontas) em
+  `McpServers/Validation/McpAuthHeaderRules.cs`. `authType` passa a aceitar só nome
+  de membro. Trocar entre `BearerToken` e `CustomHeader` exige credencial nova.
+  O `McpConnectionTester` reconfere o nome antes de montar o transporte, com falha
+  `Unknown` sem o valor, cobrindo o re-teste, a descoberta de tools e o PUT de
+  vínculo a partir de linha salva.
+- **`apps/workers`:** membro e coluna no modelo espelho, migração espelho, e
+  `AuthType` lido por conversor tolerante: valor desconhecido exclui só aquele
+  servidor, sem decifrar nem conectar. Nome de header recusado pelo .NET também
+  exclui o servidor, sem passar a exceção ao logger.
+- **`tests/CrossAppTaskStoreCompatibility.Tests`:** acordo api ↔ workers com a
+  linha gravada pelo `apps/api` real e lida pelo `apps/workers` real.
+
+### O que a implementação mediu
+
+- **O conversor tolerante da D5, antes do grupo 7** (EF Core 10.0.10, Npgsql
+  10.0.3, `pgvector/pgvector:pg18`): `AuthType?` com `IsRequired()` gera
+  `"AuthType" text NOT NULL` e modelo `IsNullable = false`; na mesma consulta,
+  `FuturoTipo` e `2` vêm `null` e as outras linhas vêm com o valor, inclusive em
+  projeção anônima; gravar `null` é recusado (`23502`). A D5 se manteve.
+- **O vazamento da V2/V3 existe no app real**, medido ao reintroduzir cada
+  defeito: o teste não salvo devolveu `...'Content-Type' with value
+  'SEGREDO-...'...` num 200; sem a checagem do tester, a descoberta de tools, o
+  re-teste salvo e o 502 do vínculo devolveram o segredo, os três; no
+  `apps/workers`, o `LogWarning(exception, ...)` do resolver o gravou.
+- **As duas migrações** saíram só com `AddColumn`/`DropColumn` de
+  `AuthHeaderName`, sem `AlterColumn` em `AuthType`.
+- **Suítes** (`podman ps` vazio; os contêineres de dev do compose foram parados
+  para as medições e religados ao fim), comparadas por nome com a baseline:
+
+  | suíte | baseline em `18a2f3b` | fim | diferença |
+  |---|---|---|---|
+  | `apps/api` | 756/756, 1m47s | **800/800**, 1m50s | +44 novos, 0 removidos |
+  | `apps/workers` | 397/397, 6m19s | **405/405**, 7m51s (2ª rodada) | +8 novos, 0 removidos |
+  | `CrossAppTaskStoreCompatibility.Tests` | 2/2 | **4/4** | +2 novos |
+
+  **A 1ª rodada final do `apps/workers` deu 404/405**: falhou
+  `KnowledgeIndexingTests.EachFragmentKeepsTheVectorOfItsOwnText_AcrossTheBatchBoundary`
+  (`Expected: 5, Actual: 4`), a mesma assinatura da **#130**. **Não está
+  classificada** como pré-existente (convenção 19): não apareceu na baseline
+  desta change. O que se sabe: 1 falha em 2 rodadas na árvore desta change e 0
+  em 1 na baseline; a change não toca `Knowledge/`; a classe divide a
+  `WorkerHostCollection` com o `McpToolExecutionEndToEndTests`, que ganhou um
+  teste, mas cada classe tem a própria `WorkerInfrastructureFixture` (Postgres e
+  RabbitMQ próprios).
+
+### Guardas contra o defeito real (convenção 15)
+
+Doze, cada um aplicado, visto reprovando o teste nomeado e desfeito (`tasks.md`,
+inline): formato de fio (duas reintroduções), nome inválido no teste não salvo,
+`authType` por nome, troca de tipo exigindo credencial, `CustomHeader` sem
+`Authorization`, linha salva com nome recusado nos três caminhos, `AuthType`
+desconhecido no resolver, segredo fora do log do resolver, acordo api ↔ workers
+pelo nome lido, e a redação de header no log nos dois apps. Duas rodadas não
+contaram e estão registradas como tal: a primeira do nome inválido (o tester ainda
+não enviava o header) e a primeira do acordo (build quebrado, 0 testes).
+
+### Achados e sequência
+
+- **#167**: o valor da credencial `BearerToken` não é validado, e CR/LF nele
+  injeta header. Fora do escopo; fica na fila.
+- **#168**: o painel do tipo `CustomHeader`, com o protótipo aprovado
+  (`1792295069-a164`). Requisito de entrada: a janela em que um servidor
+  `CustomHeader` criado pela API aparece com rótulo vazio.
+- **Deploy:** `apps/api` e `apps/workers` no mesmo `up -d`, e converter os
+  servidores `CustomHeader` antes de qualquer rollback para antes da #160
+  (`docs/deployment.md`).

@@ -18,12 +18,12 @@ namespace Buteco.Api.McpServers.Connectivity;
 /// </summary>
 public interface IMcpConnectionTester
 {
-    Task<McpConnectionTestResult> TestAsync(string url, McpServerAuthType authType, string? credential, CancellationToken cancellationToken);
+    Task<McpConnectionTestResult> TestAsync(string url, McpServerAuthType authType, string? credential, string? authHeaderName, CancellationToken cancellationToken);
 
     // Descoberta ao vivo das tools oferecidas pelo servidor (Decision 3 do
     // design.md da change backend-mcp-selecao-tools) — reaproveita a mesma
     // construção de transporte de TestAsync, sem duplicar lógica de conexão.
     // Usada tanto por GET /mcp-servers/{id}/tools quanto pela validação de
     // PUT /agents/{id}/mcp-servers.
-    Task<McpToolDiscoveryResult> ListToolsAsync(string url, McpServerAuthType authType, string? credential, CancellationToken cancellationToken);
+    Task<McpToolDiscoveryResult> ListToolsAsync(string url, McpServerAuthType authType, string? credential, string? authHeaderName, CancellationToken cancellationToken);
 }

@@ -1,5 +1,6 @@
 using System.Net;
 using Buteco.Api.McpServers.Entities;
+using Buteco.Api.McpServers.Validation;
 using ModelContextProtocol.Client;
 
 namespace Buteco.Api.McpServers.Connectivity;
@@ -17,9 +18,14 @@ public sealed class McpConnectionTester(IHttpClientFactory httpClientFactory) : 
 {
     public const string HttpClientName = "McpConnectionTester";
 
-    public async Task<McpConnectionTestResult> TestAsync(string url, McpServerAuthType authType, string? credential, CancellationToken cancellationToken)
+    public async Task<McpConnectionTestResult> TestAsync(string url, McpServerAuthType authType, string? credential, string? authHeaderName, CancellationToken cancellationToken)
     {
-        await using var transport = BuildTransport(url, authType, credential);
+        if (RejectedCustomHeaderMessage(authType, authHeaderName) is { } rejection)
+        {
+            return McpConnectionTestResult.Failed(McpConnectionTestFailureReason.Unknown, rejection);
+        }
+
+        await using var transport = BuildTransport(url, authType, credential, authHeaderName);
 
         try
         {
@@ -38,9 +44,14 @@ public sealed class McpConnectionTester(IHttpClientFactory httpClientFactory) : 
         }
     }
 
-    public async Task<McpToolDiscoveryResult> ListToolsAsync(string url, McpServerAuthType authType, string? credential, CancellationToken cancellationToken)
+    public async Task<McpToolDiscoveryResult> ListToolsAsync(string url, McpServerAuthType authType, string? credential, string? authHeaderName, CancellationToken cancellationToken)
     {
-        await using var transport = BuildTransport(url, authType, credential);
+        if (RejectedCustomHeaderMessage(authType, authHeaderName) is { } rejection)
+        {
+            return McpToolDiscoveryResult.Failed(McpConnectionTestFailureReason.Unknown, rejection);
+        }
+
+        await using var transport = BuildTransport(url, authType, credential, authHeaderName);
 
         try
         {
@@ -63,10 +74,43 @@ public sealed class McpConnectionTester(IHttpClientFactory httpClientFactory) : 
         }
     }
 
+    // Checagem da regra 2 do D3 (change mcp-autenticacao-header-customizado)
+    // ANTES de montar o transporte. Um nome que o .NET recusa como header de
+    // requisição faz o SDK lançar InvalidOperationException com o VALOR do
+    // header na mensagem (CopyAdditionalHeaders, decompilado — V2), e os catch
+    // acima repassam exception.Message na resposta HTTP (V3).
+    //
+    // A validação de entrada de McpServerEndpoints não alcança três caminhos que
+    // conectam a partir da LINHA SALVA (V9): o re-teste (POST
+    // /mcp-servers/{id}/test), a descoberta de tools (GET
+    // /mcp-servers/{id}/tools) e o PUT /agents/{id}/mcp-servers, que põe a
+    // mensagem no `detail` de um 502. Uma linha gravada por SQL direto, ou por
+    // uma validação regredida, chegaria aqui com o segredo. Esta checagem é o
+    // único ponto por onde os três passam.
+    //
+    // Motivo Unknown, e não um motivo novo: o estado só se alcança fora da
+    // validação, e um motivo novo seria contrato novo com o frontend, cujo
+    // Record exaustivo de explicações sairia `undefined` (V10, D3). A mensagem
+    // cita o nome (configuração) e nunca o valor.
+    private static string? RejectedCustomHeaderMessage(McpServerAuthType authType, string? authHeaderName) =>
+        authType == McpServerAuthType.CustomHeader && !McpAuthHeaderRules.IsAcceptedAsRequestHeader(authHeaderName)
+            ? $"O nome de header salvo para este servidor ('{authHeaderName}') não pode ser usado em uma requisição. Edite o servidor e informe outro nome de header. Nenhuma requisição foi feita."
+            : null;
+
     // Construção do transporte compartilhada entre TestAsync e ListToolsAsync
     // (Decision 3 do design.md da change backend-mcp-selecao-tools) — evita
     // duas implementações paralelas da mesma lógica de conexão MCP.
-    private HttpClientTransport BuildTransport(string url, McpServerAuthType authType, string? credential)
+    //
+    // DUPLICAÇÃO REGISTRADA, NÃO EXTRAÍDA (D6 da change
+    // mcp-autenticacao-header-customizado): a montagem do header de
+    // autenticação abaixo é a mesma de McpTransportFactory.BuildTransport em
+    // apps/workers, e com o CustomHeader passou de um tipo para dois. Não vai
+    // para libs/: os dois lados têm diferenças deliberadas (OwnsSession = false
+    // só aqui; HttpClient nomeado com PooledConnectionLifetime só lá), e a #161
+    // (OAuth client credentials) muda a forma da montagem — o token passa a ser
+    // obtido e renovado. Gatilho para reavaliar: a #161 entregar a terceira
+    // variante.
+    private HttpClientTransport BuildTransport(string url, McpServerAuthType authType, string? credential, string? authHeaderName)
     {
         var transportOptions = new HttpClientTransportOptions
         {
@@ -79,13 +123,21 @@ public sealed class McpConnectionTester(IHttpClientFactory httpClientFactory) : 
             OwnsSession = false,
         };
 
-        if (authType == McpServerAuthType.BearerToken)
+        transportOptions.AdditionalHeaders = authType switch
         {
-            transportOptions.AdditionalHeaders = new Dictionary<string, string>
+            McpServerAuthType.BearerToken => new Dictionary<string, string>
             {
                 ["Authorization"] = $"Bearer {credential}",
-            };
-        }
+            },
+            // Valor cru, sem prefixo, e SEM Authorization: o SDK manda
+            // AdditionalHeaders em toda requisição (POST, GET de stream, DELETE de
+            // sessão, sonda server/discover — design.md, V1).
+            McpServerAuthType.CustomHeader => new Dictionary<string, string>
+            {
+                [authHeaderName!] = credential!,
+            },
+            _ => null,
+        };
 
         var httpClient = httpClientFactory.CreateClient(HttpClientName);
         return new HttpClientTransport(transportOptions, httpClient, ownsHttpClient: false);

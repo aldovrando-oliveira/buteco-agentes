@@ -21,7 +21,7 @@ public class McpConnectionTesterListToolsTests(McpConnectionTestFixture factory)
         using var scope = factory.Services.CreateScope();
         var connectionTester = scope.ServiceProvider.GetRequiredService<IMcpConnectionTester>();
 
-        var result = await connectionTester.ListToolsAsync("https://mcp.example.com", McpServerAuthType.None, null, CancellationToken.None);
+        var result = await connectionTester.ListToolsAsync("https://mcp.example.com", McpServerAuthType.None, null, authHeaderName: null, CancellationToken.None);
 
         Assert.True(result.Success);
         Assert.NotNull(result.Tools);
@@ -41,7 +41,7 @@ public class McpConnectionTesterListToolsTests(McpConnectionTestFixture factory)
         using var scope = factory.Services.CreateScope();
         var connectionTester = scope.ServiceProvider.GetRequiredService<IMcpConnectionTester>();
 
-        var result = await connectionTester.ListToolsAsync("https://unreachable.example.com", McpServerAuthType.None, null, CancellationToken.None);
+        var result = await connectionTester.ListToolsAsync("https://unreachable.example.com", McpServerAuthType.None, null, authHeaderName: null, CancellationToken.None);
 
         Assert.False(result.Success);
         Assert.Null(result.Tools);
@@ -59,7 +59,7 @@ public class McpConnectionTesterListToolsTests(McpConnectionTestFixture factory)
         using var scope = factory.Services.CreateScope();
         var connectionTester = scope.ServiceProvider.GetRequiredService<IMcpConnectionTester>();
 
-        var result = await connectionTester.ListToolsAsync("https://mcp.example.com", McpServerAuthType.BearerToken, "wrong-token", CancellationToken.None);
+        var result = await connectionTester.ListToolsAsync("https://mcp.example.com", McpServerAuthType.BearerToken, "wrong-token", authHeaderName: null, CancellationToken.None);
 
         Assert.False(result.Success);
         Assert.Null(result.Tools);

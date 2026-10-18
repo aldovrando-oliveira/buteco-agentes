@@ -553,6 +553,9 @@ namespace Buteco.Workers.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AuthHeaderName")
+                        .HasColumnType("text");
+
                     b.Property<string>("AuthType")
                         .IsRequired()
                         .HasColumnType("text");

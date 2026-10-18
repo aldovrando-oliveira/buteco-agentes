@@ -15,7 +15,7 @@ public sealed class CreateMcpServerCommandHandler(AppDbContext dbContext, IMcpCr
             ? null
             : credentialCipher.Encrypt(command.Credential!);
 
-        var mcpServer = new McpServer(command.Name, command.Description, command.Url, command.AuthType, encryptedCredential);
+        var mcpServer = new McpServer(command.Name, command.Description, command.Url, command.AuthType, encryptedCredential, command.AuthHeaderName);
 
         dbContext.McpServers.Add(mcpServer);
         await dbContext.SaveChangesAsync(cancellationToken);

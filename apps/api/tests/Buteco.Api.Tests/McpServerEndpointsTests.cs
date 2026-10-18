@@ -313,6 +313,96 @@ public class McpServerEndpointsTests(ApiFactoryFixture factory) : IClassFixture<
         Assert.False((await updateResponse.Content.ReadFromJsonAsync<McpServerResponse>())!.IsActive);
     }
 
+    // --- Tipo CustomHeader (change mcp-autenticacao-header-customizado) -----
+
+    // Formato de fio (D1, convenção 12): o nome do membro é o contrato no JSON
+    // E na coluna. As duas asserções leem o ARTEFATO — o texto bruto da
+    // resposta e o valor da coluna por SQL —, porque um round-trip pelo mesmo
+    // tipo passaria com o membro renomeado (a chave muda nos dois sentidos).
+    [Fact]
+    public async Task CreateMcpServer_WithCustomHeader_WritesTypeAndHeaderNameAsStringsOnTheWireAndInTheColumn()
+    {
+        var request = new CreateMcpServerRequest("MCP Header", "Descrição", "https://mcp.example.com", "CustomHeader", "SEGREDO-fio", "X-API-TOKEN");
+
+        var response = await _client.PostAsJsonAsync("/mcp-servers", request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"authType\":\"CustomHeader\"", body);
+        Assert.Contains("\"authHeaderName\":\"X-API-TOKEN\"", body);
+
+        var created = (await response.Content.ReadFromJsonAsync<McpServerResponse>())!;
+        using var scope = factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var column = await dbContext.Database
+            .SqlQuery<string>($"""SELECT "AuthType" AS "Value" FROM mcp_servers WHERE "Id" = {created.Id}""")
+            .SingleAsync();
+        Assert.Equal("CustomHeader", column);
+    }
+
+    [Fact]
+    public async Task CreateMcpServer_WithCustomHeader_ReturnsHeaderNameAndNeverTheCredential()
+    {
+        var request = new CreateMcpServerRequest("MCP Header Criado", "Descrição", "https://mcp.example.com", "CustomHeader", "SEGREDO-criado", "X-API-TOKEN");
+
+        var response = await _client.PostAsJsonAsync("/mcp-servers", request);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("SEGREDO-criado", body);
+        Assert.DoesNotContain("redential", body, StringComparison.OrdinalIgnoreCase);
+        var created = (await response.Content.ReadFromJsonAsync<McpServerResponse>())!;
+        Assert.Equal(McpServerAuthType.CustomHeader, created.AuthType);
+        Assert.Equal("X-API-TOKEN", created.AuthHeaderName);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task CreateMcpServer_WithCustomHeaderAndNoCredential_ReturnsValidationProblemOnCredential(string? credential)
+    {
+        var request = new CreateMcpServerRequest("MCP Header Sem Credencial", "Descrição", "https://mcp.example.com", "CustomHeader", credential, "X-API-TOKEN");
+
+        var response = await _client.PostAsJsonAsync("/mcp-servers", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("\"credential\"", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task GetByIdAndList_WithCustomHeader_ReturnHeaderNameWithoutTheCredential()
+    {
+        var created = await CreateCustomHeaderServerAsync("MCP Header Consultado", "X-Consulta", "SEGREDO-consulta");
+
+        var getBody = await (await _client.GetAsync($"/mcp-servers/{created.Id}")).Content.ReadAsStringAsync();
+        Assert.Contains("\"authHeaderName\":\"X-Consulta\"", getBody);
+        Assert.DoesNotContain("SEGREDO-consulta", getBody);
+
+        var listResponse = await _client.GetAsync("/mcp-servers");
+        var listBody = await listResponse.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("SEGREDO-consulta", listBody);
+        var listed = (await listResponse.Content.ReadFromJsonAsync<List<McpServerResponse>>())!;
+        Assert.Equal("X-Consulta", listed.Single(server => server.Id == created.Id).AuthHeaderName);
+    }
+
+    [Fact]
+    public async Task GetById_WithoutCustomHeader_ReturnsNullHeaderName()
+    {
+        var created = await CreateMcpServerAsync("MCP Sem Header", McpServerAuthType.None, null);
+
+        var body = await (await _client.GetAsync($"/mcp-servers/{created.Id}")).Content.ReadAsStringAsync();
+
+        Assert.Contains("\"authHeaderName\":null", body);
+    }
+
+    private async Task<McpServerResponse> CreateCustomHeaderServerAsync(string name, string headerName, string credential)
+    {
+        var request = new CreateMcpServerRequest(name, "Descrição", "https://mcp.example.com", "CustomHeader", credential, headerName);
+        var response = await _client.PostAsJsonAsync("/mcp-servers", request);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<McpServerResponse>())!;
+    }
+
     private async Task<McpServerResponse> CreateMcpServerAsync(string name, McpServerAuthType authType, string? credential)
     {
         var request = new CreateMcpServerRequest(name, "Descrição", "https://mcp.example.com", authType.ToString(), credential);

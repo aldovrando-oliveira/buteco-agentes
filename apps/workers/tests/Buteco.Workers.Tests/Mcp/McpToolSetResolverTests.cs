@@ -8,6 +8,7 @@ using Buteco.Workers.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Buteco.Workers.Tests.Mcp;
@@ -553,6 +554,159 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
             toolSet.Tools.Select(tool => tool.Name).ToList());
     }
 
+    // --- Tipo CustomHeader (change mcp-autenticacao-header-customizado) -----
+
+    [Fact]
+    public async Task ResolveAsync_CustomHeader_IncludesTheTools_AndNoRequestCarriesAuthorization()
+    {
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+        var serverUrl = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(serverUrl, new FakeMcpServerConfig
+        {
+            AvailableTools = [new FakeMcpTool("search")],
+            RequiredHeader = ("X-API-TOKEN", "SEGREDO-workers"),
+        });
+
+        var mcpServerId = await SeedMcpServerAsync("Servidor Header", serverUrl, authType: "CustomHeader", encryptedCredential: Encrypt("SEGREDO-workers"), authHeaderName: "X-API-TOKEN");
+        await SeedAgentMcpServerAsync(agentId, mcpServerId, ["search"]);
+
+        await using var dbContext = CreateDbContext();
+        await using (var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None))
+        {
+            var tool = Assert.Single(toolSet.Tools);
+            Assert.Equal("Servidor_Header__search", tool.Name);
+        }
+
+        var received = handler.HeadersReceivedBy(serverUrl);
+        Assert.NotEmpty(received);
+        Assert.All(received, headers => Assert.Equal("SEGREDO-workers", headers["X-API-TOKEN"]));
+        Assert.All(received, headers => Assert.False(headers.ContainsKey("Authorization")));
+    }
+
+    [Fact]
+    public async Task ResolveAsync_BearerToken_StillIncludesTheTools()
+    {
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+        var serverUrl = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(serverUrl, new FakeMcpServerConfig
+        {
+            AvailableTools = [new FakeMcpTool("search")],
+            RequiredBearerToken = "SEGREDO-bearer",
+        });
+
+        var mcpServerId = await SeedMcpServerAsync("Servidor Bearer", serverUrl, authType: "BearerToken", encryptedCredential: Encrypt("SEGREDO-bearer"));
+        await SeedAgentMcpServerAsync(agentId, mcpServerId, ["search"]);
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        Assert.Equal("Servidor_Bearer__search", Assert.Single(toolSet.Tools).Name);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_CustomHeaderWithoutHeaderName_IsExcludedWithoutAnyRequest()
+    {
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+        var serverUrl = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(serverUrl, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("search")] });
+
+        var mcpServerId = await SeedMcpServerAsync("Servidor Sem Nome", serverUrl, authType: "CustomHeader", encryptedCredential: Encrypt("SEGREDO-sem-nome"), authHeaderName: null);
+        await SeedAgentMcpServerAsync(agentId, mcpServerId, ["search"]);
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        Assert.Empty(toolSet.Tools);
+        Assert.Empty(handler.HeadersReceivedBy(serverUrl));
+    }
+
+    // Guarda da tarefa 7.7 (D5): com HasConversion<string>() a leitura desta
+    // linha lança fora do try por servidor e derruba a resolução inteira (V6).
+    [Fact]
+    public async Task ResolveAsync_UnknownAuthType_ExcludesOnlyThatServer_WithoutThrowingOrConnecting()
+    {
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+        var validUrl = UniqueServerUrl();
+        var unknownUrl = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(validUrl, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("search")] });
+        handler.ConfigureServer(unknownUrl, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("search")] });
+
+        var validId = await SeedMcpServerAsync("Servidor Valido", validUrl);
+        var unknownId = await SeedMcpServerAsync("Servidor Futuro", unknownUrl, authType: "FuturoTipo", encryptedCredential: Encrypt("SEGREDO-futuro"));
+        await SeedAgentMcpServerAsync(agentId, validId, ["search"]);
+        await SeedAgentMcpServerAsync(agentId, unknownId, ["search"]);
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await CreateResolver(handler).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        Assert.Equal("Servidor_Valido__search", Assert.Single(toolSet.Tools).Name);
+        Assert.Empty(handler.HeadersReceivedBy(unknownUrl));
+    }
+
+    // Guarda da tarefa 7.8 (D3): sem a reconferência, o SDK lança
+    // InvalidOperationException com o VALOR do header — a credencial decifrada —
+    // na mensagem, e o LogWarning(exception, ...) do resolver a grava (V2, V3).
+    // Lê as linhas REAIS do logger: mensagem formatada e exceção completa.
+    [Fact]
+    public async Task ResolveAsync_HeaderNameRejectedByDotNet_ExcludesTheServer_AndNoLogLineCarriesTheSecret()
+    {
+        var agentId = Guid.NewGuid();
+        await SeedAgentAsync(agentId);
+        var serverUrl = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(serverUrl, new FakeMcpServerConfig { AvailableTools = [new FakeMcpTool("search")] });
+
+        var mcpServerId = await SeedMcpServerAsync("Servidor Content-Type", serverUrl, authType: "CustomHeader", encryptedCredential: Encrypt("SEGREDO-no-log"), authHeaderName: "Content-Type");
+        await SeedAgentMcpServerAsync(agentId, mcpServerId, ["search"]);
+        var logger = new CapturingLogger<McpToolSetResolver>();
+
+        await using var dbContext = CreateDbContext();
+        await using var toolSet = await CreateResolver(handler, logger: logger).ResolveAsync(dbContext, agentId, CancellationToken.None);
+
+        Assert.Empty(toolSet.Tools);
+        Assert.NotEmpty(logger.Lines);
+        Assert.All(logger.Lines, line => Assert.DoesNotContain("SEGREDO-no-log", line));
+        Assert.Empty(handler.HeadersReceivedBy(serverUrl));
+    }
+
+    // Logger que guarda o texto que um provedor real escreveria: a mensagem
+    // formatada e, quando há, a exceção inteira (ToString, com mensagem e pilha).
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        private readonly List<string> _lines = [];
+
+        public IReadOnlyList<string> Lines
+        {
+            get
+            {
+                lock (_lines)
+                {
+                    return _lines.ToList();
+                }
+            }
+        }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            lock (_lines)
+            {
+                _lines.Add(formatter(state, exception) + (exception is null ? string.Empty : Environment.NewLine + exception));
+            }
+        }
+    }
+
     private async Task SeedFourServersAsync(Guid agentId, FakeMcpServerHttpMessageHandler handler)
     {
         await SeedAgentAsync(agentId);
@@ -567,12 +721,15 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
 
     private static string UniqueServerUrl() => $"https://fake-mcp-{Guid.NewGuid():N}.test/mcp";
 
-    private static McpToolSetResolver CreateResolver(FakeMcpServerHttpMessageHandler handler, string encryptionKey = EncryptionKey)
+    private static McpToolSetResolver CreateResolver(FakeMcpServerHttpMessageHandler handler, string encryptionKey = EncryptionKey, ILogger<McpToolSetResolver>? logger = null)
     {
         var cipher = new AesGcmMcpCredentialCipher(Microsoft.Extensions.Options.Options.Create(new McpCryptoOptions { CredentialEncryptionKey = encryptionKey }));
         var transportFactory = new McpTransportFactory(new SingleClientHttpClientFactory(new HttpClient(handler)));
-        return new McpToolSetResolver(cipher, transportFactory, NullLogger<McpToolSetResolver>.Instance);
+        return new McpToolSetResolver(cipher, transportFactory, logger ?? NullLogger<McpToolSetResolver>.Instance);
     }
+
+    private static string Encrypt(string plaintext) =>
+        new AesGcmMcpCredentialCipher(Microsoft.Extensions.Options.Options.Create(new McpCryptoOptions { CredentialEncryptionKey = EncryptionKey })).Encrypt(plaintext);
 
     private AppDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<AppDbContext>().UseButecoAgentsNpgsql(fixture.Postgres.GetConnectionString()).Options);
@@ -593,15 +750,16 @@ public class McpToolSetResolverTests(WorkerInfrastructureFixture fixture) : ICla
         string url,
         bool isActive = true,
         string authType = "None",
-        string? encryptedCredential = null)
+        string? encryptedCredential = null,
+        string? authHeaderName = null)
     {
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         await using var dbContext = CreateDbContext();
         await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO mcp_servers ("Id", "Name", "Description", "Url", "AuthType", "EncryptedCredential", "IsActive", "CreatedAt", "UpdatedAt")
-             VALUES ({id}, {name}, {""}, {url}, {authType}, {encryptedCredential}, {isActive}, {now}, {now})
+             INSERT INTO mcp_servers ("Id", "Name", "Description", "Url", "AuthType", "EncryptedCredential", "AuthHeaderName", "IsActive", "CreatedAt", "UpdatedAt")
+             VALUES ({id}, {name}, {""}, {url}, {authType}, {encryptedCredential}, {authHeaderName}, {isActive}, {now}, {now})
              """);
         return id;
     }

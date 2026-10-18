@@ -32,6 +32,11 @@ public sealed class FakeMcpServerConfig
 
     public string? RequiredBearerToken { get; set; }
 
+    // Header customizado exigido por este servidor (change
+    // mcp-autenticacao-header-customizado): 401 se ausente ou com outro valor.
+    // Valor comparado exato, sem prefixo — é o que o tipo CustomHeader promete.
+    public (string Name, string Value)? RequiredHeader { get; set; }
+
     public IReadOnlyList<FakeMcpTool> AvailableTools { get; set; } = [];
 
     // Configurável para reproduzir servidores MCP reais que falam uma
@@ -72,6 +77,21 @@ public sealed class FakeMcpServerHttpMessageHandler : HttpMessageHandler
     /// </summary>
     public int TotalRequestsReceived { get; private set; }
 
+    private readonly List<(Uri Url, IReadOnlyDictionary<string, string> Headers)> _receivedHeaders = [];
+
+    /// <summary>
+    /// Headers de cada requisição recebida por um servidor (nome → valores juntos
+    /// por ","). Existe para as asserções NEGATIVAS do tipo CustomHeader: provar
+    /// que nenhuma requisição levou Authorization.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyDictionary<string, string>> HeadersReceivedBy(string url)
+    {
+        lock (_receivedHeaders)
+        {
+            return _receivedHeaders.Where(entry => entry.Url == new Uri(url)).Select(entry => entry.Headers).ToList();
+        }
+    }
+
     public void ConfigureServer(string url, FakeMcpServerConfig config) => _servers[new Uri(url)] = config;
 
     public int CountRequests(string url, string method) =>
@@ -88,6 +108,14 @@ public sealed class FakeMcpServerHttpMessageHandler : HttpMessageHandler
             throw new InvalidOperationException($"Nenhum FakeMcpServerConfig configurado para '{uri}'. Chame ConfigureServer antes do teste conectar.");
         }
 
+        lock (_receivedHeaders)
+        {
+            _receivedHeaders.Add((uri, request.Headers.ToDictionary(
+                header => header.Key,
+                header => string.Join(",", header.Value),
+                StringComparer.OrdinalIgnoreCase)));
+        }
+
         if (config.Unreachable)
         {
             throw new HttpRequestException("Simulated unreachable host.");
@@ -100,6 +128,12 @@ public sealed class FakeMcpServerHttpMessageHandler : HttpMessageHandler
             {
                 return new HttpResponseMessage(HttpStatusCode.Unauthorized);
             }
+        }
+
+        if (config.RequiredHeader is { } required
+            && (!request.Headers.TryGetValues(required.Name, out var values) || string.Join(",", values) != required.Value))
+        {
+            return new HttpResponseMessage(HttpStatusCode.Unauthorized);
         }
 
         if (request.Method == HttpMethod.Delete)
