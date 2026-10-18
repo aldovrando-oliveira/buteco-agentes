@@ -15722,9 +15722,11 @@ a chave no prefixo, o `Atualizar` relendo tudo e o cancelamento em StrictMode.
 **Change proposta em 17/10/2026, revisada pelo dono em 18/10/2026 (revalidação no
 `McpConnectionTester`, credencial obrigatória no teste não salvo do `CustomHeader`,
 frontend como issue própria), implementada em 18/10/2026** na branch
-`feat/160-mcp-autenticacao-header-customizado`, a partir de `18a2f3b`. **Ainda
-ativa:** o archive espera a revisão do dono (convenção 24). Só backend; o painel é
-a **#168**.
+`feat/160-mcp-autenticacao-header-customizado`, a partir de `18a2f3b`, **sincronizada
+e arquivada em 18/10/2026** a pedido do dono: 4 requisitos modificados e 5 novos em
+`mcp-server-catalog`, 1 modificado e 1 novo em `mcp-tool-execution`. Change
+arquivada em `openspec/changes/archive/2026-10-18-mcp-autenticacao-header-customizado/`.
+Só backend; o painel é a **#168**.
 
 ### O que entrou
 
