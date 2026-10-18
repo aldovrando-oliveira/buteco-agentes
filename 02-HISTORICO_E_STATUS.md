@@ -1890,8 +1890,8 @@ revisão 2 é a especificação válida das telas das quatro etapas.
 
 **Correções de protótipo — lista viva, alimenta a revisão 3 do handoff.**
 
-São **quarenta e oito**, achadas em doze etapas diferentes (a décima quinta, da #99,
-as dez da #106, as doze da #107, a da #136 e as dez da #101 estão no fim da lista). A décima quarta vem primeiro
+São **sessenta e uma**, achadas em treze etapas diferentes (a décima quinta, da #99,
+as dez da #106, as doze da #107, a da #136, as dez da #101 e as treze da #168 estão no fim da lista). A décima quarta vem primeiro
 porque é de **tipo novo** e muda o critério de detecção da lista inteira; depois
 a oitava, que também era de tipo novo quando entrou; depois as duas da 5c, depois
 as três da 5a-3, depois as duas da 5a-2, que **corrigiram duas das cinco
@@ -2242,6 +2242,38 @@ pranchas 3a e 4a.** Na D7 do `design.md` da change:
   dois esquemas.
 - **C10, "Mais recentes primeiro" na cor padrão** (conferência R2-1): `dimmed` sobre a
   faixa do cabeçalho mede 4,14:1 no claro.
+
+**Da quadragésima nona à sexagésima primeira, da #168
+(`frontend-mcp-autenticacao-header-customizado`, 18/10/2026), do canvas
+`2apwGhmPQCwYWKc8i9DFEy`, versão `1792295069-a164`, quadros `Main`, `Erros` e
+`Detalhe`.** Na tabela "Divergências do protótipo" do `design.md` da change (P1 a
+P13). A conferência do dono aprovou a tela na rodada 1, sem achados, então nenhuma
+delas saiu da conferência:
+
+- **P1, cartão marcado:** borda de 2px e `--mantine-primary-color-light`, a regra
+  que o painel já tinha escrito para o card de origem das bases, contra 1px e
+  `#eef3fb`, que só existe no claro.
+- **P2, grade:** uma ou três colunas por container query, contra
+  `repeat(auto-fit, minmax(230px, 1fr))`, que deixa um cartão órfão e foi medido na
+  fonte do protótipo. Corte medido em 760px de container.
+- **P3, Descrição mantida:** o protótipo não desenha o campo, que a API serve e o
+  painel edita.
+- **P4, sem alerta de resumo no topo:** o espaço do protótipo também mostra o
+  sucesso simulado; o painel diz o erro no campo e o sucesso por notificação.
+- **P5, sem validação local de formato do header e do token:** a lista de
+  reservados é da API (regra 4 da #168); os textos vêm do 400.
+- **P6, teste com header inválido:** obrigatoriedade barrada no campo; 400 nos
+  campos, com "Corrija os campos destacados antes de testar. Nenhuma conexão foi
+  tentada." no lugar do texto por campo do protótipo.
+- **P7, `None` em edição testa o digitado:** o protótipo testava o salvo, sem nota.
+- **P8, URL como está:** sem monoespaçado e sem o placeholder `/mcp`, fora do
+  escopo e conteúdo de exemplo.
+- **P9, indicador do Mantine:** `Radio.Indicator`, não o círculo desenhado à mão.
+- **P10, avisos:** `Alert color="yellow"`, não `#fbf1de`/`#8a5a00`.
+- **P11, caixa de prévia:** `--buteco-surface-subtle` e a borda padrão, não
+  `#faf9f8`/`#f1f1f1`.
+- **P12 e P13, simulação:** "Conexão bem-sucedida (simulada…)", datas fixas, nome
+  e URL de exemplo não entram no produto.
 
 **Para a 5b, o que já está pronto — e o que a 5a-1 já entregou:**
 
@@ -15802,3 +15834,104 @@ não enviava o header) e a primeira do acordo (build quebrado, 0 testes).
 - **Deploy:** `apps/api` e `apps/workers` no mesmo `up -d`, e converter os
   servidores `CustomHeader` antes de qualquer rollback para antes da #160
   (`docs/deployment.md`).
+
+## `frontend-mcp-autenticacao-header-customizado` — painel do token em header customizado (#168)
+
+**Change proposta e revisada pelo dono em 18/10/2026, implementada em 18/10/2026**
+na branch `feat/168-frontend-mcp-autenticacao-header-customizado`, a partir de
+`f505114`, num worktree próprio. Só `apps/frontend`; consome o contrato da **#160**
+sem mudá-lo. Referência de tela: o protótipo aprovado
+(`2apwGhmPQCwYWKc8i9DFEy`, versão `1792295069-a164`), copiado em `design/` da
+change. **Conferência visual feita pelo dono em 18/10/2026, em duas rodadas, as
+duas aprovadas:** a 1, de tela, sem achados, nos dois esquemas; a 2, dos fluxos de
+salvar (cadastro dos três tipos, troca de tipo e edição só do nome do header),
+feita sobre os cadastros existentes.
+
+### O que entrou
+
+- **Seletor de tipo em cartões com radio**, em criar e editar, no lugar do
+  `Select`: Nenhuma, Bearer Token e Token em header customizado. O cartão virou
+  componente do painel (`components/forms/RadioCardOption.tsx`), extraído do card de
+  origem das bases, que passou a usá-lo sem asserção editada.
+- **Com o tipo novo:** "Nome do header" (monoespaçado, pré-preenchido na edição),
+  "Token" no lugar de "Credencial" e a caixa de prévia `<nome do header>: ••••••••`.
+- **Avisos da troca de tipo na edição** (D4 da #160): credencial não reaproveitada
+  entre tipos com credencial, credencial apagada ao ir para Nenhuma, nenhum aviso ao
+  sair de Nenhuma.
+- **"Testar conexão" escolhe a rota por uma função pura**
+  (`utils/connectionTestMode.ts`): salvo só com o tipo mantido, tipo com credencial e
+  credencial em branco; desabilitado na troca de tipo sem credencial (corrige o teste
+  do tipo antigo); `None` em edição testa a URL digitada (aprovado pelo dono).
+- **O 400 do teste vai para os campos**, com "Nenhuma conexão foi tentada.", no lugar
+  de "Falha na conexão" (aprovado pelo dono). O erro do submit some do campo quando o
+  campo é editado ou recebe um 400 do teste.
+- **Tabela e detalhe:** rótulo do tipo por um mapa único
+  (`utils/authTypeLabels.ts`, antes duplicado), e a linha "Header" no detalhe.
+
+### O que a implementação mediu
+
+- **Suíte do frontend** (`load` 3,35 na baseline e 3,57 no segundo fechamento):
+
+  | | baseline em `f505114` | fechamento |
+  |---|---|---|
+  | `npm run test` | 136 arquivos, 1783/1783 | **138 arquivos, 1839/1839** |
+  | `format:check` | 52 arquivos | os mesmos 52 (`diff`, `exit=0`) |
+
+  **+56 casos e +2 arquivos, 0 removidos**, contados por arquivo: formulário 17→50,
+  edição 8→12, card de configuração 3→7, tabela 7→8, `RadioCardOption` +6,
+  `connectionTestMode` +8.
+- **`N` do empilhamento medido: 760px de container**, o provisório confirmado. Três
+  colunas em 760, uma em 759; no pior caso (cartão do tipo novo marcado, borda de
+  2px) sobram **13,98px** para o título de 169,02px. A barra de rolagem que aparece
+  com o tipo marcado desloca o corte de viewport de 1058 para 1073px, e o de
+  container não muda. A medida usou um `iframe` de largura fixa, porque o
+  redimensionamento da janela não teve efeito no Chrome da automação.
+- **`aria-invalid` do `PasswordInput`:** o Mantine 9.4.2 chama o `Input` com
+  `withAria: false` (`PasswordInput.mjs:159`) e põe só `data-invalid` no `<input>`
+  (`:165`). O campo de credencial/token passou a enviar `aria-invalid` explícito; a
+  asserção reprovou sem a correção (1 de 12) antes de valer.
+- **Uma cláusula da spec viva ficou inalcançável:** com a obrigatoriedade local da
+  credencial na troca de tipo, o 400 de "credencial nunca persistida" deixou de
+  chegar pelo formulário. A cláusula saiu da delta e o teste foi reescrito (decisão
+  do dono); dois 400 que ainda chegam ganharam teste pelo caminho real da página.
+- **Projeção por arquivo bateu**: 5 criados, 7 modificados de produção, 12 de teste
+  (11 deles com fixture apontada pelo `tsc`). Comentário contra lógica nas linhas
+  adicionadas: produção 1 : 0,42, teste 1 : 0,05.
+
+### Guardas contra o defeito real (convenção 15)
+
+Três, cada um aplicado, visto reprovando e desfeito (conferido com `cmp`), mais a
+asserção do `aria-invalid`:
+
+- **G1**, resultado do teste descartado ao editar o nome do header: sem o campo na
+  comparação, 1 de 50 reprovou.
+- **G2**, teste desabilitado na troca de tipo: com a regra antiga, 7 de 58
+  reprovaram, entre eles **os dois** do guarda (função pura e formulário).
+- **Precedência de erros**: com o erro da página sempre exibido, 2 de 50
+  reprovaram, os dois de precedência.
+
+### Divergências do desenho aprovado (convenção 9)
+
+- **D3:** o `N` foi medido e confirmou o provisório.
+- **D5:** a cláusula do 400 de credencial nunca persistida saiu da delta (acima).
+- **D8:** o aviso de troca de tipo fica entre a descrição e a caixa do campo, porque
+  a descrição do Mantine é um `<p>`; e o `aria-invalid` explícito no campo de
+  credencial/token.
+- **Protótipo:** P1 a P13, na lista viva "Correções de protótipo" (da quadragésima
+  nona à sexagésima primeira).
+
+### Achados fora do escopo (convenção 23)
+
+- **#170**: os outros três campos de senha com validação (`LoginForm`, token do
+  WAHA e do Telegram) não marcam `aria-invalid`. Na fila; entra no PR como `Refs`.
+  Se a correção for central, o `aria-invalid` explícito do `McpServerForm` sai junto.
+- **#171**: em viewport ≤ 768px a navbar do painel ocupa a largura inteira e
+  cobre o conteúdo, sem `Burger`, ao contrário do que diz o comentário de
+  `components/layout/AppShell.tsx` ("o conteúdo aperta"). Anterior a esta change;
+  na fila, entra no PR como `Refs`.
+- **Rodada 2 sem servidor novo:** o dono exercitou os fluxos de salvar sobre os
+  cadastros existentes. A API confirma só o estado final do registro gravado
+  (`84999c69-…`, de `None` para `CustomHeader` com `X-CUSTOM-TOKEN`); os passos
+  intermediários são atestados pelo dono (tarefa 7.3). Esse registro aponta para
+  uma URL real, e no banco local ficou com o tipo novo.
+

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Novo servidor MCP</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f6f5f3}
+a{color:#2a6ecb}a:hover{color:#1e4d92}
+.lbl{display:block;font-size:12px;font-weight:500;color:#191a1c;margin-bottom:4px}
+.ast{color:#cf3a2b;margin-left:2px}
+.desc{font-size:11px;color:#686d74;margin:0 0 5px 0;line-height:1.35}
+.inp{box-sizing:border-box;width:100%;height:36px;border:1px solid #e5e5e5;border-radius:7px;padding:0 11px;font:inherit;font-size:13px;color:#191a1c;background:#fff}
+.inp:focus{outline:none;border-color:#2a6ecb}
+.inp.bad{border-color:#cf3a2b;color:#b02a1f}
+.mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace}
+.err{font-size:11px;color:#cf3a2b;margin-top:5px;line-height:1.35}
+.btn{height:36px;padding:0 16px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; padding: 32px 24px 56px; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; color: #191a1c; background: #f6f5f3">
+<div style="max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px">
+<a href="#" style="font-size: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; width: fit-content">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>Servidores MCP</a>
+<h2 style="margin: 0; font-size: 17px; font-weight: 600; line-height: 1.35">{{pageTitle}}</h2>
+
+<form style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 9px; padding: 20px; display: flex; flex-direction: column; gap: 16px" onSubmit="{{onSubmit}}">
+<div>
+<label class="lbl" for="f-name">Nome<span class="ast">*</span></label>
+<input id="f-name" class="inp" placeholder="Nome do servidor MCP" value="{{name}}" onChange="{{onName}}">
+</div>
+<div>
+<label class="lbl" for="f-url">Url<span class="ast">*</span></label>
+<input id="f-url" class="inp mono" placeholder="https://mcp.exemplo.com/mcp" value="{{url}}" onChange="{{onUrl}}">
+</div>
+
+<div style="border-top: 1px solid #f1f1f1; margin: 2px 0 0; padding-top: 16px; display: flex; flex-direction: column; gap: 14px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #686d74">Autenticação</div>
+
+<fieldset style="border: 0; margin: 0; padding: 0">
+<legend class="lbl" style="padding: 0">Tipo de autenticação<span class="ast">*</span></legend>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; margin-top: 2px">
+<sc-for list="{{types}}" as="t" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}" style="{{t.cardStyle}}">
+<span style="{{t.dotStyle}}"></span>
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-size: 13px; font-weight: 600; color: #191a1c">{{t.label}}</span>
+<span style="font-size: 12px; color: #686d74; line-height: 1.4">{{t.desc}}</span>
+</span>
+</button>
+</sc-for>
+</div>
+</fieldset>
+
+<sc-if value="{{typeChangedToNone}}" hint-placeholder-val="{{ false }}">
+<div style="font-size: 12px; color: #8a5a00; background: #fbf1de; border-radius: 7px; padding: 9px 12px; line-height: 1.45">Ao salvar, a credencial atual ({{savedLabel}}) é apagada. Ela não fica guardada sem uso.</div>
+</sc-if>
+
+<sc-if value="{{isCustom}}" hint-placeholder-val="{{ true }}">
+<div>
+<label class="lbl" for="f-header">Nome do header<span class="ast">*</span></label>
+<p class="desc">O header em que o serviço espera o token, como está na documentação dele.</p>
+<input id="f-header" class="{{headerClass}}" placeholder="X-API-TOKEN" value="{{headerName}}" onChange="{{onHeader}}" autocomplete="off" spellcheck="false">
+<sc-if value="{{headerError}}" hint-placeholder-val="{{ false }}">
+<div class="err">{{headerError}}</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{needsCredential}}" hint-placeholder-val="{{ true }}">
+<div>
+<label class="lbl" for="f-cred">{{credLabel}}<sc-if value="{{credRequired}}" hint-placeholder-val="{{ true }}"><span class="ast">*</span></sc-if></label>
+<sc-if value="{{typeChanged}}" hint-placeholder-val="{{ false }}">
+<div style="font-size: 12px; color: #8a5a00; background: #fbf1de; border-radius: 7px; padding: 9px 12px; line-height: 1.45; margin-bottom: 8px">O tipo mudou de {{savedLabel}} para {{currentLabel}}. Informe a credencial nova: a credencial salva era do tipo anterior e não é reaproveitada.</div>
+</sc-if>
+<p class="desc">{{credDesc}}</p>
+<input id="f-cred" class="{{credClass}}" type="password" placeholder="{{credPlaceholder}}" value="{{credential}}" onChange="{{onCred}}" autocomplete="off">
+<sc-if value="{{credError}}" hint-placeholder-val="{{ false }}">
+<div class="err">{{credError}}</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{showPreview}}" hint-placeholder-val="{{ true }}">
+<div style="border: 1px solid #f1f1f1; background: #faf9f8; border-radius: 7px; padding: 10px 12px; display: flex; flex-direction: column; gap: 5px">
+<div style="font-size: 11px; color: #686d74">Como a credencial sai em cada requisição ao servidor</div>
+<div class="mono" style="font-size: 12px; color: #191a1c; word-break: break-all">{{previewLine}}</div>
+<sc-if value="{{previewNote}}" hint-placeholder-val="{{ false }}">
+<div style="font-size: 11px; color: #686d74">{{previewNote}}</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+
+<sc-if value="{{testNote}}" hint-placeholder-val="{{ false }}">
+<div style="font-size: 11px; color: #686d74; line-height: 1.4">{{testNote}}</div>
+</sc-if>
+
+<sc-if value="{{alertText}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="{{alertStyle}}">{{alertText}}</div>
+</sc-if>
+
+<div style="display: flex; gap: 10px; flex-wrap: wrap">
+<button type="submit" class="btn" style="background: #2a6ecb; color: #ffffff; border: 1px solid #2a6ecb">{{submitLabel}}</button>
+<button type="button" class="btn" style="background: #ffffff; color: #191a1c; border: 1px solid #e5e5e5">Cancelar</button>
+<button type="button" class="btn" style="background: #ffffff; color: #2a6ecb; border: 1px solid #2a6ecb" onClick="{{onTest}}" disabled="{{testDisabled}}">Testar conexão</button>
+</div>
+</form>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"modo":{"editor":"enum","options":["Criar","Editar"],"default":"Criar"},"tipoSalvo":{"editor":"enum","options":["BearerToken","CustomHeader","None"],"default":"BearerToken","section":"Edição"},"$preview":{"width":1280,"height":1180}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {};
+  }
+
+  checkHeader(name) {
+    var v = name.trim();
+    if (!v) return null;
+    var lower = v.toLowerCase();
+    var content = ['content-type','content-length','content-encoding','content-language','content-location','content-md5','content-range','content-disposition','expires','last-modified','allow'];
+    var reserved = ['accept','last-event-id','host','connection','keep-alive','proxy-connection','transfer-encoding','te','trailer','upgrade','expect'];
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) return 'Use só letras, números e - . _ (sem espaço nem dois-pontos).';
+    if (content.indexOf(lower) >= 0) return v + ' é um header de conteúdo e não pode levar a credencial.';
+    if (lower.indexOf('mcp-') === 0) return 'Headers Mcp-* são do protocolo MCP e não podem levar a credencial.';
+    if (reserved.indexOf(lower) >= 0) return v + ' é controlado pelo protocolo e não pode levar a credencial.';
+    return null;
+  }
+
+  renderVals() {
+    var self = this;
+    var s = this.state;
+    var editing = (this.props.modo ?? 'Criar') === 'Editar';
+    var saved = this.props.tipoSalvo ?? 'BearerToken';
+    var labels = { None: 'Nenhuma', BearerToken: 'Bearer Token', CustomHeader: 'Token em header customizado' };
+
+    var defs = [
+      { id: 'None', desc: 'O servidor não exige credencial.' },
+      { id: 'BearerToken', desc: 'Envia o token em Authorization: Bearer.' },
+      { id: 'CustomHeader', desc: 'Envia o token no header que o serviço exige, como X-API-TOKEN.' }
+    ];
+
+    var type = s.type ?? (editing ? saved : 'CustomHeader');
+
+    var reset = { submitted: false, alert: null };
+    var types = defs.map(function (d) {
+      var sel = d.id === type;
+      return {
+        id: d.id,
+        label: labels[d.id],
+        desc: d.desc,
+        pressed: sel ? 'true' : 'false',
+        pick: function () { self.setState(Object.assign({ type: d.id }, reset)); },
+        cardStyle: 'display:flex;gap:10px;align-items:flex-start;text-align:left;font:inherit;cursor:pointer;padding:12px;border-radius:9px;min-height:44px;' + (sel ? 'border:1px solid #2a6ecb;background:#eef3fb;' : 'border:1px solid #e5e5e5;background:#ffffff;'),
+        dotStyle: 'flex-shrink:0;width:14px;height:14px;margin-top:2px;border-radius:50%;box-sizing:border-box;' + (sel ? 'border:4px solid #2a6ecb;background:#ffffff;' : 'border:1px solid #b5b4b2;background:#ffffff;')
+      };
+    });
+
+    var isNone = type === 'None';
+    var isBearer = type === 'BearerToken';
+    var isCustom = type === 'CustomHeader';
+    var typeChanged = editing && type !== saved;
+    var needsCredential = !isNone;
+    var credRequired = needsCredential && (!editing || typeChanged);
+
+    var name = s.name ?? (editing ? 'Ferramentas internas' : '');
+    var url = s.url ?? (editing ? 'https://mcp.exemplo.com/mcp' : '');
+    var headerName = s.headerName ?? (editing && saved === 'CustomHeader' ? 'X-API-TOKEN' : '');
+    var credential = s.credential ?? '';
+
+    var headerError = isCustom ? this.checkHeader(headerName) : null;
+    if (isCustom && !headerError && s.submitted && !headerName.trim()) headerError = 'Informe o nome do header em que o serviço espera o token.';
+
+    var credError = null;
+    if (isCustom && credential && !/^[\x21-\x7e](?:[\x20-\x7e]*[\x21-\x7e])?$/.test(credential)) credError = 'A credencial só pode ter caracteres ASCII visíveis, sem espaço no início ou no fim.';
+    if (!credError && s.submitted && credRequired && !credential.trim()) credError = typeChanged ? 'Informe a credencial nova para o tipo ' + labels[type] + '.' : 'A credencial é obrigatória para o tipo de autenticação informado.';
+
+    var credLabel = isCustom ? 'Token' : 'Credencial';
+    var credPlaceholder = editing && !typeChanged ? 'Deixe em branco para manter a credencial atual' : 'Credencial de acesso';
+    var credDesc = editing && !typeChanged ? 'Deixe em branco para manter a credencial atual.' : 'Enviada cifrada (AES-GCM) e nunca retorna na API.';
+
+    var shownHeader = headerName.trim() || '<nome do header>';
+    var previewLine = isNone ? 'Nenhum header de autenticação.'
+      : isBearer ? 'Authorization: Bearer ••••••••'
+      : shownHeader + ': ••••••••';
+    var previewNote = isCustom ? 'O valor vai como foi digitado, sem prefixo. Authorization não é enviado.' : null;
+
+    var usesSaved = editing && !credential.trim() && !typeChanged;
+    var testDisabled = editing && typeChanged && needsCredential && !credential.trim();
+    var testNote = null;
+    if (testDisabled) testNote = 'Para testar o tipo novo, informe a credencial nova.';
+    else if (usesSaved && !isNone) testNote = 'Sem digitar a credencial, o teste usa a configuração salva deste servidor' + (isCustom ? ', inclusive o nome do header: uma alteração no nome só é testada depois de salvar.' : '.');
+
+    var hasErrors = !!(headerError || credError || !name.trim() || !url.trim());
+
+    var alert = s.alert;
+    var alertStyle = alert && alert.ok
+      ? 'font-size:12px;line-height:1.45;border-radius:7px;padding:10px 12px;color:#1a7a49;background:#e9f6ee'
+      : 'font-size:12px;line-height:1.45;border-radius:7px;padding:10px 12px;color:#b02a1f;background:#fdeceb';
+
+    function setter(field) {
+      return function (e) { var o = { alert: null }; o[field] = e.target.value; self.setState(o); };
+    }
+
+    return {
+      pageTitle: editing ? 'Editar servidor MCP' : 'Novo servidor MCP',
+      submitLabel: editing ? 'Salvar alterações' : 'Cadastrar servidor',
+      types: types,
+      isCustom: isCustom,
+      needsCredential: needsCredential,
+      credRequired: credRequired,
+      typeChanged: typeChanged && needsCredential && saved !== 'None',
+      typeChangedToNone: typeChanged && isNone && saved !== 'None',
+      savedLabel: labels[saved],
+      currentLabel: labels[type],
+      name: name,
+      url: url,
+      headerName: headerName,
+      credential: credential,
+      onName: setter('name'),
+      onUrl: setter('url'),
+      onHeader: setter('headerName'),
+      onCred: setter('credential'),
+      headerError: headerError,
+      headerClass: headerError ? 'inp mono bad' : 'inp mono',
+      credError: credError,
+      credClass: credError ? 'inp bad' : 'inp',
+      credLabel: credLabel,
+      credPlaceholder: credPlaceholder,
+      credDesc: credDesc,
+      showPreview: isCustom,
+      previewLine: previewLine,
+      previewNote: previewNote,
+      testNote: testNote,
+      testDisabled: testDisabled,
+      alertText: alert ? alert.text : null,
+      alertStyle: alertStyle,
+      onSubmit: function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        if (hasErrors || (credRequired && !credential.trim()) || (isCustom && !headerName.trim())) {
+          self.setState({ submitted: true, alert: { ok: false, text: 'Corrija os campos destacados antes de salvar.' } });
+        } else {
+          self.setState({ submitted: true, alert: { ok: true, text: editing ? 'Alterações salvas (protótipo: nada é gravado).' : 'Servidor cadastrado (protótipo: nada é gravado).' } });
+        }
+      },
+      onTest: function () {
+        if (isCustom && (headerError || !headerName.trim())) {
+          self.setState({ alert: { ok: false, text: 'Corrija o nome do header antes de testar. Nenhuma requisição foi feita.' } });
+        } else if (credError) {
+          self.setState({ alert: { ok: false, text: 'Corrija a credencial antes de testar. Nenhuma requisição foi feita.' } });
+        } else {
+          self.setState({ alert: { ok: true, text: 'Conexão bem-sucedida (simulada no protótipo).' } });
+        }
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
