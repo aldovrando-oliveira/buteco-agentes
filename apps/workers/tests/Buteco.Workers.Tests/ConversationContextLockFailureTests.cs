@@ -134,11 +134,31 @@ public class ConversationContextLockFailureTests(WorkerInfrastructureFixture fix
     }
 
     // ── Guarda 2: o caminho alcançável em produção ───────────────────────
-    // Duas instâncias, duas tasks do MESMO (agentId, contextId), a primeira
-    // demorando mais do que a segunda pode esperar pelo lock. É o cenário do
-    // contato que manda a segunda mensagem enquanto o agente ainda responde a
-    // primeira — o índice único de PendingDispatch em apps/inbox filtra por
-    // Status = 'Pending', então uma linha Dispatching não impede uma nova.
+    /// <summary>
+    /// Duas instâncias, duas tasks do MESMO <c>(agentId, contextId)</c>, a primeira
+    /// demorando mais do que a segunda pode esperar pelo lock: as duas chegam a estado
+    /// terminal, e o <c>[Completed, Failed]</c> é o contrato do worker para isso.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Quem produz este cenário mudou com a change inbox-serializacao-por-sessao
+    /// (#162).</b> Até ela, era o contato que manda a segunda mensagem enquanto o agente
+    /// ainda responde a primeira: o índice único de <c>PendingDispatch</c> em
+    /// apps/inbox filtra por <c>Status = 'Pending'</c>, e o sweep despachava a segunda
+    /// com a primeira em <c>Dispatching</c>. Desde ela, o inbox não despacha uma sessão
+    /// com linha em <c>Dispatching</c>, e a conversa do contato não chega mais aqui. O
+    /// guarda disso é <c>SessionSerializationRoundTripTests</c>
+    /// (tests/InboxOrchestratorRoundTrip.Tests), com os três apps reais.
+    /// </para>
+    /// <para>
+    /// O que ainda produz o cenário é <b>cliente A2A externo</b> mandando duas mensagens
+    /// concorrentes no mesmo contexto direto a apps/api (D2 daquela change). Para ele, o
+    /// <c>[Completed, Failed]</c> continua valendo, por contrato documentado em
+    /// <c>docs/architecture.md</c>, e não como defeito. Por isso nenhuma asserção daqui
+    /// muda: reescrever para <c>[Completed, Completed]</c> afirmaria algo falso sobre o
+    /// worker, que não mudou.
+    /// </para>
+    /// </remarks>
     [Fact]
     public async Task TwoInstances_SameContext_SlowFirstTask_BothReachTerminalState()
     {

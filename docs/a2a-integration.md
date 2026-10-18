@@ -427,6 +427,16 @@ ao LLM (limitado às últimas 20 mensagens). Tasks `failed`/`rejected` nunca
 entram nesse histórico. Um `contextId` novo (ou omitido) começa uma
 conversa sem memória anterior.
 
+**Sobre duas mensagens ao mesmo tempo no mesmo `contextId`**: o worker executa
+uma task por vez em cada contexto do mesmo agente. Se o cliente manda a segunda
+mensagem enquanto a primeira ainda está `working`, a segunda espera a primeira
+por até **30 s**; se a primeira demorar mais que isso, a segunda termina
+`TASK_STATE_FAILED`. É o contrato, e não um defeito (ver
+[Execuções concorrentes no mesmo contexto](architecture.md#execuções-concorrentes-no-mesmo-contexto)).
+Para manter a ordem da conversa, espere a task anterior chegar a um estado
+terminal antes de mandar a seguinte. As conversas que chegam pelos canais do
+`apps/inbox` já são serializadas por ele e não passam por isso.
+
 ## Diagramas de fluxo
 
 ### Ciclo de vida da Task

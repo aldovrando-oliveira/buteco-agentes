@@ -73,6 +73,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
     private WebApplicationFactory<ApiProgram>? _apiFactory;
     private WebApplicationFactory<InboxProgram>? _inboxFactory;
     private IHost? _workersHost;
+    private IHost? _secondWorkersHost;
 
     // Resposta fixa do IChatClient mockado — o LLM de verdade não faz parte
     // do escopo desta fatia; só precisa provar que o texto de volta chega
@@ -101,6 +102,16 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
     public bool ChatClientFails { get; set; }
 
+    // Controles da disputa pelo lock de contexto (#162, guarda 4 da D5 da change
+    // inbox-serializacao-por-sessao). Neutros por padrão, como os de cima: LLM sem
+    // atraso, Command Timeout default do Npgsql (30 s), uma instância de worker.
+    public TimeSpan ChatClientDelay { get; set; } = TimeSpan.Zero;
+
+    // Vale para os hosts de worker construídos DEPOIS de atribuído (segunda instância,
+    // reinício) — o mesmo recurso de ConversationContextLockFailureTests: encurta a
+    // espera pelo advisory lock produzindo a mesma exceção de produção.
+    public int? WorkerCommandTimeoutSeconds { get; set; }
+
     public async Task InitializeAsync()
     {
         await Task.WhenAll(_apiAndWorkersPostgres.StartAsync(), _inboxPostgres.StartAsync(), _rabbitMq.StartAsync());
@@ -127,6 +138,8 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        await StopSecondWorkersAsync();
+
         if (_workersHost is not null)
         {
             await _workersHost.StopAsync();
@@ -241,7 +254,9 @@ public sealed class RoundTripFixture : IAsyncLifetime
     {
         var builder = Host.CreateApplicationBuilder();
 
-        builder.Configuration["ConnectionStrings:Postgres"] = _apiAndWorkersPostgres.GetConnectionString();
+        builder.Configuration["ConnectionStrings:Postgres"] = WorkerCommandTimeoutSeconds is { } commandTimeout
+            ? $"{_apiAndWorkersPostgres.GetConnectionString()};Command Timeout={commandTimeout}"
+            : _apiAndWorkersPostgres.GetConnectionString();
         builder.Services.AddInfrastructure(builder.Configuration);
 
         builder.Services.Configure<RabbitMqOptions>(options =>
@@ -255,9 +270,17 @@ public sealed class RoundTripFixture : IAsyncLifetime
         var chatClientMock = new Mock<IChatClient>();
         chatClientMock
             .Setup(client => client.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
-            .Returns(() => ChatClientFails
-                ? Task.FromException<ChatResponse>(new HttpRequestException("Falha simulada do provedor."))
-                : Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, MockedAgentReplyText))));
+            .Returns(async () =>
+            {
+                if (ChatClientDelay > TimeSpan.Zero)
+                {
+                    await Task.Delay(ChatClientDelay);
+                }
+
+                return ChatClientFails
+                    ? throw new HttpRequestException("Falha simulada do provedor.")
+                    : new ChatResponse(new ChatMessage(ChatRole.Assistant, MockedAgentReplyText));
+            });
 
         var chatClientResolverMock = new Mock<IChatClientResolver>();
         chatClientResolverMock
@@ -297,6 +320,28 @@ public sealed class RoundTripFixture : IAsyncLifetime
         _workersHost.Dispose();
         _workersHost = BuildWorkersHost();
         await _workersHost.StartAsync();
+    }
+
+    /// <summary>
+    /// Sobe uma segunda instância de apps/workers contra a mesma fila e o mesmo banco —
+    /// as duas réplicas do piloto. Parada por <see cref="StopSecondWorkersAsync"/>.
+    /// </summary>
+    public async Task StartSecondWorkersAsync()
+    {
+        _secondWorkersHost = BuildWorkersHost();
+        await _secondWorkersHost.StartAsync();
+    }
+
+    public async Task StopSecondWorkersAsync()
+    {
+        if (_secondWorkersHost is null)
+        {
+            return;
+        }
+
+        await _secondWorkersHost.StopAsync();
+        _secondWorkersHost.Dispose();
+        _secondWorkersHost = null;
     }
 
     // Login real contra apps/api (não um token forjado com a mesma

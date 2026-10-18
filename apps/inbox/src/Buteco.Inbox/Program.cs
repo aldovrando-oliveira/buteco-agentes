@@ -133,6 +133,10 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Teto da serialização por sessão (inbox-serializacao-por-sessao, D3; convenção 8):
+// um valor que desligaria a serialização em silêncio reprova o boot.
+app.ValidateDebounceSessionSerializationMaxWait();
+
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

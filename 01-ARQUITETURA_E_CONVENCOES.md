@@ -78,6 +78,17 @@ abaixo. O estado aberta/encerrada é **derivável** por isso, mas ainda não
 contra `apps/api`. Concorrência otimista via `xmin` do Postgres. É
 **buffer, não histórico**: some quando o ciclo de disparo termina.
 
+**Invariante da sessão** (#162, `inbox-serializacao-por-sessao`): no máximo
+uma `Pending` (índice único parcial) e, salvo o teto, **nenhum disparo novo
+com outra `Dispatching` da sessão**. O `DebounceSweepService` aplica a
+condição na consulta de candidatos e na releitura antes do claim, pelo mesmo
+predicado; o que chega nesse meio-tempo sai num lote só quando a linha em
+`Dispatching` é encerrada. O teto (`Debounce:SessionSerializationMaxWait`,
+10 min contados do `LastMessageAt` da linha em `Dispatching`) existe para a
+task que nunca termina, e passado ele a linha deixa de bloquear sem ser
+alterada. Quem mexer no sweep não tira nenhum dos dois pontos da condição: a
+consulta evita trabalho, a releitura é a que fecha a janela.
+
 > **Área sensível**: a coleção de mensagens do `PendingDispatch` é
 > owned/JSON e já produziu perda silenciosa de mensagem sob concorrência
 > real (aliasing de change tracker do EF Core após re-leitura na mesma

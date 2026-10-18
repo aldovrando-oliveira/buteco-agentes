@@ -937,6 +937,22 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **A segunda mensagem de uma conversa ocupada falhava no lock de contexto** (#162).
+  Com o agente ainda respondendo a primeira mensagem, o inbox despachava a segunda,
+  ela esperava a primeira terminar por no máximo 30 s e, se a primeira demorasse
+  mais, terminava em falha, e o contato recebia *«Não consegui responder agora»*.
+  Com duas réplicas de `apps/workers`, como o piloto roda, isso já acontecia. Agora
+  o inbox segura a mensagem seguinte da conversa até a anterior terminar, e o que
+  chegar nesse meio-tempo sai junto, num disparo só, na ordem em que chegou. No
+  painel, essas mensagens ficam "pendentes" até a primeira resposta, em vez de irem
+  para "em processamento" e falharem. A espera tem teto de 10 min
+  (`Debounce__SessionSerializationMaxWait`), para uma execução que nunca termina não
+  prender a conversa; valor menor ou igual a zero ou à janela de debounce impede o
+  boot. Cliente A2A externo que manda duas mensagens ao mesmo tempo no mesmo
+  `contextId` continua sujeito aos 30 s, por contrato
+  ([`docs/a2a-integration.md`](docs/a2a-integration.md)). O deploy é só do
+  `apps/inbox`, sem migration.
+
 - **"Testar conexão" na edição de servidor MCP testava o tipo antigo** (#168):
   trocar o tipo de autenticação e deixar a credencial em branco testava o servidor
   salvo, com o tipo anterior, e mostrava o resultado como se fosse o da tela. Agora
