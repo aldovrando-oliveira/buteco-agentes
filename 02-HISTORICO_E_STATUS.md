@@ -8687,8 +8687,8 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 **ACRÉSCIMO DE 18/10/2026: a serialização por sessão do inbox, e o que ela destrava**
 (a posição de cada uma é esta, e as entradas delas apontam para cá):
 
-- **`inbox-serializacao-por-sessao` (#162)** — aplicada em 18/10/2026, à espera da
-  revisão do dono e do archive. **Pré-requisito de merge da
+- **`inbox-serializacao-por-sessao` (#162)** — aplicada, revisada e arquivada em
+  18/10/2026; PR aberto, merge e deploy do dono. **Pré-requisito de merge da
   `workers-consumo-concorrente` (#163)**, que corre em paralelo noutro worktree e só
   mergeia depois desta; e antes da `replicas-de-worker` (posição 9). Deploy só do
   `apps/inbox`, sem migration.
@@ -15963,8 +15963,12 @@ asserção do `aria-invalid`:
 `fix/162-inbox-serializacao-por-sessao`, num worktree próprio, a partir de `cb736db`
 (rebaseada de `18a2f3b` antes do apply; os 10 commits do rebase, #169 e #172, não
 tocam `apps/inbox`, o round-trip, `AgentExecutionService` nem
-`ConversationContextLock`). **Não sincronizada nem arquivada**: o archive, com sync, é
-do dono, depois da revisão. Pré-requisito de merge da `workers-consumo-concorrente`
+`ConversationContextLock`). **Revisada e aprovada pelo dono, sincronizada e arquivada
+em 18/10/2026** a pedido dele: em `inbox-message-orchestration`, 1 requisito
+acrescentado ("Disparo do debounce é serializado por sessão") e 1 alterado ("Debounce
+agrupa mensagens dentro da janela configurada", cenário "Mensagens fora da janela").
+Change arquivada em `openspec/changes/archive/2026-10-18-inbox-serializacao-por-sessao/`.
+Pré-requisito de merge da `workers-consumo-concorrente`
 (#163), que corre em paralelo noutro worktree; a posição está na fila viva
 ("Próximo passo", acréscimo de 18/10/2026).
 
