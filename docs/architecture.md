@@ -150,8 +150,22 @@ Dois vínculos N:N:
 
 ### `McpServer` (`apps/api`)
 
-`Name`, `Description`, `Url`, `AuthType` (`None` ou `BearerToken`) e
-`EncryptedCredential` (AES-GCM).
+`Name`, `Description`, `Url`, `AuthType` (`None`, `BearerToken` ou
+`CustomHeader`), `EncryptedCredential` (AES-GCM) e `AuthHeaderName`.
+
+- `BearerToken` envia a credencial em `Authorization: Bearer <credencial>`.
+- `CustomHeader` envia a credencial crua, sem prefixo, no header de nome
+  `AuthHeaderName`, e não envia `Authorization`. O nome é configuração: fica
+  em claro e volta nas respostas da API. A credencial continua write-only.
+- O nome do header é validado no cadastro: precisa ser token HTTP, ser aceito
+  pelo .NET como header de requisição, e não pode ser um header controlado pelo
+  protocolo MCP (prefixo `Mcp-`) ou pelo HTTP (`Accept`, `Host`, `Connection`,
+  `Transfer-Encoding` e afins). `Authorization` é aceito.
+- A credencial está vinculada ao tipo: trocar entre `BearerToken` e
+  `CustomHeader` exige credencial nova.
+- `apps/workers` lê `AuthType` com um conversor tolerante: um valor que a versão
+  em execução não conhece exclui só aquele servidor da execução, em vez de
+  derrubar a resolução de tools do agente.
 
 ### `KnowledgeBase` (`apps/api`)
 

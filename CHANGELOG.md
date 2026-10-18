@@ -65,6 +65,16 @@ o versionamento pretende seguir
 - Execução real de tool call durante o processamento da task.
 - Painel de catálogo de servidores, visão inversa de uso (quais agentes usam
   cada servidor, com quais tools) e catálogo de tools no detalhe.
+- **Autenticação por token fixo em header customizado** (#160): tipo
+  `CustomHeader`, com o nome do header (`authHeaderName`, em claro e devolvido nas
+  respostas) e a credencial cifrada como hoje. O token vai cru, sem prefixo e sem
+  `Authorization`, em toda requisição ao servidor, no teste de conexão, na
+  descoberta de tools e na execução. Só backend (`apps/api` e `apps/workers`): o
+  painel ainda não oferece o tipo, e chega com a #168.
+- O nome do header é validado no cadastro, na atualização e no teste não salvo:
+  token HTTP, aceito pelo .NET como header de requisição, e fora dos headers do
+  protocolo MCP (`Mcp-*`) e do HTTP (`Accept`, `Host`, `Connection` e afins). O
+  valor do token só aceita ASCII visível, sem espaço nas pontas.
 
 **Delegação entre agentes**
 
@@ -720,6 +730,16 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **Trocar o tipo de autenticação de um servidor MCP entre `BearerToken` e
+  `CustomHeader` exige credencial nova** (#160). Antes, a credencial em branco
+  mantinha o segredo do tipo anterior; agora o `PUT` responde `400` em `credential`
+  e o registro não muda. Mesmo tipo com credencial em branco continua mantendo.
+- **`authType` só aceita o nome de um tipo** (#160): `"2"`, `"99"` e
+  `"None,BearerToken"` eram aceitos e passam a responder `400`. A mensagem de
+  valores aceitos lista os três tipos.
+- **`apps/workers` deixa de derrubar a resolução de tools de um agente por um
+  `AuthType` que não conhece** (#160): só aquele servidor sai da execução, com um
+  aviso no log. Ver a ordem de deploy e de rollback em `docs/deployment.md`.
 - **O operador recebe `409` ao criar, editar ou excluir documento numa base
   sincronizada** (#102). Reindexar, editar nome e descrição da base e ativar ou
   desativar continuam liberados. O cadastro de base com

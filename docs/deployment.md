@@ -138,6 +138,34 @@ SQL
 A primeira linha da saída é `1` se a migração já rodou (pule o passo 0) e `0`
 se não; a segunda é a contagem de `Pending` a registrar.
 
+**`apps/api` e `apps/workers` sobem no mesmo passo 4, sempre** — e a partir da
+migração `AddMcpServerAuthHeaderName` (#160) isso deixa de ser só costume. O
+`apps/api` passa a gravar o tipo de autenticação `CustomHeader` em
+`mcp_servers`, e um `apps/workers` de antes dessa versão, ao ler uma linha com
+esse valor, derruba a resolução de tools inteira de todo agente vinculado ao
+servidor (a leitura do enum lança, e ela acontece fora do `try` por servidor).
+O valor só existe depois que um operador grava um servidor `CustomHeader`, então
+a janela de um `up -d` conjunto é segura.
+
+**Rollback para antes da #160:** antes de voltar o `apps/api` **ou** o
+`apps/workers` para uma versão sem `CustomHeader`, converta ou remova os
+servidores `CustomHeader`. O `apps/api` antigo também lança ao materializar essas
+linhas, e a listagem de servidores MCP passa a falhar. O `Down` da migração só
+roda junto com o rollback dos dois apps, porque os modelos novos dos dois mapeiam
+a coluna `AuthHeaderName`:
+
+```
+docker compose --env-file .env.prod -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'psql -U "$POSTGRES_USER" -d buteco_agents -tA' <<'SQL'
+SELECT "Id", "Name" FROM mcp_servers WHERE "AuthType" = 'CustomHeader';
+SQL
+```
+
+Do `apps/workers` desta versão em diante, um `AuthType` desconhecido exclui só
+aquele servidor da execução, com um aviso no log: rollbacks **só do
+`apps/workers`** para versões que já têm essa tolerância são seguros para tipos
+de autenticação futuros (D5 da `mcp-autenticacao-header-customizado`).
+
 **Mudou o teto de conteúdo do `apps/api`** (`KnowledgeDocumentLimits`)? Rode
 também `restart connectors` no mesmo deploy: o ciclo lembra em memória os
 arquivos recusados, e o `up -d` não recria um serviço cuja imagem não mudou
