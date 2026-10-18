@@ -75,8 +75,13 @@ public sealed class DebounceSweepService(
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var cutoff = DateTimeOffset.UtcNow - debounceOptions.Value.Window;
 
-            candidateIds = await dbContext.PendingDispatches
-                .Where(dispatch => dispatch.Status == PendingDispatchStatus.Pending && dispatch.LastMessageAt <= cutoff)
+            // Serialização por sessão, primeiro dos dois pontos (design.md da change
+            // inbox-serializacao-por-sessao, D1/D3): o NOT EXISTS vai na mesma
+            // consulta, sem ida e volta a mais.
+            candidateIds = await WhereSessionHasNoDispatchInFlight(
+                    dbContext,
+                    dbContext.PendingDispatches
+                        .Where(dispatch => dispatch.Status == PendingDispatchStatus.Pending && dispatch.LastMessageAt <= cutoff))
                 .Select(dispatch => dispatch.Id)
                 .ToListAsync(cancellationToken);
         }
@@ -130,15 +135,30 @@ public sealed class DebounceSweepService(
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var pendingDispatch = await dbContext.PendingDispatches
-            .FirstOrDefaultAsync(
-                dispatch => dispatch.Id == pendingDispatchId && dispatch.Status == PendingDispatchStatus.Pending,
-                cancellationToken);
+        // Segundo ponto da serialização por sessão (D1): a mesma condição da consulta
+        // de candidatos, relida aqui porque entre as duas passa até um ciclo inteiro
+        // de candidatos em série, e outra linha da sessão pode ter virado
+        // Dispatching nesse meio. NÃO tirar nenhum dos dois pontos: a consulta evita
+        // o trabalho, esta releitura é a que fecha a janela.
+        //
+        // Por que basta, sem lock nem índice novo (D1, "Por que a dupla checagem
+        // basta"): para esta linha ser reivindicada com outra da sessão em
+        // Dispatching, a outra teria de VIRAR Dispatching entre esta leitura e o
+        // SaveChanges abaixo. Só vira Dispatching uma Pending reivindicada aqui, e o
+        // índice único garante que a única Pending da sessão é esta própria. A
+        // reconciliação e o push só removem linhas; a falha de transporte devolve a
+        // Pending, nunca a Dispatching. E o claim continua sob xmin.
+        var pendingDispatch = await WhereSessionHasNoDispatchInFlight(
+                dbContext,
+                dbContext.PendingDispatches
+                    .Where(dispatch => dispatch.Id == pendingDispatchId && dispatch.Status == PendingDispatchStatus.Pending))
+            .FirstOrDefaultAsync(cancellationToken);
 
         if (pendingDispatch is null)
         {
             // Já reivindicada, disparada ou removida por outra instância
-            // entre a varredura e este momento.
+            // entre a varredura e este momento — ou a sessão ganhou uma linha em
+            // Dispatching nesse meio, e esta espera o próximo ciclo.
             return;
         }
 
@@ -205,6 +225,24 @@ public sealed class DebounceSweepService(
         }
 
         await HandleResponseAsync(scope, dbContext, pendingDispatch, response, cancellationToken);
+    }
+
+    // O predicado da serialização por sessão, num lugar só para os dois pontos que
+    // o usam não divergirem (design.md da change inbox-serializacao-por-sessao,
+    // D1/D3). Exclui o candidato cuja sessão tem OUTRA linha em Dispatching — a
+    // mesma SessionId, nunca qualquer sessão (um filtro global serializaria o inbox
+    // inteiro) — enquanto o LastMessageAt dela estiver dentro do teto. Além do teto
+    // a linha deixa de bloquear e não é tocada: continua sendo da reconciliação.
+    // Failed não bloqueia: MarkFailed é sempre seguido da remoção da linha.
+    private IQueryable<PendingDispatch> WhereSessionHasNoDispatchInFlight(
+        AppDbContext dbContext, IQueryable<PendingDispatch> candidates)
+    {
+        var inFlightCutoff = DateTimeOffset.UtcNow - debounceOptions.Value.SessionSerializationMaxWait;
+
+        return candidates.Where(candidate => !dbContext.PendingDispatches.Any(other =>
+            other.SessionId == candidate.SessionId
+            && other.Status == PendingDispatchStatus.Dispatching
+            && other.LastMessageAt > inFlightCutoff));
     }
 
     // Chave de Message.Metadata que carrega o instante de recebimento da

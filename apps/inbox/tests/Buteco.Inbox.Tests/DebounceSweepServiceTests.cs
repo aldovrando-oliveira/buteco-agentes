@@ -1,9 +1,11 @@
+using System.Net.Http.Json;
 using A2A;
 using Buteco.Inbox.Channels.Entities;
 using Buteco.Inbox.Infrastructure;
 using Buteco.Inbox.Messages.Entities;
 using Buteco.Inbox.Orchestration;
 using Buteco.Inbox.Orchestration.Entities;
+using Buteco.Inbox.Orchestration.PushNotifications.Endpoints;
 using Buteco.Inbox.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -101,11 +103,25 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
 
         await ReceiveAsync(channelId, externalId, "Mensagem 1");
         var contextId = await ResolveContextIdAsync(channelId, externalId);
+        var sessionId = await ResolveSessionIdAsync(channelId, externalId);
 
         await PollUntil(
             () => factory.A2AClientFactory.Requests.Count(r => r.Message.ContextId == contextId),
             count => count >= 1,
             TimeSpan.FromSeconds(3));
+
+        // Encerra o primeiro ciclo pelo endpoint de push real ANTES da segunda
+        // mensagem. Desde a inbox-serializacao-por-sessao (#162, D5 guarda 5) o sweep
+        // não despacha uma sessão com linha em Dispatching: sem este passo, a segunda
+        // mensagem esperaria o primeiro ciclo e o teste afirmaria o defeito corrigido
+        // (dois disparos concorrentes no mesmo contexto). Verificado: com a correção e
+        // sem este passo, o PollUntil abaixo estoura o tempo.
+        var first = await PollUntilAsync(
+            () => GetPendingDispatchAsync(sessionId),
+            dispatch => dispatch is { Status: PendingDispatchStatus.Dispatching, TaskId: not null },
+            TimeSpan.FromSeconds(3));
+        await ResolveThroughPushAsync(first!);
+        await PollUntilNoPendingDispatchAsync(sessionId, TimeSpan.FromSeconds(3));
 
         await ReceiveAsync(channelId, externalId, "Mensagem 2");
 
@@ -372,6 +388,23 @@ public class DebounceSweepServiceTests(OrchestrationFactoryFixture factory) : IC
             DateTimeOffset.UtcNow,
             new Dictionary<string, string>(),
             CancellationToken.None);
+    }
+
+    private async Task ResolveThroughPushAsync(PendingDispatch dispatch)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, PushNotificationEndpoints.RoutePattern)
+        {
+            Content = JsonContent.Create(new AgentTask
+            {
+                Id = dispatch.TaskId!,
+                ContextId = Guid.NewGuid().ToString("N"),
+                Status = new A2A.TaskStatus { State = TaskState.Completed, Timestamp = DateTimeOffset.UtcNow },
+            }),
+        };
+        request.Headers.Add(PushNotificationEndpoints.TokenHeaderName, dispatch.ExpectedToken);
+
+        var response = await factory.CreateClient().SendAsync(request);
+        response.EnsureSuccessStatusCode();
     }
 
     private async Task<List<MessageEntity>> GetMessagesAsync(Guid sessionId)
