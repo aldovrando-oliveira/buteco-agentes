@@ -15839,7 +15839,10 @@ não enviava o header) e a primeira do acordo (build quebrado, 0 testes).
 
 **Change proposta e revisada pelo dono em 18/10/2026, implementada em 18/10/2026**
 na branch `feat/168-frontend-mcp-autenticacao-header-customizado`, a partir de
-`f505114`, num worktree próprio. Só `apps/frontend`; consome o contrato da **#160**
+`f505114`, num worktree próprio, **sincronizada e arquivada em 18/10/2026** a pedido
+do dono: 4 requisitos modificados em `mcp-server-catalog-ui` (cadastro, detalhe,
+edição e teste de conexão). Change arquivada em
+`openspec/changes/archive/2026-10-18-frontend-mcp-autenticacao-header-customizado/`. Só `apps/frontend`; consome o contrato da **#160**
 sem mudá-lo. Referência de tela: o protótipo aprovado
 (`2apwGhmPQCwYWKc8i9DFEy`, versão `1792295069-a164`), copiado em `design/` da
 change. **Conferência visual feita pelo dono em 18/10/2026, em duas rodadas, as
