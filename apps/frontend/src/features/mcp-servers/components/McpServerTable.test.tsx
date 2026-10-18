@@ -13,6 +13,7 @@ const activeServer: McpServer = {
   description: 'Servidor MCP do Zendesk',
   url: 'https://mcp.zendesk.example/sse',
   authType: 'BearerToken',
+  authHeaderName: null,
   isActive: true,
   createdAt: '2026-08-01T00:00:00Z',
   updatedAt: '2026-08-01T00:00:00Z',
@@ -24,6 +25,7 @@ const inactiveServer: McpServer = {
   description: 'Servidor MCP do Notion',
   url: 'https://mcp.notion.example/sse',
   authType: 'None',
+  authHeaderName: null,
   isActive: false,
   createdAt: '2026-08-01T00:00:00Z',
   updatedAt: '2026-08-01T00:00:00Z',
@@ -140,5 +142,11 @@ describe('McpServerTable', () => {
     expect(screen.getByRole('link', { name: activeServer.name })).toBeInTheDocument();
     expect(screen.getByText(activeServer.url)).toBeInTheDocument();
     expect(screen.queryByText('Nenhum agente')).not.toBeInTheDocument();
+  });
+
+  it('exibe "Token em header customizado" para servidor CustomHeader', () => {
+    renderTable([{ ...activeServer, authType: 'CustomHeader', authHeaderName: 'X-API-TOKEN' }]);
+
+    expect(screen.getByText('Token em header customizado')).toBeInTheDocument();
   });
 });

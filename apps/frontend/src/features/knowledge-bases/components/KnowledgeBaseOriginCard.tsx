@@ -17,6 +17,7 @@ import {
   Text,
 } from '@mantine/core';
 import { Folder } from 'lucide-react';
+import { RadioCardOption } from '../../../components/forms/RadioCardOption';
 import type { ConnectorFolder, ConnectorProvider } from '../types/connectors';
 import type { KnowledgeBaseContentMode } from '../types/knowledgeBase';
 import { providerLabel } from '../utils/connectorErrors';
@@ -43,55 +44,6 @@ export interface KnowledgeBaseOriginCardProps {
 }
 
 const PROSE_MAX_WIDTH = 620;
-
-interface OriginOptionProps {
-  value: KnowledgeBaseContentMode;
-  title: string;
-  description: string;
-  disabled?: boolean;
-  note?: string;
-}
-
-// Opção em cartão, como nas pranchas 2a e 2b: borda de 2px na cor de destaque e
-// fundo sutil quando marcada. O fundo vem de `--mantine-primary-color-light`, que
-// o Mantine declara nos dois esquemas (convenção 16), e não do `#f3f7fd` da
-// prancha, que só existe no claro.
-function OriginOption({ value, title, description, disabled, note }: OriginOptionProps) {
-  return (
-    <Radio.Card
-      value={value}
-      disabled={disabled}
-      radius="md"
-      p={14}
-      className="buteco-origin-option"
-      // Conteúdo no topo do cartão: o Radio.Card é um botão, que centraliza na
-      // vertical, e o cartão vizinho mais alto deslocava o conteúdo deste
-      // (conferência, rodada 1).
-      style={{
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'flex',
-        alignItems: 'flex-start',
-      }}
-    >
-      <Group wrap="nowrap" align="flex-start" gap={10}>
-        <Radio.Indicator mt={3} disabled={disabled} />
-        <Stack gap={4}>
-          <Text fw={600} size="sm" c={disabled ? 'dimmed' : undefined}>
-            {title}
-          </Text>
-          <Text fz={13} c="dimmed" style={{ lineHeight: 1.45 }}>
-            {description}
-          </Text>
-          {note && (
-            <Text size="xs" c="dimmed" style={{ lineHeight: 1.45 }}>
-              {note}
-            </Text>
-          )}
-        </Stack>
-      </Group>
-    </Radio.Card>
-  );
-}
 
 function ProviderSection({
   providers,
@@ -294,12 +246,12 @@ export function KnowledgeBaseOriginCard({
             aria-label="Origem dos documentos"
           >
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={12}>
-              <OriginOption
+              <RadioCardOption
                 value="Manual"
                 title="Manual"
                 description="Você carrega e atualiza os documentos markdown na tela da base."
               />
-              <OriginOption
+              <RadioCardOption
                 value="Synced"
                 title="Sincronizada"
                 description="Os documentos vêm de uma pasta e acompanham o que é incluído, alterado ou excluído nela."
