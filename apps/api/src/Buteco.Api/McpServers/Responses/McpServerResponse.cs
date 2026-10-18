@@ -12,6 +12,10 @@ public sealed record McpServerResponse(
     string Description,
     string Url,
     McpServerAuthType AuthType,
+    // Nome do header do tipo CustomHeader, nulo nos demais. É configuração e
+    // volta em claro (D2 da change mcp-autenticacao-header-customizado); a
+    // credencial continua fora desta resposta.
+    string? AuthHeaderName,
     bool IsActive,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
@@ -22,6 +26,7 @@ public sealed record McpServerResponse(
         mcpServer.Description,
         mcpServer.Url,
         mcpServer.AuthType,
+        mcpServer.AuthHeaderName,
         mcpServer.IsActive,
         mcpServer.CreatedAt,
         mcpServer.UpdatedAt);

@@ -118,7 +118,7 @@ public sealed class ReplaceAgentMcpServersCommandHandler(
             }
         }
 
-        var discovery = await connectionTester.ListToolsAsync(mcpServer.Url, mcpServer.AuthType, credential, cancellationToken);
+        var discovery = await connectionTester.ListToolsAsync(mcpServer.Url, mcpServer.AuthType, credential, mcpServer.AuthHeaderName, cancellationToken);
 
         return discovery.Success
             ? (null, discovery.Tools!.Select(tool => tool.Name).ToList())

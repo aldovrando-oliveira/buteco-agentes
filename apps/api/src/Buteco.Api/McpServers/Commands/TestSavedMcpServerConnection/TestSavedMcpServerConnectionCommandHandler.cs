@@ -41,7 +41,7 @@ public sealed class TestSavedMcpServerConnectionCommandHandler(
             }
         }
 
-        var result = await connectionTester.TestAsync(mcpServer.Url, mcpServer.AuthType, credential, cancellationToken);
+        var result = await connectionTester.TestAsync(mcpServer.Url, mcpServer.AuthType, credential, mcpServer.AuthHeaderName, cancellationToken);
 
         return TestSavedMcpServerConnectionResult.Completed(result);
     }

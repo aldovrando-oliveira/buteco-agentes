@@ -9,4 +9,5 @@ public sealed record UpdateMcpServerCommand(
     string Description,
     string Url,
     McpServerAuthType AuthType,
-    string? Credential) : ICommand<UpdateMcpServerResult>;
+    string? Credential,
+    string? AuthHeaderName) : ICommand<UpdateMcpServerResult>;

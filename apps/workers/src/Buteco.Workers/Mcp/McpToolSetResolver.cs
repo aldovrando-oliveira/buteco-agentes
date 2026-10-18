@@ -61,6 +61,37 @@ public sealed class McpToolSetResolver(
         {
             var server = binding.Server;
 
+            // Tipo de autenticação que esta versão não conhece (D5 da change
+            // mcp-autenticacao-header-customizado): o conversor de AppDbContext o
+            // materializa como null em vez de lançar. Sai do conjunto SEM decifrar a
+            // credencial e SEM conectar — não há como montar a autenticação.
+            if (server.AuthType is not { } authType)
+            {
+                logger.LogWarning(
+                    "O McpServer {McpServerId} ({McpServerName}) tem um tipo de autenticação que esta versão de apps/workers não conhece — excluído do conjunto de tools desta execução.",
+                    server.Id,
+                    server.Name);
+                continue;
+            }
+
+            // Nome de header que o .NET recusa (D3): o SDK lançaria
+            // InvalidOperationException com o VALOR do header — a credencial
+            // decifrada — na mensagem (CopyAdditionalHeaders, decompilado, V2), e o
+            // LogWarning(exception, ...) do catch abaixo a gravaria no log. apps/api
+            // valida o nome no cadastro; esta reconferência cobre a linha que não
+            // passou por lá (SQL direto, validação regredida). Só a regra que fecha
+            // o vazamento é reconferida: a lista de reservados vive em apps/api. E
+            // a exceção NÃO é passada ao logger.
+            if (authType == McpServerAuthType.CustomHeader && !IsAcceptedAsRequestHeader(server.AuthHeaderName))
+            {
+                logger.LogWarning(
+                    "O McpServer {McpServerId} ({McpServerName}) tem um nome de header ('{AuthHeaderName}') que não pode ser usado em uma requisição — excluído do conjunto de tools desta execução.",
+                    server.Id,
+                    server.Name,
+                    server.AuthHeaderName);
+                continue;
+            }
+
             McpClient client;
             HttpClientTransport transport;
             try
@@ -68,11 +99,11 @@ public sealed class McpToolSetResolver(
                 // Só McpServer com AuthType != None tem EncryptedCredential
                 // (invariante garantida por apps/api, ver McpServer.UpdateDetails) —
                 // o operador nulo-tolerante documenta essa garantia.
-                var credential = server.AuthType == McpServerAuthType.None
+                var credential = authType == McpServerAuthType.None
                     ? null
                     : credentialCipher.Decrypt(server.EncryptedCredential!);
 
-                transport = transportFactory.BuildTransport(server.Url, server.AuthType, credential, $"mcp-tool-execution-{server.Id:N}");
+                transport = transportFactory.BuildTransport(server.Url, authType, credential, server.AuthHeaderName, $"mcp-tool-execution-{server.Id:N}");
                 client = await McpClient.CreateAsync(transport, McpTransportFactory.BuildClientOptions(), cancellationToken: cancellationToken);
             }
             catch (Exception exception) when (!IsShutdownCancellation(exception, cancellationToken))
@@ -136,6 +167,22 @@ public sealed class McpToolSetResolver(
     //
     // Só é parada quando o token DESTA execução foi cancelado — a mesma regra de
     // AgentExecutionService.IsShutdownCancellation.
+    // A MESMA chamada que o SDK faz com cada header adicional
+    // (TryAddWithoutValidation), com valor fictício: quando ela devolve false, o
+    // SDK lança com o valor real na mensagem. Mesmo critério de
+    // McpAuthHeaderRules.IsAcceptedAsRequestHeader em apps/api — replicado, não
+    // compartilhado (isolamento entre apps; são três linhas).
+    private static bool IsAcceptedAsRequestHeader(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        using var probe = new HttpRequestMessage();
+        return probe.Headers.TryAddWithoutValidation(name, "x");
+    }
+
     private static bool IsShutdownCancellation(Exception exception, CancellationToken cancellationToken) =>
         exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
 

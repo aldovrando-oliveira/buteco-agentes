@@ -7,4 +7,5 @@ namespace Buteco.Api.McpServers.Commands.TestUnsavedMcpServerConnection;
 public sealed record TestUnsavedMcpServerConnectionCommand(
     string Url,
     McpServerAuthType AuthType,
-    string? Credential) : ICommand<McpConnectionTestResult>;
+    string? Credential,
+    string? AuthHeaderName) : ICommand<McpConnectionTestResult>;

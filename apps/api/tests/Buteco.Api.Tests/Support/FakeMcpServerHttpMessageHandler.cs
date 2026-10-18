@@ -34,6 +34,17 @@ public sealed class FakeMcpServerHttpMessageHandler : HttpMessageHandler
 
     public string? RequiredBearerToken { get; set; }
 
+    // Header customizado exigido pelo servidor fake (change
+    // mcp-autenticacao-header-customizado): 401 se ausente ou com outro valor.
+    // Comparação exata do valor, sem prefixo — é o que o tipo CustomHeader
+    // promete enviar.
+    public (string Name, string Value)? RequiredHeader { get; set; }
+
+    // Headers de cada requisição recebida, na ordem (nome → valores juntos por
+    // ","). Existe para as asserções NEGATIVAS do tipo CustomHeader: provar que
+    // nenhuma requisição levou Authorization.
+    public List<IReadOnlyDictionary<string, string>> ReceivedHeaders { get; } = [];
+
     public IReadOnlyList<FakeMcpTool> AvailableTools { get; set; } = [];
 
     // Configurável para reproduzir servidores MCP reais que falam uma
@@ -48,6 +59,10 @@ public sealed class FakeMcpServerHttpMessageHandler : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         RequestCount++;
+        ReceivedHeaders.Add(request.Headers.ToDictionary(
+            header => header.Key,
+            header => string.Join(",", header.Value),
+            StringComparer.OrdinalIgnoreCase));
 
         // Comparação via Uri (não string) para não depender de barra final
         // normalizada de forma diferente entre o valor configurado no teste
@@ -64,6 +79,12 @@ public sealed class FakeMcpServerHttpMessageHandler : HttpMessageHandler
             {
                 return new HttpResponseMessage(HttpStatusCode.Unauthorized);
             }
+        }
+
+        if (RequiredHeader is { } required
+            && (!request.Headers.TryGetValues(required.Name, out var values) || string.Join(",", values) != required.Value))
+        {
+            return new HttpResponseMessage(HttpStatusCode.Unauthorized);
         }
 
         var body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);

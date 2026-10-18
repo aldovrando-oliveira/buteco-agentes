@@ -42,7 +42,7 @@ public sealed class ListMcpServerToolsQueryHandler(
             }
         }
 
-        var result = await connectionTester.ListToolsAsync(mcpServer.Url, mcpServer.AuthType, credential, cancellationToken);
+        var result = await connectionTester.ListToolsAsync(mcpServer.Url, mcpServer.AuthType, credential, mcpServer.AuthHeaderName, cancellationToken);
 
         return ListMcpServerToolsResult.Completed(McpServerToolsResponse.FromDiscoveryResult(result));
     }

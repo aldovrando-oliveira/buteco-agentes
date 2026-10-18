@@ -74,6 +74,52 @@ public class McpToolExecutionEndToEndTests(WorkerInfrastructureFixture fixture) 
         Assert.Equal(1, handler.CountRequests(serverUrl, "tools/call"));
     }
 
+    // Change mcp-autenticacao-header-customizado: a execução inteira — sonda,
+    // initialize, tools/list, tools/call e o encerramento da sessão — leva o
+    // token no header configurado, e nenhuma requisição leva Authorization.
+    [Fact]
+    public async Task RoundTrip_CustomHeaderServer_ToolCallReachesTheServer_WithTheTokenInTheConfiguredHeaderOnly()
+    {
+        var agentId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var serverUrl = UniqueServerUrl();
+        var handler = new FakeMcpServerHttpMessageHandler();
+        handler.ConfigureServer(serverUrl, new FakeMcpServerConfig
+        {
+            AvailableTools = [new FakeMcpTool("search")],
+            RequiredHeader = ("X-API-TOKEN", "SEGREDO-ponta-a-ponta"),
+            ToolCallResult = _ => "7 pedidos em aberto",
+        });
+
+        await SeedAgentAsync(agentId);
+        var mcpServerId = await SeedMcpServerAsync("ERP", serverUrl, authType: "CustomHeader", credential: "SEGREDO-ponta-a-ponta", authHeaderName: "X-API-TOKEN");
+        await SeedAgentMcpServerAsync(agentId, mcpServerId, ["search"]);
+
+        var chatClient = BuildToolCallingChatClientMock("ERP__search", toolCallCount: 1, out var finalResponseTextCapture);
+
+        using var host = BuildHost(chatClient.Object, handler);
+        await host.StartAsync();
+
+        A2ATaskRecord record;
+        try
+        {
+            record = await RunTurnAsync(agentId, contextId, "Quantos pedidos estão em aberto?");
+        }
+        finally
+        {
+            await host.StopAsync();
+        }
+
+        Assert.Equal(nameof(TaskState.Completed), record.State);
+        Assert.Contains("7 pedidos em aberto", finalResponseTextCapture());
+        Assert.Equal(1, handler.CountRequests(serverUrl, "tools/call"));
+
+        var received = handler.HeadersReceivedBy(serverUrl);
+        Assert.NotEmpty(received);
+        Assert.All(received, headers => Assert.Equal("SEGREDO-ponta-a-ponta", headers["X-API-TOKEN"]));
+        Assert.All(received, headers => Assert.False(headers.ContainsKey("Authorization")));
+    }
+
     [Fact]
     public async Task SameToolCalledTwiceInSameTurn_RoutesBothCalls_WithoutReconnecting()
     {
@@ -283,15 +329,18 @@ public class McpToolExecutionEndToEndTests(WorkerInfrastructureFixture fixture) 
              """);
     }
 
-    private async Task<Guid> SeedMcpServerAsync(string name, string url, bool isActive = true)
+    private async Task<Guid> SeedMcpServerAsync(string name, string url, bool isActive = true, string authType = "None", string? credential = null, string? authHeaderName = null)
     {
+        var encryptedCredential = credential is null
+            ? null
+            : new AesGcmMcpCredentialCipher(Microsoft.Extensions.Options.Options.Create(new McpCryptoOptions { CredentialEncryptionKey = EncryptionKey })).Encrypt(credential);
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         await using var dbContext = CreateDbContext();
         await dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
-             INSERT INTO mcp_servers ("Id", "Name", "Description", "Url", "AuthType", "EncryptedCredential", "IsActive", "CreatedAt", "UpdatedAt")
-             VALUES ({id}, {name}, {""}, {url}, {"None"}, {(string?)null}, {isActive}, {now}, {now})
+             INSERT INTO mcp_servers ("Id", "Name", "Description", "Url", "AuthType", "EncryptedCredential", "AuthHeaderName", "IsActive", "CreatedAt", "UpdatedAt")
+             VALUES ({id}, {name}, {""}, {url}, {authType}, {encryptedCredential}, {authHeaderName}, {isActive}, {now}, {now})
              """);
         return id;
     }

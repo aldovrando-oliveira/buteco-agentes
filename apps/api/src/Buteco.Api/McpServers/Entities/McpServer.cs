@@ -16,6 +16,11 @@ public class McpServer
     // valor em texto claro. Nula quando AuthType == None.
     public string? EncryptedCredential { get; private set; }
 
+    // Nome do header em que a credencial vai quando AuthType == CustomHeader.
+    // Configuração, não segredo: fica em claro e volta na resposta (D2 da change
+    // mcp-autenticacao-header-customizado). Nulo em qualquer outro tipo.
+    public string? AuthHeaderName { get; private set; }
+
     public bool IsActive { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
@@ -26,7 +31,7 @@ public class McpServer
     {
     }
 
-    public McpServer(string name, string description, string url, McpServerAuthType authType, string? encryptedCredential)
+    public McpServer(string name, string description, string url, McpServerAuthType authType, string? encryptedCredential, string? authHeaderName = null)
     {
         Id = Guid.NewGuid();
         Name = name;
@@ -34,25 +39,39 @@ public class McpServer
         Url = url;
         AuthType = authType;
         EncryptedCredential = authType == McpServerAuthType.None ? null : encryptedCredential;
+        AuthHeaderName = authType == McpServerAuthType.CustomHeader ? authHeaderName : null;
         IsActive = true;
         CreatedAt = DateTimeOffset.UtcNow;
         UpdatedAt = CreatedAt;
     }
 
-    // Não recebe a credencial aqui — ver SetEncryptedCredential. Quando
-    // authType transiciona para None, limpa a credencial anteriormente
-    // persistida (Decision 6 do design.md da change
-    // backend-mcp-catalogo-vinculo): não faz sentido manter um segredo
-    // cifrado sem uso funcional possível.
-    public void UpdateDetails(string name, string description, string url, McpServerAuthType authType)
+    // Não recebe a credencial aqui — ver SetEncryptedCredential.
+    //
+    // A credencial persistida está VINCULADA AO TIPO para o qual foi informada
+    // (D4 da change mcp-autenticacao-header-customizado), e por isso é limpa
+    // sempre que o AuthType MUDA — não só quando ele vai para None. Isso estende
+    // a Decision 6 da change backend-mcp-catalogo-vinculo, que limpava só na
+    // transição para None (segredo cifrado sem uso possível). O motivo da
+    // extensão: um token digitado para Authorization: Bearer, mandado cru em
+    // X-API-TOKEN (ou o inverso), falharia como "credencial rejeitada" sem
+    // pista de que o valor era do tipo anterior.
+    //
+    // Quem produz o 400 é o handler, não este método: com a credencial limpa e
+    // nenhuma nova informada, a checagem "AuthType != None && sem credencial"
+    // de UpdateMcpServerCommandHandler devolve CredentialMissing ANTES do
+    // SaveChanges, e o registro persistido fica intacto.
+    public void UpdateDetails(string name, string description, string url, McpServerAuthType authType, string? authHeaderName)
     {
+        var authTypeChanged = authType != AuthType;
+
         Name = name;
         Description = description;
         Url = url;
         AuthType = authType;
+        AuthHeaderName = authType == McpServerAuthType.CustomHeader ? authHeaderName : null;
         UpdatedAt = DateTimeOffset.UtcNow;
 
-        if (authType == McpServerAuthType.None)
+        if (authTypeChanged || authType == McpServerAuthType.None)
         {
             EncryptedCredential = null;
         }

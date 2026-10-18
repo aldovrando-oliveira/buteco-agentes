@@ -48,7 +48,15 @@ public sealed class McpTransportFactory(IHttpClientFactory httpClientFactory)
                 ConnectTimeout = OutboundConnectTimeout.Value,
             });
 
-    public HttpClientTransport BuildTransport(string url, McpServerAuthType authType, string? credential, string transportName)
+    // DUPLICAÇÃO REGISTRADA, NÃO EXTRAÍDA (D6 da change
+    // mcp-autenticacao-header-customizado): a montagem do header de autenticação
+    // abaixo é a mesma de McpConnectionTester.BuildTransport em apps/api, e com o
+    // CustomHeader passou de um tipo para dois. Não vai para libs/: os dois lados
+    // têm diferenças deliberadas (o HttpClient nomeado com PooledConnectionLifetime
+    // só aqui; OwnsSession = false só lá), e a #161 (OAuth client credentials) muda
+    // a forma da montagem — o token passa a ser obtido e renovado. Gatilho para
+    // reavaliar: a #161 entregar a terceira variante.
+    public HttpClientTransport BuildTransport(string url, McpServerAuthType authType, string? credential, string? authHeaderName, string transportName)
     {
         var transportOptions = new HttpClientTransportOptions
         {
@@ -57,13 +65,21 @@ public sealed class McpTransportFactory(IHttpClientFactory httpClientFactory)
             EnableStandaloneGetStream = false,
         };
 
-        if (authType == McpServerAuthType.BearerToken)
+        transportOptions.AdditionalHeaders = authType switch
         {
-            transportOptions.AdditionalHeaders = new Dictionary<string, string>
+            McpServerAuthType.BearerToken => new Dictionary<string, string>
             {
                 ["Authorization"] = $"Bearer {credential}",
-            };
-        }
+            },
+            // Valor cru, sem prefixo, e SEM Authorization — em toda requisição da
+            // sessão (POST, GET de stream, DELETE de encerramento, sonda
+            // server/discover; design.md, V1).
+            McpServerAuthType.CustomHeader => new Dictionary<string, string>
+            {
+                [authHeaderName!] = credential!,
+            },
+            _ => null,
+        };
 
         var httpClient = httpClientFactory.CreateClient(HttpClientName);
         return new HttpClientTransport(transportOptions, httpClient, ownsHttpClient: false);

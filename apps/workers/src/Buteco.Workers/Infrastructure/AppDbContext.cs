@@ -93,8 +93,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(mcpServer => mcpServer.Name).IsRequired();
             entity.Property(mcpServer => mcpServer.Description).IsRequired();
             entity.Property(mcpServer => mcpServer.Url).IsRequired();
-            entity.Property(mcpServer => mcpServer.AuthType).IsRequired().HasConversion<string>();
+            // Conversor TOLERANTE (D5 da change mcp-autenticacao-header-customizado).
+            // Com HasConversion<string>(), ler um valor que este enum não tem lança
+            // InvalidOperationException ("Cannot convert string value ... to any
+            // value in the mapped enum" — medido com EF Core 10.0.10, V6), e a
+            // consulta dos vínculos em McpToolSetResolver está FORA do try por
+            // servidor: uma linha nova derrubava a resolução inteira do agente.
+            // Aqui o valor desconhecido materializa como null, as demais linhas da
+            // mesma consulta continuam lidas, e a coluna segue NOT NULL (medido
+            // contra Postgres real: modelo IsNullable = false, script com
+            // "AuthType" text NOT NULL, gravação de null recusada com 23502).
+            //
+            // LIMITE: isto protege dos PRÓXIMOS valores em diante. O apps/workers que
+            // já está implantado não tem este conversor; para o deploy desta change
+            // vale a ordem do Migration Plan do design.md.
+            entity.Property(mcpServer => mcpServer.AuthType).IsRequired().HasConversion(
+                authType => authType!.Value.ToString(),
+                stored => ParseKnownAuthType(stored));
             entity.Property(mcpServer => mcpServer.EncryptedCredential).IsRequired(false);
+            entity.Property(mcpServer => mcpServer.AuthHeaderName).IsRequired(false);
             entity.Property(mcpServer => mcpServer.IsActive).IsRequired().HasDefaultValue(true);
             entity.Property(mcpServer => mcpServer.CreatedAt).IsRequired();
             entity.Property(mcpServer => mcpServer.UpdatedAt).IsRequired();
@@ -330,4 +347,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasForeignKey(call => call.TaskId).OnDelete(DeleteBehavior.Restrict);
         });
     }
+
+    // Só NOME de membro definido, comparado como gravado (apps/api grava o nome
+    // exato do membro). Enum.TryParse aceitaria "2" ou "None,BearerToken" e
+    // devolveria valor indefinido ou combinado — por isso a comparação é por nome.
+    // Público porque é chamado de dentro da expression tree do conversor.
+    public static McpServerAuthType? ParseKnownAuthType(string stored) =>
+        Enum.GetNames<McpServerAuthType>().Contains(stored) ? Enum.Parse<McpServerAuthType>(stored) : null;
 }

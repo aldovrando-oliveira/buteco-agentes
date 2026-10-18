@@ -129,6 +129,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(mcpServer => mcpServer.Url).IsRequired();
             entity.Property(mcpServer => mcpServer.AuthType).IsRequired().HasConversion<string>();
             entity.Property(mcpServer => mcpServer.EncryptedCredential).IsRequired(false);
+            entity.Property(mcpServer => mcpServer.AuthHeaderName).IsRequired(false);
             entity.Property(mcpServer => mcpServer.IsActive).IsRequired().HasDefaultValue(true);
             entity.Property(mcpServer => mcpServer.CreatedAt).IsRequired();
             entity.Property(mcpServer => mcpServer.UpdatedAt).IsRequired();
