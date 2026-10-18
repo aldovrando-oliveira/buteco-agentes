@@ -8684,6 +8684,25 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 9 replicas-de-worker                (desceu da 6)
 ```
 
+**ACRÉSCIMO DE 18/10/2026: a serialização por sessão do inbox, e o que ela destrava**
+(a posição de cada uma é esta, e as entradas delas apontam para cá):
+
+- **`inbox-serializacao-por-sessao` (#162)** — aplicada em 18/10/2026, à espera da
+  revisão do dono e do archive. **Pré-requisito de merge da
+  `workers-consumo-concorrente` (#163)**, que corre em paralelo noutro worktree e só
+  mergeia depois desta; e antes da `replicas-de-worker` (posição 9). Deploy só do
+  `apps/inbox`, sem migration.
+- **#164** (colisão entre falha de transporte e `Pending` nova da sessão) — **logo
+  depois da #162, sem bloquear o merge dela**. A #162 agrava o efeito (a mensagem
+  seguinte espera o teto de 10 min, em vez de sair), e o item com gatilho está em
+  "Itens abertos" da entrada da #162.
+- **#164 × #163: independentes, em paralelo** (decisão do dono, 18/10/2026). Uma é o
+  transporte do inbox, a outra o consumidor do worker; podem andar ao mesmo tempo, e
+  a #164 **não bloqueia** o merge da #163. **Só a #162 vem antes das duas.**
+- **#166** (lock de contexto adquirido depois do `StartWorkAsync`) — change própria,
+  com deploy **junto** do da `workers-consumo-concorrente`, para a quebra das séries
+  de tempo de fila e de lock ser um marco só (convenção 22).
+
 **ACRÉSCIMO DE 22/09/2026: duas changes entram antes da `replicas-de-worker`**,
 as duas nascidas da execução real da `metricas-execucao-coleta`, com os motivos
 nos itens delas em "Abertos por `metricas-execucao-coleta`" e no item da
@@ -15938,3 +15957,145 @@ asserção do `aria-invalid`:
   intermediários são atestados pelo dono (tarefa 7.3). Esse registro aponta para
   uma URL real, e no banco local ficou com o tipo novo.
 
+## `inbox-serializacao-por-sessao` — segunda mensagem da sessão não falha mais no lock de contexto (#162)
+
+**Change proposta em 17/10/2026, implementada em 18/10/2026** na branch
+`fix/162-inbox-serializacao-por-sessao`, num worktree próprio, a partir de `cb736db`
+(rebaseada de `18a2f3b` antes do apply; os 10 commits do rebase, #169 e #172, não
+tocam `apps/inbox`, o round-trip, `AgentExecutionService` nem
+`ConversationContextLock`). **Não sincronizada nem arquivada**: o archive, com sync, é
+do dono, depois da revisão. Pré-requisito de merge da `workers-consumo-concorrente`
+(#163), que corre em paralelo noutro worktree; a posição está na fila viva
+("Próximo passo", acréscimo de 18/10/2026).
+
+### O defeito
+
+O inbox despachava a segunda mensagem de uma sessão com a primeira ainda em
+`Dispatching`: o índice único de `PendingDispatch` filtra só `Pending`
+(`AppDbContext.cs:126-128`), e o sweep selecionava candidatos sem olhar a sessão
+(`DebounceSweepService.cs:78-81`). As duas tasks caíam no mesmo `(agentId,
+contextId)`, e a segunda esperava o advisory lock do worker por no máximo 30 s
+(`CommandTimeout` do Npgsql). Com duas réplicas de `apps/workers`, que é como o piloto
+roda, ela terminava `failed` e o contato recebia o aviso de falha. Com uma réplica, a
+segunda esperava na fila do RabbitMQ, sem prazo, e o defeito não aparecia.
+
+### O que entrou
+
+Código de produção só em `apps/inbox`, sem migration:
+
+- **`DebounceSweepService`**: um predicado só, `WhereSessionHasNoDispatchInFlight`, nos
+  dois pontos em que o sweep decide: a consulta de candidatos (`NOT EXISTS` da mesma
+  `SessionId` em `Dispatching`, na mesma consulta) e a releitura antes do claim. A
+  dupla checagem basta sem lock nem índice (D1): só vira `Dispatching` uma `Pending`
+  reivindicada pelo próprio sweep, e o índice único garante que a única `Pending` da
+  sessão é a que está sendo reivindicada.
+- **O lote:** nada muda na ingestão. O que chega com a sessão ocupada é anexado à
+  `Pending`, que sai num `SendMessage` só, na ordem de chegada, no ciclo seguinte ao
+  encerramento da linha em `Dispatching`.
+- **O teto (D3):** `Debounce:SessionSerializationMaxWait`, 10 min contados do
+  `LastMessageAt` da linha em `Dispatching`. Além dele a linha deixa de bloquear, sem
+  ser alterada. Derivação no XML doc de `DebounceOptions`: uma resposta travada da
+  #134 (400 s) mais uma delegação (120 s), igual a `UntrackedDispatchMaxAge`. **Não
+  medido** como duração real de turno; gatilho de recalibração ao lado.
+- **Checagem no boot** (`DebounceOptionsValidation`, convenção 8): teto menor ou igual
+  a zero, ou menor ou igual a `Debounce:Window`, reprova a inicialização com a chave,
+  o valor e, no segundo caso, a janela. Linha de log quando passa.
+- **Testes:** `DebounceSessionSerializationTests` (guardas 1, 2 e 3 da D5) e
+  `DebounceOptionsValidationTests` no inbox; `SessionSerializationRoundTripTests`
+  (guarda 4) com os três apps reais e controles novos na `RoundTripFixture`, neutros
+  por padrão (atraso do LLM, `Command Timeout` do worker, segunda instância);
+  `DebounceSweepServiceTests.MessagesOutsideWindow_TriggerSeparateSendMessageCalls`
+  ajustado de propósito (guarda 5); nota no XML doc de
+  `ConversationContextLockFailureTests.TwoInstances_SameContext_SlowFirstTask_BothReachTerminalState`,
+  sem asserção alterada (D4).
+- **Docs:** `docs/architecture.md` (serialização por sessão no `PendingDispatch`, e a
+  subsecção nova "Execuções concorrentes no mesmo contexto" com o contrato da D2),
+  `docs/a2a-integration.md` (o mesmo contrato, para quem integra),
+  `docs/configuration.md`, o invariante no `01` e o `CHANGELOG`.
+
+### O que a implementação mediu
+
+Todas em 18/10/2026, com `buteco-agents_postgres_1` e `buteco-agents_rabbitmq_1` de pé
+antes e depois de cada suíte, e **zero** processos `vstest`/`testhost` de outras
+worktrees em todas as amostras (a cada 30 s). Comparadas por classe:
+
+| suíte | baseline em `cb736db` | fechamento | diferença |
+|---|---|---|---|
+| `apps/inbox` | 241/241, 42 s (load 4,03 → 5,68) | **252/252**, 40 s (load 3,06 → 6,04) | +4 `DebounceSessionSerializationTests`, +7 `DebounceOptionsValidationTests`; as outras 31 classes iguais |
+| `apps/workers` | 405/405, 6m06s (load 5,68 → 2,65) | **405/405**, 5m17s (load 6,04 → 3,31) | nenhuma: as 42 classes com as mesmas contagens. A change não toca `src`; só o XML doc de um teste |
+| `InboxOrchestratorRoundTrip` | 10/10, 9 s (load 2,52 → 5,82) | **11/11**, 18 s (load 3,31 → 4,94) | +1 `SessionSerializationRoundTripTests`; os 10 iguais, com os controles novos neutros |
+
+- **O round-trip reproduz o defeito do piloto de ponta a ponta**: com duas instâncias de
+  worker, LLM de 8 s e `Command Timeout=3`, o contato recebeu o aviso de falha
+  **antes** da resposta da primeira mensagem (`[COMPLETED, FAILED, "aviso de falha",
+  resposta]`).
+- **Nenhum teste existente do inbox dependia do defeito além do previsto na D5**: só
+  `MessagesOutsideWindow_TriggerSeparateSendMessageCalls` mudou.
+
+### Guardas contra o defeito real (convenção 15)
+
+Cinco, da D5. Primeira perna (vermelho contra o código anterior, `cb736db`) e segunda
+perna (reverter o componente sobre o código final, ver reprovar, restaurar com o
+checksum conferido):
+
+| guarda | vermelho em `cb736db` | segunda perna |
+|---|---|---|
+| 1, lote no inbox | `["msg1", "msg2", "msg3"]` no lugar de `["msg1"]`: três disparos, cada mensagem sozinha | **sem o predicado da D1**: reprova igual (19 s); o par do guarda 2 também reprova, com `["pendente"]` disparado |
+| 2, teto | escrito depois do código (o teto não existia) | **sem o teto**: a linha além do teto passa a segurar a `Pending`, `TimeoutException` (25 s) |
+| 3, outra sessão | **verde de propósito** (regressão contra filtro global) | **filtro global**: reprova, junto com 1 e 2 (31 s) |
+| 4, round-trip | `[COMPLETED, FAILED, "aviso de falha", resposta]` | **sem o predicado da D1**: reprova igual (37 s) |
+| 5, teste que muda | com a correção e sem o ajuste: `TimeoutException` em `DebounceSweepServiceTests.cs:112` | é a própria primeira perna |
+
+Mais um, fora da D5: **sem a chamada no `Program.cs`**,
+`InvalidMaxWait_FailsTheRealApplicationStartup` reprova (`No exception was thrown`,
+8 s). É o que permite dizer que o registro da checagem de boot está provado.
+
+### Divergências do desenho aprovado (convenção 9)
+
+- **Guarda 2 (tarefa 3.5) sem teto curto:** os dois testes leem o teto em vigor (o
+  default de produção) e semeiam a linha em `Dispatching` 1 min além ou aquém dele. O
+  guarda fica sem relógio e exercita o valor de produção. A linha leva `TaskId`, para a
+  reconciliação não a encerrar no meio do teste.
+- **"Seção do lock de contexto" (tarefa 5.4) não existia** no `docs/architecture.md`;
+  o lock só aparecia de passagem em `docs/deployment.md`. Entrou a subsecção nova no
+  fim de "Histórico de conversa e compactação", onde a conversa já é definida como as
+  tasks do mesmo `contextId`.
+- **O registro da checagem no `Program.cs` é provado por teste**, ao contrário do
+  precedente do worker (`EmbeddingBatchSizeValidation`): os testes do inbox sobem a
+  aplicação real pela `WebApplicationFactory`.
+
+### Itens abertos que esta change cria
+
+- **Linha em `Dispatching` sem `TaskId` segura a sessão até o teto.** É o que sobra
+  quando o claim acontece e o `TaskId` nunca é gravado (o caso mais provável hoje é a
+  #164): a sessão fica segurada até o teto da D3 (~10 min) e a reconciliação encerra a
+  linha como perda (~11 min). Antes desta change, perdia-se aquela mensagem e a
+  seguinte saía; agora a seguinte espera o teto.
+  - **Gatilho:** o primeiro log `Mensagem de usuário perdida: disparo da sessão … sem
+    TaskId` em produção, ou a #164 entrar em andamento.
+  - **Posição:** dentro da #164, que já está na fila logo depois desta.
+- **Achado lateral, `apps/workers`: o lock de contexto é adquirido depois do
+  `StartWorkAsync`** (`AgentExecutionService.cs:245` contra `:283`). A espera pelo
+  lock aparece como `working` e contamina as métricas de tempo de fila e de lock.
+  - **Posição:** change própria, com deploy **junto** do da `workers-consumo-concorrente`.
+    As duas mudam o significado das séries de tempo de fila e de lock; num deploy só, a
+    quebra das séries é um marco só (convenção 22).
+  - **Issue:** **#166** (convenção 23). O gatilho registrado antes, a abertura da
+    `workers-consumo-concorrente`, disparou com a #163.
+
+### Achados fora do escopo (convenção 23)
+
+- **#173**: `docs/a2a-integration.md:426` diz que o histórico do `contextId` é
+  limitado às últimas 20 mensagens; o código usa 200 (`AgentExecutionService.cs:58`)
+  mais a compactação a cada 10 turnos. Anterior a esta change, achado ao acrescentar
+  o contrato da D2 no mesmo parágrafo do guia.
+
+### O que fica para o deploy, e é do dono
+
+- **Só `apps/inbox`**, pelo runbook normal de redeploy, **sem** o passo do `migrator`.
+  Pode subir antes da `workers-consumo-concorrente` e independe dela.
+- **Sessões que já tiverem linhas em `Dispatching`** no piloto passam a segurar a
+  `Pending` delas até a linha ser resolvida ou até o teto. Nenhuma limpeza manual: a
+  reconciliação e o teto liberam sozinhos.
+- **Rollback:** a imagem anterior de `apps/inbox`; a chave
+  `Debounce__SessionSerializationMaxWait`, se definida, é ignorada por ela.

@@ -362,6 +362,32 @@ em `Dispatching` (#47, `pending-dispatch-orfa`):
 - **os desfechos de falha do debounce** (rejeição síncrona, rejeição de
   protocolo, esgotamento de tentativas), pelo mesmo processador.
 
+**Serialização por sessão** (#162, `inbox-serializacao-por-sessao`). A sessão
+tem no máximo uma `Pending` (índice único parcial), e o sweep **não despacha** a
+`Pending` de uma sessão que tem outra linha em `Dispatching`. A condição vale
+nos dois pontos em que o sweep decide: na consulta de candidatos (um
+`NOT EXISTS` da mesma `SessionId`) e na releitura antes da reivindicação. Isso
+basta sem lock nem índice novo, porque só vira `Dispatching` uma `Pending`
+reivindicada pelo próprio sweep, e o push e a reconciliação só removem linhas.
+Vale com qualquer número de instâncias de `apps/inbox` e de `apps/workers`, e
+não toca as outras sessões.
+
+- **O lote.** Enquanto a sessão está ocupada, o que chega continua sendo
+  anexado à `Pending`. Quando a linha em `Dispatching` some, a `Pending` já tem
+  a janela vencida e sai no ciclo seguinte (até 2 s), num `SendMessage` só, com
+  as mensagens na ordem de chegada.
+- **O teto.** Uma linha em `Dispatching` com `LastMessageAt` mais velho que
+  `Debounce:SessionSerializationMaxWait` (10 min) deixa de bloquear, e não é
+  alterada: continua sendo da reconciliação. Ele existe para a task que nunca
+  chega a estado terminal, que sem ele seguraria a conversa para sempre. Passado
+  o teto, o comportamento volta ao anterior: a `Pending` sai, e se a execução
+  antiga ainda segurar o lock de contexto, a nova pode terminar `failed` (ver
+  [Execuções concorrentes no mesmo contexto](#execuções-concorrentes-no-mesmo-contexto)).
+- **O custo.** A sessão espera a execução anterior inteira: delegações de até
+  120 s por chamada e resposta travada do provedor de até 400 s (#134). Linha
+  presa à espera da reconciliação segura a sessão por até ~3 min depois do
+  estado terminal (com `TaskId`) ou até o teto (sem `TaskId`).
+
 Todo desfecho em que nenhuma resposta virá manda ao contato um **aviso de
 falha** de texto fixo, persistido como mensagem de saída. Na parada do
 processo, nenhum serviço reivindica trabalho novo depois de
@@ -676,6 +702,27 @@ A mesma leitura vale pelo dado, sem depender de log: em `provider_calls`, linhas
 com finalidade `Compaction` e `Failed = true` são compactação quebrada, e a
 entrada por turno crescendo sem parar é o sintoma que o usuário sente primeiro —
 custo e latência subindo a cada mensagem da mesma conversa.
+
+### Execuções concorrentes no mesmo contexto
+
+`apps/workers` serializa as execuções de um mesmo `(agentId, contextId)` por um
+advisory lock do Postgres (`ConversationContextLock`). A espera pelo lock é
+limitada pelo `CommandTimeout` do Npgsql, **30 s**. Uma task que não consegue o
+lock nesse prazo termina `failed`, nunca presa em `working`.
+
+- **Conversas que chegam pelo inbox não disputam o lock.** O inbox não despacha
+  a mensagem seguinte de uma sessão enquanto a anterior está em `Dispatching`
+  (ver [Serialização por sessão](#pendingdispatch-appsinbox)), então duas tasks
+  da mesma conversa não rodam ao mesmo tempo **por causa do inbox**, salvo
+  depois do teto de 10 min.
+- **Cliente A2A externo**, que fala direto com `apps/api` e manda duas mensagens
+  concorrentes no mesmo `contextId`, **continua podendo ter a segunda em `failed`**
+  depois de 30 s de espera, se a primeira segurar o lock por mais que isso. É o
+  contrato, e não defeito: serializar para clientes externos seria papel de
+  `apps/api` ou do worker, e as duas formas (esperar mais pelo lock, ou
+  reentregar com atraso) foram recusadas na #162 (`design.md` da
+  `inbox-serializacao-por-sessao`, D1/D2). Um cliente externo que precise de
+  ordem espera a task anterior terminar antes de mandar a seguinte.
 
 ---
 
