@@ -1,4 +1,4 @@
-export type McpServerAuthType = 'None' | 'BearerToken';
+export type McpServerAuthType = 'None' | 'BearerToken' | 'CustomHeader';
 
 export interface McpServer {
   id: string;
@@ -6,6 +6,9 @@ export interface McpServer {
   description: string;
   url: string;
   authType: McpServerAuthType;
+  // Nome do header do tipo CustomHeader; nulo nos demais. A API sempre devolve
+  // o campo (McpServerResponse, change mcp-autenticacao-header-customizado, D2).
+  authHeaderName: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -17,6 +20,8 @@ export interface CreateMcpServerInput {
   url: string;
   authType: McpServerAuthType;
   credential?: string;
+  // Enviado só com CustomHeader (design.md, D4).
+  authHeaderName?: string;
 }
 
 export type UpdateMcpServerInput = CreateMcpServerInput;
@@ -25,6 +30,7 @@ export interface TestMcpServerConfigInput {
   url: string;
   authType: McpServerAuthType;
   credential?: string;
+  authHeaderName?: string;
 }
 
 export type McpConnectionTestFailureReason =

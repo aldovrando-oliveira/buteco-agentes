@@ -11,6 +11,7 @@ const mcpServer: McpServer = {
   description: 'Servidor MCP do Zendesk',
   url: 'https://mcp.zendesk.example/sse',
   authType: 'BearerToken',
+  authHeaderName: null,
   isActive: true,
   createdAt: '2026-08-01T00:00:00Z',
   updatedAt: '2026-08-01T00:00:00Z',
@@ -48,5 +49,44 @@ describe('McpServerConfigCard', () => {
 
     expect(screen.queryByTestId('credential-row')).not.toBeInTheDocument();
     expect(screen.getByText('Nenhuma')).toBeInTheDocument();
+  });
+
+  describe('token em header customizado', () => {
+    const customHeaderServer: McpServer = {
+      ...mcpServer,
+      authType: 'CustomHeader',
+      authHeaderName: 'X-API-TOKEN',
+    };
+
+    it('exibe o rótulo do tipo e a linha "Header" com o nome em monoespaçado', () => {
+      renderCard(customHeaderServer);
+
+      expect(screen.getByText('Token em header customizado')).toBeInTheDocument();
+      expect(screen.getByText('Header')).toBeInTheDocument();
+      const header = screen.getByTestId('auth-header-row');
+      expect(header).toHaveTextContent('X-API-TOKEN');
+      expect(header).toHaveStyle({ fontFamily: 'var(--mantine-font-family-monospace)' });
+      expect(screen.getByTestId('credential-row')).toBeInTheDocument();
+    });
+
+    it('com o nome do header nulo, a linha diz que o dado não veio', () => {
+      renderCard({ ...customHeaderServer, authHeaderName: null });
+
+      expect(screen.getByTestId('auth-header-row')).toHaveTextContent('—');
+    });
+  });
+
+  it('não exibe a linha "Header" com Bearer Token', () => {
+    renderCard(mcpServer);
+
+    expect(screen.queryByTestId('auth-header-row')).not.toBeInTheDocument();
+    expect(screen.queryByText('Header')).not.toBeInTheDocument();
+  });
+
+  it('não exibe a linha "Header" com Nenhuma', () => {
+    renderCard({ ...mcpServer, authType: 'None' });
+
+    expect(screen.queryByTestId('auth-header-row')).not.toBeInTheDocument();
+    expect(screen.queryByText('Header')).not.toBeInTheDocument();
   });
 });

@@ -1,0 +1,17 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-18T02:58:00Z"},
+  "title": "Cadastro MCP — autenticação",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1280, "h": 1180, "title": "Formulário — alternar autenticação (interativo)", "expand": "fill", "is_interactive": true},
+    "Erros.dc.html": {"x": 1360, "y": 0, "w": 856, "h": 1000, "title": "Erros ao salvar"},
+    "Detalhe.dc.html": {"x": 2296, "y": 0, "w": 560, "h": 420, "title": "Detalhe — card de configuração"}
+  },
+  "order": ["Main.dc.html", "Erros.dc.html", "Detalhe.dc.html"],
+  "notes": {
+    "titulo": {"x": 0, "y": -300, "text": "Servidor MCP — tipos de autenticação", "kind": "title1", "maxW": 2856}
+  },
+  "designSystems": []
+}

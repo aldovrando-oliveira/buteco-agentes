@@ -1,15 +1,11 @@
 import { Group, Stack, Text } from '@mantine/core';
 import { SectionedCard } from '../../../components/data/SectionedCard';
+import { authTypeLabels } from '../utils/authTypeLabels';
 import type { McpServer } from '../types/mcpServer';
 
 interface McpServerConfigCardProps {
   mcpServer: McpServer;
 }
-
-const authTypeLabels: Record<McpServer['authType'], string> = {
-  None: 'Nenhuma',
-  BearerToken: 'Bearer Token',
-};
 
 function ConfigRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -37,6 +33,25 @@ export function McpServerConfigCard({ mcpServer }: McpServerConfigCardProps) {
             {authTypeLabels[mcpServer.authType]}
           </Text>
         </ConfigRow>
+
+        {/* Só com CustomHeader, que é o único tipo com nome de header
+            (design.md da change frontend-mcp-autenticacao-header-customizado,
+            D7). A API não aceita CustomHeader sem o nome; se ele chegar nulo
+            assim mesmo, é registro que não veio, e a linha diz `—` em vez de
+            ficar vazia (convenção 13). */}
+        {mcpServer.authType === 'CustomHeader' && (
+          <ConfigRow label="Header">
+            <Text
+              size="sm"
+              ff="monospace"
+              ta="right"
+              style={{ wordBreak: 'break-all' }}
+              data-testid="auth-header-row"
+            >
+              {mcpServer.authHeaderName ?? '—'}
+            </Text>
+          </ConfigRow>
+        )}
 
         {/* A API nunca devolve o valor da credencial. A linha existe para
             responder se existe credencial salva, e diz que está cifrada

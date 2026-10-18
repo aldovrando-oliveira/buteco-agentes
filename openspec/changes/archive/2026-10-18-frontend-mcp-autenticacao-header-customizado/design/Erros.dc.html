@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Erros ao salvar servidor MCP</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2a6ecb}a:hover{color:#1e4d92}
+.lbl{display:block;font-size:12px;font-weight:500;color:#191a1c;margin-bottom:4px}
+.ast{color:#cf3a2b;margin-left:2px}
+.desc{font-size:11px;color:#686d74;margin:0 0 5px 0;line-height:1.35}
+.inp{box-sizing:border-box;width:100%;height:36px;border:1px solid #e5e5e5;border-radius:7px;padding:0 11px;font:inherit;font-size:13px;color:#191a1c;background:#fff}
+.inp.bad{border-color:#cf3a2b;color:#b02a1f}
+.mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace}
+.err{font-size:11px;color:#cf3a2b;margin-top:5px;line-height:1.35}
+.btn{height:36px;padding:0 16px;border-radius:7px;font:inherit;font-size:13px;font-weight:600}
+</style>
+</helmet>
+<div style="width: 856px; height: 1000px; box-sizing: border-box; padding: 28px; background: #f6f5f3; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; color: #191a1c; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 600">Editar servidor MCP</h2>
+<form style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 9px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+<div role="alert" style="font-size: 12px; line-height: 1.45; border-radius: 7px; padding: 10px 12px; color: #b02a1f; background: #fdeceb">Corrija os campos destacados antes de salvar.</div>
+<div>
+<label class="lbl" for="e-name">Nome<span class="ast">*</span></label>
+<input id="e-name" class="inp" value="Ferramentas internas" readonly>
+</div>
+<div>
+<label class="lbl" for="e-url">Url<span class="ast">*</span></label>
+<input id="e-url" class="inp mono" value="https://mcp.exemplo.com/mcp" readonly>
+</div>
+<div style="border-top: 1px solid #f1f1f1; padding-top: 16px; display: flex; flex-direction: column; gap: 14px">
+<div style="font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #686d74">Autenticação</div>
+<fieldset style="border: 0; margin: 0; padding: 0">
+<legend class="lbl" style="padding: 0">Tipo de autenticação<span class="ast">*</span></legend>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; margin-top: 2px">
+<button type="button" aria-pressed="false" style="display: flex; gap: 10px; align-items: flex-start; text-align: left; font: inherit; padding: 12px; border-radius: 9px; min-height: 44px; border: 1px solid #e5e5e5; background: #ffffff">
+<span style="flex-shrink: 0; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; box-sizing: border-box; border: 1px solid #b5b4b2; background: #ffffff"></span>
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-size: 13px; font-weight: 600; color: #191a1c">Nenhuma</span>
+<span style="font-size: 12px; color: #686d74; line-height: 1.4">O servidor não exige credencial.</span>
+</span>
+</button>
+<button type="button" aria-pressed="false" style="display: flex; gap: 10px; align-items: flex-start; text-align: left; font: inherit; padding: 12px; border-radius: 9px; min-height: 44px; border: 1px solid #e5e5e5; background: #ffffff">
+<span style="flex-shrink: 0; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; box-sizing: border-box; border: 1px solid #b5b4b2; background: #ffffff"></span>
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-size: 13px; font-weight: 600; color: #191a1c">Bearer Token</span>
+<span style="font-size: 12px; color: #686d74; line-height: 1.4">Envia o token em Authorization: Bearer.</span>
+</span>
+</button>
+<button type="button" aria-pressed="true" style="display: flex; gap: 10px; align-items: flex-start; text-align: left; font: inherit; padding: 12px; border-radius: 9px; min-height: 44px; border: 1px solid #2a6ecb; background: #eef3fb">
+<span style="flex-shrink: 0; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%; box-sizing: border-box; border: 4px solid #2a6ecb; background: #ffffff"></span>
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="font-size: 13px; font-weight: 600; color: #191a1c">Token em header customizado</span>
+<span style="font-size: 12px; color: #686d74; line-height: 1.4">Envia o token no header que o serviço exige, como X-API-TOKEN.</span>
+</span>
+</button>
+</div>
+</fieldset>
+<div>
+<label class="lbl" for="e-header">Nome do header<span class="ast">*</span></label>
+<p class="desc">O header em que o serviço espera o token, como está na documentação dele.</p>
+<input id="e-header" class="inp mono bad" value="Content-Type" readonly aria-invalid="true" aria-describedby="e-header-err">
+<div id="e-header-err" class="err">Content-Type é um header de conteúdo e não pode levar a credencial.</div>
+</div>
+<div>
+<label class="lbl" for="e-cred">Token<span class="ast">*</span></label>
+<div style="font-size: 12px; color: #8a5a00; background: #fbf1de; border-radius: 7px; padding: 9px 12px; line-height: 1.45; margin-bottom: 8px">O tipo mudou de Bearer Token para Token em header customizado. Informe a credencial nova: a credencial salva era do tipo anterior e não é reaproveitada.</div>
+<p class="desc">Enviada cifrada (AES-GCM) e nunca retorna na API.</p>
+<input id="e-cred" class="inp bad" type="password" placeholder="Credencial de acesso" aria-invalid="true" aria-describedby="e-cred-err">
+<div id="e-cred-err" class="err">Informe a credencial nova para o tipo Token em header customizado.</div>
+</div>
+</div>
+<div style="font-size: 11px; color: #686d74">Para testar o tipo novo, informe a credencial nova.</div>
+<div style="display: flex; gap: 10px">
+<button type="button" class="btn" style="background: #2a6ecb; color: #ffffff; border: 1px solid #2a6ecb">Salvar alterações</button>
+<button type="button" class="btn" style="background: #ffffff; color: #191a1c; border: 1px solid #e5e5e5">Cancelar</button>
+<button type="button" class="btn" style="background: #ffffff; color: #2a6ecb; border: 1px solid #2a6ecb; opacity: .5" disabled>Testar conexão</button>
+</div>
+</form>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":856,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

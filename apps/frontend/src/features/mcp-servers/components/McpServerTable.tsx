@@ -3,6 +3,7 @@ import { SectionedCard } from '../../../components/data/SectionedCard';
 import { SectionLabel } from '../../../components/data/SectionLabel';
 import { Link } from 'react-router';
 import { serverUsageSummary } from '../utils/agentUsage';
+import { authTypeLabels } from '../utils/authTypeLabels';
 import type { McpServer } from '../types/mcpServer';
 import type { Agent } from '../../agents/types/agent';
 
@@ -15,11 +16,6 @@ interface McpServerTableProps {
   // frontend-mcp-servidor-uso-e-diagnostico).
   agents?: Agent[];
 }
-
-const authTypeLabels: Record<McpServer['authType'], string> = {
-  None: 'Nenhuma',
-  BearerToken: 'Bearer Token',
-};
 
 function UsageCell({ mcpServer, agents }: { mcpServer: McpServer; agents?: Agent[] }) {
   if (!agents) {

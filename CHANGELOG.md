@@ -69,12 +69,25 @@ o versionamento pretende seguir
   `CustomHeader`, com o nome do header (`authHeaderName`, em claro e devolvido nas
   respostas) e a credencial cifrada como hoje. O token vai cru, sem prefixo e sem
   `Authorization`, em toda requisição ao servidor, no teste de conexão, na
-  descoberta de tools e na execução. Só backend (`apps/api` e `apps/workers`): o
-  painel ainda não oferece o tipo, e chega com a #168.
+  descoberta de tools e na execução. Entregue no backend (`apps/api` e
+  `apps/workers`); o painel passou a oferecer o tipo com a #168.
 - O nome do header é validado no cadastro, na atualização e no teste não salvo:
   token HTTP, aceito pelo .NET como header de requisição, e fora dos headers do
   protocolo MCP (`Mcp-*`) e do HTTP (`Accept`, `Host`, `Connection` e afins). O
   valor do token só aceita ASCII visível, sem espaço nas pontas.
+- **Painel do tipo "Token em header customizado"** (#168): o tipo de autenticação
+  é escolhido em cartões com radio (Nenhuma, Bearer Token e Token em header
+  customizado), em criar e editar; com o tipo novo, campo "Nome do header"
+  (pré-preenchido na edição), campo "Token" e uma prévia de como a credencial sai
+  em cada requisição (`<nome do header>: ••••••••`, sem o valor). Na edição, trocar
+  entre dois tipos com credencial avisa que a salva não é reaproveitada, e trocar
+  para Nenhuma avisa que ela será apagada. Tabela e detalhe mostram o rótulo, e o
+  detalhe ganha a linha "Header". A validação de formato do nome e do token
+  continua só na API; o painel mostra a mensagem dela no campo. O cartão com radio
+  virou componente do painel (`components/forms/RadioCardOption.tsx`), usado também
+  pelo card de origem das bases. Achado no caminho, na fila: a **#170** (campos de
+  senha com erro não marcam `aria-invalid`; o de credencial/token do servidor MCP
+  já marca).
 
 **Delegação entre agentes**
 
@@ -737,6 +750,14 @@ o versionamento pretende seguir
 - **`authType` só aceita o nome de um tipo** (#160): `"2"`, `"99"` e
   `"None,BearerToken"` eram aceitos e passam a responder `400`. A mensagem de
   valores aceitos lista os três tipos.
+- **No formulário de servidor MCP, o 400 do "Testar conexão" vai para os campos**
+  (#168), como no envio, com o aviso de que nenhuma conexão foi tentada. Antes
+  aparecia como "Falha na conexão", afirmando uma tentativa que não aconteceu.
+- **Na edição de um servidor MCP sem autenticação, "Testar conexão" testa a URL
+  digitada** (#168), e não mais a salva, que era testada sem nenhum aviso na tela.
+  Nos tipos com credencial, credencial em branco e tipo mantido continuam testando
+  a configuração salva, e a nota agora diz "configuração", incluindo a URL e o
+  nome do header salvos.
 - **`apps/workers` deixa de derrubar a resolução de tools de um agente por um
   `AuthType` que não conhece** (#160): só aquele servidor sai da execução, com um
   aviso no log. Ver a ordem de deploy e de rollback em `docs/deployment.md`.
@@ -915,6 +936,12 @@ o versionamento pretende seguir
   "manter a atual".
 
 ### Fixed
+
+- **"Testar conexão" na edição de servidor MCP testava o tipo antigo** (#168):
+  trocar o tipo de autenticação e deixar a credencial em branco testava o servidor
+  salvo, com o tipo anterior, e mostrava o resultado como se fosse o da tela. Agora
+  o botão fica desabilitado, com a nota "Para testar o tipo novo, informe a
+  credencial nova".
 
 - **Conversa ficava sem resposta e sem aviso quando o push da task não chegava ao
   inbox** (#47). A `PendingDispatch` em `Dispatching` só saía desse estado pelo push de

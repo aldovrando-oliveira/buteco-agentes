@@ -87,6 +87,7 @@ export function McpServerEditPage() {
           description: data.description,
           url: data.url,
           authType: data.authType,
+          authHeaderName: data.authHeaderName ?? '',
         }}
       />
     </Stack>

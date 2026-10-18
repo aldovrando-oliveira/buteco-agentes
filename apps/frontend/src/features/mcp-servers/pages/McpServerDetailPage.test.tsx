@@ -47,6 +47,7 @@ const activeMcpServer: McpServer = {
   description: 'Servidor MCP do Zendesk',
   url: 'https://mcp.zendesk.example/sse',
   authType: 'BearerToken',
+  authHeaderName: null,
   isActive: true,
   createdAt: '2026-08-01T00:00:00Z',
   updatedAt: '2026-08-01T00:00:00Z',

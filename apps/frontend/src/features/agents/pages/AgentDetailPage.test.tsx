@@ -80,6 +80,7 @@ const mcpServer: McpServer = {
   description: '',
   url: 'https://mcp.exemplo.com/sse',
   authType: 'None',
+  authHeaderName: null,
   isActive: true,
   createdAt: '2026-07-26T00:00:00Z',
   updatedAt: '2026-07-26T00:00:00Z',
