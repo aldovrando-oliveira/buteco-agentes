@@ -378,11 +378,15 @@ de falha de entrega de push notification atribuível a esse ir-e-volta.
 - **Orquestrador além do compose** (Kubernetes, Swarm, etc.).
 - **Observabilidade/métricas** (Prometheus, dashboards, etc.).
 - **Múltiplas réplicas de `apps/workers`/`apps/inbox`/`apps/connectors`** —
-  o lock hoje é `pg_advisory_lock`/`xmin` nos dois primeiros e **em memória** no
-  ciclo de sincronização do `apps/connectors` (#105), nada distribuído. Nunca
-  usar `replicas > 1` pra esses três serviços neste compose sem resolver isso
-  primeiro. Duas réplicas do `apps/connectors` não corrompem dados, mas dobram o
-  consumo de cota do Google e rodam dois ciclos da mesma base ao mesmo tempo.
+  nunca usar `replicas > 1` pra esses três serviços neste compose, cada um pelo
+  próprio motivo. `apps/connectors`: o lock do ciclo de sincronização é **em
+  memória** (#105); duas réplicas não corrompem dados, mas dobram o consumo de cota
+  do Google e rodam dois ciclos da mesma base ao mesmo tempo. `apps/workers`:
+  decisão de **disponibilidade**, em aberto na #48; a capacidade se conta em slots
+  (`réplicas × TaskConsumer__MaxConcurrentExecutions`, default 4) e não é motivo
+  para a réplica única. `apps/inbox`: decisão **operacional**, sem restrição técnica
+  de coordenação, a rever na #165. O `pg_advisory_lock`/`xmin` dos dois últimos
+  vive no Postgres compartilhado e funciona entre instâncias.
 - **TLS/certificado** — resolvido por um nginx/Cloudflare já existentes,
   fora deste stack. `docker-compose.prod.yml` nunca publica 80/443
   diretamente.

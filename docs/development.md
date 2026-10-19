@@ -262,15 +262,15 @@ o offset atual (ex. `Fuso horário do sistema: America/Sao_Paulo, offset
 atual: -03:00:00`) e, com um job na fila, os logs de transição de estado da
 task. `Ctrl+C` encerra e loga `Worker stopping at: ...`.
 
-> **Delegação entre agentes exige duas ou mais instâncias de `apps/workers`
-> rodando ao mesmo tempo.** O consumidor RabbitMQ processa no máximo uma
-> mensagem não confirmada por instância (`prefetchCount: 1`). Se um agente
-> delega para outro e só há uma instância ativa, ela fica esperando a task
-> delegada terminar sem nunca poder consumi-la ela mesma — a delegação
-> sempre expira pelo timeout de 120 s em vez de completar. Para exercitar
-> esse fluxo localmente, rode um segundo
+> **Delegação entre agentes exige dois slots de execução livres ao mesmo
+> tempo**: um para o Source, que espera, e outro para o Target. Cada instância
+> de `apps/workers` executa até `TaskConsumer__MaxConcurrentExecutions` tasks ao
+> mesmo tempo (default **4**), então **uma instância local basta**. Com
+> `TaskConsumer__MaxConcurrentExecutions=1` (o rollback), a instância que
+> espera a task delegada é a única que poderia consumi-la, e a delegação sempre
+> expira pelo timeout de 120 s; nesse caso, rode um segundo
 > `dotnet run --project src/Buteco.Workers` em outro terminal, com a mesma
-> configuração e sem nenhum ajuste adicional.
+> configuração.
 
 ### apps/inbox
 

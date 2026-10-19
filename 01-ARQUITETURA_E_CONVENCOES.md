@@ -459,15 +459,22 @@ O que a exclusão faz, e o que não se adivinha lendo a rota:
 Duas filas, com propósitos e topologias distintas — e a distinção é decisão, não
 acidente.
 
-**`agent-tasks`** — execução de tarefa de agente. Consumidor com
-`prefetchCount: 1`, e `AgentDelegationConcurrencyTests` existe para provar o que
-isso implica: dentro de uma instância o consumo é **serializado**, a ponto de uma
-delegação que aguarda a task do alvo ser autodeadlock estrutural. Falha descarta
-a mensagem (`BasicNackAsync(requeue: false)`), sem retry.
+**`agent-tasks`** — execução de tarefa de agente. Cada instância tem **`N` slots**
+(`TaskConsumer:MaxConcurrentExecutions`, default 4, não medido; change
+`workers-consumo-concorrente`, #163), e o **mesmo `N`** é o prefetch e a
+concorrência de despacho do canal: prefetch maior que a concorrência prenderia
+entregas no processo, fora do alcance de outras instâncias. Uma delegação que
+aguarda a task do alvo segura um slot, então a conta de capacidade é em slots,
+`réplicas × N ≥ C × D + 1`, e não em instâncias; com `N = 1` (o rollback), numa
+instância só, ela é autodeadlock estrutural e expira pelo timeout
+(`AgentDelegationConcurrencyTests` prova os dois lados). Falha descarta a mensagem
+(`BasicNackAsync(requeue: false)`), sem retry.
 
-**`knowledge-indexing`** — indexação de documento. **Fila própria justamente por
-causa do `prefetchCount: 1` da outra:** indexação de minutos ali não seria "fila
-mais lenta", seria a mesma classe de bloqueio, com execução de agente atrás.
+**`knowledge-indexing`** — indexação de documento. **Fila própria porque os slots
+da outra são de execução de agente:** indexação de minutos ali não seria "fila
+mais lenta", ocuparia slots que as conversas esperam — a mesma classe de bloqueio,
+com execução de agente atrás. O consumidor dela continua com prefetch 1, e o teto
+de concorrência da indexação é controlado na entrada da fila.
 
 Três publicadores, todos em `apps/api`: criar documento, atualizar documento com
 conteúdo diferente, e **reindexar** — este último a única entrada que publica sem
