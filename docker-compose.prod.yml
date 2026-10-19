@@ -10,10 +10,14 @@
 #
 # Non-Goals explícitos (não sugerir nem alterar aqui): CI/CD, orquestrador
 # além do compose, observabilidade/métricas, múltiplas réplicas de
-# apps/workers/apps/inbox/apps/connectors (lock hoje é pg_advisory_lock/xmin
-# nos dois primeiros e em memória no ciclo de sincronização do terceiro, #105,
-# nada distribuído — nunca usar `replicas > 1`/`deploy.replicas` nesses três
-# serviços), TLS (resolvido pelo nginx externo), WAHA (instância externa
+# apps/workers/apps/inbox/apps/connectors — nunca usar `replicas > 1`/
+# `deploy.replicas` nesses três serviços, cada um pelo próprio motivo:
+# apps/connectors, o lock em memória do ciclo de sincronização (#105);
+# apps/workers, decisão de disponibilidade em aberto na #48 (capacidade se
+# conta em slots, réplicas × TaskConsumer__MaxConcurrentExecutions, e não é
+# motivo); apps/inbox, decisão operacional, a rever na #165. Os locks dos dois
+# últimos (pg_advisory_lock/xmin) vivem no Postgres e funcionam entre
+# instâncias —, TLS (resolvido pelo nginx externo), WAHA (instância externa
 # já existente, não sobe aqui).
 
 services:
@@ -175,6 +179,12 @@ services:
       # variá-lo é como o teto do gateway é descoberto, porque ele não foi
       # medido (só se sabe que 442 fragmentos falharam e 267 passaram).
       Embedding__BatchSize: ${EMBEDDING_BATCH_SIZE:-250}
+      # Quantas tasks esta instância executa ao mesmo tempo (prefetch = concorrência
+      # do canal de tasks). Default 4 NÃO MEDIDO (calibração na #48); fora de [1, 32]
+      # reprova o boot. Rollback: 1, que é o comportamento anterior. Subir acima do N
+      # verificado contra o max_connections do Postgres exige refazer a verificação
+      # (docs/configuration.md).
+      TaskConsumer__MaxConcurrentExecutions: ${TASK_CONSUMER_MAX_CONCURRENT_EXECUTIONS:-4}
       Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY}
     # Sem porta — apps/workers nunca serviu HTTP.
 

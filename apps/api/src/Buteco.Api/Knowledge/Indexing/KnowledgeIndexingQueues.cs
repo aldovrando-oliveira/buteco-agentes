@@ -10,11 +10,11 @@ namespace Buteco.Api.Knowledge.Indexing;
 ///
 /// <para>
 /// <b>Fila própria, não <c>agent-tasks</c></b> (design.md, D2). O consumidor de
-/// tarefas roda com <c>prefetchCount: 1</c>, e <c>AgentDelegationConcurrencyTests</c>
-/// existe para provar que isso serializa o consumo dentro de uma instância — a
-/// ponto de uma delegação que espera a task do alvo ser autodeadlock estrutural.
-/// Indexação de minutos ali não é "fila mais lenta": é a mesma classe de
-/// bloqueio, com execução de agente atrás.
+/// tarefas tem um número limitado de slots de execução por instância
+/// (<c>TaskConsumer:MaxConcurrentExecutions</c> de apps/workers, change
+/// workers-consumo-concorrente), e uma delegação que espera a task do alvo segura um
+/// deles. Indexação de minutos ali não é "fila mais lenta": ocupa slots de execução
+/// de agente, e é a mesma classe de bloqueio, com a conversa atrás.
 /// </para>
 /// </summary>
 public static class KnowledgeIndexingQueues

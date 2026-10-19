@@ -10,10 +10,18 @@ namespace Buteco.Workers.Knowledge.Indexing;
 
 /// <summary>
 /// Consome a fila de indexação. <b>Fila própria, nunca <c>agent-tasks</c></b>
-/// (design.md, D2): aquele consumidor roda com <c>prefetchCount: 1</c>, e
-/// <c>AgentDelegationConcurrencyTests</c> existe para provar que isso serializa
-/// o consumo dentro de uma instância. Indexação de minutos ali não é "fila mais
-/// lenta" — é a mesma classe de bloqueio, com execução de agente atrás.
+/// (design.md, D2): aquele consumidor tem <c>N</c> slots de execução por instância
+/// (<c>TaskConsumer:MaxConcurrentExecutions</c>, change workers-consumo-concorrente),
+/// e uma delegação que espera a task do alvo segura um deles. Indexação de minutos
+/// ali não é "fila mais lenta" — ocupa os slots de execução de agente, e é a mesma
+/// classe de bloqueio com a conversa atrás.
+///
+/// <para>
+/// Este consumidor continua com prefetch 1 e concorrência 1 (o default do construtor
+/// de <c>CreateChannelOptions</c>, que ele usa sem passar opções): o teto de
+/// concorrência da indexação é controlado na entrada da fila
+/// (<c>knowledge_indexing_requests</c>), não aqui (D6 daquela change).
+/// </para>
 /// </summary>
 public sealed class KnowledgeIndexingConsumer(
     IOptions<RabbitMqOptions> options,

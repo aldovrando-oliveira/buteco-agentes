@@ -27,7 +27,7 @@ using TaskStatus = A2A.TaskStatus;
 namespace Buteco.Workers.Tests;
 
 [Collection(WorkerHostCollection.Name)]
-public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture, ITestOutputHelper output) : IClassFixture<WorkerInfrastructureFixture>
+public partial class TaskJobConsumerTests(WorkerInfrastructureFixture fixture, ITestOutputHelper output) : IClassFixture<WorkerInfrastructureFixture>
 {
     [Fact]
     public async Task Consumer_ProcessesJob_TaskEndsCompletedWithArtifact()
@@ -602,7 +602,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture, ITestOutp
             .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "reexecutou")));
 
         // Sentinela: uma task normal publicada DEPOIS da terminal, no mesmo host.
-        // Com prefetchCount: 1 e um consumidor só, as mensagens são processadas em
+        // Com N = 1 (fixo no harness) e um consumidor só, as mensagens são processadas em
         // ordem — quando a sentinela termina, a terminal já foi processada E
         // confirmada. Âncora em estado persistido, nunca em relógio nem em "fila
         // vazia": a mensagem em voo some da contagem de prontas assim que é
@@ -1070,13 +1070,26 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture, ITestOutp
     /// com o <c>(provider, model)</c> pedido — o que o
     /// <see cref="ChatClientResolver"/> faz em produção.
     /// </summary>
+    // N = 1 FIXO nos builders desta classe, e não o default 4 de produção (change
+    // workers-consumo-concorrente, D7). A classe foi escrita contra prefetchCount: 1
+    // e consumo serializado, e um teste depende disso para valer: a sentinela de
+    // RedeliveredTerminalTask_IsNotExecutedAgain_… (publicada depois, só termina
+    // depois da terminal PORQUE o consumo é serializado). Com N > 1 a sentinela pode
+    // terminar primeiro e o guarda olharia antes da reexecução. Os guardas de vários
+    // slots (TaskJobConsumerConcurrencyTests.cs) passam N explicitamente.
+    private static void ConfigureTaskConsumer(HostApplicationBuilder builder, int maxConcurrentExecutions) =>
+        builder.Services.Configure<TaskConsumerOptions>(options => options.MaxConcurrentExecutions = maxConcurrentExecutions);
+
     private IHost BuildMeasuredHost(
-        IChatClient chatClient, List<(LogLevel Level, IReadOnlyList<KeyValuePair<string, object?>> State)>? logs = null)
+        IChatClient chatClient,
+        List<(LogLevel Level, IReadOnlyList<KeyValuePair<string, object?>> State)>? logs = null,
+        int maxConcurrentExecutions = 1)
     {
         var builder = Host.CreateApplicationBuilder();
 
         builder.Configuration["ConnectionStrings:Postgres"] = ConnectionString;
         builder.Services.AddInfrastructure(builder.Configuration);
+        ConfigureTaskConsumer(builder, maxConcurrentExecutions);
 
         if (logs is not null)
         {
@@ -1148,6 +1161,7 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture, ITestOutp
 
         builder.Configuration["ConnectionStrings:Postgres"] = fixture.Postgres.GetConnectionString();
         builder.Services.AddInfrastructure(builder.Configuration);
+        ConfigureTaskConsumer(builder, maxConcurrentExecutions: 1);
 
         builder.Services.Configure<RabbitMqOptions>(options =>
         {
@@ -1177,12 +1191,14 @@ public class TaskJobConsumerTests(WorkerInfrastructureFixture fixture, ITestOutp
     private IHost BuildHost(
         IChatClient chatClient,
         List<(LogLevel Level, IReadOnlyList<KeyValuePair<string, object?>> State)>? logs = null,
-        IAgentDelegationToolSetResolver? delegationResolver = null)
+        IAgentDelegationToolSetResolver? delegationResolver = null,
+        int maxConcurrentExecutions = 1)
     {
         var builder = Host.CreateApplicationBuilder();
 
         builder.Configuration["ConnectionStrings:Postgres"] = fixture.Postgres.GetConnectionString();
         builder.Services.AddInfrastructure(builder.Configuration);
+        ConfigureTaskConsumer(builder, maxConcurrentExecutions);
 
         if (logs is not null)
         {

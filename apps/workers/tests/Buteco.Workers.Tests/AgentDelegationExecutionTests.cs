@@ -35,9 +35,10 @@ namespace Buteco.Workers.Tests;
 ///
 /// A maioria dos cenários usa DUAS instâncias de host (Source e Target) —
 /// não por escolha de estilo, mas porque uma única instância nunca
-/// consegue completar uma delegação de verdade (design.md, Decision 1:
-/// `prefetchCount: 1` faz a instância que aguarda a task do Target ser a
-/// mesma que precisaria consumi-la). Só os cenários em que a tool retorna
+/// consegue completar uma delegação de verdade COM UM SLOT (design.md, Decision 1:
+/// o harness fixa `N = 1`, e aí a instância que aguarda a task do Target é a
+/// mesma que precisaria consumi-la; em produção o default é 4 slots, change
+/// workers-consumo-concorrente, e uma instância basta). Só os cenários em que a tool retorna
 /// falha ANTES de publicar qualquer mensagem para o Target (Target
 /// inválido, Source inválido) dispensam a segunda instância.
 ///
@@ -831,6 +832,12 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
 
         builder.Configuration["ConnectionStrings:Postgres"] = fixture.Postgres.GetConnectionString();
         builder.Services.AddInfrastructure(builder.Configuration);
+
+        // N = 1 FIXO, e não o default 4 de produção (change workers-consumo-concorrente,
+        // D7): o XML doc da classe afirma que uma instância nunca completa uma delegação,
+        // e isso só é verdade com um slot. Os cenários de duas instâncias continuam
+        // exercitando o consumo entre réplicas, que é o que esta classe prova.
+        builder.Services.Configure<TaskConsumerOptions>(options => options.MaxConcurrentExecutions = 1);
 
         builder.Services.Configure<RabbitMqOptions>(options =>
         {

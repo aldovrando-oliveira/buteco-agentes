@@ -11,6 +11,7 @@ namespace Buteco.Workers.Messaging;
 
 public sealed class TaskJobConsumer(
     IOptions<RabbitMqOptions> options,
+    IOptions<TaskConsumerOptions> consumerOptions,
     AgentExecutionService executionService,
     TimeProvider timeProvider,
     ILogger<TaskJobConsumer> logger) : BackgroundService
@@ -46,10 +47,29 @@ public sealed class TaskJobConsumer(
             Password = options.Value.Password,
         };
 
+        // N execuções simultâneas por instância, e o MESMO N nos dois lugares abaixo
+        // (change workers-consumo-concorrente, D1). Prefetch maior que a concorrência
+        // prende entregas neste processo sem executar, fora do alcance de outras
+        // instâncias: é onde a task do Target de uma delegação ficaria parada.
+        var maxConcurrentExecutions = (ushort)consumerOptions.Value.MaxConcurrentExecutions;
+
         _connection = await factory.CreateConnectionAsync(stoppingToken);
-        _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
+
+        // A PEGADINHA DO CONSTRUTOR (RabbitMQ.Client 7.2.1, decompilado): o público
+        // de CreateChannelOptions tem `consumerDispatchConcurrency = 1` como default, e
+        // não null. Omitido o argumento, ele fixa 1 POR CIMA de qualquer valor na
+        // ConnectionFactory, e o prefetch N vira N entregas para um slot só. Não
+        // "simplificar" tirando o argumento nem mover o valor para a factory. O guarda
+        // é TaskJobConsumerTests.TwoSlots_ThreeSlowTasks_ExactlyTwoWorking_… — o único
+        // teste que percebe a concorrência voltar a 1.
+        _channel = await _connection.CreateChannelAsync(
+            new CreateChannelOptions(
+                publisherConfirmationsEnabled: false,
+                publisherConfirmationTrackingEnabled: false,
+                consumerDispatchConcurrency: maxConcurrentExecutions),
+            stoppingToken);
         await _channel.QueueDeclareAsync(QueueName, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
-        await _channel.BasicQosAsync(0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
+        await _channel.BasicQosAsync(0, prefetchCount: maxConcurrentExecutions, global: false, cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(_channel);
         consumer.ReceivedAsync += async (_, deliverEventArgs) =>
@@ -92,7 +112,7 @@ public sealed class TaskJobConsumer(
     }
 
     /// <summary>
-    /// Para de consumir, cancela a execução em voo, e SÓ ENTÃO fecha canal e
+    /// Para de consumir, cancela as execuções em voo, e SÓ ENTÃO fecha canal e
     /// conexão — a ordem é o conteúdo deste método (#49; design.md da change
     /// workers-parada-com-execucao-em-voo, D1 e D5).
     /// </summary>
@@ -111,15 +131,31 @@ public sealed class TaskJobConsumer(
     /// final acontece com o host vivo.
     /// </para>
     /// <para>
-    /// <b>Por que cancelar o consumidor no broker primeiro.</b> A execução
-    /// interrompida devolve o job com <c>nack(requeue: true)</c>; com o consumidor
-    /// ainda registrado e <c>prefetchCount: 1</c>, o broker o entrega de novo a
-    /// ESTE consumidor, que já está cancelado, e assim por diante até o
-    /// <c>Quiesce</c> do fechamento. É corrida: passou 10 de 10 rodadas sem
+    /// <b>Por que cancelar o consumidor no broker primeiro.</b> Cada execução
+    /// interrompida devolve o próprio job com <c>nack(requeue: true)</c>; com o
+    /// consumidor ainda registrado e crédito de prefetch livre (o slot que a execução
+    /// acabou de soltar), o broker o entrega de novo a ESTE consumidor, que já está
+    /// cancelado, e assim por diante até o <c>Quiesce</c> do fechamento. É corrida: passou 10 de 10 rodadas sem
     /// espera, e deu 649 voltas em 2 s com a janela aberta. Depois do
     /// <c>cancel-ok</c> o broker não entrega nada aqui, e o job vai para outro
     /// worker. Falha ou estouro do prazo é aviso, e a parada SEGUE: se impedisse o
     /// <c>base.StopAsync</c>, seria o defeito de volta.
+    /// </para>
+    /// <para>
+    /// <b>Com <c>N</c> execuções em voo a sequência é a mesma</b> (change
+    /// workers-consumo-concorrente, D5). O <c>stoppingToken</c> é um só, então
+    /// <c>base.StopAsync</c> cancela as <c>N</c> ao mesmo tempo; cada uma solta o
+    /// próprio lock de contexto, e o <c>CloseAsync</c> espera as <c>N</c> tarefas do
+    /// dispatcher. A parada leva o tempo da execução mais lenta a observar o
+    /// cancelamento, não a soma: guarda <c>StopAsync_WithTwoExecutionsInFlight_…</c>.
+    /// </para>
+    /// <para>
+    /// <b>Quem devolve o job à fila, medido: o fechamento do canal, não o
+    /// <c>nack</c></b> (#177). <c>CloseAsync</c> envia <c>channel.close</c> antes de
+    /// esperar os callbacks, e o broker devolve toda entrega sem <c>ack</c>; o
+    /// <c>nack(requeue: true)</c> do callback costuma sair com o canal já fechado.
+    /// Removido, ou trocado por <c>requeue: false</c>, os guardas de parada continuam
+    /// verdes. Corrigir muda a sequência da parada e fica na #177.
     /// </para>
     /// </remarks>
     public override async Task StopAsync(CancellationToken cancellationToken)

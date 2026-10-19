@@ -518,14 +518,16 @@ normalmente.
 - **THEN** a resposta é um erro do protocolo e nenhum job é publicado
 
 ### Requirement: Parada do worker com execução em voo
-`apps/workers` SHALL, ao parar com uma execução em andamento, deixar de receber
-jobs do broker, e então cancelar a execução **antes** de fechar o canal e a
-conexão com o broker. A parada SHALL retornar sem esperar os prazos de fechamento
-do canal e da conexão. A execução interrompida SHALL terminar enquanto o host
-ainda está ativo. A task interrompida SHALL permanecer em `working`, sem que
-`failed` seja gravado por causa da parada, e o job SHALL ser devolvido
-explicitamente à fila para reentrega, sem ser reentregue ao worker que está
-parando. A parada SHALL NOT ser registrada em log como erro de execução.
+`apps/workers` SHALL, ao parar com uma ou mais execuções em andamento, deixar de
+receber jobs do broker, e então cancelar **todas** as execuções **antes** de fechar
+o canal e a conexão com o broker. O cancelamento SHALL alcançar as execuções ao
+mesmo tempo, de modo que o tempo de parada seja o da execução mais lenta a
+observar o cancelamento, e não a soma delas. A parada SHALL retornar sem esperar os
+prazos de fechamento do canal e da conexão. As execuções interrompidas SHALL
+terminar enquanto o host ainda está ativo. Cada task interrompida SHALL permanecer
+em `working`, sem que `failed` seja gravado por causa da parada, e cada job SHALL
+ser devolvido explicitamente à fila para reentrega, sem ser reentregue ao worker
+que está parando. A parada SHALL NOT ser registrada em log como erro de execução.
 
 #### Scenario: Parada com execução esperando o provedor não espera os prazos de fechamento
 - **WHEN** o worker é parado enquanto uma execução espera a resposta do provedor
@@ -540,6 +542,13 @@ parando. A parada SHALL NOT ser registrada em log como erro de execução.
 - **THEN** a parada retorna sem lançar exceção e sem esperar os prazos de
   fechamento do canal e da conexão, e a execução não continua como se a tool
   tivesse falhado
+
+#### Scenario: Parada com várias execuções em voo cabe no prazo do compose
+- **WHEN** um worker com `N = 2` é parado com duas execuções em voo, ambas
+  esperando o provedor de LLM e observando o cancelamento
+- **THEN** a parada retorna em menos de 10 s, as duas tasks continuam em
+  `working`, os dois jobs estão de novo na fila `agent-tasks`, e nenhum lock de
+  contexto de conversa continua em posse
 
 #### Scenario: Worker que está parando não recebe o job de volta
 - **WHEN** a execução em voo recebe o cancelamento da parada

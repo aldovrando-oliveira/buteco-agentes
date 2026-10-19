@@ -259,6 +259,16 @@ public sealed class RoundTripFixture : IAsyncLifetime
             : _apiAndWorkersPostgres.GetConnectionString();
         builder.Services.AddInfrastructure(builder.Configuration);
 
+        // N = 1 FIXO em toda instância que a fixture constrói (subida, reinício,
+        // segunda), e NÃO um controle como os de cima (change workers-consumo-concorrente,
+        // D7). Não é neutro: é o regime de antes da #163, contra o default 4 de produção.
+        // Dois testes dependem dele: a sentinela de OrphanDispatchRoundTripTests (só
+        // fecha depois da mensagem devolvida PORQUE o consumo é serializado) e a perna
+        // vermelha de SessionSerializationRoundTripTests (msg2 só cai na segunda
+        // instância, a do Command Timeout curto, porque a primeira tem um slot só).
+        // Gatilho para virar controle: o primeiro teste daqui que precise de N > 1.
+        builder.Services.Configure<TaskConsumerOptions>(options => options.MaxConcurrentExecutions = 1);
+
         builder.Services.Configure<RabbitMqOptions>(options =>
         {
             options.Host = _rabbitMq.Hostname;
@@ -324,7 +334,8 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
     /// <summary>
     /// Sobe uma segunda instância de apps/workers contra a mesma fila e o mesmo banco —
-    /// as duas réplicas do piloto. Parada por <see cref="StopSecondWorkersAsync"/>.
+    /// o caso de várias instâncias, sem afirmar quantas o piloto roda (que muda e é
+    /// registrado no 02). Parada por <see cref="StopSecondWorkersAsync"/>.
     /// </summary>
     public async Task StartSecondWorkersAsync()
     {

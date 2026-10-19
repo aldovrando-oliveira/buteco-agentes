@@ -3934,7 +3934,13 @@ sumia sem erro nenhum.
 tinha escrito.** Com **uma** instância o caminho era inalcançável:
 `prefetchCount: 1` serializa o consumo dentro do processo, e o lock nunca é
 disputado de dentro. O piloto roda com **duas**, que é pré-requisito da
-delegação entre agentes. O caminho alcançável não tem nada de artificial:
+delegação entre agentes. *(Correção de status em 18/10/2026: o piloto roda hoje com
+**três** instâncias de `apps/workers`, declarado pelo dono nessa data, ao abrir o
+apply da `workers-consumo-concorrente` (#163). Desde quando são três, e como sobem,
+não está registrado. O "duas" acima é o que se escreveu em 20/09 e não registra como
+foi constatado. Ver a contradição de réplicas em "Abertos por
+`fix-vazamento-httpclient-chat`".)* O caminho
+alcançável não tem nada de artificial:
 o índice único de `PendingDispatch` filtra por `Status = 'Pending'`
 (`AppDbContext.cs:126-128`), então uma linha em `Dispatching` **não** impede uma
 nova `Pending` — um contato que manda a segunda mensagem enquanto o agente ainda
@@ -8484,6 +8490,25 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   3. Logo, com `replicas: 1` como o compose manda, **delegação trava**. Não é
      contradição só de documentação: é funcional.
 
+  *(Correção de status em 18/10/2026: a operação já diverge da documentação. O
+  piloto roda hoje com **três** instâncias de `apps/workers` (fonte: o dono, em
+  18/10/2026, ao abrir o apply da `workers-consumo-concorrente`, #163), contra o
+  "nunca usar `replicas > 1`" de `docker-compose.prod.yml:15` e de
+  `docs/deployment.md:380`, e sem `replicas` no serviço `workers` do compose. Nada
+  versionado produz três instâncias, e como elas sobem não está registrado. A
+  delegação não trava no piloto por isso, e não por o compose estar certo. A #163
+  registra o fato no D8 dela e conta as três instâncias na verificação de
+  `max_connections` antes do deploy.)*
+
+  *(Correção de status em 18/10/2026, segunda: **a contradição funcional está
+  resolvida pela `workers-consumo-concorrente` (#163).** A delegação precisa de dois
+  **slots**, não de duas instâncias: com o default de 4 execuções por instância, uma
+  instância só conclui a delegação (guarda
+  `SingleInstanceWithTwoSlots_ProcessesSourceAndTarget_DelegationSucceeds`). A
+  justificativa falsa do compose e do `docs/deployment.md` §4 foi trocada pelo motivo
+  de cada serviço, e `replicas` continua 1 no arquivo. A divergência entre o arquivo
+  e a operação (três instâncias) continua, e é fato registrado, não corrigido.)*
+
   **A justificativa escrita no compose está factualmente errada.**
   `pg_advisory_lock` e `xmin` são **distribuídos por construção** — o lock vive
   no servidor Postgres compartilhado e coordena todos os clientes, que é
@@ -8702,6 +8727,13 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 - **#166** (lock de contexto adquirido depois do `StartWorkAsync`) — change própria,
   com deploy **junto** do da `workers-consumo-concorrente`, para a quebra das séries
   de tempo de fila e de lock ser um marco só (convenção 22).
+- **`workers-consumo-concorrente` (#163)** — aplicada em 18/10/2026 sobre `1e250e6`,
+  com a #162 já na `main`. Deploy em **dia posterior** ao da #162, junto da #166 se ela
+  estiver pronta (marco 2), ou sozinha, com a #166 num marco 3 depois (D9 da change).
+  Antes do deploy, do dono: a verificação de `max_connections` (contando as três
+  instâncias de `apps/workers` em operação). **A `replicas-de-worker` (#48) muda de
+  pergunta:** a capacidade passa a ser contada em slots, e ela fica com a decisão de
+  **disponibilidade** e a calibração de `N`. Ver a entrada da change no fim do arquivo.
 
 **ACRÉSCIMO DE 22/09/2026: duas changes entram antes da `replicas-de-worker`**,
 as duas nascidas da execução real da `metricas-execucao-coleta`, com os motivos
@@ -8793,7 +8825,12 @@ em 21/09/2026 e o que a segura é o deploy.)*
 de antecipar a `replicas-de-worker` é grande, porque ela é a que "resolve o
 problema":
 
-- **A `replicas-de-worker` depende de observação de produção.** A decisão dela —
+- **A `replicas-de-worker` depende de observação de produção.** *(Correção de status
+  em 18/10/2026: com a `workers-consumo-concorrente` (#163), `N` passou a ser slots
+  por instância, e a fórmula conta slots: `réplicas × N ≥ C × D + 1`. A
+  `replicas-de-worker` (#48) deixa de decidir capacidade por número de instâncias e
+  passa a tratar de **disponibilidade** e de calibrar `N` com o `C` de pico. A frase
+  abaixo fica como registro.)* A decisão dela —
   capacidade (`N ≥ C × D + 1`) ou o redesenho de retomada — exige o **`C` de pico
   real**, que não é observável hoje e é exatamente o que a instrumentação da
   `delegacao-diagnostico` existe para produzir, **contra tráfego real**.
@@ -10043,6 +10080,13 @@ duas changes parado até alguém lhe dar posição.
     O tempo de fila de task delegada muda de significado ali, e a série se divide
     pela data. **Posição:** tarefa da própria `replicas-de-worker` (convenção 22 —
     recalibrar é da change que muda o estado).
+    *(Correção de status em 18/10/2026: **o Marco 2 passa à
+    `workers-consumo-concorrente` (#163)**, que é onde a troca de regime acontece: com
+    `N` slots, a espera sai da fila e vai para o lock. Antes dele há um marco da
+    #162 sozinha (serialização por sessão no inbox, deploy só do `apps/inbox`), em
+    outro dia. O Marco 2 é o deploy da #163 com a #166 junto, se ela estiver pronta;
+    sem a #166, a #163 sozinha, e a #166 ganha marco próprio depois. Ver a D9 da
+    change e a entrada dela no fim do arquivo.)*
 
 - **Falta timeout de CONEXÃO nas chamadas HTTP de saída de `apps/workers` — e ele
   é causa de falha que o usuário vê.** Achado em 22/09/2026, na execução real da
@@ -15980,7 +16024,10 @@ O inbox despachava a segunda mensagem de uma sessão com a primeira ainda em
 (`DebounceSweepService.cs:78-81`). As duas tasks caíam no mesmo `(agentId,
 contextId)`, e a segunda esperava o advisory lock do worker por no máximo 30 s
 (`CommandTimeout` do Npgsql). Com duas réplicas de `apps/workers`, que é como o piloto
-roda, ela terminava `failed` e o contato recebia o aviso de falha. Com uma réplica, a
+roda, ela terminava `failed` e o contato recebia o aviso de falha. *(Correção de status
+em 18/10/2026: o piloto roda com **três**, declarado pelo dono; ver a D8 da
+`workers-consumo-concorrente` e a contradição de réplicas em "Abertos por
+`fix-vazamento-httpclient-chat`". O mecanismo descrito vale com duas ou mais.)* Com uma réplica, a
 segunda esperava na fila do RabbitMQ, sem prazo, e o defeito não aparecia.
 
 ### O que entrou
@@ -16103,3 +16150,159 @@ Mais um, fora da D5: **sem a chamada no `Program.cs`**,
   reconciliação e o teto liberam sozinhos.
 - **Rollback:** a imagem anterior de `apps/inbox`; a chave
   `Debounce__SessionSerializationMaxWait`, se definida, é ignorada por ela.
+
+## `workers-consumo-concorrente` — uma instância de `apps/workers` executa até N tasks (#163)
+
+**Change proposta em 17/10/2026, implementada em 18/10/2026** na branch
+`feat/163-workers-consumo-concorrente`, num worktree próprio, a partir de `1e250e6`
+(rebaseada de `18a2f3b` por fast-forward, com a #162 já na `main`). **Revisada e
+aprovada pelo dono, sincronizada e arquivada em 18/10/2026** a pedido dele: capacidade
+nova `workers-concurrent-task-consumption` (4 requisitos, com Purpose escrito no delta);
+3 requisitos alterados (`a2a-task-lifecycle` "Parada do worker com execução em voo",
+`agent-delegation-execution` "Processamento concorrente de Source e Target entre
+réplicas de apps/workers", `agent-execution-metrics` "Execuções concorrentes não misturam
+métricas") e 1 renomeado e alterado (`server-deployment`, "Serviços com coordenação em
+memória rodam em réplica única" → "Serviços de réplica única declaram o motivo de cada
+um"). Change arquivada em
+`openspec/changes/archive/2026-10-18-workers-consumo-concorrente/`, com a 6.1 e a 6.3
+abertas: são do dono, no deploy. Relacionadas: #48 (réplicas e calibração), #162 (pré-requisito
+de merge, cumprido), #166 (deploy junto, se pronta).
+
+### O que entrou
+
+- **`TaskConsumer:MaxConcurrentExecutions`** (`Options/TaskConsumerOptions.cs`), uma
+  opção só para o prefetch do `BasicQos` **e** o `consumerDispatchConcurrency` do canal
+  de tasks, que nunca divergem (D1). **Default 4, não medido** (D2); calibrar é da #48.
+- **`TaskJobConsumer`**: canal criado com `CreateChannelOptions(…,
+  consumerDispatchConcurrency: N)` e `BasicQosAsync(prefetchCount: N)`. Nada na
+  `ConnectionFactory`, pela pegadinha do construtor (default `1`, não `null`), escrita ao
+  lado da criação do canal. Sequência da parada intacta (D5).
+- **Checagem de boot** `ValidateTaskConsumerConcurrency` (convenção 8): fora de
+  `[1, 32]` reprova sem corrigir; linha de log com o valor quando passa. Chamada no
+  `Program.cs`, que nenhum teste prova (os testes montam o host à mão).
+- **Harnesses com `N = 1` explícito**, cada um com o motivo: `TaskJobConsumerTests`,
+  `AgentDelegationConcurrencyTests`, `AgentDelegationExecutionTests`,
+  `ConversationContextLockFailureTests` e `RoundTripFixture` (três caminhos). Os outros
+  nove harnesses não dependem de `N = 1` (tarefa 1.4) e herdam o default 4.
+- **Docs:** compose e `docs/deployment.md` §4 com o motivo de cada serviço de réplica
+  única (sem a justificativa falsa de "nada distribuído"; `replicas` continua 1),
+  variável nova no compose e no `.env.prod.example`, `docs/configuration.md`,
+  `docs/development.md` ("dois slots"), `01` ("Filas de trabalho") e o `CHANGELOG`.
+- **Contradição de réplicas resolvida** (ver a correção de status em "Abertos por
+  `fix-vazamento-httpclient-chat`"): a delegação precisa de dois slots, e uma instância
+  com o default basta.
+
+### O que a implementação mediu
+
+Suítes por nome, com zero contêineres de dev, `DOCKER_HOST` do Podman,
+`TESTCONTAINERS_RYUK_DISABLED`, `DOTNET_SYSTEM_NET_DISABLEIPV6` e
+`TZ=America/Sao_Paulo`, VM `podman-machine-default` (6 CPUs, 6 GiB):
+
+| suíte | baseline em `1e250e6` | fechamento | diferença |
+|---|---|---|---|
+| `apps/workers` | 405/405, 5m28s de parede (load 3,97 → 3,82) | **415/415** nas duas rodadas de fechamento; **duração inválida** (36m33s e 18m11s de parede, ver abaixo) | +10 novos (5 guardas, o 5 com seis casos); os 405 da baseline existem e passam |
+| `InboxOrchestratorRoundTrip` | 10/11 (`Source3` intermitente, #176), depois 11/11 e 11/11 na mesma árvore | **11/11**, 2m22s (load 2,79 → 9,81) | nenhuma; os 11 nomes iguais |
+
+- **A duração do fechamento de `apps/workers` não é medição** (régua da
+  `WorkerHostCollection`: acima de ~10 min é contenção). A soma dos corpos de teste foi
+  381 s contra 237 s da baseline (os 10 novos incluídos); o resto foi **subida de
+  contêiner**: ~44 s antes de cada classe, contra ~10 s na baseline, espalhados por
+  igual, e um buraco único de 1201 s na primeira rodada que não se repetiu na segunda.
+  Condição medida no momento: `pmset -g therm` com **`CPU_Speed_Limit = 23`** (CPU do
+  Mac limitada a 23%, na tomada, sem modo de baixo consumo) e o relógio da VM do Podman
+  **27 min atrás** do Mac, voltando a atrasar ~2 min a cada 11 depois de acertado à mão.
+  O resultado **por nome** vale: as duas rodadas têm os mesmos 415 nomes, todos
+  aprovados.
+- **Medição limpa, pedida na revisão** (CPU sem limite, relógio da VM certo durante toda
+  a rodada, zero contêineres, nenhum outro processo de teste): `apps/workers` 415/415 em
+  **6m27s** contra 5m28s, com a diferença espalhada pelas classes antigas e concentrada
+  no primeiro teste de cada uma, inclusive em classes sem `TaskJobConsumer`. **A/B dos
+  nove harnesses sem `N` fixo**, default 4 contra default 1, intercalados: corpos 96,6 e
+  94,8 s contra 95,8 e 96,8 s, parede igual. `N = 4` não os deixa mais lentos.
+  Round-trip 10/11 nessa rodada, com a `Source3` da #176.
+- **Baseline nas mesmas condições e investigação** (worktree limpo em `1e250e6` para a
+  baseline, removido no fim; na árvore da change, só `--filter`, sem edição):
+
+  | rodada | árvore | testes | vstest | parede |
+  |---|---|---|---|---|
+  | baseline limpa (22:41) | `1e250e6`, worktree limpo | 405/405 | 5m39s | 5m45s |
+  | B1 (23:06) | `1e250e6`, worktree limpo | 405/405 | 4m52s | 4m57s |
+  | C1 (23:12) | change, sem os 10 testes novos | 405/405 | 5m12s | 5m17s |
+  | C2 (23:17) | change, sem `TaskConsumerConcurrencyValidationTests` | 409/409 | 5m23s | 5m28s |
+  | fechamento limpo (22:15) | change completa | 415/415 | 6m18s | 6m27s |
+
+  Condições nas cinco, conferidas antes e amostradas a cada 30 s: `CPU_Speed_Limit =
+  100`, relógio da VM acertado antes de cada rodada e com desvio de −1 a +1 s
+  durante, zero contêineres, nenhum outro `vstest`/`testhost`/`dotnet run`, mesmas
+  variáveis de ambiente, `--no-build` em todas menos o fechamento limpo (nele a
+  parede inclui o build incremental; o tempo do vstest, não). A C1 bate com a B1 **nome a nome e estado a estado** (lista filtrada
+  conferida antes de rodar).
+
+  - **Resolvido:** o código da change não deixa testes antigos mais lentos. A C1
+    (mesmos 405 nomes, árvore da change) roda em 5m12s, dentro da faixa da
+    baseline (4m52s a 5m39s, duas rodadas nas mesmas condições).
+  - **Não resolvido:** quanto do aumento da suíte completa (6m18s, uma amostra)
+    vem de cada teste novo (classe de validação fora da coleção contra guardas
+    dentro dela). Com um ruído de 47 s entre rodadas iguais, uma rodada de cada
+    lado não separa isso. **Gatilho para retomar:** a suíte de `apps/workers`
+    passar de 8 min em condições limpas, ou outra change medir crescimento que não
+    venha dos próprios testes. **Primeira hipótese a testar:** mover
+    `TaskConsumerConcurrencyValidationTests` para dentro da coleção de hosts.
+  - **Ruído da suíte: 47 s** entre duas baselines nas mesmas condições. Dado para
+    as próximas medições: afirmar diferença dessa ordem exige mais de uma rodada
+    de cada lado.
+- **Duas conexões Postgres por execução, no máximo** (tarefa 1.3): a dedicada do lock e
+  uma de vida curta por vez, porque as tool calls de um turno são **seriais** (o
+  `FunctionInvokingChatClient` do `ChatClientAgent` fica com `AllowConcurrentInvocation`
+  no default `false`). O teto de 32 da D3 vale. Achado: #175.
+- **A assinatura do `CreateChannelOptions` no 7.2.1** é `(bool, bool, RateLimiter? =
+  null, ushort? consumerDispatchConcurrency = 1)`; o tipo é `ushort?`.
+
+### Guardas contra o defeito real (convenção 15)
+
+Vermelho contra o consumidor anterior (com a opção já existindo, inerte), verde com a
+implementação, e a segunda perna por mutação com o checksum conferido na restauração:
+
+| guarda | vermelho antes | segunda perna |
+|---|---|---|
+| 1 — `N = 2`, três tasks lentas: duas em `Working`, uma pronta na fila | `(1, 2, 2)` | prefetch 3: `(2, 1, 0)`; concorrência omitida: `(1, 2, 1)` |
+| 2 — delegação numa instância com `N = 2` | `(False, Completed, False)`, expirou | guarda com `N = 1`: o mesmo |
+| 3 — parada com duas execuções em voo | `(1, 1, 1, 2, 0)`, só uma entrou | ordem antiga da parada: 30,4 s. **`nack` removido: verde** (ver abaixo) |
+| 4 — `AsyncLocal` no mesmo host, dois provedores | pico de chamadas simultâneas 1 | escopo em campo estático: `openai: []`, `anthropic: [anthropic, openai]` |
+| 5 — boot fora de `[1, 32]` | não compila (3 × `CS1061`) | — |
+
+### Divergências do desenho aprovado (convenção 9)
+
+- **O `nack` da parada não devolve o job; o fechamento do canal devolve** (#177).
+  `Channel.CloseAsync` envia `channel.close` antes de esperar os callbacks, e o broker
+  devolve toda entrega sem `ack`. Removido o `nack`, ou com `requeue: false`, o guarda 3
+  **e** o guarda 2.2 da `workers-parada-com-execucao-em-voo` ficam verdes. Anterior a
+  esta change. A D5, a D7 e os XML docs foram corrigidos para não afirmar o caminho; a
+  segunda perna do guarda 3 passou a ser a ordem antiga da parada.
+- **Guardas 1, 3 e 4 como `partial` de `TaskJobConsumerTests`**, não classe própria: uma
+  classe nova com host seria a 15ª da coleção `worker-hosts`, com recalibração
+  obrigatória da referência de duração.
+- **`TaskConsumerOptions` (3.1) feita antes dos guardas 1–4**, inerte, para eles ficarem
+  vermelhos pelo comportamento e não por compilação.
+
+### Achados fora do escopo (convenção 23)
+
+- **#175**: três comentários afirmam que o `FunctionInvokingChatClient` invoca tools em
+  paralelo; com o default, não. Ligar a propriedade reabre o teto de `N`.
+- **#176**: `OrphanDispatchRoundTripTests.Source3_…` reprova intermitente (1 em 3 na
+  baseline): a sentinela espera o `TaskId` numa linha que pode sumir entre sondagens.
+- **#177**: o `nack` da parada, acima.
+
+### O que fica para o deploy, e é do dono
+
+- **Antes:** o deploy da #162 sozinha (marco 1, só `apps/inbox`), e tráfego de produção
+  sob ela; a verificação do `max_connections` do Postgres (tarefa 6.1), com o pior caso
+  de `apps/workers` contado **pelas instâncias em operação** — três em 18/10/2026,
+  declarado pelo dono, a reconferir no dia; e a decisão de subir a #166 junto.
+- **No deploy:** sem migration; `TASK_CONSUMER_MAX_CONCURRENT_EXECUTIONS` opcional
+  (default 4). Conferir no log de boot a linha "Execuções simultâneas por instância do
+  consumidor de tasks conferidas: N".
+- **Depois:** o marco 2 das séries de tempo de fila e de lock aqui, com data, fuso
+  (`America/Sao_Paulo`), `N` em vigor e as changes que entraram nele (D9); a taxa de 502
+  do gateway contra a de antes (com três instâncias, até 12 chamadas simultâneas contra 3).
+- **Rollback:** `TASK_CONSUMER_MAX_CONCURRENT_EXECUTIONS=1` e reinício do `workers`.

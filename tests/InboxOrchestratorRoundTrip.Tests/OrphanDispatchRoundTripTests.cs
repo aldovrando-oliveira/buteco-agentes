@@ -106,7 +106,7 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
         }
 
         // Sentinela: conversa nova publicada DEPOIS do reinício. Com um
-        // consumidor e prefetch 1, quando ela fecha o round-trip a mensagem
+        // consumidor e N = 1 (fixo na fixture), quando ela fecha o round-trip a mensagem
         // devolvida à fila na parada já foi reentregue e confirmada.
         var (_, sentinelChannelId, sentinelExternalId) = await StartConversationAsync();
         await WaitForTaskIdAsync(sentinelChannelId, sentinelExternalId);

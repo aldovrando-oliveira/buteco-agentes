@@ -743,6 +743,18 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **Cada instância de `apps/workers` executa até 4 tasks ao mesmo tempo** (#163), em
+  vez de uma. O número vem de `TaskConsumer__MaxConcurrentExecutions`
+  (`TASK_CONSUMER_MAX_CONCURRENT_EXECUTIONS` no `.env.prod`), que fixa ao mesmo tempo
+  quantas mensagens o broker entrega à instância e quantas ela executa. O default 4
+  **não foi medido**; a calibração fica na #48. Fora de `[1, 32]` o boot reprova, e o
+  log de inicialização registra o valor em vigor. **Uma instância só passa a concluir
+  delegação entre agentes**, que antes sempre expirava pelos 120 s sem uma segunda
+  instância. Rollback: `1`, que é o comportamento anterior, só reiniciando o
+  `workers`. Antes do deploy, conferir o `max_connections` do Postgres (ver
+  [`docs/configuration.md`](docs/configuration.md)). O compose e o runbook deixam de
+  dizer que o lock de `apps/workers`/`apps/inbox` não é distribuído; `replicas`
+  continua 1, cada serviço com o próprio motivo.
 - **Trocar o tipo de autenticação de um servidor MCP entre `BearerToken` e
   `CustomHeader` exige credencial nova** (#160). Antes, a credencial em branco
   mantinha o segredo do tipo anterior; agora o `PUT` responde `400` em `credential`
