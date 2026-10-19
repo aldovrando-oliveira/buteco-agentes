@@ -16155,8 +16155,17 @@ Mais um, fora da D5: **sem a chamada no `Program.cs`**,
 
 **Change proposta em 17/10/2026, implementada em 18/10/2026** na branch
 `feat/163-workers-consumo-concorrente`, num worktree próprio, a partir de `1e250e6`
-(rebaseada de `18a2f3b` por fast-forward, com a #162 já na `main`). **Não arquivada:**
-espera revisão do dono. Relacionadas: #48 (réplicas e calibração), #162 (pré-requisito
+(rebaseada de `18a2f3b` por fast-forward, com a #162 já na `main`). **Revisada e
+aprovada pelo dono, sincronizada e arquivada em 18/10/2026** a pedido dele: capacidade
+nova `workers-concurrent-task-consumption` (4 requisitos, com Purpose escrito no delta);
+3 requisitos alterados (`a2a-task-lifecycle` "Parada do worker com execução em voo",
+`agent-delegation-execution` "Processamento concorrente de Source e Target entre
+réplicas de apps/workers", `agent-execution-metrics` "Execuções concorrentes não misturam
+métricas") e 1 renomeado e alterado (`server-deployment`, "Serviços com coordenação em
+memória rodam em réplica única" → "Serviços de réplica única declaram o motivo de cada
+um"). Change arquivada em
+`openspec/changes/archive/2026-10-18-workers-consumo-concorrente/`, com a 6.1 e a 6.3
+abertas: são do dono, no deploy. Relacionadas: #48 (réplicas e calibração), #162 (pré-requisito
 de merge, cumprido), #166 (deploy junto, se pronta).
 
 ### O que entrou
