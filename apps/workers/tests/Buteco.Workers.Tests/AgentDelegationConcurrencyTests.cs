@@ -27,8 +27,9 @@ namespace Buteco.Workers.Tests;
 
 /// <summary>
 /// Prova direta da investigação bloqueante do design.md da change
-/// apps-workers-delegacao-execucao (Decision 1): o consumidor RabbitMQ de
-/// <c>apps/workers</c> roda com <c>prefetchCount: 1</c> — dentro de uma
+/// apps-workers-delegacao-execucao (Decision 1): com o consumidor RabbitMQ de
+/// <c>apps/workers</c> em um slot por instância (<c>N = 1</c>, que este harness
+/// fixa; o default de produção é 4, change workers-consumo-concorrente) — dentro de uma
 /// única instância, uma tool de delegação que aguarda (`await`) a task do
 /// Target terminar é um autodeadlock estrutural, porque a mesma instância
 /// que está esperando é a única que poderia consumir a mensagem que ela
@@ -102,7 +103,7 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
             // Prova direta: o mock do Target só pode ter sido invocado por
             // uma instância DIFERENTE da que processa o Source — a
             // instância ocupada com a task do Source está presa com sua
-            // única mensagem não confirmada (prefetchCount: 1) durante
+            // única mensagem não confirmada (N = 1 no harness) durante
             // toda a espera da tool de delegação, então estruturalmente
             // não pode consumir a mensagem do Target ela mesma. Uma janela
             // curta (bem menor que os 30s configurados para o timeout da
@@ -156,6 +157,76 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         Assert.NotEmpty(targetCalls);
         Assert.All(targetCalls, call => Assert.Equal(TargetProvider, call.Provider));
         Assert.Empty(await ExecutionMetricsReader.DelegationOutcomesAsync(ConnectionString, outcome.TargetTaskId!));
+    }
+
+    /// <summary>
+    /// <b>Guarda 2 da change workers-consumo-concorrente (#163, D7)</b>: uma
+    /// instância só, com <c>N = 2</c>, conclui a delegação. É o cenário "Instância
+    /// única com dois slots conclui a delegação" da spec agent-delegation-execution, e
+    /// o que resolve a contradição do <c>02</c> (compose em réplica única, delegação
+    /// precisando de dois lugares): a conta é em slots, <c>réplicas × N</c>.
+    /// </summary>
+    /// <remarks>
+    /// Mesma forma de <c>TwoInstances_…</c>, com uma instância: o Target tem de ser
+    /// invocado bem antes do timeout de 30 s. Com <c>N = 1</c> ele só seria consumido
+    /// depois de a delegação expirar e o Source confirmar a mensagem, e a resposta do
+    /// Source não traria o texto do Target.
+    /// </remarks>
+    [Fact]
+    public async Task SingleInstanceWithTwoSlots_ProcessesSourceAndTarget_DelegationSucceeds()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        var toolName = ExpectedToolName("Financeiro");
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(toolName, "Uma tarefa qualquer.");
+
+        var targetInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var targetChatClient = new Mock<IChatClient>();
+        targetChatClient
+            .Setup(c => c.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                targetInvoked.TrySetResult();
+                return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "Resultado do Target.")));
+            });
+
+        var clients = new Dictionary<(string, string), IChatClient>
+        {
+            [(SourceProvider, SourceModel)] = sourceChatClient.Object,
+            [(TargetProvider, TargetModel)] = targetChatClient.Object,
+        };
+
+        using var singleInstance = BuildHost(clients, delegationTimeout: TimeSpan.FromSeconds(30), maxConcurrentExecutions: 2);
+        await singleInstance.StartAsync();
+
+        bool targetInvokedInTime;
+        A2ATaskRecord sourceRecord;
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+
+            targetInvokedInTime = await Task.WhenAny(targetInvoked.Task, Task.Delay(TimeSpan.FromSeconds(10))) == targetInvoked.Task;
+            sourceRecord = await PollUntilTerminalAsync(sourceTaskId, maxAttempts: 200);
+        }
+        finally
+        {
+            await singleInstance.StopAsync();
+        }
+
+        // Num retrato só: contra o defeito, o Target não é invocado a tempo E o Source
+        // termina com o texto da expiração, e a falha mostra as duas coisas.
+        var finalText = ExtractArtifactText(sourceRecord);
+        Assert.Equal(
+            (true, nameof(TaskState.Completed), true),
+            (targetInvokedInTime, sourceRecord.State, finalText?.Contains("Resultado do Target.") ?? false));
     }
 
     [Fact]
@@ -521,15 +592,24 @@ public class AgentDelegationConcurrencyTests(WorkerInfrastructureFixture fixture
         return mock;
     }
 
+    // N = 1 por padrão, e não o default 4 de produção (change
+    // workers-consumo-concorrente, D7): os cenários de instância única desta classe
+    // (SingleInstance_DelegationTimesOut…, DelegationTimeout_WithTargetNeverConsumed…,
+    // DelegationTimeout_WithNoSuccessfulRead…) SÃO o caso de um slot. Com 4, o Target
+    // seria consumido pela mesma instância (sem client mapeado, no primeiro) e o estado
+    // observado deixaria de ser Submitted. Os de duas instâncias continuam exercitando o
+    // consumo entre réplicas. O guarda de dois slots numa instância passa N = 2.
     private IHost BuildHost(
         IReadOnlyDictionary<(string Provider, string Model), IChatClient> chatClientsByProviderModel,
         TimeSpan delegationTimeout,
-        List<CapturedLogEntry>? delegationLogs = null)
+        List<CapturedLogEntry>? delegationLogs = null,
+        int maxConcurrentExecutions = 1)
     {
         var builder = Host.CreateApplicationBuilder();
 
         builder.Configuration["ConnectionStrings:Postgres"] = fixture.Postgres.GetConnectionString();
         builder.Services.AddInfrastructure(builder.Configuration);
+        builder.Services.Configure<TaskConsumerOptions>(options => options.MaxConcurrentExecutions = maxConcurrentExecutions);
 
         if (delegationLogs is not null)
         {

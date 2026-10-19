@@ -23,6 +23,10 @@ builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(Gemin
 builder.Services.Configure<McpCryptoOptions>(builder.Configuration.GetSection(McpCryptoOptions.SectionName));
 builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection(EmbeddingOptions.SectionName));
 
+// Vinculado à seção, ao contrário dos dois de baixo: é feito para ser ajustado
+// em produção (calibração na #48, rollback para 1). Ver Options/TaskConsumerOptions.cs.
+builder.Services.Configure<TaskConsumerOptions>(builder.Configuration.GetSection(TaskConsumerOptions.SectionName));
+
 // Não vinculado a nenhuma seção de configuração de propósito — defaults
 // são, na prática, constantes de produto (ver Options/AgentDelegationToolOptions.cs).
 builder.Services.Configure<AgentDelegationToolOptions>(_ => { });
@@ -105,6 +109,15 @@ host.ValidateTimeZoneConfiguration();
 // NonTerminalTaskDetector abaixo: os testes montam o host à mão. Remover esta
 // linha deixa EmbeddingBatchSizeValidationTests verde e a produção sem checagem.
 host.ValidateEmbeddingBatchSize();
+
+// Convenção 8: TaskConsumer:MaxConcurrentExecutions fora de [1, 32] reprova o boot,
+// sem corrigir (0 seria prefetch sem limite; o teto protege o pool do Npgsql). Ver o
+// XML doc do método e o design.md da change workers-consumo-concorrente, D3.
+//
+// NENHUM TESTE DESTA SUÍTE PROVA ESTE REGISTRO, pelo mesmo motivo das duas acima:
+// os testes montam o host à mão. Remover esta linha deixa
+// TaskConsumerConcurrencyValidationTests verde e a produção sem checagem.
+host.ValidateTaskConsumerConcurrency();
 
 // Quinto caso da convenção 8, e o PRIMEIRO desta base que faz I/O no boot —
 // ver o XML doc do método para o que sustenta o custo (o compose garante

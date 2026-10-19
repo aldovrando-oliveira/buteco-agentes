@@ -35,7 +35,7 @@ namespace InboxOrchestratorRoundTrip.Tests;
 ///
 /// <para>
 /// Contra o defeito, msg2 vira task enquanto a primeira ainda roda, cai na segunda
-/// instância (a primeira está ocupada, <c>prefetchCount: 1</c>), espera o lock por
+/// instância (a primeira está ocupada: a fixture fixa <c>N = 1</c>), espera o lock por
 /// mais que o <c>Command Timeout</c> curto e termina <c>failed</c>, com o aviso de
 /// falha entregue ao contato.
 /// </para>
@@ -67,7 +67,7 @@ public class SessionSerializationRoundTripTests(RoundTripFixture fixture) : ICla
                 Timeout);
 
             // Ponto de sincronização por estado persistido, como em
-            // ConversationContextLockFailureTests.cs:167-172: a primeira instância
+            // ConversationContextLockFailureTests.cs:186-191: a primeira instância
             // está ocupada com a primeira task ANTES de a segunda existir. Sem isso,
             // as duas tasks poderiam cair na mesma instância, serializar na fila, e
             // o guarda passaria verde sem exercitar nada.

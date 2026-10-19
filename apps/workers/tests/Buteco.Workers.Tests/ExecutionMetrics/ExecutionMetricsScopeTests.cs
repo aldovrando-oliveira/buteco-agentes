@@ -29,7 +29,8 @@ public class ExecutionMetricsScopeTests
     /// <summary>
     /// O risco que o <c>AsyncLocal</c> traz, afirmado direto: duas execuções
     /// concorrentes no mesmo processo (é o que os testes de duas instâncias
-    /// fazem, e o que um prefetch maior faria em produção) não podem gravar uma
+    /// fazem, e o que N > 1 faz em produção desde a change workers-consumo-concorrente;
+    /// o guarda de integração é TwoSlots_SameHost_TwoProviders_…) não podem gravar uma
     /// no escopo da outra.
     /// </summary>
     [Fact]

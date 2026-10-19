@@ -185,7 +185,7 @@ public class ConversationContextLockFailureTests(WorkerInfrastructureFixture fix
 
             // Ponto de sincronização: estado persistido, não relógio. Esperar a
             // primeira task estar `working` garante que a instância que a pegou
-            // está ocupada (prefetchCount: 1, mensagem não confirmada) ANTES de
+            // está ocupada (N = 1 no harness, mensagem não confirmada) ANTES de
             // a segunda instância existir — sem isso, as duas tasks poderiam
             // cair na mesma instância, serializar sem disputa de lock nenhuma, e
             // o guarda passaria verde sem exercitar o defeito.
@@ -417,6 +417,13 @@ public class ConversationContextLockFailureTests(WorkerInfrastructureFixture fix
         builder.Configuration["ConnectionStrings:Postgres"] =
             $"{fixture.Postgres.GetConnectionString()};{connectionStringSuffix}";
         builder.Services.AddInfrastructure(builder.Configuration);
+
+        // N = 1 FIXO, e não o default 4 de produção (change workers-consumo-concorrente,
+        // D7): o guarda 2 precisa da primeira instância OCUPADA para a segunda task cair
+        // na segunda instância e disputar o lock (ver o ponto de sincronização dele). Com
+        // N > 1 a primeira instância poderia pegar as duas, e a segunda task esperaria o lock
+        // com o Command Timeout da mesma instância, sem exercitar duas instâncias.
+        builder.Services.Configure<TaskConsumerOptions>(options => options.MaxConcurrentExecutions = 1);
 
         builder.Services.Configure<RabbitMqOptions>(options =>
         {
