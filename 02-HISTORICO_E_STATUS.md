@@ -8709,6 +8709,78 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 9 replicas-de-worker                (desceu da 6)
 ```
 
+**ACRÉSCIMO DE 23/10/2026: a evolução de autenticação, em quatro entregas (#206)**
+(as issues da evolução estão abertas no `Backlog`, e a ordem delas é esta):
+
+O Buteco passa a ser o próprio emissor de identidade (emissor OIDC no `apps/api`),
+com usuários, papéis, aplicações externas e provedores federados. São **quatro
+entregas**, uma por milestone, cada uma com issue de acompanhamento que lista as
+tarefas na ordem. Dentro de cada entrega vale o sequenciamento da casa (catálogo →
+vínculo → execução → UI), e a tela é sempre issue separada, depois do backend.
+**A ordem não depende só desta prosa:** cada dependência abaixo está gravada como
+`blocked-by` nativo na issue bloqueada (convenção 24).
+
+```
+M1 Autenticação com provedor próprio            acompanhamento #194
+   1 #179  emissor OIDC no apps/api
+   2 #180  usuários locais: e-mail, senha, 2 etapas    ← #179
+   3 #181  convites e redefinição por link             ← #180
+   4 #182  JWKS no inbox/connectors, fim do HMAC       ← #179 #180   (fecha #117 e #122)
+   5 #183  painel da M1                                ← #179 #180 #181 #182   (absorve #170 se couber)
+M2 Diferentes acessos                            acompanhamento #195
+   6 #184  papéis Admin, Operador, Leitor              ← #180 #182
+   7 #185  painel: papéis, menu, 403                   ← #183 #184
+   8 #186  aplicações externas com credencial          ← #179 #184
+   9 #187  agentes liberados por aplicação             ← #186
+  10 #188  painel de aplicações externas               ← #185 #186 #187
+M3 Autenticação com Google                       acompanhamento #196
+  11 #189  provedores federados e Google               ← #181 #184
+  12 #190  painel: login com provedor e recusas        ← #185 #189
+M4 Autenticação corporativa                      acompanhamento #197
+  13 #191  provedor OIDC genérico                      ← #189
+  14 #192  aplicações federadas (troca de token)       ← #187 #191
+  15 #193  painel da M4                                ← #188 #190 #192
+```
+
+`←` é "bloqueada por". **A posição da evolução em relação ao resto desta fila**
+(#164, #166, `replicas-de-worker`) **não foi decidida aqui**: é do dono, ao mover a
+primeira issue para `Ready`. A #117 deixou de estar `aguardando gatilho` em
+23/10/2026: o gatilho aconteceu quando o `apps/connectors` foi para produção com a
+chave compartilhada (#119), e o destino dela é a #182.
+
+**Decisões fixadas em 23/10/2026, pelo dono, e registradas nos corpos das issues:**
+
+- **Transição do token entre a #180 e a #182: há um período de convivência**, para
+  cada PR deixar o `main` implantável. A #180 faz o emissor novo emitir o token do
+  operador; enquanto a #182 não estiver em `Done`, o `apps/inbox` e o
+  `apps/connectors` continuam aceitando o token HMAC antigo, e o painel continua
+  funcionando contra os três apps. A convivência é **esse intervalo**: o PR da #182
+  liga a validação pelo JWKS com `aud` e remove, no mesmo passo, a validação HMAC e
+  a `Auth:TokenSigningKey` dos três apps, e o runbook (`docs/deployment.md`) diz em
+  que ordem atualizar os apps. **Critério das duas:** depois do merge de cada PR, o
+  painel faz login e acessa uma rota do `apps/api`, uma do `apps/inbox` (canais) e a
+  sincronização do `apps/connectors`.
+- **Papéis da #184:** o **histórico de conversas** (sessões e mensagens do
+  `apps/inbox`) é visível para Admin e Operador, e o Leitor **não** vê. **Aplicações
+  externas são só do Admin, inclusive ver** lista e detalhe; criar, editar, liberar
+  agentes, gerar e revogar segredos também. A sugestão inicial era o Operador só ver,
+  e o dono decidiu que ele não vê. A #185, a #186 e a #188 foram ajustadas para a
+  mesma matriz (na #188, o card "Aplicações com acesso" do detalhe do agente só
+  aparece para Admin).
+
+**Fora da evolução, `aguardando gatilho`, sem milestone:**
+
+| issue | o quê | gatilho |
+|---|---|---|
+| #198 | aba Insights da aplicação externa | duas ou mais aplicações externas ativas no piloto ao mesmo tempo |
+| #199 | aba Atividade e recusas da aplicação externa | o primeiro diagnóstico de recusa de aplicação externa que precisou ler log do servidor |
+| #200 | envio de e-mail para convite e redefinição de senha | uma instalação com serviço de e-mail transacional disponível pedir o envio automático |
+| #201 | cadastro de provedores federados pelo portal | a primeira instalação em que quem administra não tem acesso à configuração nem ao reinício do `apps/api` |
+| #202 | política "só SSO" | a primeira instalação com provedor corporativo que exija bloquear a senha local |
+| #203 | perfil Auditor | um pedido de acesso de auditoria que o papel Leitor não atenda |
+| #204 | permissão por agente e por base de conhecimento | a primeira instalação com duas equipes que não podem ver os agentes ou as bases uma da outra |
+| #205 | logotipo customizado do provedor federado | um provedor corporativo em uso cujo nome e subtítulo não bastem para reconhecer o botão (pedido real) |
+
 **ACRÉSCIMO DE 18/10/2026: a serialização por sessão do inbox, e o que ela destrava**
 (a posição de cada uma é esta, e as entradas delas apontam para cá):
 
