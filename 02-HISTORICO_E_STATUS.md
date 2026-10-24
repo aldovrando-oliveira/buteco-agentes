@@ -8766,16 +8766,33 @@ chave compartilhada (#119), e o destino dela é a #182.
   autenticada dos dois apps; depois do merge da #180 e da #182, o painel faz login e
   acessa uma rota do `apps/api`, uma do `apps/inbox` (canais) e a sincronização do
   `apps/connectors`.
-- **HMAC só para serviço a partir da #184.** Durante a convivência (até a #182), o
-  `apps/api` e o `apps/inbox` aceitam token HMAC **só** para os subjects de serviço
-  (`service:inbox`, `service:api`, `service:connectors`); token HMAC com subject
-  `operator` é recusado com `401`, porque não carrega papel e contornaria a
+- **HMAC só para serviço a partir da #184, nos três apps.** Durante a convivência
+  (até a #182), o `apps/api`, o `apps/inbox` e o `apps/connectors` aceitam token
+  HMAC **só** para os subjects de serviço (`service:inbox`, `service:api`,
+  `service:connectors`, cada um onde já é aceito); token HMAC com subject
+  `operator` é recusado com `401` nos três, porque não carrega papel e contornaria a
   checagem. Por isso a #184 depende da #180 e da #208, e **não** espera a #182, que
   remove o restante (a validação HMAC dos tokens de serviço e a
-  `Auth:TokenSigningKey`). **Critério:** com a #184 em `main`, um token HMAC
-  `operator` assinado com a chave compartilhada recebe `401` numa rota autenticada
-  do `apps/api` e do `apps/inbox`.
-- **Papéis da #184:** o **histórico de conversas** (sessões e mensagens do
+  `Auth:TokenSigningKey`). A primeira versão desta decisão deixava o
+  `apps/connectors` de fora, e o painel o chama direto: quem tivesse a chave
+  continuaria entrando nele como operador até a #182. **Critérios:** com a #184 em
+  `main`, (a) um token do emissor com papel Leitor recebe `403` numa rota de pastas
+  do `apps/connectors`; (b) um token HMAC `operator` assinado com a chave
+  compartilhada recebe `401` numa rota autenticada de cada um dos três apps.
+- **Papéis da #184**, checados no `apps/api`, no `apps/inbox` e no `apps/connectors`:
+
+  | área | Admin | Operador | Leitor |
+  |---|---|---|---|
+  | usuários | gerir | — | — |
+  | aplicações externas | gerir | — | — |
+  | agentes, MCP, conhecimento, canais | gerir | gerir (credenciais só escritas) | ler, sem credenciais |
+  | histórico de conversas (`apps/inbox`) | ver | ver | — |
+  | aplicações com acesso a um agente (card do detalhe do agente) | lista com nomes e link | só a contagem | só a contagem |
+  | identidade | ler | — | — |
+  | conectores no `apps/connectors` (provedores, pastas, "Sincronizar agora") | acessar | acessar | — (`403`) |
+
+  No `apps/connectors`, só as rotas que eram do subject `operator` passam a seguir
+  a matriz; "descrever pasta" continua só do `service:api`. O **histórico de conversas** (sessões e mensagens do
   `apps/inbox`) é visível para Admin e Operador, e o Leitor **não** vê. **Aplicações
   externas são só do Admin, inclusive ver** lista e detalhe; criar, editar, liberar
   agentes, gerar e revogar segredos também. A sugestão inicial era o Operador só ver,
