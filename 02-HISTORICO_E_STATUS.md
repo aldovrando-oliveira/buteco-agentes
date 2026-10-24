@@ -8723,23 +8723,24 @@ vínculo → execução → UI), e a tela é sempre issue separada, depois do ba
 ```
 M1 Autenticação com provedor próprio            acompanhamento #194
    1 #179  emissor OIDC no apps/api
-   2 #180  usuários locais: e-mail, senha, 2 etapas    ← #179
-   3 #181  convites e redefinição por link             ← #180
-   4 #182  JWKS no inbox/connectors, fim do HMAC       ← #179 #180   (fecha #117 e #122)
-   5 #183  painel da M1                                ← #179 #180 #181 #182   (absorve #170 se couber)
+   2 #208  inbox/connectors aceitam o JWKS, com HMAC   ← #179
+   3 #180  usuários locais: e-mail, senha, 2 etapas    ← #179 #208
+   4 #181  convites e redefinição por link             ← #180
+   5 #182  remove o HMAC e a chave compartilhada       ← #180   (fecha #117 e #122)
+   6 #183  painel da M1                                ← #179 #208 #180 #181 #182   (absorve #170 se couber)
 M2 Diferentes acessos                            acompanhamento #195
-   6 #184  papéis Admin, Operador, Leitor              ← #180 #182
-   7 #185  painel: papéis, menu, 403                   ← #183 #184
-   8 #186  aplicações externas com credencial          ← #179 #184
-   9 #187  agentes liberados por aplicação             ← #186
-  10 #188  painel de aplicações externas               ← #185 #186 #187
+   7 #184  papéis Admin, Operador, Leitor              ← #180 #182
+   8 #185  painel: papéis, menu, 403                   ← #183 #184
+   9 #186  aplicações externas com credencial          ← #179 #184
+  10 #187  agentes liberados por aplicação             ← #186
+  11 #188  painel de aplicações externas               ← #185 #186 #187
 M3 Autenticação com Google                       acompanhamento #196
-  11 #189  provedores federados e Google               ← #181 #184
-  12 #190  painel: login com provedor e recusas        ← #185 #189
+  12 #189  provedores federados e Google               ← #181 #184
+  13 #190  painel: login com provedor e recusas        ← #185 #189
 M4 Autenticação corporativa                      acompanhamento #197
-  13 #191  provedor OIDC genérico                      ← #189
-  14 #192  aplicações federadas (troca de token)       ← #187 #191
-  15 #193  painel da M4                                ← #188 #190 #192
+  14 #191  provedor OIDC genérico                      ← #189
+  15 #192  aplicações federadas (troca de token)       ← #187 #191
+  16 #193  painel da M4                                ← #188 #190 #192
 ```
 
 `←` é "bloqueada por". **A posição da evolução em relação ao resto desta fila**
@@ -8750,23 +8751,31 @@ chave compartilhada (#119), e o destino dela é a #182.
 
 **Decisões fixadas em 23/10/2026, pelo dono, e registradas nos corpos das issues:**
 
-- **Transição do token entre a #180 e a #182: há um período de convivência**, para
-  cada PR deixar o `main` implantável. A #180 faz o emissor novo emitir o token do
-  operador; enquanto a #182 não estiver em `Done`, o `apps/inbox` e o
-  `apps/connectors` continuam aceitando o token HMAC antigo, e o painel continua
-  funcionando contra os três apps. A convivência é **esse intervalo**: o PR da #182
-  liga a validação pelo JWKS com `aud` e remove, no mesmo passo, a validação HMAC e
-  a `Auth:TokenSigningKey` dos três apps, e o runbook (`docs/deployment.md`) diz em
-  que ordem atualizar os apps. **Critério das duas:** depois do merge de cada PR, o
-  painel faz login e acessa uma rota do `apps/api`, uma do `apps/inbox` (canais) e a
-  sincronização do `apps/connectors`.
+- **Transição do token: há um período de convivência, em três passos**, para cada
+  PR deixar o `main` implantável. A **#208** faz o `apps/inbox` e o
+  `apps/connectors` aceitarem o token do emissor pelo JWKS com `aud`, **mantendo o
+  HMAC válido** (nada é removido). A **#180** passa a emitir o token do operador
+  pelo emissor; quando ela chega ao `main`, os dois apps já o aceitam, e o painel
+  continua funcionando contra os três. A **#182** só remove: a validação HMAC e a
+  `Auth:TokenSigningKey` dos três apps, com os tokens de serviço assimétricos por
+  serviço e o runbook (`docs/deployment.md`) dizendo em que ordem atualizar os apps.
+  A primeira versão deste registro punha o JWKS e a remoção no mesmo PR da #182; a
+  divisão (23/10/2026) tirou do caminho o intervalo em que o painel ficaria sem
+  token aceito pelo `apps/inbox` e pelo `apps/connectors`. **Critérios:** com a
+  #208 em `main`, um token do emissor e um token HMAC são aceitos em rota
+  autenticada dos dois apps; depois do merge da #180 e da #182, o painel faz login e
+  acessa uma rota do `apps/api`, uma do `apps/inbox` (canais) e a sincronização do
+  `apps/connectors`.
 - **Papéis da #184:** o **histórico de conversas** (sessões e mensagens do
   `apps/inbox`) é visível para Admin e Operador, e o Leitor **não** vê. **Aplicações
   externas são só do Admin, inclusive ver** lista e detalhe; criar, editar, liberar
   agentes, gerar e revogar segredos também. A sugestão inicial era o Operador só ver,
   e o dono decidiu que ele não vê. A #185, a #186 e a #188 foram ajustadas para a
-  mesma matriz (na #188, o card "Aplicações com acesso" do detalhe do agente só
-  aparece para Admin).
+  mesma matriz. **Exceção, decidida no mesmo dia:** o card "Aplicações com acesso"
+  do detalhe do agente mostra ao Admin a lista com nomes e link, e ao Operador e ao
+  Leitor só a contagem ("Usado por N aplicações externas"), sem nomes nem link, para
+  quem desativa um agente saber que há dependência. A #187 serve a contagem a todos
+  os papéis e os nomes só ao Admin; a #184 e a #188 registram a exceção.
 
 **Fora da evolução, `aguardando gatilho`, sem milestone:**
 
