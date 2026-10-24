@@ -8709,6 +8709,113 @@ correção de posição registrada em "Abertos por `delegacao-ciclo-no-cadastro`
 9 replicas-de-worker                (desceu da 6)
 ```
 
+**ACRÉSCIMO DE 23/10/2026: a evolução de autenticação, em quatro entregas (#206)**
+(as issues da evolução estão abertas no `Backlog`, e a ordem delas é esta):
+
+O Buteco passa a ser o próprio emissor de identidade (emissor OIDC no `apps/api`),
+com usuários, papéis, aplicações externas e provedores federados. São **quatro
+entregas**, uma por milestone, cada uma com issue de acompanhamento que lista as
+tarefas na ordem. Dentro de cada entrega vale o sequenciamento da casa (catálogo →
+vínculo → execução → UI), e a tela é sempre issue separada, depois do backend.
+**A ordem não depende só desta prosa:** cada dependência abaixo está gravada como
+`blocked-by` nativo na issue bloqueada (convenção 24).
+
+```
+M1 Autenticação com provedor próprio            acompanhamento #194
+   1 #179  emissor OIDC no apps/api
+   2 #208  inbox/connectors aceitam o JWKS, com HMAC   ← #179
+   3 #180  usuários locais: e-mail, senha, 2 etapas    ← #179 #208
+   4 #181  convites e redefinição por link             ← #180
+   5 #182  remove o HMAC e a chave compartilhada       ← #180   (fecha #117 e #122)
+   6 #183  painel da M1                                ← #179 #208 #180 #181 #182   (absorve #170 se couber)
+M2 Diferentes acessos                            acompanhamento #195
+   7 #184  papéis Admin, Operador, Leitor              ← #180 #208
+   8 #185  painel: papéis, menu, 403                   ← #183 #184
+   9 #186  aplicações externas com credencial          ← #179 #184
+  10 #187  agentes liberados por aplicação             ← #186
+  11 #188  painel de aplicações externas               ← #185 #186 #187
+M3 Autenticação com Google                       acompanhamento #196
+  12 #189  provedores federados e Google               ← #181 #184
+  13 #190  painel: login com provedor e recusas        ← #185 #189
+M4 Autenticação corporativa                      acompanhamento #197
+  14 #191  provedor OIDC genérico                      ← #189
+  15 #192  aplicações federadas (troca de token)       ← #187 #191
+  16 #193  painel da M4                                ← #188 #190 #192
+```
+
+`←` é "bloqueada por". **A posição da evolução em relação ao resto desta fila**
+(#164, #166, `replicas-de-worker`) **não foi decidida aqui**: é do dono, ao mover a
+primeira issue para `Ready`. A #117 deixou de estar `aguardando gatilho` em
+23/10/2026: o gatilho aconteceu quando o `apps/connectors` foi para produção com a
+chave compartilhada (#119), e o destino dela é a #182.
+
+**Decisões fixadas em 23/10/2026, pelo dono, e registradas nos corpos das issues:**
+
+- **Transição do token: há um período de convivência, em três passos**, para cada
+  PR deixar o `main` implantável. A **#208** faz o `apps/inbox` e o
+  `apps/connectors` aceitarem o token do emissor pelo JWKS com `aud`, **mantendo o
+  HMAC válido** (nada é removido). A **#180** passa a emitir o token do operador
+  pelo emissor; quando ela chega ao `main`, os dois apps já o aceitam, e o painel
+  continua funcionando contra os três. A **#182** só remove: a validação HMAC e a
+  `Auth:TokenSigningKey` dos três apps, com os tokens de serviço assimétricos por
+  serviço e o runbook (`docs/deployment.md`) dizendo em que ordem atualizar os apps.
+  A primeira versão deste registro punha o JWKS e a remoção no mesmo PR da #182; a
+  divisão (23/10/2026) tirou do caminho o intervalo em que o painel ficaria sem
+  token aceito pelo `apps/inbox` e pelo `apps/connectors`. **Critérios:** com a
+  #208 em `main`, um token do emissor e um token HMAC são aceitos em rota
+  autenticada dos dois apps; depois do merge da #180 e da #182, o painel faz login e
+  acessa uma rota do `apps/api`, uma do `apps/inbox` (canais) e a sincronização do
+  `apps/connectors`.
+- **HMAC só para serviço a partir da #184, nos três apps.** Durante a convivência
+  (até a #182), o `apps/api`, o `apps/inbox` e o `apps/connectors` aceitam token
+  HMAC **só** para os subjects de serviço (`service:inbox`, `service:api`,
+  `service:connectors`, cada um onde já é aceito); token HMAC com subject
+  `operator` é recusado com `401` nos três, porque não carrega papel e contornaria a
+  checagem. Por isso a #184 depende da #180 e da #208, e **não** espera a #182, que
+  remove o restante (a validação HMAC dos tokens de serviço e a
+  `Auth:TokenSigningKey`). A primeira versão desta decisão deixava o
+  `apps/connectors` de fora, e o painel o chama direto: quem tivesse a chave
+  continuaria entrando nele como operador até a #182. **Critérios:** com a #184 em
+  `main`, (a) um token do emissor com papel Leitor recebe `403` numa rota de pastas
+  do `apps/connectors`; (b) um token HMAC `operator` assinado com a chave
+  compartilhada recebe `401` numa rota autenticada de cada um dos três apps.
+- **Papéis da #184**, checados no `apps/api`, no `apps/inbox` e no `apps/connectors`:
+
+  | área | Admin | Operador | Leitor |
+  |---|---|---|---|
+  | usuários | gerir | — | — |
+  | aplicações externas | gerir | — | — |
+  | agentes, MCP, conhecimento, canais | gerir | gerir (credenciais só escritas) | ler, sem credenciais |
+  | histórico de conversas (`apps/inbox`) | ver | ver | — |
+  | aplicações com acesso a um agente (card do detalhe do agente) | lista com nomes e link | só a contagem | só a contagem |
+  | identidade | ler | — | — |
+  | conectores no `apps/connectors` (provedores, pastas, "Sincronizar agora") | acessar | acessar | — (`403`) |
+
+  No `apps/connectors`, só as rotas que eram do subject `operator` passam a seguir
+  a matriz; "descrever pasta" continua só do `service:api`. O **histórico de conversas** (sessões e mensagens do
+  `apps/inbox`) é visível para Admin e Operador, e o Leitor **não** vê. **Aplicações
+  externas são só do Admin, inclusive ver** lista e detalhe; criar, editar, liberar
+  agentes, gerar e revogar segredos também. A sugestão inicial era o Operador só ver,
+  e o dono decidiu que ele não vê. A #185, a #186 e a #188 foram ajustadas para a
+  mesma matriz. **Exceção, decidida no mesmo dia:** o card "Aplicações com acesso"
+  do detalhe do agente mostra ao Admin a lista com nomes e link, e ao Operador e ao
+  Leitor só a contagem ("Usado por N aplicações externas"), sem nomes nem link, para
+  quem desativa um agente saber que há dependência. A #187 serve a contagem a todos
+  os papéis e os nomes só ao Admin; a #184 e a #188 registram a exceção.
+
+**Fora da evolução, `aguardando gatilho`, sem milestone:**
+
+| issue | o quê | gatilho |
+|---|---|---|
+| #198 | aba Insights da aplicação externa | duas ou mais aplicações externas ativas no piloto ao mesmo tempo |
+| #199 | aba Atividade e recusas da aplicação externa | o primeiro diagnóstico de recusa de aplicação externa que precisou ler log do servidor |
+| #200 | envio de e-mail para convite e redefinição de senha | uma instalação com serviço de e-mail transacional disponível pedir o envio automático |
+| #201 | cadastro de provedores federados pelo portal | a primeira instalação em que quem administra não tem acesso à configuração nem ao reinício do `apps/api` |
+| #202 | política "só SSO" | a primeira instalação com provedor corporativo que exija bloquear a senha local |
+| #203 | perfil Auditor | um pedido de acesso de auditoria que o papel Leitor não atenda |
+| #204 | permissão por agente e por base de conhecimento | a primeira instalação com duas equipes que não podem ver os agentes ou as bases uma da outra |
+| #205 | logotipo customizado do provedor federado | um provedor corporativo em uso cujo nome e subtítulo não bastem para reconhecer o botão (pedido real) |
+
 **ACRÉSCIMO DE 18/10/2026: a serialização por sessão do inbox, e o que ela destrava**
 (a posição de cada uma é esta, e as entradas delas apontam para cá):
 
