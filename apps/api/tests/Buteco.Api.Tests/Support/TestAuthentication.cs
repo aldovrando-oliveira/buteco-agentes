@@ -40,7 +40,14 @@ public static class TestAuthentication
         // desenvolvedor estar em America/Sao_Paulo. A checagem em si é
         // exercitada por TimeZoneStartupValidationTests, que fixa os dois lados.
         ["TZ"] = TimeZoneInfo.Local.Id,
+
+        // Exigida no boot com o emissor OIDC ligado, e o emissor liga em toda fixture
+        // com PublicUrl:BaseUrl, inclusive pelo appsettings.Development.json (design.md da
+        // change emissor-oidc-api, D8). Só de teste, distinta da chave de desenvolvimento.
+        ["Identity:SigningKeyEncryptionKey"] = IdentitySigningKeyEncryptionKey,
     };
+
+    public const string IdentitySigningKeyEncryptionKey = "dGVzdC1pZGVudGl0eS1rZXktMzItYnl0ZXMtLS0tLS0=";
 
     // Anexado por padrão em ConfigureClient de cada fixture — os testes
     // de negócio (anteriores a esta change) não deveriam precisar saber

@@ -12,6 +12,8 @@
     <PackageReference Include="A2A.AspNetCore" />
     <PackageReference Include="RabbitMQ.Client" />
     <PackageReference Include="ModelContextProtocol.Core" />
+    <PackageReference Include="OpenIddict.Server.AspNetCore" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" />
     <PackageReference Include="Mediator.Abstractions" />
     <PackageReference Include="Mediator.SourceGenerator">
       <PrivateAssets>all</PrivateAssets>
