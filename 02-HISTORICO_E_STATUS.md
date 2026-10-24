@@ -8729,7 +8729,7 @@ M1 Autenticação com provedor próprio            acompanhamento #194
    5 #182  remove o HMAC e a chave compartilhada       ← #180   (fecha #117 e #122)
    6 #183  painel da M1                                ← #179 #208 #180 #181 #182   (absorve #170 se couber)
 M2 Diferentes acessos                            acompanhamento #195
-   7 #184  papéis Admin, Operador, Leitor              ← #180 #182
+   7 #184  papéis Admin, Operador, Leitor              ← #180 #208
    8 #185  painel: papéis, menu, 403                   ← #183 #184
    9 #186  aplicações externas com credencial          ← #179 #184
   10 #187  agentes liberados por aplicação             ← #186
@@ -8766,6 +8766,15 @@ chave compartilhada (#119), e o destino dela é a #182.
   autenticada dos dois apps; depois do merge da #180 e da #182, o painel faz login e
   acessa uma rota do `apps/api`, uma do `apps/inbox` (canais) e a sincronização do
   `apps/connectors`.
+- **HMAC só para serviço a partir da #184.** Durante a convivência (até a #182), o
+  `apps/api` e o `apps/inbox` aceitam token HMAC **só** para os subjects de serviço
+  (`service:inbox`, `service:api`, `service:connectors`); token HMAC com subject
+  `operator` é recusado com `401`, porque não carrega papel e contornaria a
+  checagem. Por isso a #184 depende da #180 e da #208, e **não** espera a #182, que
+  remove o restante (a validação HMAC dos tokens de serviço e a
+  `Auth:TokenSigningKey`). **Critério:** com a #184 em `main`, um token HMAC
+  `operator` assinado com a chave compartilhada recebe `401` numa rota autenticada
+  do `apps/api` e do `apps/inbox`.
 - **Papéis da #184:** o **histórico de conversas** (sessões e mensagens do
   `apps/inbox`) é visível para Admin e Operador, e o Leitor **não** vê. **Aplicações
   externas são só do Admin, inclusive ver** lista e detalhe; criar, editar, liberar
