@@ -8724,24 +8724,45 @@ vínculo → execução → UI), e a tela é sempre issue separada, depois do ba
 M1 Autenticação com provedor próprio            acompanhamento #194
    1 #179  emissor OIDC no apps/api
    2 #208  inbox/connectors aceitam o JWKS, com HMAC   ← #179
-   3 #180  usuários locais: e-mail, senha, 2 etapas    ← #179 #208
-   4 #181  convites e redefinição por link             ← #180
-   5 #182  remove o HMAC e a chave compartilhada       ← #180   (fecha #117 e #122)
-   6 #183  painel da M1                                ← #179 #208 #180 #181 #182   (absorve #170 se couber)
+   3 #209  limpeza das entradas de token do OpenIddict ← #179
+   4 #180  usuários locais: e-mail, senha, 2 etapas    ← #179 #208
+   5 #181  convites e redefinição por link             ← #180
+   6 #182  remove o HMAC e a chave compartilhada       ← #180   (fecha #117 e #122)
+   7 #211  rota de leitura do emissor e das chaves     ← #179
+   8 #183  painel da M1                                ← #179 #208 #180 #181 #182 #211   (absorve #170 se couber)
 M2 Diferentes acessos                            acompanhamento #195
-   7 #184  papéis Admin, Operador, Leitor              ← #180 #208
-   8 #185  painel: papéis, menu, 403                   ← #183 #184
-   9 #186  aplicações externas com credencial          ← #179 #184
-  10 #187  agentes liberados por aplicação             ← #186
-  11 #188  painel de aplicações externas               ← #185 #186 #187
+   9 #184  papéis Admin, Operador, Leitor              ← #180 #208
+  10 #185  painel: papéis, menu, 403                   ← #183 #184
+  11 #186  aplicações externas com credencial          ← #179 #184
+  12 #187  agentes liberados por aplicação             ← #186
+  13 #188  painel de aplicações externas               ← #185 #186 #187
 M3 Autenticação com Google                       acompanhamento #196
-  12 #189  provedores federados e Google               ← #181 #184
-  13 #190  painel: login com provedor e recusas        ← #185 #189
+  14 #189  provedores federados e Google               ← #181 #184
+  15 #190  painel: login com provedor e recusas        ← #185 #189
 M4 Autenticação corporativa                      acompanhamento #197
-  14 #191  provedor OIDC genérico                      ← #189
-  15 #192  aplicações federadas (troca de token)       ← #187 #191
-  16 #193  painel da M4                                ← #188 #190 #192
+  16 #191  provedor OIDC genérico                      ← #189
+  17 #192  aplicações federadas (troca de token)       ← #187 #191
+  18 #193  painel da M4                                ← #188 #190 #192
 ```
+
+*(Atualizada em 24/10/2026, pela `emissor-oidc-api`: a M1 passou de 6 para 8
+itens. Entraram a **#209**, aberta nesta change para limpar as entradas de token e
+de autorização que o OpenIddict grava, e a **#211**, a rota de leitura do emissor e
+das chaves para a tela Identidade. A #179 previa essa rota; por decisão do dono, em
+24/10/2026, ela ficou fora da #179 e também fora da #183, porque tela não leva
+backend (convenção 9, registrado também no `design.md` da change). A ordem acima é
+a do board.)*
+
+**Regra das entregas da evolução** (decisão do dono, 24/10/2026, também no corpo
+das issues de acompanhamento #194 a #197). Cada entrega é uma milestone:
+
+- só as issues da entrega em andamento ficam em `Ready`, e as das seguintes em
+  `Backlog`;
+- quando **todas** as issues de uma entrega estão em `Done`, as da entrega
+  seguinte vão para `Ready`, na ordem desta fila, e a issue de acompanhamento da
+  entrega concluída fecha;
+- dentro da entrega, uma issue vai para `In progress` ao abrir a change dela
+  (convenção 24), não antes.
 
 `←` é "bloqueada por". **A posição da evolução em relação ao resto desta fila**
 (#164, #166, `replicas-de-worker`) **não foi decidida aqui**: é do dono, ao mover a
@@ -16413,3 +16434,131 @@ implementação, e a segunda perna por mutação com o checksum conferido na res
   (`America/Sao_Paulo`), `N` em vigor e as changes que entraram nele (D9); a taxa de 502
   do gateway contra a de antes (com três instâncias, até 12 chamadas simultâneas contra 3).
 - **Rollback:** `TASK_CONSUMER_MAX_CONCURRENT_EXECUTIONS=1` e reinício do `workers`.
+
+## `emissor-oidc-api` — emissor OIDC no `apps/api`, com chaves persistidas e rotação (#179)
+
+**Change proposta e implementada em 24/10/2026** na branch `feat/179-emissor-oidc-api`,
+num worktree próprio, a partir de `c29246c`. Entrega M1 · 1 de 8 (acompanhamento #194).
+Sincronizada e arquivada em 24/10/2026, antes do PR, como pedido pelo dono: capacidades
+novas `oidc-issuer` e `identity-signing-keys`, e `route-authentication` alterada (os
+endpoints do emissor são anônimos, com motivo, e conferidos no boot). Change arquivada em
+`openspec/changes/archive/2026-10-24-emissor-oidc-api/`, com a 8.4 (push e PR) e a 8.5
+(limpeza pós-merge) abertas. Relacionadas: #208
+(o `apps/inbox` e o `apps/connectors` passam a aceitar o token), #209 (limpeza das
+entradas de token, aberta nesta change), #210 e #212 (abertas nesta change, fora dela), #211 (rota
+de leitura das chaves, fora desta change por decisão do dono), #180, #186, #182, #117.
+
+### O que entrou
+
+- **Servidor OIDC no `apps/api`**, com OpenIddict 7.7.2, só o servidor
+  (`OpenIddict.Server.AspNetCore` + `OpenIddict.EntityFrameworkCore`). Discovery, JWKS e
+  token anônimos. Só `client_credentials`, e **nenhum cliente cadastrado**: em produção o
+  endpoint de token responde `invalid_client`. O token sai JWT RS256 não cifrado, com
+  `iss`, `sub` = `client_id`, `aud` = recursos dos escopos, `iat`, `exp` e `kid`.
+- **Issuer = `PublicUrl:BaseUrl`.** Sem url pública, o emissor não é registrado e o boot
+  avisa; url inválida, ou emissor ligado sem `Identity:SigningKeyEncryptionKey`, derruba o
+  boot. **Os endereços do discovery saem do issuer**, pelo
+  `DiscoveryEndpointsFromIssuerHandler` (correção do D8, abaixo).
+- **Chaves em `identity_keys`**, RSA 2048 com a parte privada cifrada por AES-256-GCM, e
+  uma chave simétrica de cifra para os tokens que não são de acesso. Rotação a cada 90
+  dias por `BackgroundService`, sem reiniciar: publicação 7 dias antes de assinar,
+  retenção de 24 h. Cada chave entra no OpenIddict embrulhada num X.509 em memória, com a
+  validade igual à janela de assinatura, porque é por ela que o OpenIddict escolhe a chave
+  que assina. Verificação sob `pg_advisory_xact_lock`.
+- **`503` com `Retry-After: 5` em toda rota até o anel carregar**, com aquecimento em
+  segundo plano a cada 5 s e sem guardar falha.
+- **Checagem de boot `ValidateIdentityIssuerEndpoints()`** (convenção 8): as URIs de todos
+  os tipos de endpoint do servidor contra `IdentityIssuerEndpoints.Expected`, nos dois
+  sentidos, e sem colidir com rota mapeada.
+- **Migration** `AddIdentityIssuer`: `identity_keys` e as quatro tabelas do OpenIddict em
+  snake_case, só no `AppDbContext` do `apps/api`.
+- **EF Core 10.0.10 → 10.0.13** no `Directory.Packages.props`, que alcança o
+  `apps/workers` e o `apps/inbox`.
+- **Stack:** blocos do emissor no `nginx.conf` do `frontend`;
+  `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` no compose (só `api`) e no `.env.prod.example`.
+- **Docs:** `01` ("Autenticação", com a **revogação da convenção "sem biblioteca JWT"**, e
+  a tabela dos apps), `docs/architecture.md`, `docs/configuration.md`,
+  `docs/deployment.md` e o `CHANGELOG`. Nesta entrada também: a fila da M1 com 8 itens e
+  a regra das entregas, na seção da evolução de autenticação.
+
+### O que a implementação mediu
+
+Suítes por nome, com `DOCKER_HOST` do Podman, `TESTCONTAINERS_RYUK_DISABLED`,
+`DOTNET_SYSTEM_NET_DISABLEIPV6` e `TZ=America/Sao_Paulo`, VM `podman-machine-default` (6
+CPUs, 6 GiB), relógio da VM acertado antes de cada suíte, `CPU_Speed_Limit = 100` e
+nenhum contêiner em `podman ps` na largada:
+
+| suíte | baseline em `c29246c` | só a subida da EF Core (1.3) | fechamento | diferença por nome |
+|---|---|---|---|---|
+| `apps/api` | 800/800, 1m53s (load 7,59 → 17,13) | — | **863/863**, 1m45s (load 2,68 → 12,55) | +63 novos, todos do emissor; os 800 da baseline existem e passam |
+| `apps/workers` | 415/415, 6m13s (load 7,51 → 4,79) | 415/415, 5m52s | **415/415**, 5m05s (load 7,63 → 2,55) | nenhuma; os 415 nomes iguais e aprovados |
+| `apps/inbox` | 252/252, 35s (load 4,79 → 5,54) | 252/252, 38s | **252/252**, 34s (load 2,55 → 3,54) | nenhuma; os 252 nomes iguais e aprovados |
+
+- **Uma rodada de baseline do `apps/api` foi descartada como baseline**, não como
+  evidência: com load 12,14 na largada deu 799/800, e a falha virou a **#210** (o teste
+  da varredura de indexação afirma o pedido apagado logo depois da publicação, e o
+  despacho publica antes de apagar). Não reapareceu no fechamento.
+- **Build:** com o metapacote `OpenIddict.AspNetCore`, `NU1605` e avisos novos de
+  vulnerabilidade (ver as divergências); com só o servidor, o build `--no-incremental` dos
+  três apps tem **o mesmo conjunto de avisos** da baseline.
+- **F10 do design confirmado (3.4, trava):** o OpenIddict 7.7.2 aceita uma credencial
+  X.509 com `NotBefore` no futuro, publica os dois `kid` no JWKS e assina cinco tokens
+  seguidos só com a válida; só com a futura, recusa (`ID0088`).
+
+### Guardas contra o defeito real (convenção 15)
+
+| guarda | defeito reintroduzido | resultado com o defeito | restaurado |
+|---|---|---|---|
+| 3.6 — ordem de assinatura com duas chaves válidas e uma futura, em ordem invertida | embrulho X.509 trocado por `RsaSecurityKey` pura | reprova: `Expected "c-ativa"`, `Actual "a-anterior"` | passa |
+| 5.2 — todo `*_endpoint` e o `jwks_uri` do discovery sob o issuer, com `Host` e esquema diferentes | registro do `DiscoveryEndpointsFromIssuerHandler` comentado | reprova: `token_endpoint` = `http://outro-host.interno:8080/connect/token` e `jwks_uri` = `http://outro-host.interno:8080/.well-known/jwks` fora do issuer | 3/3 |
+| 5.9 — composição real com o endpoint de introspecção acrescentado derruba o boot | `app.ValidateIdentityIssuerEndpoints()` comentada no `Program.cs` | reprova: `Assert.NotNull() Failure: Value is null` (o boot subiu) | 3/3 |
+
+Também pegou um defeito meu antes do fechamento: o teste de concorrência (quatro anéis no
+mesmo banco) criou **três** chaves de assinatura, porque o anel lia o "agora" antes de
+pegar o advisory lock. Corrigido, lendo depois do lock.
+
+### Divergências do desenho aprovado (convenção 9)
+
+- **D8, premissa falsa, corrigida com decisão do dono:** fixar o issuer **não** basta para
+  o discovery anunciar o endereço público. No OpenIddict 7.7.2, o `AttachEndpoints` monta
+  cada endpoint a partir do `BaseUri` da requisição (`OpenIddictServerHandlers.Discovery.cs`
+  l. 417 e 444; `OpenIddictServerAspNetCoreHandlers.cs` l. 102), e atrás do nginx, com HTTP
+  puro, o discovery anunciaria `http://`. URIs absolutas não servem: o `InferEndpointType`
+  só casa URI absoluta com o mesmo esquema, host e porta da requisição. Entrou um handler
+  que troca o `BaseUri` da transação de discovery pelo issuer, e com isso cobre todo
+  endpoint configurado, inclusive os da #180 (registrado na #180). Descartados:
+  `ForwardedHeaders` (não resolve o esquema, com o TLS fora do stack) e mudar a spec.
+- **D1:** o pacote é `OpenIddict.Server.AspNetCore`, não o metapacote
+  `OpenIddict.AspNetCore`, que trazia `NU1605` (`Microsoft.Extensions.Configuration`
+  10.0.10 contra 10.0.11) e avisos novos de vulnerabilidade em
+  `System.Security.Cryptography.Pkcs`/`.Xml` 10.0.11.
+- **D6, fato corrigido:** o `inbox` não declara `depends_on: api: service_healthy`; com o
+  banco inalcançável, só o `connectors` e o `frontend` deixam de subir. A decisão não muda.
+- **Fixtures de teste:** o emissor decide se liga lendo a configuração no registro (D8), e o
+  `ConfigureAppConfiguration` da `WebApplicationFactory` só entra no `Build()`. As
+  fixtures passaram a mandar a url pública também por `UseSetting`.
+- **OpenIddict liga por padrão um segundo endereço de discovery**,
+  `/.well-known/oauth-authorization-server`. O `SetConfigurationEndpointUris` explícito o
+  remove, e a checagem de boot reprovaria se voltasse.
+- **Com `scope` no pedido, o OpenIddict valida o escopo antes do cliente** (`invalid_scope`
+  antes de `invalid_client`). Os testes de cliente inexistente e de `grant_type=password`
+  não mandam `scope`.
+
+### Achados fora do escopo (convenção 23)
+
+- **#210** (na baseline, acima).
+- **#212**: no Podman local, o nginx do stack não alcança nenhum backend, porque o
+  `resolver 127.0.0.11` é o DNS do Docker. Produção, em Docker, não é afetada. A 6.3 foi
+  verificada trocando só essa linha dentro do contêiner.
+
+### O que fica para o deploy, e é do dono
+
+- **Antes:** gerar `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` (`openssl rand -base64 32`),
+  distinta das outras, pôr no `.env.prod` e guardar com o backup do banco. Sem ela o `api`
+  não sobe.
+- **No deploy:** o `migrator` cria as cinco tabelas; rebuild do `api` **e do `frontend`**
+  (o `nginx.conf` muda). Conferir com os três `curl` de `docs/deployment.md` ("Emissor
+  OIDC do `apps/api`") contra o domínio público: JSON com `issuer`, `jwks_uri` e
+  `token_endpoint` em `https://`, e `invalid_client` no token.
+- **Rollback:** a imagem anterior do `api` e do `frontend`. As tabelas novas ficam, sem
+  efeito sobre o código anterior.

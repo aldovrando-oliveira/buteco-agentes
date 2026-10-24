@@ -108,6 +108,11 @@ services:
       Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
       Gemini__ApiKey: ${GEMINI_API_KEY:-}
       Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY:?defina MCP_CREDENTIAL_ENCRYPTION_KEY — use --env-file .env.prod}
+      # Cifra em repouso das chaves de assinatura do emissor OIDC (#179). Só no
+      # apps/api, e com valor distinto da MCP_CREDENTIAL_ENCRYPTION_KEY. Com
+      # PUBLIC_DOMAIN definido o emissor está ligado, e sem esta chave o api não
+      # sobe. Perdê-la torna as chaves gravadas ilegíveis (docs/deployment.md).
+      Identity__SigningKeyEncryptionKey: ${IDENTITY_SIGNING_KEY_ENCRYPTION_KEY:?defina IDENTITY_SIGNING_KEY_ENCRYPTION_KEY — use --env-file .env.prod}
       PublicUrl__BaseUrl: ${PUBLIC_DOMAIN:?defina PUBLIC_DOMAIN — use --env-file .env.prod}
       Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY:?defina AUTH_TOKEN_SIGNING_KEY — use --env-file .env.prod}
       Auth__OperatorUsername: ${AUTH_OPERATOR_USERNAME:?defina AUTH_OPERATOR_USERNAME — use --env-file .env.prod}

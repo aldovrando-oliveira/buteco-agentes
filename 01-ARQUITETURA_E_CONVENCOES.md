@@ -21,7 +21,7 @@ Workflow de desenvolvimento: spec-driven via OpenSpec
 
 | App | Papel | Stack | Banco |
 |---|---|---|---|
-| `apps/api` | CRUD de agentes, catálogo MCP, delegação, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, push notification (emissor), login do operador e emissão de token | .NET 10, ASP.NET Core Minimal API, CQRS via `Mediator.Abstractions`+`SourceGenerator` v3.0.2, EF Core+Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` (mesmas tabelas, dois `AppDbContext` mantidos sincronizados por disciplina, não por schema separado) |
+| `apps/api` | CRUD de agentes, catálogo MCP, delegação, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, push notification (emissor), login do operador e emissão de token, emissor OIDC (discovery, JWKS, token) | .NET 10, ASP.NET Core Minimal API, OpenIddict 7.7.2 (servidor), CQRS via `Mediator.Abstractions`+`SourceGenerator` v3.0.2, EF Core+Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` (mesmas tabelas, dois `AppDbContext` mantidos sincronizados por disciplina, não por schema separado) |
 | `apps/workers` | Executa tasks: chama o LLM, resolve tools MCP, executa delegação, dispara push notification | .NET 10 Worker Service, `Microsoft.Agents.AI` 1.15.0 (`ChatClientAgent`, `Compaction`), EF Core mirror, consumidor RabbitMQ | Mesmo Postgres de `apps/api` |
 | `apps/frontend` | UI de gestão (agentes, MCP, delegação, canais), tela de login, sessões e histórico de conversa por canal | React 19.2+, TypeScript, Vite, Mantine v9, `react-router` v8, `@tanstack/react-query` v5, `react-markdown`+`remark-gfm`, Vitest+Testing Library | — |
 | `apps/connectors` | Conectores de provedor de arquivos para bases de conhecimento: navegar, descrever pasta, listar a raiz (suportados e ignorados com motivo), entregar markdown. Google Drive por service account | .NET 10 Minimal API, REST ao Google sem biblioteca do provedor | — |
@@ -524,8 +524,18 @@ um laço que falharia pelo mesmo motivo.
 
 ## Autenticação
 
-**Token stateless assinado com HMAC**, sem biblioteca JWT e sem sessão em
-banco. `apps/api` emite o token do operador, no login; cada serviço
+**Hoje convivem dois mecanismos.** O token HMAC, descrito abaixo, continua
+emitindo e validando todas as rotas até a #182. Ao lado dele, desde a #179, o
+`apps/api` é emissor OpenID Connect (ver "Emissor OIDC", abaixo), que ainda não
+é credencial de rota nenhuma.
+
+**Token stateless assinado com HMAC**, sem sessão em banco. O texto anterior
+dizia "sem biblioteca JWT"; essa convenção foi **revogada em 24/10/2026**
+(`emissor-oidc-api`, D11). Emitir OIDC, e a partir da #208 validar token de
+terceiro, é exatamente o caso em que biblioteca mantida vence implementação
+própria: rotação, JWKS, discovery e validação de `aud`/`iss`/`exp` são o tipo
+de código em que defeito vira falha de segurança. O HMAC continua sem
+biblioteca até sair, na #182. `apps/api` emite o token do operador, no login; cada serviço
 assina o **próprio** token de serviço com a mesma chave (o `apps/inbox` com
 `service:inbox` em `apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs`,
 e, desde a #104, o `apps/api` com `service:api` em
@@ -563,6 +573,25 @@ isolados sem introduzir store compartilhado.
 - **Frontend**: módulo fino de token sobre `sessionStorage`
   (ler/anexar/limpar em `401`), importado por cada `request<T>` de
   feature — sem cliente HTTP compartilhado (convenção 7 preservada).
+
+- **Emissor OIDC** (#179), com OpenIddict 7.7.2, só o servidor:
+  discovery (`/.well-known/openid-configuration`), JWKS (`/.well-known/jwks`)
+  e token (`/connect/token`), anônimos. Só o fluxo `client_credentials` está
+  habilitado, sem nenhum cliente cadastrado: o primeiro é da #186. O issuer é
+  a `PublicUrl:BaseUrl`, e sem ela o emissor fica desligado, com aviso no boot.
+  Os endereços do discovery saem do issuer, nunca do host da requisição. Até a
+  #182, um token do emissor enviado a uma rota do app recebe `401`.
+- **Chaves do emissor**: RSA (RS256) em `identity_keys`, com a parte privada
+  cifrada por AES-256-GCM com `Identity:SigningKeyEncryptionKey`, distinta da
+  chave do MCP. A rotação é automática a cada 90 dias, sem reiniciar: a
+  próxima chave é publicada no JWKS 7 dias antes de assinar, e a anterior
+  valida por mais 24 h. Um advisory lock do Postgres impede duas rotações
+  simultâneas. Até o anel carregar do banco, toda rota do `apps/api` responde
+  `503`, inclusive `/health`.
+- **Os endpoints do OpenIddict não passam pelo roteamento**, então a checagem
+  de rotas anônimas não os vê. Eles têm lista esperada própria, com motivo
+  (`IdentityIssuerEndpoints.Expected`), conferida no boot nos dois sentidos
+  contra as URIs configuradas no servidor (convenção 8).
 
 Rotas anônimas são decisão de segurança, não detalhe de implementação:
 adicionar uma passa por revisão.

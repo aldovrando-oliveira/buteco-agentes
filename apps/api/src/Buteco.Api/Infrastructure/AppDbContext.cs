@@ -6,6 +6,7 @@ using Buteco.Api.AgentMcpBindings.Entities;
 using Buteco.Api.Agents.Entities;
 using Buteco.Api.EmbeddingMetrics.Entities;
 using Buteco.Api.ExecutionMetrics.Entities;
+using Buteco.Api.Identity.Keys;
 using Buteco.Api.Knowledge.Indexing;
 using Buteco.Api.KnowledgeBases.Entities;
 using Buteco.Api.KnowledgeDocuments.Entities;
@@ -14,6 +15,7 @@ using Buteco.Api.McpServers.Entities;
 using Buteco.Api.RejectionMetrics.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using OpenIddict.EntityFrameworkCore.Models;
 
 namespace Buteco.Api.Infrastructure;
 
@@ -52,6 +54,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<EmbeddingCall> EmbeddingCalls => Set<EmbeddingCall>();
 
     public DbSet<TaskRejection> TaskRejections => Set<TaskRejection>();
+
+    public DbSet<IdentityKey> IdentityKeys => Set<IdentityKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -642,6 +646,36 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // task_executions e embedding_calls, que também não entraram.
             entity.HasIndex(rejection => rejection.RejectedAt);
             entity.HasIndex(rejection => rejection.AgentId);
+        });
+
+        // Emissor OIDC (design.md da change emissor-oidc-api, D3). Registrado no
+        // MODELO, e não no DbContextOptionsBuilder: as fixtures de teste trocam o
+        // DbContextOptions<AppDbContext> por conta própria, e um options.UseOpenIddict()
+        // sumiria com a troca. Só os nomes de tabela vão para snake_case; as colunas
+        // ficam como o OpenIddict as declara, porque renomear coluna de entidade de
+        // terceiro é manutenção contra cada upgrade. apps/workers não espelha nenhuma
+        // das cinco: ninguém lá as lê.
+        modelBuilder.UseOpenIddict();
+        modelBuilder.Entity<OpenIddictEntityFrameworkCoreApplication>().ToTable("openiddict_applications");
+        modelBuilder.Entity<OpenIddictEntityFrameworkCoreAuthorization>().ToTable("openiddict_authorizations");
+        modelBuilder.Entity<OpenIddictEntityFrameworkCoreScope>().ToTable("openiddict_scopes");
+        modelBuilder.Entity<OpenIddictEntityFrameworkCoreToken>().ToTable("openiddict_tokens");
+
+        modelBuilder.Entity<IdentityKey>(entity =>
+        {
+            entity.ToTable("identity_keys");
+            entity.HasKey(key => key.Kid);
+            entity.Property(key => key.Kid).HasColumnName("kid");
+            entity.Property(key => key.Usage).HasColumnName("usage").HasConversion<string>().IsRequired();
+            entity.Property(key => key.Algorithm).HasColumnName("algorithm").IsRequired();
+            entity.Property(key => key.ProtectedMaterial).HasColumnName("protected_material").IsRequired();
+            entity.Property(key => key.CreatedAt).HasColumnName("created_at");
+            entity.Property(key => key.SignsFrom).HasColumnName("signs_from");
+            entity.Property(key => key.SignsUntil).HasColumnName("signs_until");
+            entity.Property(key => key.ValidatesUntil).HasColumnName("validates_until");
+
+            // A carga do anel: as chaves de cada uso que ainda validam.
+            entity.HasIndex(key => new { key.Usage, key.ValidatesUntil });
         });
     }
 }

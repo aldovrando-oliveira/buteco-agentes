@@ -26,10 +26,10 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
 
     <!-- Data access -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.13" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <!-- pgvector: a coluna de verdade é vector(4096) e quem escreve é
          apps/workers (design.md D1/D12 da change knowledge-base-indexacao).
@@ -42,6 +42,11 @@
          0.2.2 e 0.3.0 — então verificar antes de assumir (risco R8). -->
     <PackageVersion Include="Pgvector" Version="0.3.2" />
     <PackageVersion Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
+
+    <!-- Emissor OIDC (apps/api, change emissor-oidc-api D1): a 7.7.x exige
+         EF Core Relational e Microsoft.Extensions.* >= 10.0.11 -->
+    <PackageVersion Include="OpenIddict.Server.AspNetCore" Version="7.7.2" />
+    <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.7.2" />
 
     <!-- CQRS mediator (apps/api) -->
     <PackageVersion Include="Mediator.Abstractions" Version="3.0.2" />
