@@ -348,7 +348,10 @@ e o aviso do log cita o `kid` que não decifrou. Recolocar a chave certa no
 `.env.prod` e recriar o contêiner do `api` resolve; as linhas gravadas não mudam.
 Se a chave estiver perdida de vez, apague as linhas de `identity_keys`: o
 `apps/api` cria chaves novas, e os tokens emitidos com as antigas deixam de
-validar. Até a #208 nenhum app valida esses tokens, então hoje o efeito é nulo.
+validar. Desde a #208, o `apps/inbox` e o `apps/connectors` validam esses
+tokens: um token assinado pela chave nova recebe `401` uma vez em cada um, que
+busca as chaves de novo e aceita a próxima requisição (no máximo uma busca por
+minuto). Nenhum token do emissor circula até a #180, então hoje o efeito é nulo.
 
 **`503` até o primeiro acesso ao banco.** O anel de chaves carrega do banco
 logo depois do start, em segundo plano, e tenta de novo a cada 5 s. Até
@@ -373,6 +376,38 @@ curl -s -X POST https://<PUBLIC_DOMAIN>/connect/token \
 
 Se algum devolver HTML, o `nginx.conf` do `frontend` está sem os blocos do
 emissor (imagem antiga do `frontend`).
+
+### Validação do token do emissor no `apps/inbox` e no `apps/connectors` (#208)
+
+Os dois recebem `Identity__Issuer: ${PUBLIC_DOMAIN}` do compose, a mesma
+variável do `PublicUrl__BaseUrl` do `apps/api`, e obtêm as chaves pelo
+`Api__BaseUrl` (`http://api:8080`). Nenhuma variável nova no `.env.prod`, e
+nenhuma migration.
+
+**Ordem de deploy:** qualquer uma. O `apps/api` não muda nesta entrega, e
+nenhum token do emissor circula até a #180. Os dois sobem com o `apps/api`
+fora do ar e atendem o HMAC normalmente.
+
+**Conferência depois do deploy:**
+
+```
+$C logs inbox      | grep -E 'token do emissor (ligada|desligada)|chaves do emissor'
+$C logs connectors | grep -E 'token do emissor (ligada|desligada)|chaves do emissor'
+```
+
+| O que aparece | O que significa |
+|---|---|
+| `Validação do token do emissor ligada: issuer https://<PUBLIC_DOMAIN>/, ...` seguido de `Chaves do emissor obtidas pelo Api:BaseUrl (/.well-known/jwks): kids ...` | certo: as chaves foram obtidas pelo endereço interno |
+| `Validação do token do emissor desligada: Identity:Issuer não configurado` | o `Identity__Issuer` não chegou ao contêiner (compose antigo). Só o HMAC funciona |
+| erro `O discovery do emissor lido pelo Api:BaseUrl declara o issuer '...', diferente de Identity:Issuer '...'` | o `PublicUrl__BaseUrl` do `api` e o `Identity__Issuer` do app divergem (as duas saem de `PUBLIC_DOMAIN`; ver se alguém as editou à mão no compose). Nenhuma chave é obtida |
+| aviso `Busca das chaves do emissor pelo Api:BaseUrl (...) falhou` repetido a cada 10 s | o `apps/api` não responde no endereço interno. Normal enquanto ele sobe |
+
+**`503` para o token do emissor antes da primeira obtenção.** Entre o start e a
+primeira busca bem-sucedida (até 10 s depois de o `apps/api` responder), um
+token do emissor recebe `503` com `Retry-After: 10`; com o issuer divergente, o
+`503` continua até a configuração ser corrigida. O token HMAC nunca recebe esse
+`503`. Depois de obtidas, as chaves continuam valendo com o `apps/api` fora do
+ar.
 
 ### Risco aceito: placeholder `changeme` não é rejeitado no boot
 

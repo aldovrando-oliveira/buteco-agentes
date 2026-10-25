@@ -188,6 +188,17 @@ o versionamento pretende seguir
 - **Checagem de boot dos endpoints do emissor** (#179): lista esperada com
   motivo, conferida nos dois sentidos contra as URIs configuradas no servidor,
   porque os endpoints do OpenIddict não passam pelo roteamento.
+- **O `apps/inbox` e o `apps/connectors` aceitam o access token do emissor**
+  (#208), validado pelo JWKS com `Microsoft.AspNetCore.Authentication.JwtBearer`
+  10.0.13, ao lado do token HMAC, que não muda. RS256, `typ` `at+jwt`, `iss`
+  igual a `Identity__Issuer`, a `aud` de cada app (`buteco-inbox`,
+  `buteco-connectors`) e `exp`. A forma do token escolhe o esquema, sem queda de
+  um no outro. As chaves vêm do endereço interno do `apps/api`, em segundo
+  plano: os dois sobem com o `apps/api` fora do ar, e um token do emissor recebe
+  `503` com `Retry-After` até a primeira obtenção. O subject sai do
+  `client_id` (`buteco-painel` → `operator`), nunca do `sub`. Variável nova
+  `Identity__Issuer`, que o compose de produção preenche com `PUBLIC_DOMAIN`;
+  vazia, a validação fica desligada, com aviso no boot.
 
 **Contexto temporal e de canal**
 
@@ -773,6 +784,10 @@ o versionamento pretende seguir
 - **Revogada a convenção "token sem biblioteca JWT"** (#179). O HMAC continua
   sem biblioteca até sair (#182); o emissor e a validação de token de terceiro
   usam biblioteca mantida.
+- **Reescrito o princípio de autenticação do `01`** (#208): "nenhuma chamada de
+  rede entre os processos para validar token" passa a "nenhuma requisição espera
+  o `apps/api` para ser autenticada". A obtenção das chaves do emissor é a única
+  chamada, fora do caminho da requisição, e não afeta o HMAC.
 - **Cada instância de `apps/workers` executa até 4 tasks ao mesmo tempo** (#163), em
   vez de uma. O número vem de `TaskConsumer__MaxConcurrentExecutions`
   (`TASK_CONSUMER_MAX_CONCURRENT_EXECUTIONS` no `.env.prod`), que fixa ao mesmo tempo
