@@ -1,7 +1,8 @@
 namespace Buteco.Connectors.Tests.Support;
 
-// Relógio controlado pelo teste, sem pacote novo (o apps/inbox não usa
-// Microsoft.Extensions.TimeProvider.Testing).
+// Relógio controlado pelo teste, sem pacote novo (Microsoft.Extensions.TimeProvider.Testing
+// não é referenciado aqui; o apps/inbox passou a usá-lo na change
+// validacao-jwks-inbox-connectors).
 //
 // Com timers desde a change ciclo-de-sincronizacao (design.md, D11): sem CreateTimer, um
 // PeriodicTimer(intervalo, este relógio) cairia no timer REAL do sistema, e o teste do

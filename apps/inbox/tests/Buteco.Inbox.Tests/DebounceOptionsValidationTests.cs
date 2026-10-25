@@ -91,7 +91,7 @@ public class DebounceOptionsValidationTests
     public void InvalidMaxWait_FailsTheRealApplicationStartup()
     {
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            builder.UseIssuer().ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Inbox:CredentialEncryptionKey"] = "NtxqjqnKG3sqy52PFRh/SGk573bsE9TrDtKOsDiR8uc=",
                 ["Api:BaseUrl"] = "http://apps-api.test",

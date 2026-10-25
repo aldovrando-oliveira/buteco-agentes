@@ -53,6 +53,24 @@ public class IdentityIssuerTokenTests(ApiFactoryFixture factory) : IClassFixture
         Assert.True(token.TryGetPayloadValue<long>("exp", out _));
     }
 
+    // validacao-jwks-inbox-connectors, D6: o apps/inbox e o apps/connectors decidem o
+    // subject pelo client_id e exigem typ at+jwt. Os dois vêm do próprio OpenIddict
+    // (PrepareAccessTokenPrincipal, RFC 9068); o teste guarda esse contrato contra upgrade.
+    [Fact]
+    public async Task AccessToken_CarriesClientId_AndAtJwtType()
+    {
+        var response = await AnonymousClient().PostAsync("/connect/token", IdentityIssuerTestClient.TokenRequest());
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, body);
+
+        var accessToken = JsonDocument.Parse(body).RootElement.GetProperty(Parameters.AccessToken).GetString()!;
+        var token = new JsonWebToken(accessToken);
+
+        Assert.True(token.TryGetPayloadValue<string>(Claims.ClientId, out var clientId), accessToken);
+        Assert.Equal(IdentityIssuerTestClient.ClientId, clientId);
+        Assert.Equal("at+jwt", token.Typ);
+    }
+
     [Fact]
     public async Task WrongSecret_IsInvalidClient_AndIssuesNoToken()
     {

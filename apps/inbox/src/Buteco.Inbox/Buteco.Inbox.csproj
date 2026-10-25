@@ -8,6 +8,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="A2A" />
     <PackageReference Include="Mediator.Abstractions" />
+    <!-- Token do emissor do apps/api (validacao-jwks-inbox-connectors, D1). -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Mediator.SourceGenerator">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>

@@ -21,6 +21,7 @@ using ApiRabbitMqOptions = ApiAssembly::Buteco.Api.Options.RabbitMqOptions;
 using ApiProgram = ApiAssembly::Program;
 using InboxAppDbContext = InboxAssembly::Buteco.Inbox.Infrastructure.AppDbContext;
 using InboxA2AClientFactory = InboxAssembly::Buteco.Inbox.Orchestration.A2AClientFactory;
+using InboxIssuerKeysRetriever = InboxAssembly::Buteco.Inbox.Auth.IssuerKeysRetriever;
 using InboxProgram = InboxAssembly::Program;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -112,6 +113,14 @@ public sealed class RoundTripFixture : IAsyncLifetime
     // espera pelo advisory lock produzindo a mesma exceção de produção.
     public int? WorkerCommandTimeoutSeconds { get; set; }
 
+    // Emissor do apps/api ligado (validacao-jwks-inbox-connectors, D9): url pública fixa,
+    // passada ao apps/inbox como Identity:Issuer SEM a barra final, como o compose faz com
+    // PUBLIC_DOMAIN; o issuer do token sai com ela. O apps/inbox busca as chaves pelo
+    // TestServer do apps/api, atrás deste portão: fechado, a busca falha como rede fora.
+    public const string ApiPublicBaseUrl = "https://api.exemplo.test";
+
+    public IssuerKeysGate ApiIssuerKeys { get; } = new();
+
     public async Task InitializeAsync()
     {
         await Task.WhenAll(_apiAndWorkersPostgres.StartAsync(), _inboxPostgres.StartAsync(), _rabbitMq.StartAsync());
@@ -165,9 +174,14 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
         return factory.WithWebHostBuilder(builder =>
         {
+            // UseSetting: o emissor decide se liga no registro, antes do Build() (D8 da
+            // change emissor-oidc-api); a cópia de baixo vale para quem lê depois.
+            builder.UseSetting("PublicUrl:BaseUrl", ApiPublicBaseUrl);
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
+                    ["PublicUrl:BaseUrl"] = ApiPublicBaseUrl,
+                    ["Identity:SigningKeyEncryptionKey"] = "dGVzdC1pZGVudGl0eS1rZXktMzItYnl0ZXMtLS0tLS0=",
                     // Só precisa ser não-vazio — ProviderCatalogService.IsProviderConfigured("openai")
                     // olha só a presença da chave (libs/ProviderCatalog/LlmProviders.cs); a chamada
                     // real ao LLM nunca acontece, IChatClientResolver está mockado em apps/workers.
@@ -204,9 +218,12 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
         return factory.WithWebHostBuilder(builder =>
         {
+            // UseSetting: o apps/inbox decide no registro se liga o esquema do emissor.
+            builder.UseSetting("Identity:Issuer", ApiPublicBaseUrl);
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
+                    ["Identity:Issuer"] = ApiPublicBaseUrl,
                     ["Inbox:CredentialEncryptionKey"] = "NtxqjqnKG3sqy52PFRh/SGk573bsE9TrDtKOsDiR8uc=",
                     // Placeholders — nenhuma rede real é usada para alcançar
                     // apps/api (ver ConfigurePrimaryHttpMessageHandler
@@ -246,6 +263,12 @@ public sealed class RoundTripFixture : IAsyncLifetime
                 // EnqueueingAgentHandler de verdade.
                 services.AddHttpClient(InboxA2AClientFactory.HttpClientName)
                     .ConfigurePrimaryHttpMessageHandler(() => ApiFactory.Server.CreateHandler());
+
+                // Chaves do emissor pelo TestServer do apps/api, o endereço interno do
+                // teste (D3), atrás do portão.
+                services.AddHttpClient(InboxIssuerKeysRetriever.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => ApiFactory.Server.CreateHandler())
+                    .AddHttpMessageHandler(() => new IssuerKeysGateHandler(ApiIssuerKeys));
             });
         });
     }

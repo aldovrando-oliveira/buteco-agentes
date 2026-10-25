@@ -14,7 +14,6 @@ using Buteco.Inbox.Messages.Endpoints;
 using Buteco.Inbox.Options;
 using Buteco.Inbox.Orchestration;
 using Buteco.Inbox.Orchestration.PushNotifications.Endpoints;
-using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -102,13 +101,11 @@ builder.Services.AddHttpClient(A2AClientFactory.HttpClientName)
     .AddHttpMessageHandler<ServiceTokenDelegatingHandler>();
 builder.Services.AddSingleton<IA2AClientFactory, A2AClientFactory>();
 
-// Esquema único de autenticação (design.md, Decision 1) — valida token
-// de operador emitido por apps/api, mesma chave de assinatura, sem
-// chamada de rede entre os processos.
-builder.Services
-    .AddAuthentication(OperatorTokenAuthenticationHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, OperatorTokenAuthenticationHandler>(
-        OperatorTokenAuthenticationHandler.SchemeName, _ => { });
+// Token HMAC de operador emitido por apps/api (mesma chave de assinatura) e, com
+// Identity:Issuer, o access token do emissor do apps/api validado pelo JWKS, um
+// esquema por forma de token (validacao-jwks-inbox-connectors, D2). Nenhuma
+// requisição espera o apps/api: as chaves vêm em segundo plano (D4).
+builder.Services.AddIssuerTokenAuthentication(builder.Configuration);
 // Só o subject "operator" passa; qualquer outro recebe 403
 // (inbox-restricao-de-subject, D1/D2). FallbackPolicy porque nenhuma rota
 // declara autorização própria: é ela que governa toda rota sem AllowAnonymous.
@@ -136,6 +133,11 @@ var app = builder.Build();
 // Teto da serialização por sessão (inbox-serializacao-por-sessao, D3; convenção 8):
 // um valor que desligaria a serialização em silêncio reprova o boot.
 app.ValidateDebounceSessionSerializationMaxWait();
+
+// Issuer do emissor e tabela de clientes (validacao-jwks-inbox-connectors, D7;
+// convenção 8). Sem Identity:Issuer, só avisa que a validação está desligada.
+app.ValidateIssuerTokenConfiguration();
+app.ValidateIssuerClientSubjects();
 
 app.UseCors();
 app.UseAuthentication();
