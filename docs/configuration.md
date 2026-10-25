@@ -121,7 +121,8 @@ restrito, a extensão precisa ser criada antes, por fora da migração.
 | `Auth__OperatorPasswordHash` | **fail-fast** | `{iterations}.{saltBase64}.{hashBase64}`, PBKDF2-HMAC-SHA256, gerado offline — ver [development.md](development.md#autenticação-em-desenvolvimento) |
 | `Auth__OperatorTokenLifetime` | não | TTL do token de operador. Default de 30 min fixado no próprio tipo, não em `appsettings.json` |
 | `Mcp__CredentialEncryptionKey` | sim | AES-256 (32 bytes) em base64. Mesmo valor de `apps/workers`. Gerar com `openssl rand -base64 32` |
-| `PublicUrl__BaseUrl` | sim | URL pública da própria API, usada em `AgentCard.SupportedInterfaces` para descoberta A2A externa. Não afeta `SendMessage`/`GetTask` |
+| `PublicUrl__BaseUrl` | sim | URL pública da própria API, usada em `AgentCard.SupportedInterfaces` para descoberta A2A externa e como **issuer do emissor OIDC** (#179). Não afeta `SendMessage`/`GetTask`. Ver abaixo |
+| `Identity__SigningKeyEncryptionKey` | sim, com o emissor ligado | AES-256 (32 bytes) em base64, para cifrar em repouso as chaves de assinatura do emissor OIDC. **Distinta** de `Mcp__CredentialEncryptionKey`. Gerar com `openssl rand -base64 32`. Ausente, fora de base64 ou sem 32 bytes, com `PublicUrl__BaseUrl` definida, derruba o boot. O `appsettings.Development.json` traz uma chave de desenvolvimento |
 | `OpenAI__BaseUrl` / `OpenAI__ApiKey` / `OpenAI__Model` | não | Presença habilita o provedor em `GET /providers` |
 | `Anthropic__ApiKey` | não | Idem, para Claude |
 | `Gemini__ApiKey` | não | Idem, para Gemini |
@@ -144,6 +145,15 @@ montar a lista de provedores disponíveis.
 `PublicUrl__BaseUrl` controla a direção oposta de `Cors__AllowedOrigins`:
 `Cors` define quem pode **chamar** a API (entrada); `PublicUrl` é a URL pela
 qual a própria API é **alcançada** de fora, do ponto de vista do AgentCard.
+
+`PublicUrl__BaseUrl` também liga ou desliga o **emissor OIDC** (#179), e tem
+três estados:
+
+| valor | boot | emissor | demais rotas |
+|---|---|---|---|
+| ausente ou vazio | sobe, com o aviso "Emissor OIDC desligado" no log | não existe: `/.well-known/openid-configuration`, `/.well-known/jwks` e `/connect/token` não respondem | sem mudança |
+| URI absoluta `http` ou `https`, sem query nem fragmento | sobe, se `Identity__SigningKeyEncryptionKey` for válida | ligado, com essa URL como issuer; todos os endereços do discovery saem dela | `503` até as chaves carregarem do banco (ver [deployment.md](deployment.md)) |
+| qualquer outro valor | **falha**, com mensagem que cita `PublicUrl:BaseUrl` | — | — |
 
 ---
 
@@ -312,6 +322,7 @@ de configuração que o processo enxerga.
 | `EMBEDDING_BATCH_SIZE` | `Embedding__BatchSize` de `apps/workers`. **Opcional, default 250** — diferente das duas acima, a ausência não quebra nada. É o parâmetro a ajustar quando a indexação de documento grande falhar no gateway |
 | `TASK_CONSUMER_MAX_CONCURRENT_EXECUTIONS` | `TaskConsumer__MaxConcurrentExecutions` de `apps/workers`. **Opcional, default 4, não medido**; fora de `[1, 32]` reprova o boot. Rollback: `1`. Subir acima do `N` verificado contra o `max_connections` do Postgres exige refazer a verificação antes (ver a linha da tabela de `apps/workers`) |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` — byte-idêntica entre `apps/api` e `apps/workers` |
+| `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` | `Identity__SigningKeyEncryptionKey` — só `apps/api`, distinta das outras chaves |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` — só `apps/inbox` |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` — byte-idêntica entre `apps/api`, `apps/inbox` e `apps/connectors` (risco aceito, ver [deployment.md](deployment.md)) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` de `apps/connectors`. **Opcional**: vazia, o provedor `google-drive` não aparece. Inválida, só o `apps/connectors` não sobe; o painel continua no ar |

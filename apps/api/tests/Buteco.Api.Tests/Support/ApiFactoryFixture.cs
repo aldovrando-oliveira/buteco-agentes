@@ -35,6 +35,14 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // A url pública vai TAMBÉM por UseSetting, que chega ao Program.cs antes do
+        // Build(): o emissor OIDC decide se liga lendo a configuração no registro dos
+        // serviços (design.md da change emissor-oidc-api, D8), e o
+        // ConfigureAppConfiguration abaixo só entra no Build(). Sem esta linha, o registro
+        // enxergaria a url do appsettings.Development.json. A cópia de baixo continua
+        // valendo para quem lê PublicUrlOptions depois do Build(), como os endereços A2A.
+        builder.UseSetting("PublicUrl:BaseUrl", ConfiguredPublicBaseUrl);
+
         // Garante "só openai configurado" como precondição dos testes,
         // independente do que appsettings.Development.json tiver localmente
         // (esse arquivo é ajustado livremente por quem desenvolve, para uso
@@ -125,10 +133,29 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
         TestAuthentication.AttachOperatorToken(client, Services);
     }
 
+    /// <summary>
+    /// <c>false</c> deixa o banco sem migrar depois de subir o host: é o estado em que o
+    /// anel de chaves do emissor não carrega (design.md da change emissor-oidc-api, D6).
+    /// Quem desliga migra depois, com <see cref="MigrateAsync"/>.
+    /// </summary>
+    protected virtual bool MigratesOnInitialize => true;
+
     async Task IAsyncLifetime.InitializeAsync()
     {
         await _postgres.StartAsync();
 
+        if (MigratesOnInitialize)
+        {
+            await MigrateAsync();
+        }
+        else
+        {
+            _ = Services;
+        }
+    }
+
+    public async Task MigrateAsync()
+    {
         using var scope = Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await dbContext.Database.MigrateAsync();

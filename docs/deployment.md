@@ -310,6 +310,7 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `ANTHROPIC_API_KEY`/`GEMINI_API_KEY` | `Anthropic__ApiKey`/`Gemini__ApiKey` | api (só checa presença), workers (usa de verdade) | não | vazias, os provedores não aparecem em `GET /providers` |
 | `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` | `Embedding__Provider`/`__Model`/`__Dimensions` | workers | **sim** — o compose falha sem `MODEL` e `DIMENSIONS` | N/A. Sem elas o boot **passa** e a **primeira indexação** falha com modelo vazio e dimensão 0. A coluna do índice é `vector(4096)`, fixa na migration |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` | api (cifra), workers (decifra) | sim | **sim, byte-idêntica** |
+| `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` | `Identity__SigningKeyEncryptionKey` | api (cifra das chaves do emissor OIDC) | sim, fail-fast (o emissor está ligado, porque `PUBLIC_DOMAIN` é obrigatória) | N/A — só um processo. **Distinta** das outras chaves |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` | api, inbox, connectors | sim, fail-fast | **sim, byte-idêntica** (risco aceito abaixo, #117) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` | connectors | não — vazia, o provedor `google-drive` não aparece; **inválida, o `apps/connectors` não sobe** | N/A |
@@ -325,6 +326,53 @@ ambiente; ficam fixos no compose: `Connectors__BaseUrl=http://connectors:8080`
 no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
 (ciclo de sincronização) e o build arg `VITE_CONNECTORS_BASE_URL=""` do
 `frontend`, que só existe junto com o bloco `/connectors` do `nginx.conf`.
+
+### Emissor OIDC do `apps/api` (#179)
+
+Com `PUBLIC_DOMAIN` definida, o `apps/api` é emissor OIDC, e o issuer é essa URL.
+
+**Gerar a chave antes do deploy em que a #179 entra:**
+
+```
+openssl rand -base64 32   # → IDENTITY_SIGNING_KEY_ENCRYPTION_KEY no .env.prod
+```
+
+Use um valor novo, nunca o de `MCP_CREDENTIAL_ENCRYPTION_KEY` ou de
+`INBOX_CREDENTIAL_ENCRYPTION_KEY`, e guarde-o junto do backup do banco. O
+`migrator` cria as tabelas (`identity_keys` e as quatro `openiddict_*`), e o
+`apps/api` cria a primeira chave de assinatura sozinho, na subida.
+
+**Perder ou trocar a chave.** As chaves gravadas em `identity_keys` deixam de
+abrir. O `apps/api` sobe, mas responde `503` em toda rota, inclusive `/health`,
+e o aviso do log cita o `kid` que não decifrou. Recolocar a chave certa no
+`.env.prod` e recriar o contêiner do `api` resolve; as linhas gravadas não mudam.
+Se a chave estiver perdida de vez, apague as linhas de `identity_keys`: o
+`apps/api` cria chaves novas, e os tokens emitidos com as antigas deixam de
+validar. Até a #208 nenhum app valida esses tokens, então hoje o efeito é nulo.
+
+**`503` até o primeiro acesso ao banco.** O anel de chaves carrega do banco
+logo depois do start, em segundo plano, e tenta de novo a cada 5 s. Até
+carregar, **toda** rota do `apps/api` responde `503` com `Retry-After: 5`.
+
+**Efeito no healthcheck do compose.** A imagem do `apps/api` sonda com
+`curl -f http://localhost:8080/health` (intervalo 10 s, `start-period` 10 s, 3
+tentativas), e `curl -f` trata `503` como falha. Com o banco inalcançável, o
+`api` fica `unhealthy` em cerca de 40 s, e o `connectors` e o `frontend`, que
+declaram `depends_on: api: service_healthy`, não sobem. O `inbox` depende só do
+`migrator` e sobe. É o comportamento certo: sem banco o `apps/api` não serve
+nada. Um `api` `unhealthy` com o banco fora do ar não é defeito do emissor.
+
+**Conferência depois do deploy**, contra o domínio público:
+
+```
+curl -s https://<PUBLIC_DOMAIN>/.well-known/openid-configuration   # JSON; issuer, jwks_uri e token_endpoint em https://<PUBLIC_DOMAIN>/
+curl -s https://<PUBLIC_DOMAIN>/.well-known/jwks                   # JSON com ao menos uma chave RSA com kid
+curl -s -X POST https://<PUBLIC_DOMAIN>/connect/token \
+     -d grant_type=client_credentials -d client_id=x -d client_secret=y   # {"error":"invalid_client",...}
+```
+
+Se algum devolver HTML, o `nginx.conf` do `frontend` está sem os blocos do
+emissor (imagem antiga do `frontend`).
 
 ### Risco aceito: placeholder `changeme` não é rejeitado no boot
 

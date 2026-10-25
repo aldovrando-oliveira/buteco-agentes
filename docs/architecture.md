@@ -70,7 +70,7 @@ provedores de arquivos (Google Drive) para as bases de conhecimento.
 
 | App | Papel | Stack | Banco |
 |---|---|---|---|
-| `apps/api` | CRUD de agentes, catálogo MCP, delegação, bases de conhecimento, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, emissão de push notification, login do operador e emissão de token | .NET 10, ASP.NET Core Minimal API, CQRS via `Mediator`, EF Core + Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` |
+| `apps/api` | CRUD de agentes, catálogo MCP, delegação, bases de conhecimento, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, emissão de push notification, login do operador e emissão de token, emissor OIDC (discovery, JWKS, token) | .NET 10, ASP.NET Core Minimal API, OpenIddict 7.7.2 (servidor), CQRS via `Mediator`, EF Core + Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` |
 | `apps/workers` | Executa tasks: chama o LLM, resolve tools MCP, executa delegação, dispara push notification | .NET 10 Worker Service, `Microsoft.Agents.AI` (`ChatClientAgent`, `Compaction`), EF Core espelhado, consumidor RabbitMQ | Mesmo Postgres de `apps/api` |
 | `apps/inbox` | Catálogo de canais de entrada, CRM (`Contact`/`Session`), histórico de mensagens, orquestrador de debounce, adapters de canal | .NET 10 Minimal API, CQRS próprio, EF Core | Postgres **próprio** (`buteco_inbox`), isolado |
 | `apps/connectors` | Conectores de provedor de arquivos para bases de conhecimento: navegação de pastas, descrição de pasta, listagem da raiz e markdown de arquivo. Hoje, Google Drive por service account | .NET 10 Minimal API, chamadas REST ao Google sem biblioteca do provedor | — |
@@ -849,8 +849,15 @@ Change `ciclo-de-sincronizacao` (#105).
 
 ## Autenticação
 
-**Token stateless assinado com HMAC**, sem biblioteca JWT e sem sessão em
-banco. `apps/api` emite o token do operador, no login; cada serviço assina
+**Hoje convivem dois mecanismos.** O token HMAC, descrito logo abaixo, autentica
+todas as rotas até a #182. O emissor OIDC do `apps/api` (#179, "Emissor OIDC",
+no fim desta seção) já emite token, mas nenhuma rota o aceita ainda: o
+`apps/inbox` e o `apps/connectors` passam a aceitá-lo na #208, e o `apps/api`
+na #180.
+
+**Token stateless assinado com HMAC**, sem sessão em banco. A convenção "sem
+biblioteca JWT" foi revogada em 24/10/2026 pela `emissor-oidc-api` (ver o
+`01`); o HMAC segue sem biblioteca até sair. `apps/api` emite o token do operador, no login; cada serviço assina
 o **próprio** token de serviço com a mesma chave, a cada requisição de saída —
 o `apps/inbox` com `service:inbox` em
 `apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs`, e o
@@ -927,6 +934,62 @@ sem introduzir um store compartilhado.
 
 Rotas anônimas são decisão de segurança, não detalhe de implementação:
 adicionar uma passa por revisão.
+
+### Emissor OIDC (`apps/api`, #179)
+
+O `apps/api` é servidor OpenID Connect com OpenIddict 7.7.2, só o pacote de
+servidor (`OpenIddict.Server.AspNetCore`), e expõe três endpoints anônimos:
+
+```
+cliente ──GET  /.well-known/openid-configuration──▶ issuer, jwks_uri, token_endpoint
+        ──GET  /.well-known/jwks──────────────────▶ chaves públicas RSA (kid)
+        ──POST /connect/token (client_credentials)▶ JWT RS256 com iss, sub, aud, iat, exp
+                                                      │
+quem valida (a partir da #208) ◀── verifica a assinatura só pelo JWKS
+```
+
+- **Issuer = `PublicUrl:BaseUrl`**, o mesmo valor dos endereços A2A. Sem url
+  pública, o emissor não é registrado e o boot avisa no log; o resto do app
+  segue igual. Url inválida, ou emissor ligado sem
+  `Identity:SigningKeyEncryptionKey`, derruba o boot.
+- **Endereços do discovery saem do issuer.** No OpenIddict, os endpoints do
+  documento são montados pelo esquema e pelo host da requisição, e atrás do
+  nginx do stack isso anunciaria `http://`. O
+  `Identity/DiscoveryEndpointsFromIssuerHandler.cs` troca a base da transação de
+  discovery pelo issuer, e com isso cobre também qualquer endpoint que uma
+  change futura habilitar.
+- **Fluxo:** só `client_credentials`, sem nenhum cliente cadastrado; em produção
+  o endpoint de token responde `invalid_client`. O token sai JWT **não cifrado**,
+  com `sub` = `client_id` e `aud` = os recursos dos escopos concedidos.
+- **Chaves** em `identity_keys`, no banco do `apps/api` (o `AppDbContext` do
+  `apps/workers` não as mapeia), junto das quatro tabelas do OpenIddict em
+  snake_case:
+  - assinatura RSA 2048 (RS256), com a parte privada cifrada por AES-256-GCM;
+  - uma chave simétrica de cifra, que o OpenIddict exige para os tokens que não
+    são de acesso;
+  - rotação a cada 90 dias por um `BackgroundService` que verifica de hora em
+    hora: a próxima chave aparece no JWKS 7 dias antes de assinar, e a anterior
+    continua no JWKS por 24 h depois de parar de assinar;
+  - a verificação roda sob `pg_advisory_xact_lock`, então duas instâncias não
+    criam duas chaves;
+  - cada chave vai ao OpenIddict embrulhada num certificado X.509 em memória,
+    com validade igual à janela de assinatura, porque é pela validade do
+    certificado que o OpenIddict escolhe com qual chave assinar.
+- **Até o anel carregar do banco, toda rota responde `503` com `Retry-After`**,
+  inclusive `/health`. Um aquecimento em segundo plano tenta logo depois do
+  start e repete a cada 5 s, sem bloquear o boot; a primeira requisição também
+  tenta, sem guardar a falha.
+- **Checagem de boot própria.** Os endpoints do OpenIddict não são rotas
+  mapeadas, então a `ValidateRouteAuthenticationClassification` não os vê. A
+  `ValidateIdentityIssuerEndpoints()` compara as URIs configuradas no servidor,
+  de todos os tipos de endpoint, com `IdentityIssuerEndpoints.Expected`, nos
+  dois sentidos.
+- **Não é credencial das rotas do app.** O `apps/api` não registra
+  `OpenIddict.Validation`; um JWT do emissor em `GET /agents` passa pelo handler
+  HMAC e recebe `401`.
+- **nginx do stack:** blocos exatos para `/.well-known/openid-configuration` e
+  `/.well-known/jwks`, e um de prefixo para `/connect`, com o desvio de
+  navegação.
 
 ---
 

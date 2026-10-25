@@ -169,6 +169,25 @@ o versionamento pretende seguir
 - Enforcement por padrão em toda rota HTTP, com allowlist explícita de rotas
   anônimas validada no startup.
 - Tela de login e módulo de token no painel.
+- **Emissor OpenID Connect no `apps/api`** (#179), com OpenIddict 7.7.2 (só o
+  servidor). Discovery em `/.well-known/openid-configuration`, JWKS em
+  `/.well-known/jwks` e token em `/connect/token`, anônimos e roteados pelo
+  nginx do stack. Só o fluxo `client_credentials` está habilitado, sem nenhum
+  cliente cadastrado: em produção o endpoint de token responde
+  `invalid_client`. O issuer é a `PublicUrl__BaseUrl`, e todos os endereços do
+  discovery saem dele, nunca do host da requisição. Sem url pública, o emissor
+  fica desligado, com aviso no boot. O login e o token HMAC não mudam, e um
+  token do emissor não é aceito nas rotas do app até a #180.
+- **Chaves de assinatura do emissor persistidas e com rotação automática**
+  (#179). RSA (RS256) em `identity_keys`, com a parte privada cifrada por
+  AES-256-GCM com a variável nova `Identity__SigningKeyEncryptionKey`
+  (`IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` no `.env.prod`, obrigatória no stack).
+  A cada 90 dias, sem reiniciar: a próxima chave é publicada no JWKS 7 dias
+  antes de assinar, e a anterior valida por mais 24 h. Um advisory lock do
+  Postgres impede duas rotações simultâneas.
+- **Checagem de boot dos endpoints do emissor** (#179): lista esperada com
+  motivo, conferida nos dois sentidos contra as URIs configuradas no servidor,
+  porque os endpoints do OpenIddict não passam pelo roteamento.
 
 **Contexto temporal e de canal**
 
@@ -743,6 +762,17 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **O `apps/api` responde `503` em toda rota até carregar as chaves do emissor
+  do banco** (#179), inclusive `/health`, com `Retry-After: 5`. O carregamento
+  roda em segundo plano logo depois do start e repete a cada 5 s. Com o banco
+  inalcançável, o `api` fica `unhealthy` em cerca de 40 s, e o `connectors` e o
+  `frontend` não sobem (ver [`docs/deployment.md`](docs/deployment.md)).
+- **EF Core 10.0.10 → 10.0.13 em todo o repositório** (#179), exigida pelo
+  `OpenIddict.EntityFrameworkCore`. As suítes do `apps/workers` e do
+  `apps/inbox` ficaram iguais à baseline, por nome.
+- **Revogada a convenção "token sem biblioteca JWT"** (#179). O HMAC continua
+  sem biblioteca até sair (#182); o emissor e a validação de token de terceiro
+  usam biblioteca mantida.
 - **Cada instância de `apps/workers` executa até 4 tasks ao mesmo tempo** (#163), em
   vez de uma. O número vem de `TaskConsumer__MaxConcurrentExecutions`
   (`TASK_CONSUMER_MAX_CONCURRENT_EXECUTIONS` no `.env.prod`), que fixa ao mesmo tempo

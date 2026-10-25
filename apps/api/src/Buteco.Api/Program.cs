@@ -6,6 +6,7 @@ using Buteco.Api.AgentKnowledgeBindings.Endpoints;
 using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Auth;
 using Buteco.Api.Auth.Endpoints;
+using Buteco.Api.Identity;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Insights;
 using Buteco.Api.Insights.Endpoints;
@@ -131,6 +132,13 @@ builder.Services.AddAuthorization(options =>
         .AddRequirements(new ServiceScopeRequirement())
         .Build());
 
+// Emissor OIDC (design.md da change emissor-oidc-api). Liga só com PublicUrl:BaseUrl,
+// e o registro não lança, para o migration bundle continuar subindo até o Build(): a
+// configuração errada é reprovada por ValidateIdentityIssuerConfiguration, abaixo. O
+// esquema do OpenIddict entra AO LADO do esquema acima, que continua o padrão (D9):
+// o token do emissor não é credencial das rotas do apps/api nesta change.
+builder.Services.AddIdentityIssuer(builder.Configuration);
+
 var corsOptions = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new CorsOptions();
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.WithOrigins(corsOptions.AllowedOrigins).AllowAnyHeader().AllowAnyMethod()));
@@ -163,12 +171,24 @@ app.ValidateMetricsRegimeConfiguration();
 // .RealComposition_WithInvalidBaseUrl_FailsToStart.
 app.ValidateConnectorsConfiguration();
 
+// Convenção 8: url pública inválida, ou emissor ligado sem Identity:SigningKeyEncryptionKey,
+// derruba o boot; sem url pública sobe com aviso e sem emissor (design.md da change
+// emissor-oidc-api, D8). Provado pela composição real em
+// IdentityIssuerStartupValidationTests.
+app.ValidateIdentityIssuerConfiguration();
+
 // Sem UseHttpsRedirection: no compose de servidor (containerizacao-stack-servidor),
 // apps/api só recebe tráfego HTTP puro do nginx interno do stack — TLS termina
 // fora do stack (nginx/Cloudflare já existentes), sem ForwardedHeaders
 // configurado. Redirecionar aqui geraria 307 permanente em todo request via
 // proxy. Alinha com apps/inbox, que nunca chamou este middleware.
 app.UseCors();
+
+// Antes do UseAuthentication, porque é lá dentro que o OpenIddict monta as opções, em
+// toda requisição, e sem chave a montagem lança: até o anel carregar, toda rota
+// responde 503 com Retry-After (design.md da change emissor-oidc-api, D6). Não faz
+// nada com o emissor desligado.
+app.UseIdentityKeyRingGate();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -203,6 +223,13 @@ app.ValidateRouteAuthenticationClassification(
 // endpoints mapeados (design.md da change catalogo-base-sincronizada, D6;
 // convenção 8). Também depois de todos os Map*.
 app.ValidateServiceScopeRoutes(ServiceScopeAuthorizationHandler.ServiceRoutes);
+
+// Os endpoints do emissor não são RouteEndpoint, e a checagem de rotas anônimas acima
+// não os vê. Esta compara as URIs configuradas no servidor OIDC com a lista esperada,
+// nos dois sentidos, e com as rotas mapeadas (design.md da change emissor-oidc-api,
+// D8). Remover esta linha reprova
+// IdentityIssuerStartupValidationTests.RealComposition_WithIntrospectionEndpoint_FailsToStart.
+app.ValidateIdentityIssuerEndpoints();
 
 app.Run();
 
