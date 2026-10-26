@@ -43,6 +43,11 @@ aparece longe da causa.
 | `Mcp:CredentialEncryptionKey` | `apps/api` + `apps/workers` | `apps/api` cifra a credencial do servidor MCP ao salvar; `apps/workers` não consegue decifrá-la para conectar durante uma execução |
 | Chaves de provedor de LLM | `apps/api` + `apps/workers` | `apps/api` anuncia o provedor como disponível em `GET /providers`, mas a task termina `failed` no worker |
 
+Fora da tabela, porque não é segredo: `Identity:Issuer` do `apps/inbox` e do
+`apps/connectors` precisa ser o `PublicUrl:BaseUrl` do `apps/api` (a barra final
+não importa). Divergente, nenhuma chave do emissor é obtida, o log de erro traz os
+dois valores, e todo token do emissor recebe `503`; o HMAC não muda.
+
 `Inbox:CredentialEncryptionKey` é a exceção deliberada: é **própria** de
 `apps/inbox` e nunca deve ter o mesmo valor de `Mcp:CredentialEncryptionKey`
 — são segredos de domínios diferentes, cada um decifrável apenas pelo
@@ -232,6 +237,7 @@ runtime.
 | `Api__BaseUrl` | **fail-fast** | Onde `apps/api` escuta. Usada para validar `AgentId` (`GET /agents/{id}`) e como cliente A2A (`POST /agents/{id}/a2a`) |
 | `PublicUrl__BaseUrl` | sim | URL pela qual este processo é alcançável a partir de `apps/api` e `apps/workers`. Vai no `pushNotificationConfig.url` de cada `SendMessage` — sem o valor correto, o round-trip nunca completa |
 | `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api`. Também usada para auto-assinar o token de serviço |
+| `Identity__Issuer` | não | Issuer do emissor OIDC do `apps/api`: o mesmo valor do `PublicUrl__BaseUrl` de lá. Liga a validação do access token do emissor (audience `buteco-inbox`), ao lado do HMAC. Ver "Validação do token do emissor", abaixo |
 | `Debounce__Window` | não | Janela de agrupamento de mensagens da mesma sessão. Default `00:00:10` |
 | `Debounce__SweepInterval` | não | Cadência de varredura do `BackgroundService` que dispara buffers vencidos. Default `00:00:02` |
 | `Debounce__MaxDispatchAttempts` | não | Teto de retentativas em falha de transporte. Default `3` |
@@ -254,7 +260,8 @@ servidor ainda não existe (#119).
 | `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api` e `apps/inbox`. Ausente ou vazia, o boot falha |
 | `GoogleDrive__ServiceAccountKeyBase64` | não | O arquivo JSON da chave da service account do Google, em base64 numa linha (`base64 -i chave.json \| tr -d '\n'`). **Ausente ou vazia, o provedor `google-drive` não existe** para o processo: o app sobe e `GET /connectors/providers` não o lista. **Presente e inválida, o boot falha**, com a verificação que falhou e sem trecho do valor. Só o `client_email` sai do processo, na rota de provedores |
 | `Cors__AllowedOrigins` | não | Origens do painel autorizadas por CORS, no mesmo formato dos outros apps |
-| `Api__BaseUrl` | não | Endereço do `apps/api`, usado só pelo ciclo de sincronização. Em desenvolvimento, `http://localhost:5017`. Ver abaixo |
+| `Api__BaseUrl` | não | Endereço do `apps/api`, usado pelo ciclo de sincronização e, com `Identity__Issuer`, para obter as chaves do emissor. Em desenvolvimento, `http://localhost:5017`. Ver abaixo |
+| `Identity__Issuer` | não | Issuer do emissor OIDC do `apps/api`, como no `apps/inbox` (audience `buteco-connectors`). **Com ele, `Api__BaseUrl` passa a ser obrigatório**: sem endereço interno não há de onde ler as chaves, e o boot falha nomeando as duas chaves. Ver "Validação do token do emissor", abaixo |
 
 `Api__BaseUrl` tem três estados, e só um deles derruba o processo:
 
@@ -270,6 +277,28 @@ A navegação e a descrição de pasta não dependem dele. O ciclo assina
 A service account usa só o escopo `drive.readonly`. A Drive API precisa estar
 **ativada no projeto do Google Cloud dono da service account**; sem isso, toda
 chamada responde `502` com o código `api-not-configured`.
+
+---
+
+## Validação do token do emissor (`apps/inbox` e `apps/connectors`)
+
+`Identity__Issuer` liga, nos dois apps, a aceitação do access token do emissor
+OIDC do `apps/api` (#208), ao lado do HMAC, que não muda. A forma do token
+decide o esquema: JWS compacto vai à validação do emissor, qualquer outra coisa
+ao HMAC.
+
+| valor | boot | token do emissor | HMAC |
+|---|---|---|---|
+| ausente ou vazio | sobe, com o aviso "Validação do token do emissor desligada" | `401` | como antes |
+| URI absoluta `http` ou `https`, sem query nem fragmento | sobe, sem nenhuma chamada ao `apps/api`; as chaves vêm em segundo plano | aceito com a `aud` do app; `503` com `Retry-After: 10` até a primeira obtenção das chaves | como antes |
+| outro valor | **falha**, nomeando `Identity:Issuer` | — | — |
+
+As chaves são lidas de `{Api__BaseUrl}/.well-known/openid-configuration` (só para
+conferir o `issuer`) e `{Api__BaseUrl}/.well-known/jwks`, nunca do endereço
+público. O subject do token sai do `client_id`, por uma tabela fixa no código
+(`buteco-painel` → `operator`); cliente fora dela recebe `403`. Não há opção de
+configuração para os intervalos (busca a cada 10 s até obter; renovação a cada
+hora; `kid` desconhecido no máximo uma busca por minuto).
 
 ---
 
@@ -314,7 +343,7 @@ de configuração que o processo enxerga.
 |---|---|
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` | credenciais do Postgres do stack (sem porta publicada no host) |
 | `RABBITMQ_USER` / `RABBITMQ_PASSWORD` | credenciais do RabbitMQ do stack (sem porta publicada) |
-| `PUBLIC_DOMAIN` | `PublicUrl__BaseUrl` de `apps/api` **e** de `apps/inbox` |
+| `PUBLIC_DOMAIN` | `PublicUrl__BaseUrl` de `apps/api` **e** de `apps/inbox`, e `Identity__Issuer` de `apps/inbox` **e** de `apps/connectors` |
 | `TZ` | `TZ` de `apps/workers` |
 | `OPENAI_BASE_URL` / `OPENAI_API_KEY` | `OpenAI__BaseUrl` / `OpenAI__ApiKey` nos dois processos |
 | `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | `Anthropic__ApiKey` / `Gemini__ApiKey`, em `apps/api` **e** `apps/workers`. Opcionais: vazias, os provedores não aparecem em `GET /providers` |

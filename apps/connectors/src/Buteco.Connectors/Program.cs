@@ -4,7 +4,6 @@ using Buteco.Connectors.Connectors.GoogleDrive;
 using Buteco.Connectors.Endpoints;
 using Buteco.Connectors.Options;
 using Buteco.Connectors.Sync;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,10 +35,10 @@ builder.Services.AddGoogleDriveConnector(builder.Configuration);
 // registros de conector acima.
 builder.Services.ValidateConnectorRegistrations();
 
-builder.Services
-    .AddAuthentication(OperatorTokenAuthenticationHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, OperatorTokenAuthenticationHandler>(
-        OperatorTokenAuthenticationHandler.SchemeName, _ => { });
+// Token HMAC e, com Identity:Issuer, o access token do emissor do apps/api validado
+// pelo JWKS, um esquema por forma de token (validacao-jwks-inbox-connectors, D2).
+// Nenhuma requisição espera o apps/api: as chaves vêm em segundo plano (D4).
+builder.Services.AddIssuerTokenAuthentication(builder.Configuration);
 
 // Autenticação MAIS a tabela de subjects (design.md, D1). Só RequireAuthenticatedUser()
 // é o defeito da #116: qualquer subject validamente assinado teria acesso a tudo.
@@ -75,6 +74,12 @@ app.ValidateConnectorsSubjectRoutes(ConnectorsSubjectAuthorizationHandler.Subjec
 // Convenção 8, sobre o host construído: Api:BaseUrl presente e inválido derruba o boot;
 // ausente sobe com aviso. O guarda da composição real está em ApiConfigurationValidationTests.
 app.ValidateApiConfiguration();
+
+// Convenção 8 (validacao-jwks-inbox-connectors, D7): issuer do emissor válido e, com
+// ele, Api:BaseUrl presente; e a tabela de clientes apontando só para subjects de
+// SubjectRoutes. Sem Identity:Issuer, só avisa que a validação está desligada.
+app.ValidateIssuerTokenConfiguration();
+app.ValidateIssuerClientSubjects();
 
 app.Run();
 

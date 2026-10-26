@@ -343,7 +343,7 @@ public class InboxShutdownUnderKestrelTests(PostgresOnlyFixture fixture, ITestOu
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.ConfigureAppConfiguration((_, config) =>
+            builder.UseIssuer().ConfigureAppConfiguration((_, config) =>
             {
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {

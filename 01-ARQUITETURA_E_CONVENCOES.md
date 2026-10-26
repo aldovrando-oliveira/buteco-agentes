@@ -526,8 +526,10 @@ um laço que falharia pelo mesmo motivo.
 
 **Hoje convivem dois mecanismos.** O token HMAC, descrito abaixo, continua
 emitindo e validando todas as rotas até a #182. Ao lado dele, desde a #179, o
-`apps/api` é emissor OpenID Connect (ver "Emissor OIDC", abaixo), que ainda não
-é credencial de rota nenhuma.
+`apps/api` é emissor OpenID Connect (ver "Emissor OIDC", abaixo), e desde a
+#208 o `apps/inbox` e o `apps/connectors` aceitam o access token dele, validado
+pelo JWKS ("Validação do token do emissor", abaixo). O `apps/api` ainda não o
+aceita nas próprias rotas (#180).
 
 **Token stateless assinado com HMAC**, sem sessão em banco. O texto anterior
 dizia "sem biblioteca JWT"; essa convenção foi **revogada em 24/10/2026**
@@ -542,11 +544,24 @@ e, desde a #104, o `apps/api` com `service:api` em
 `apps/api/src/Buteco.Api/Auth/ServiceTokenDelegatingHandler.cs`, só para chamar o
 `apps/connectors`; os dois são cópias com o subject trocado, sem `libs/`).
 A frase anterior dizia que o `apps/api` emitia os dois, e não é o que o
-código faz; corrigida em `catalogo-base-sincronizada`. `apps/api`
+código faz; corrigida em `catalogo-base-sincronizada`.
+
+**Nenhuma requisição espera o `apps/api` para ser autenticada.** O token HMAC
+é validado localmente pela chave compartilhada, no `apps/api`, no `apps/inbox`
+e no `apps/connectors`, como antes. O token do emissor é validado localmente
+pelas chaves públicas do JWKS, que o `apps/inbox` e o `apps/connectors` obtêm
+do `apps/api` pelo endereço interno **fora do caminho da requisição**: em
+segundo plano depois do start, renovadas a cada hora, e de novo diante de um
+`kid` desconhecido, no máximo uma vez por minuto. Com o `apps/api` fora do ar,
+o app sobe e o HMAC funciona; o token do emissor valida com as chaves já
+obtidas, e recebe `503` se nenhuma foi obtida ainda. Foi o que permitiu
+autenticar apps com bancos isolados sem introduzir store compartilhado.
+*(Reescrito em 25/10/2026, `validacao-jwks-inbox-connectors`, D8. Dizia: "`apps/api`
 e `apps/inbox` validam **localmente**, compartilhando apenas a chave de
-assinatura via configuração — nenhuma chamada de rede entre os processos
-para validar token. Foi o que permitiu autenticar dois apps com bancos
-isolados sem introduzir store compartilhado.
+assinatura via configuração — nenhuma chamada de rede entre os processos para
+validar token." A obtenção das chaves é a única chamada, e não afeta o HMAC; o
+texto também omitia o `apps/connectors`, que valida o HMAC do mesmo jeito desde
+a #103.)*
 
 - **Operador único**, credencial via variável de ambiente (usuário +
   hash PBKDF2), `POST /auth/login` em `apps/api`. Sem tabela de usuários,
@@ -580,7 +595,10 @@ isolados sem introduzir store compartilhado.
   habilitado, sem nenhum cliente cadastrado: o primeiro é da #186. O issuer é
   a `PublicUrl:BaseUrl`, e sem ela o emissor fica desligado, com aviso no boot.
   Os endereços do discovery saem do issuer, nunca do host da requisição. Até a
-  #182, um token do emissor enviado a uma rota do app recebe `401`.
+  #180, um token do emissor enviado a uma rota do `apps/api` recebe `401`. O
+  access token sai com `typ` `at+jwt` e com `client_id`, os dois postos pelo
+  próprio OpenIddict; o `IdentityIssuerTokenTests` guarda esse contrato, porque
+  os apps que validam dependem dele.
 - **Chaves do emissor**: RSA (RS256) em `identity_keys`, com a parte privada
   cifrada por AES-256-GCM com `Identity:SigningKeyEncryptionKey`, distinta da
   chave do MCP. A rotação é automática a cada 90 dias, sem reiniciar: a
@@ -592,6 +610,21 @@ isolados sem introduzir store compartilhado.
   de rotas anônimas não os vê. Eles têm lista esperada própria, com motivo
   (`IdentityIssuerEndpoints.Expected`), conferida no boot nos dois sentidos
   contra as URIs configuradas no servidor (convenção 8).
+- **Validação do token do emissor** (#208), no `apps/inbox` e no
+  `apps/connectors`, com `Microsoft.AspNetCore.Authentication.JwtBearer`
+  10.0.13 e `ConfigurationManager` próprio. **Um esquema por token, pela
+  forma:** JWS compacto (dois pontos) vai ao esquema do emissor, qualquer outra
+  coisa ao HMAC, sem queda de um no outro. Exige RS256, `typ` `at+jwt`, `iss`
+  igual a `Identity:Issuer` (normalizado com barra final), a `aud` do app
+  (`buteco-inbox`, `buteco-connectors`; `buteco-api` na #180) e `exp`, com
+  30 s de tolerância. **As chaves vêm de `{Api:BaseUrl}/.well-known/jwks`**,
+  nunca do `jwks_uri` público, e o `issuer` do discovery lido pelo endereço
+  interno é conferido contra `Identity:Issuer`. Sem `Identity:Issuer`, a
+  validação fica desligada, com aviso no boot. **O subject vem do
+  `client_id`**, por uma tabela fechada por app (`buteco-painel` → `operator`),
+  e nunca do `sub`: cliente fora da tabela recebe `403`. As tabelas de subjects
+  de cada app não mudam. Código copiado entre os dois apps, sem `libs/`; a
+  pergunta volta na #180, com o terceiro consumidor.
 
 Rotas anônimas são decisão de segurança, não detalhe de implementação:
 adicionar uma passa por revisão.

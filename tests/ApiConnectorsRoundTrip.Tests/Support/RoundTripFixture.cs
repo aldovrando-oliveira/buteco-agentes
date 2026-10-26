@@ -18,6 +18,7 @@ using ApiProgram = ApiAssembly::Program;
 using ApiIndexingPublisher = ApiAssembly::Buteco.Api.Knowledge.Indexing.IKnowledgeIndexingJobPublisher;
 using ApiTokenService = ApiAssembly::Buteco.Api.Auth.ITokenService;
 using ConnectorsProgram = ConnectorsAssembly::Program;
+using ConnectorsIssuerKeysRetriever = ConnectorsAssembly::Buteco.Connectors.Auth.IssuerKeysRetriever;
 using ConnectorsSyncApiClient = ConnectorsAssembly::Buteco.Connectors.Sync.SyncApiClient;
 using ConnectorsSyncScheduler = ConnectorsAssembly::Buteco.Connectors.Sync.SyncSchedulerService;
 
@@ -47,6 +48,15 @@ public sealed class RoundTripFixture : IAsyncLifetime
     private const string ConnectorsBaseUrl = "http://connectors.roundtrip.test";
 
     private const string ApiBaseUrl = "http://api.roundtrip.test";
+
+    // Emissor do apps/api ligado (validacao-jwks-inbox-connectors, D9): url pública fixa,
+    // passada ao apps/connectors como Identity:Issuer SEM a barra final, como o compose faz
+    // com PUBLIC_DOMAIN. O apps/connectors busca as chaves pelo TestServer do apps/api
+    // (o endereço interno do teste), atrás deste portão: fechado, a busca falha como rede
+    // fora.
+    public const string ApiPublicBaseUrl = "https://api.exemplo.test";
+
+    public IssuerKeysGate ApiIssuerKeys { get; } = new();
 
     private readonly PostgreSqlContainer _apiPostgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
         .WithDatabase("buteco_agents_connectors_roundtrip_test")
@@ -109,6 +119,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
             // O apps/api desta fixture, e não o localhost:5017 do appsettings.Development.json
             // do apps/connectors (design.md da change ciclo-de-sincronizacao, D2).
             builder.UseSetting("Api:BaseUrl", ApiBaseUrl);
+            builder.UseSetting("Identity:Issuer", ApiPublicBaseUrl);
             builder.ConfigureServices(services =>
             {
                 services.AddConnector(FakeConnector.Key, FakeConnector.AccountEmail, _ => Fake, _ => Fake);
@@ -122,14 +133,23 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
                 services.AddHttpClient(ConnectorsSyncApiClient.HttpClientName)
                     .ConfigurePrimaryHttpMessageHandler(() => new RecordingHandler(ConnectorsToApi) { InnerHandler = api!.Server.CreateHandler() });
+
+                services.AddHttpClient(ConnectorsIssuerKeysRetriever.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => api!.Server.CreateHandler())
+                    .AddHttpMessageHandler(() => new IssuerKeysGateHandler(ApiIssuerKeys));
             });
         });
 
         api = new WebApplicationFactory<ApiProgram>().WithWebHostBuilder(builder =>
         {
+            // UseSetting: o emissor decide se liga no registro, antes do Build() (D8 da
+            // change emissor-oidc-api); a cópia de baixo vale para quem lê depois.
+            builder.UseSetting("PublicUrl:BaseUrl", ApiPublicBaseUrl);
             builder.ConfigureAppConfiguration((_, config) =>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
+                    ["PublicUrl:BaseUrl"] = ApiPublicBaseUrl,
+                    ["Identity:SigningKeyEncryptionKey"] = "dGVzdC1pZGVudGl0eS1rZXktMzItYnl0ZXMtLS0tLS0=",
                     ["Auth:TokenSigningKey"] = TokenSigningKey,
                     ["Connectors:BaseUrl"] = ConnectorsBaseUrl,
                     // A checagem de fuso do apps/api compara com o fuso da máquina.

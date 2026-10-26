@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using Buteco.Inbox.Auth;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Buteco.Inbox.Tests.Support;
@@ -19,6 +20,16 @@ public static class TestAuthentication
     {
         ["Auth:TokenSigningKey"] = TokenSigningKey,
     };
+
+    // Identity:Issuer das fixtures (validacao-jwks-inbox-connectors, D7). Vazio desliga a
+    // validação do token do emissor: sem isso, o appsettings.Development.json a ligaria
+    // em toda fixture, com busca de chaves em segundo plano. Por UseSetting, e não em
+    // ConfigOverrides: a WebApplicationFactory aplica o ConfigureAppConfiguration só no
+    // Build(), e o AddIssuerTokenAuthentication decide o registro antes dele, lendo a
+    // configuração do builder. Quem testa o emissor liga com o TestIssuer
+    // (IssuerTokenFactory).
+    public static IWebHostBuilder UseIssuer(this IWebHostBuilder builder, string issuer = "") =>
+        builder.UseSetting("Identity:Issuer", issuer);
 
     public static void AttachOperatorToken(HttpClient client, IServiceProvider services)
     {

@@ -141,6 +141,11 @@ services:
       # internet pública; correção futura seria uma variável separada
       # só pra isso).
       PublicUrl__BaseUrl: ${PUBLIC_DOMAIN}
+      # Issuer do emissor OIDC do apps/api: a mesma variável que vira o
+      # PublicUrl__BaseUrl de lá, para os dois valores nunca divergirem
+      # (validacao-jwks-inbox-connectors, D3). As chaves vêm pelo Api__BaseUrl
+      # acima, nunca pelo domínio público. Vazia, só o token HMAC é aceito.
+      Identity__Issuer: ${PUBLIC_DOMAIN}
       Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY}
     # Sem porta publicada — idem apps/api.
 
@@ -214,8 +219,12 @@ services:
       # não sobe — e por isso o frontend NÃO depende deste serviço.
       GoogleDrive__ServiceAccountKeyBase64: ${GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64:-}
       # Endereço interno do apps/api para o ciclo de sincronização (#105). Fixo;
-      # vazio desligaria o ciclo.
+      # vazio desligaria o ciclo. É também por ele que as chaves do emissor
+      # são obtidas.
       Api__BaseUrl: "http://api:8080"
+      # Issuer do emissor OIDC do apps/api, mesma variável e mesmo motivo do
+      # inbox (validacao-jwks-inbox-connectors, D3).
+      Identity__Issuer: ${PUBLIC_DOMAIN}
     # Sem porta publicada — o nginx do stack alcança pelo nome de serviço.
 
   frontend:

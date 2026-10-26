@@ -48,6 +48,10 @@
     <PackageVersion Include="OpenIddict.Server.AspNetCore" Version="7.7.2" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.7.2" />
 
+    <!-- Validação do token do emissor (apps/inbox, apps/connectors; change
+         validacao-jwks-inbox-connectors D1). A cadeia Microsoft.IdentityModel.*
+         fica na mínima declarada (8.19.2), sem fixar aqui. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
     <!-- CQRS mediator (apps/api) -->
     <PackageVersion Include="Mediator.Abstractions" Version="3.0.2" />
     <PackageVersion Include="Mediator.SourceGenerator" Version="3.0.2" />

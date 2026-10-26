@@ -851,9 +851,9 @@ Change `ciclo-de-sincronizacao` (#105).
 
 **Hoje convivem dois mecanismos.** O token HMAC, descrito logo abaixo, autentica
 todas as rotas até a #182. O emissor OIDC do `apps/api` (#179, "Emissor OIDC",
-no fim desta seção) já emite token, mas nenhuma rota o aceita ainda: o
-`apps/inbox` e o `apps/connectors` passam a aceitá-lo na #208, e o `apps/api`
-na #180.
+no fim desta seção) emite access token, que o `apps/inbox` e o `apps/connectors`
+aceitam desde a #208 ("Validação do token do emissor", depois dele); o
+`apps/api` passa a aceitá-lo na #180.
 
 **Token stateless assinado com HMAC**, sem sessão em banco. A convenção "sem
 biblioteca JWT" foi revogada em 24/10/2026 pela `emissor-oidc-api` (ver o
@@ -866,10 +866,13 @@ o `apps/inbox` com `service:inbox` em
 `apps/connectors`, e o `apps/connectors` com `service:connectors` em
 `apps/connectors/src/Buteco.Connectors/Auth/ServiceTokenDelegatingHandler.cs`, só para
 o ciclo de sincronização chamar o `apps/api`. Os três handlers são cópias com o subject
-trocado, sem `libs/`. `apps/api` e `apps/inbox` validam **localmente**,
-compartilhando apenas a chave de assinatura via configuração. Não há chamada de rede entre os processos para
-validar token — foi o que permitiu autenticar dois apps com bancos isolados
-sem introduzir um store compartilhado.
+trocado, sem `libs/`. **Nenhuma requisição espera o `apps/api` para ser
+autenticada:** o HMAC é validado localmente nos três apps, pela chave
+compartilhada; o token do emissor é validado localmente pelas chaves do JWKS,
+obtidas em segundo plano (ver abaixo). Foi o que permitiu autenticar apps com
+bancos isolados sem introduzir um store compartilhado. *(Até 25/10/2026 este
+parágrafo dizia "Não há chamada de rede entre os processos para validar token";
+a obtenção das chaves do emissor é a única, fora do caminho da requisição.)*
 
 - **Operador único**, com credencial via variável de ambiente (usuário mais
   hash PBKDF2), por `POST /auth/login` em `apps/api`. Sem tabela de usuários
@@ -984,12 +987,60 @@ quem valida (a partir da #208) ◀── verifica a assinatura só pelo JWKS
   `ValidateIdentityIssuerEndpoints()` compara as URIs configuradas no servidor,
   de todos os tipos de endpoint, com `IdentityIssuerEndpoints.Expected`, nos
   dois sentidos.
-- **Não é credencial das rotas do app.** O `apps/api` não registra
-  `OpenIddict.Validation`; um JWT do emissor em `GET /agents` passa pelo handler
-  HMAC e recebe `401`.
+- **Não é credencial das rotas do `apps/api`** (até a #180). O `apps/api` não
+  registra validação do token; um JWT do emissor em `GET /agents` passa pelo
+  handler HMAC e recebe `401`.
+- **O access token sai com `typ` `at+jwt` e `client_id`**, os dois postos pelo
+  próprio OpenIddict (`PrepareAccessTokenPrincipal`, RFC 9068). Os apps que
+  validam dependem dos dois, e o `IdentityIssuerTokenTests` guarda o contrato.
 - **nginx do stack:** blocos exatos para `/.well-known/openid-configuration` e
   `/.well-known/jwks`, e um de prefixo para `/connect`, com o desvio de
   navegação.
+
+### Validação do token do emissor (`apps/inbox` e `apps/connectors`, #208)
+
+```
+                       Authorization: Bearer <token>
+                                   │
+                    esquema de política "Bearer" (pela forma)
+                  ┌────────────────┴─────────────────┐
+         dois pontos (JWS)                   qualquer outra coisa
+                  │                                  │
+        IssuerToken (JwtBearer)            OperatorToken (HMAC, sem mudança)
+        RS256, typ at+jwt, iss,
+        aud do app, exp (±30 s)
+                  │
+        ConfigurationManager ◄── IssuerKeysRetriever ── IssuerKeysRefreshService
+        (cache, kid desconhecido:       │                (10 s até obter,
+         1 busca/min)                   │                 tique de 10 min)
+                                        ▼
+                  {Api:BaseUrl}/.well-known/openid-configuration  (só o issuer)
+                  {Api:BaseUrl}/.well-known/jwks                  (as chaves)
+                  nunca o jwks_uri público
+```
+
+- **Um esquema por token.** O seletor decide antes de validar, pela contagem de
+  pontos (o HMAC tem um por construção). Um JWT inválido nunca é tentado no
+  HMAC, e um HMAC nunca toca nas chaves.
+- **Chaves pelo endereço interno**, pelo cliente nomeado `IssuerKeys` (timeout
+  5 s). O `issuer` do discovery é conferido contra `Identity:Issuer`;
+  divergente, nenhuma chave é obtida e o erro traz os dois valores.
+- **O app sobe sem o `apps/api`.** Nenhuma I/O no boot; antes da primeira
+  obtenção, o token do emissor recebe `503` com `Retry-After`, para o painel
+  não deslogar por uma queda passageira. Depois, as chaves obtidas continuam
+  valendo com o `apps/api` fora. Entre buscas que falharam há pelo menos 10 s,
+  inclusive as disparadas por requisição. A configuração "last known good" da
+  biblioteca fica desligada, para uma chave retirada do JWKS deixar de valer
+  assim que o cache renova.
+- **O principal sai do `client_id`**, por uma tabela fechada por app
+  (`IssuerClientSubjects`: `buteco-painel` → `operator`), e nunca do `sub`. As
+  tabelas de subjects (`SubjectAuthorization`,
+  `ConnectorsSubjectAuthorizationHandler`) não mudam.
+- **Checagens de boot:** `Identity:Issuer` absoluto, sem query nem fragmento;
+  com ele, `Api:BaseUrl` obrigatório; e a tabela de clientes apontando só para
+  subjects existentes. Sem `Identity:Issuer`, a validação fica desligada, com
+  aviso.
+- **Código copiado entre os dois apps**, sem `libs/`; cada cópia nomeia a outra.
 
 ---
 

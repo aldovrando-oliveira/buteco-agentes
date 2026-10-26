@@ -16562,3 +16562,169 @@ pegar o advisory lock. Corrigido, lendo depois do lock.
   `token_endpoint` em `https://`, e `invalid_client` no token.
 - **Rollback:** a imagem anterior do `api` e do `frontend`. As tabelas novas ficam, sem
   efeito sobre o código anterior.
+
+## `validacao-jwks-inbox-connectors` — `apps/inbox` e `apps/connectors` aceitam o token do emissor pelo JWKS, ao lado do HMAC (#208)
+
+**Change proposta em 24/10/2026 e implementada em 25/10/2026** na branch
+`feat/208-validacao-jwks-inbox-connectors`, num worktree próprio, a partir de `f216338`.
+Entrega M1 · 2 de 8 (acompanhamento #194). Capacidade nova `issuer-token-validation`;
+`oidc-issuer` e `route-authentication` alteradas. Change arquivada em
+`openspec/changes/archive/2026-10-25-validacao-jwks-inbox-connectors/`, com a 9.4 (limpeza
+pós-merge) aberta. Antes do apply, por pedido do dono, ficaram registradas na #186
+("`buteco-` é prefixo reservado de `client_id`; aplicação externa só recebe o recurso
+`buteco-api`") e na #180 ("o painel trata `503` com `Retry-After` como indisponibilidade
+passageira; só `401` encerra a sessão"). Relacionadas: #180 (herda os valores abaixo),
+#182, #184, #186, #214 (aberta nesta change).
+
+### O que entrou
+
+- **Validação do access token do emissor** no `apps/inbox` e no `apps/connectors`, com
+  `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.13 (MIT) e um
+  `ConfigurationManager<OpenIdConnectConfiguration>` montado por nós. RS256, `typ`
+  `at+jwt`, `iss` = `Identity:Issuer` normalizado, a `aud` do app (`buteco-inbox`,
+  `buteco-connectors`) e `exp`, com 30 s de tolerância; `MapInboundClaims = false`.
+- **Um esquema por token, pela forma** (esquema de política `Bearer`): exatamente dois
+  pontos vai ao `IssuerToken`, qualquer outra coisa ao `OperatorToken` (HMAC), que não
+  mudou. Sem queda de um no outro.
+- **Chaves pelo endereço interno**: `{Api:BaseUrl}/.well-known/openid-configuration`, só
+  para conferir o `issuer` contra `Identity:Issuer`, e `{Api:BaseUrl}/.well-known/jwks`.
+  O `jwks_uri` público nunca é seguido. Cliente nomeado `IssuerKeys`, timeout 5 s.
+- **O app sobe sem o `apps/api`**: busca em segundo plano a cada 10 s até obter, depois
+  tique de 10 min; renovação automática a cada hora (cache de no máximo ~1h15); `kid`
+  desconhecido no máximo uma busca por minuto; 10 s entre buscas falhas, inclusive as da
+  requisição; `503` com `Retry-After: 10` para o token do emissor enquanto nenhuma chave
+  foi obtida. O HMAC nunca depende disso.
+- **Subject pelo `client_id`**, numa tabela fechada por app (`buteco-painel` →
+  `operator`), nunca pelo `sub`. As tabelas de subjects dos dois apps não mudaram.
+- **Checagens de boot** (convenção 8): `Identity:Issuer` absoluto `http`/`https` sem
+  query nem fragmento; com ele, `Api:BaseUrl` obrigatório (só alcançável no
+  `apps/connectors`); a tabela de clientes apontando só para subjects existentes. Sem
+  `Identity:Issuer`, a validação fica desligada, com aviso.
+- **`apps/api`: nenhuma mudança de produção.** Um teste de contrato no
+  `IdentityIssuerTokenTests` afirma o `client_id` e o `typ` `at+jwt` que o OpenIddict já
+  emite (ver as divergências).
+- **Stack:** `Identity__Issuer: ${PUBLIC_DOMAIN}` no `inbox` e no `connectors`; nenhuma
+  variável nova no `.env.prod`, nenhuma migration.
+- **Docs:** o princípio do `01` reescrito (D8), com o texto antigo citado e datado;
+  `docs/architecture.md` (diagrama do caminho das chaves), `docs/configuration.md`,
+  `docs/deployment.md` e o `CHANGELOG`.
+- Código copiado entre os dois apps, sem `libs/` (D10), cada cópia nomeando a outra.
+
+### O que a implementação mediu
+
+Suítes por nome, com `DOCKER_HOST` do Podman, `TESTCONTAINERS_RYUK_DISABLED`,
+`DOTNET_SYSTEM_NET_DISABLEIPV6` e `TZ=America/Sao_Paulo`, VM `podman-machine-default` (6
+CPUs, 6 GiB), `CPU_Speed_Limit = 100`, relógio da VM no máximo 1 s à frente do Mac e
+nenhum contêiner em `podman ps` na largada de cada suíte. Baseline no worktree limpo em
+`f216338`; fechamento na árvore final. Comparação pelo `testName` dos `.trx`, como
+multiconjunto, com o GUID gerado no teste normalizado (ver #214):
+
+| suíte | baseline em `f216338` | fechamento | diferença por nome |
+|---|---|---|---|
+| `apps/inbox` | 252/252, 51 s (load 5,47 → 7,52) | **302/302**, 45 s (load 3,00 → 5,84) | +50 novos, todos aprovados; os 252 com par igual |
+| `apps/connectors` | 261/261 + 1 ignorado, 10 s (load 7,52 → 13,07) | **315/315 + 1 ignorado**, 11 s (load 5,84 → 5,19) | +54 novos, todos aprovados; os 262 com par igual |
+| `apps/api` | 863/863, 4m01s (load 7,62 → 13,53) | **864/864**, 1m38s (load 6,90 → 11,53) | +1 novo (o contrato do `client_id`); os 863 com par igual |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 11/11, 18 s (load 2,82 → 4,44) | **12/12**, 18 s (load 5,19 → 5,11) | +1 novo (acordo com o emissor real); os 11 com par igual |
+| `tests/ApiConnectorsRoundTrip.Tests` | 7/7, 6 s (load 4,44 → 9,06) | **8/8**, 6 s (load 5,11 → 5,28) | +1 novo; os 7 com par igual |
+
+- A baseline dos dois projetos de `tests/` foi rodada em 25/10, no mesmo worktree limpo,
+  depois da das três suítes (24/10): a 1.1 não os cobria.
+- **Sem a normalização, o `apps/connectors` acusava 5 ausentes e 5 novos**: os casos de
+  `SubjectAuthorizationTests.SubjectXRota` com a rota do "Sincronizar agora" levam um
+  `Guid.NewGuid()` no nome. São os mesmos casos; virou a **#214**.
+- **Build `--no-incremental`** dos cinco projetos de teste, nos dois worktrees: o mesmo
+  conjunto de avisos.
+- **Três rodadas de fechamento, mesmos números.** A 1 foi antes da linha de log de
+  sucesso da obtenção das chaves; a 2, antes de tirar o `kid` repetido dessa linha
+  (achado na 9.2). A tabela é a 3 para os quatro projetos que compilam esse código, e a 2
+  para o `apps/api`, que não mudou entre elas. As anteriores estão em
+  `208-fechamento/rodada-{1,2}/`.
+- **Verificação manual no stack local (9.2), 25/10/2026:** `apps/inbox` (5027) e
+  `apps/connectors` (5037) por `dotnet run`, com o `apps/api` parado: os dois sobem, logam
+  `Validação do token do emissor ligada: issuer http://localhost:5017/, ...`, `/health`
+  `200`, um token com forma de JWT recebe `503` com `Retry-After: 10`, e o aviso de busca
+  falha se repete (`Connection refused (localhost:5017)`: a mensagem da exceção de rede
+  traz `host:porta`, nunca credencial). Subido o `apps/api` (5017), os dois logam
+  `Chaves do emissor obtidas pelo Api:BaseUrl (/.well-known/jwks): kids fniY4qt8...`, o
+  mesmo `kid` do JWKS do `apps/api`, e o mesmo token passa a `401`. A linha listava o
+  `kid` duas vezes: o JWKS do OpenIddict traz `n`/`e` e `x5c`, e `GetSigningKeys` devolve
+  uma chave para cada; o log passou a usar `Distinct`. Saídas em
+  `208-fechamento/manual/`.
+
+### Guardas contra o defeito real (convenção 15)
+
+Cada defeito foi reintroduzido, o teste rodado e a árvore restaurada, conferida por `diff`:
+
+| guarda | defeito reintroduzido | resultado com o defeito |
+|---|---|---|
+| D7, `apps/inbox` | `app.ValidateIssuerTokenConfiguration()` comentado no `Program.cs` | `InvalidIssuer_FailsTheRealApplicationStartup` reprova nos 4 casos (o boot subiu) |
+| D7, `apps/connectors` | o mesmo | 7 de 9 de `IssuerTokenStartupValidationTests` reprovam; os 2 restantes são as checagens puras da tabela |
+| D7, `apps/connectors` | `Api:BaseUrl` não exigido com o issuer ligado | `IssuerWithoutApiBaseUrl_*` reprova |
+| D2, nos dois | `FallbackPolicy` com os dois esquemas, o "tentar um depois o outro" | `InvalidJwt_IsUnauthorized_WithoutCallingTheHmacValidator` (o JWT passou pelo `ITokenService`) e `HmacTokens_ValidAndInvalid_NeverTouchTheIssuerKeys` (o HMAC passou a consultar as chaves) reprovam |
+| D6, `apps/inbox` | `NameIdentifier` tirado do `sub` | 5 reprovam, entre eles `ForgedOperatorSub_DoesNotBecomeTheOperator` |
+| F11, `apps/inbox` | `UseLastKnownGoodConfiguration = true` | `RotatedKey_*` reprova: a chave retirada continuou `200` |
+| contrato do `apps/api` | handler temporário que retira o `client_id` do access token | `AccessToken_CarriesClientId_AndAtJwtType` reprova (l. 69) |
+| acordo, `tests/` | o mesmo handler temporário no `apps/api` real | os dois `IssuerTokenRoundTripTests` reprovam |
+
+### Divergências do desenho aprovado (convenção 9)
+
+- **Premissa falsa, F8/D6 (parada obrigatória; correção decidida pelo dono):** o design
+  dizia que o OpenIddict 7.7.2 **não** põe `client_id` no access token, só o claim
+  privado `oi_prst`, e previa um `AccessTokenClientIdHandler` no `apps/api`. **Pega na
+  verificação contra o defeito:** com o handler escrito e o teste dele verde, o registro
+  foi comentado para ver o guarda reprovar, e ele **continuou passando**. O payload real
+  sem o handler já trazia `"client_id":"cliente-teste"`, e a fonte da tag `7.7.2` o põe no
+  próprio `PrepareAccessTokenPrincipal` (`OpenIddictServerHandlers.cs` l. 3722–3724, RFC
+  9068). A leitura do design tinha parado antes dessa linha. O handler saiu, e o teste
+  ficou como **contrato** do comportamento de que os dois apps dependem, visto reprovar
+  uma vez com um handler temporário que retirava o claim. O `apps/api` não muda em código
+  de produção. Sem a convenção 15, o handler teria entrado como código morto, com um
+  teste que não guardava nada.
+- **Versão lida × versão resolvida:** os fatos do `ConfigurationManager` (F1–F7) foram
+  lidos na tag `8.23.0`, mas o restore resolve `Microsoft.IdentityModel.*` 8.19.2. Relido
+  na `8.19.2`: só um campo de diagnóstico difere; os fatos valem.
+- **F11, novo:** com o padrão `UseLastKnownGoodConfiguration = true`, a chave retirada do
+  JWKS continuaria validando por até 1 h. Desligado; guarda acima.
+- **O log não ecoa o valor de `Api:BaseUrl`** (o design pedia "o endereço"): o mesmo
+  cuidado de `ValidateApiConfiguration` do `apps/connectors`. Nomeia a chave e o caminho.
+  Acrescentada uma linha `Information` de sucesso com os `kid`s obtidos, que a
+  conferência pós-deploy usa.
+- **JWKS sem chave de assinatura conta como falha** (mantém o `503`, e não `401`).
+- **Testes: `Identity:Issuer` por `UseSetting`.** O registro decide antes do `Build()`, e
+  o `ConfigureAppConfiguration` da `WebApplicationFactory` só entra no `Build()`; medido:
+  o teste "sem `Identity:Issuer`" recebia `503`, porque o registro via o valor do
+  `appsettings.Development.json`. As fixtures existentes do `apps/inbox` passaram a fixá-lo
+  vazio (`TestAuthentication.UseIssuer`), e o `ConnectorsFactory` também. É a mesma
+  armadilha da #179 (D8 de lá).
+- O `apps/connectors` usa o `ManualTimeProvider` da suíte, e não o `FakeTimeProvider`;
+  os dois fixtures de `tests/` fixam a url pública do `apps/api` (`https://api.exemplo.test`)
+  e passam o issuer **sem** barra final ao app que valida, como o compose faz.
+
+### Achados fora do escopo (convenção 23)
+
+- **#214**: os nomes de `SubjectAuthorizationTests.SubjectXRota` (`apps/connectors`)
+  mudam a cada execução (GUID aleatório no argumento do `Theory`), e a comparação por
+  nome precisou de normalização.
+
+### Herança para a #180
+
+- Cadastrar `buteco-painel` como cliente **público** (authorization code + PKCE, sem
+  segredo, sem `client_credentials`), para um token com esse `client_id` só vir de
+  usuário. O confidencial de mesmo nome existe só nos testes de acordo.
+- Três escopos, um por app, com os recursos `buteco-api`, `buteco-inbox` e
+  `buteco-connectors`; o token do painel pede os três (a `aud` vira array).
+- O `apps/api` passa a aceitar o token com a `aud` `buteco-api`.
+- **A pergunta do `libs/` volta**: com o `apps/api` validando o próprio token, são três
+  consumidores do mesmo código (D10).
+- O painel trata `503` com `Retry-After` como indisponibilidade passageira; só `401`
+  encerra a sessão (registrado na #180).
+
+### O que fica para o deploy, e é do dono
+
+- **Nada a gerar.** Rebuild do `inbox` e do `connectors`; o `api` não muda. Ordem
+  indiferente.
+- **Conferir** com os `grep` de `docs/deployment.md` ("Validação do token do emissor no
+  `apps/inbox` e no `apps/connectors`"): `Validação do token do emissor ligada` seguida de
+  `Chaves do emissor obtidas`, e nenhum erro de issuer divergente. O painel continua no
+  HMAC.
+- **Rollback:** as imagens anteriores dos dois. A variável nova é ignorada por elas.
