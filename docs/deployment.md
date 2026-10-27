@@ -377,6 +377,30 @@ curl -s -X POST https://<PUBLIC_DOMAIN>/connect/token \
 Se algum devolver HTML, o `nginx.conf` do `frontend` está sem os blocos do
 emissor (imagem antiga do `frontend`).
 
+### Limpeza das entradas de token do emissor (#209)
+
+**Nada a gerar:** sem variável nova, sem mudança no compose, sem migration. O
+`apps/api` passa a não gravar o access token de `client_credentials` e a limpar
+`openiddict_tokens` e `openiddict_authorizations` de hora em hora. O primeiro
+ciclo é 1 h depois do start.
+
+**Conferência depois do deploy**, passada 1 h da subida:
+
+```
+$C logs api | grep -E 'Limpeza das entradas de token (falhou|removeu)'
+```
+
+| linha | leitura |
+|---|---|
+| nenhuma | certo: o ciclo sem nada a remover, ou pulado por outra instância, loga em `Debug`, que o nível padrão não mostra. Hoje não há token emitido em produção |
+| `Limpeza das entradas de token removeu N tokens e M autorizações.` | certo: removeu linhas mortas com mais de 14 dias |
+| `Limpeza das entradas de token falhou neste ciclo; o próximo tenta de novo.` | o ciclo falhou, em geral por banco indisponível. O próximo tenta de novo em 1 h. Se repetir com o banco no ar, abra issue com a exceção do log |
+
+**Rollback:** volte para a imagem anterior do `apps/api`. Não há schema nem
+configuração a desfazer. A versão anterior volta a gravar o access token de
+`client_credentials` e para de limpar as tabelas. Quando esta versão voltar,
+ela remove as linhas que se acumularem.
+
 ### Validação do token do emissor no `apps/inbox` e no `apps/connectors` (#208)
 
 Os dois recebem `Identity__Issuer: ${PUBLIC_DOMAIN}` do compose, a mesma

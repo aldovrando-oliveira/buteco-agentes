@@ -199,6 +199,15 @@ o versionamento pretende seguir
   `client_id` (`buteco-painel` → `operator`), nunca do `sub`. Variável nova
   `Identity__Issuer`, que o compose de produção preenche com `PUBLIC_DOMAIN`;
   vazia, a validação fica desligada, com aviso no boot.
+- **Limpeza das entradas de token do emissor** (#209). O access token de
+  `client_credentials` deixa de gerar linha em `openiddict_tokens`, porque
+  ninguém a lê: a validação é pelo JWKS. Os outros tipos de token continuam
+  gravados, porque a revogação de sessão os usa. Um serviço em segundo plano do
+  `apps/api` roda de hora em hora o `PruneAsync` do OpenIddict sobre tokens e
+  autorizações, e remove só o que está morto e tem mais de 14 dias. Uma
+  instância por ciclo, por advisory lock do Postgres em chave própria. O boot
+  falha se a duração do refresh token passar da idade mínima da limpeza. Sem
+  variável nova e sem migration.
 
 **Contexto temporal e de canal**
 

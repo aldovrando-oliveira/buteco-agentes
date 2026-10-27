@@ -17,6 +17,12 @@ namespace Buteco.Api.Tests.Identity;
 /// (convenção 15): sem a chamada de <c>ValidateIdentityIssuerEndpoints()</c> no
 /// <c>Program.cs</c>, ele reprova (registro no tasks.md, 5.9).
 /// </para>
+/// <para>
+/// O caso do refresh token de 15 dias é o guarda da desigualdade da limpeza (change
+/// limpeza-tokens-openiddict, D3). Verificado contra o defeito: sem a checagem no
+/// <c>ValidateIdentityIssuerConfiguration</c>, ele reprova (registro no tasks.md
+/// daquela change, 4.2).
+/// </para>
 /// </summary>
 public class IdentityIssuerStartupValidationTests
 {
@@ -58,6 +64,33 @@ public class IdentityIssuerStartupValidationTests
 
         Assert.NotNull(exception);
         Assert.Contains("endpoint introspection '/connect/introspect'", Flatten(exception), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RealComposition_WithRefreshTokensOutlivingThePruneMinimumAge_FailsNamingBothDurations()
+    {
+        using var factory = new Factory(
+            new() { ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl },
+            services => services.Configure<OpenIddictServerOptions>(options => options.RefreshTokenLifetime = TimeSpan.FromDays(15)));
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.NotNull(exception);
+        var message = Flatten(exception);
+        Assert.Contains("Idade mínima da limpeza das entradas de token (14.00:00:00)", message, StringComparison.Ordinal);
+        Assert.Contains("refresh token (15.00:00:00)", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RealComposition_WithTheDefaultRefreshTokenLifetime_PassesThePruneCheck()
+    {
+        // A composição real, sem tocar na duração (14 dias, o padrão). Sem banco, o boot
+        // pode falhar depois por outro motivo; o que se afirma é que não é por esta checagem.
+        using var factory = new Factory(new() { ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl });
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.DoesNotContain("Idade mínima da limpeza", exception is null ? "" : Flatten(exception), StringComparison.Ordinal);
     }
 
     private sealed class Factory(Dictionary<string, string?> settings, Action<IServiceCollection>? services = null)

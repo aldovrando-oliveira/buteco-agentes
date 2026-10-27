@@ -1,4 +1,5 @@
 using Buteco.Api.Identity.Keys;
+using Buteco.Api.Identity.Storage;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Options;
 using Microsoft.Extensions.Options;
@@ -19,7 +20,8 @@ namespace Buteco.Api.Identity;
 /// <list type="bullet">
 /// <item><c>PublicUrl:BaseUrl</c> vazia → nada do emissor é registrado, e o boot avisa;</item>
 /// <item>presente mas inválida → só o estado é registrado, e o boot falha;</item>
-/// <item>presente e válida → OpenIddict, anel de chaves, gate e rotação.</item>
+/// <item>presente e válida → OpenIddict, anel de chaves, gate, rotação e limpeza das
+/// entradas de token (change limpeza-tokens-openiddict, D1 e D4).</item>
 /// </list>
 /// </summary>
 public static class IdentityIssuerServiceCollectionExtensions
@@ -51,6 +53,9 @@ public static class IdentityIssuerServiceCollectionExtensions
         services.AddHostedService<IdentityKeyRotationService>();
         services.AddSingleton<IConfigureOptions<OpenIddictServerOptions>, IdentityKeyRingOptionsConfigurer>();
         services.AddSingleton<IOptionsChangeTokenSource<OpenIddictServerOptions>, IdentityKeyRingChangeTokenSource>();
+        services.AddSingleton<IIdentityTokenPruner, IdentityTokenPruner>();
+        services.AddSingleton(new IdentityTokenPruneSchedule());
+        services.AddHostedService<IdentityTokenPruneService>();
 
         services.AddOpenIddict()
             .AddCore(core => core.UseEntityFrameworkCore().UseDbContext<AppDbContext>())
@@ -77,6 +82,10 @@ public static class IdentityIssuerServiceCollectionExtensions
                 // O issuer fixo não basta: sem este handler, os endpoints do discovery
                 // sairiam do esquema e do host da requisição (D8, correção).
                 server.AddEventHandler(DiscoveryEndpointsFromIssuerHandler.Descriptor);
+
+                // O access token de client_credentials sai sem linha em openiddict_tokens:
+                // ninguém a lê, e é o fluxo de maior volume (limpeza-tokens-openiddict, D1).
+                server.AddEventHandler(ClientCredentialsAccessTokenStorageHandler.Descriptor);
 
                 // TLS termina fora do stack, e o apps/api recebe HTTP puro (D8).
                 server.UseAspNetCore().DisableTransportSecurityRequirement();

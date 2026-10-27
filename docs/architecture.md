@@ -978,6 +978,20 @@ quem valida (a partir da #208) ◀── verifica a assinatura só pelo JWKS
   - cada chave vai ao OpenIddict embrulhada num certificado X.509 em memória,
     com validade igual à janela de assinatura, porque é pela validade do
     certificado que o OpenIddict escolhe com qual chave assinar.
+- **Linhas de token e de autorização** (#209). O access token de
+  `client_credentials` sai sem linha em `openiddict_tokens`
+  (`Identity/Storage/ClientCredentialsAccessTokenStorageHandler.cs`). Código,
+  refresh e id token continuam gravados, porque a revogação de sessão os usa.
+  Um segundo `BackgroundService`, o `IdentityTokenPruneService`, roda de hora em
+  hora o `PruneAsync` do OpenIddict, primeiro para tokens e depois para
+  autorizações. Ele remove só o que está morto (vencido, resgatado, revogado,
+  ou autorização sem token) e tem mais de 14 dias, em lotes de 1.000:
+  - uma instância por ciclo, por `pg_try_advisory_xact_lock` na chave
+    `BUTECOP1`, diferente da `BUTECOK1` da rotação; quem não pega o lock pula o
+    ciclo;
+  - o lock fica numa transação de outra conexão, que não escreve nada, e os
+    lotes saem fora dela;
+  - o boot afirma que a idade mínima (14 dias) é ≥ a duração do refresh token.
 - **Até o anel carregar do banco, toda rota responde `503` com `Retry-After`**,
   inclusive `/health`. Um aquecimento em segundo plano tenta logo depois do
   start e repete a cada 5 s, sem bloquear o boot; a primeira requisição também

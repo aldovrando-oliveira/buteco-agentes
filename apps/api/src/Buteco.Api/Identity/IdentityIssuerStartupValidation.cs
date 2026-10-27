@@ -1,4 +1,5 @@
 using Buteco.Api.Identity.Keys;
+using Buteco.Api.Identity.Storage;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
 
@@ -13,8 +14,9 @@ public static class IdentityIssuerStartupValidation
 {
     /// <summary>
     /// Com o emissor desligado, só avisa. Ligado, reprova url pública inválida, chave de
-    /// cifra ausente ou malformada, e retenção menor que a duração do access token mais o
-    /// intervalo da verificação de rotação.
+    /// cifra ausente ou malformada, retenção menor que a duração do access token mais o
+    /// intervalo da verificação de rotação, e idade mínima da limpeza menor que a duração
+    /// do refresh token (change limpeza-tokens-openiddict, D3).
     /// </summary>
     public static void ValidateIdentityIssuerConfiguration(this IHost host)
     {
@@ -37,7 +39,8 @@ public static class IdentityIssuerStartupValidation
         IdentityKeyMaterialCipher.ParseKey(
             host.Services.GetRequiredService<IOptions<IdentityIssuerOptions>>().Value.SigningKeyEncryptionKey);
 
-        var accessTokenLifetime = ComposeWithoutKeys(host.Services).AccessTokenLifetime ?? TimeSpan.Zero;
+        var composed = ComposeWithoutKeys(host.Services);
+        var accessTokenLifetime = composed.AccessTokenLifetime ?? TimeSpan.Zero;
         var checkInterval = host.Services.GetRequiredService<IdentityKeyRotationSchedule>().CheckInterval;
         if (IdentityKeyRotationPolicy.Retention < accessTokenLifetime + checkInterval)
         {
@@ -45,6 +48,19 @@ public static class IdentityIssuerStartupValidation
                 $"Retenção das chaves do emissor ({IdentityKeyRotationPolicy.Retention}) menor que a duração do access token " +
                 $"({accessTokenLifetime}) mais o intervalo da verificação de rotação ({checkInterval}): um token assinado " +
                 "pela chave anterior deixaria de validar antes de expirar.");
+        }
+
+        // A linha de um refresh token resgatado precisa existir enquanto ele estiver no
+        // prazo, ou a detecção de reuso para de valer em silêncio. Hoje passa (14 dias dos
+        // dois lados); existe para quem mudar a duração do refresh token na #180.
+        // Nulo, no OpenIddict, é refresh token sem prazo: nenhuma idade mínima cobre.
+        var refreshTokenLifetime = composed.RefreshTokenLifetime;
+        if (refreshTokenLifetime is null || IdentityTokenPrunePolicy.MinimumAge < refreshTokenLifetime)
+        {
+            throw new InvalidOperationException(
+                $"Idade mínima da limpeza das entradas de token ({IdentityTokenPrunePolicy.MinimumAge}) menor que a duração " +
+                $"do refresh token ({refreshTokenLifetime?.ToString() ?? "sem prazo"}): a linha de um refresh token resgatado sairia antes de ele vencer, " +
+                "e o reuso deixaria de revogar a sessão. Suba IdentityTokenPrunePolicy.MinimumAge junto com a duração (#180).");
         }
 
         logger.LogInformation("Emissor OIDC ligado, issuer {Issuer}.", state.Issuer);
