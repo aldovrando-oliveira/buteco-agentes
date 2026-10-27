@@ -606,6 +606,24 @@ a #103.)*
   valida por mais 24 h. Um advisory lock do Postgres impede duas rotações
   simultâneas. Até o anel carregar do banco, toda rota do `apps/api` responde
   `503`, inclusive `/health`.
+- **O que o emissor grava em `openiddict_tokens` e `openiddict_authorizations`**
+  (#209). O access token de `client_credentials` **não** gera linha: um handler
+  do `GenerateTokenContext` (`ClientCredentialsAccessTokenStorageHandler`) desliga
+  o `CreateTokenEntry` só para ele, porque ninguém lê essa linha (a validação é
+  pelo JWKS). Os outros tipos de token e os outros fluxos continuam gravados,
+  porque a revogação de sessão depende deles. A **limpeza**
+  (`IdentityTokenPruneService`) roda a cada 1 h, com o primeiro ciclo 1 h depois
+  do start. Ela chama o `PruneAsync` do OpenIddict, primeiro para tokens e
+  depois para autorizações, e só remove linhas mortas com mais de 14 dias. Uma
+  instância por ciclo, por `pg_try_advisory_xact_lock` na chave `bigint`
+  `BUTECOP1` (`IdentityTokenPrunePolicy.AdvisoryLockKey`). Essa chave é diferente
+  da `BUTECOK1` da rotação, e as duas ficam fora do espaço de dois `int4` do
+  `apps/workers`. O lock fica numa transação curta de outra conexão, e os lotes
+  de 1.000 não viram uma transação longa. **O boot falha se a idade mínima da
+  limpeza for menor que a duração do refresh token** (ou se ele não tiver prazo),
+  porque a linha do refresh resgatado precisa existir enquanto ele estiver no
+  prazo, para a detecção de reuso valer. Quem subir a duração do refresh (#180)
+  sobe a `MinimumAge` junto.
 - **Os endpoints do OpenIddict não passam pelo roteamento**, então a checagem
   de rotas anônimas não os vê. Eles têm lista esperada própria, com motivo
   (`IdentityIssuerEndpoints.Expected`), conferida no boot nos dois sentidos

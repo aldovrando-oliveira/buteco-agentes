@@ -16728,3 +16728,133 @@ Cada defeito foi reintroduzido, o teste rodado e a árvore restaurada, conferida
   `Chaves do emissor obtidas`, e nenhum erro de issuer divergente. O painel continua no
   HMAC.
 - **Rollback:** as imagens anteriores dos dois. A variável nova é ignorada por elas.
+
+## `limpeza-tokens-openiddict` — o emissor deixa de gravar o access token de `client_credentials` e limpa as entradas mortas de token e de autorização (#209)
+
+**Change proposta em 25/10/2026 e implementada em 26–27/10/2026** na branch
+`feat/209-limpeza-tokens-openiddict`, num worktree próprio, a partir de `32d596b`. Entrega
+M1 · 3 de 8 (acompanhamento #194). Capacidade nova `issuer-token-storage`; nenhuma
+alterada. Change arquivada em
+`openspec/changes/archive/2026-10-27-limpeza-tokens-openiddict/`, com a 6.6 (limpeza
+pós-merge) aberta. Uma Open Question foi resolvida pelo dono antes do apply e virou o D9:
+a lista de sessões mostra só as sessões vivas. Os registros na #180 e na #186 foram
+aprovados pelo dono, texto a texto. Relacionadas: #180 e #186 (herdam o que está abaixo),
+#182.
+
+### O que entrou
+
+- **O access token de `client_credentials` sai sem linha em `openiddict_tokens`** (D1).
+  O handler `ClientCredentialsAccessTokenStorageHandler` roda no `GenerateTokenContext`,
+  na ordem `CreateTokenEntry.Descriptor.Order - 500`, lida do descritor do próprio
+  OpenIddict. Ele põe `CreateTokenEntry = false` só para o par access token e
+  `client_credentials`. Ninguém lê essa linha: a validação é pelo JWKS. Os outros tipos
+  de token e os outros grants continuam gravados como antes, porque a revogação de sessão
+  usa essas linhas.
+- **Limpeza de hora em hora** (D3, D4). O `IdentityTokenPruneService` é um
+  `BackgroundService` no idioma do `IdentityKeyRotationService`: `PeriodicTimer` criado
+  na construção, primeiro ciclo no primeiro tique, `try/catch` por ciclo, `EventId` 1185
+  (falha) e 1186 (removeu). Cada ciclo chama o `IdentityTokenPruner`, que roda o
+  `PruneAsync` do OpenIddict, tokens antes de autorizações. Só sai o que está morto e tem
+  mais de 14 dias (`IdentityTokenPrunePolicy.MinimumAge`), em lotes de 1.000. Sem
+  `OpenIddict.Quartz`.
+- **Uma instância por ciclo** (D5): `pg_try_advisory_xact_lock` na chave `bigint`
+  `4779819235982397489` (`BUTECOP1`), diferente da `BUTECOK1` da rotação. O lock fica numa
+  transação de outra conexão, que não escreve nada; quem não pega o lock pula o ciclo.
+- **Checagem de boot** (convenção 8): o boot falha se a `MinimumAge` for menor que a
+  duração do refresh token, ou se o refresh não tiver prazo. A mensagem cita as duas
+  durações e a #180.
+- **Nenhuma migration, variável, rota ou pacote novo.** Só o `apps/api` muda.
+- **Docs:** `01` (Autenticação), `docs/architecture.md`, `docs/deployment.md` (conferência
+  pós-deploy e rollback) e o `CHANGELOG`.
+
+### O que a implementação mediu
+
+Suítes por nome, no protocolo da 1.1 da #179: `DOCKER_HOST` do Podman,
+`TESTCONTAINERS_RYUK_DISABLED`, `DOTNET_SYSTEM_NET_DISABLEIPV6` e `TZ=America/Sao_Paulo`.
+Antes de cada suíte, o script esperou `CPU_Speed_Limit = 100` e load abaixo de 8, acertou
+o relógio da VM e conferiu `podman ps` vazio. Baseline no worktree limpo em `32d596b`.
+
+| suíte | baseline em `32d596b` | fechamento | diferença por nome |
+|---|---|---|---|
+| `apps/api` | 864/864, 2m12s | **889/889 + 1 ignorado**, 1m36s | +26 novos (25 aprovados e o de medição, ignorado sem `BUTECO_MEDICAO=1`); 0 ausentes, 0 com resultado mudado |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 12/12 | **12/12** | iguais |
+| `tests/ApiConnectorsRoundTrip.Tests` | 8/8 | **8/8** | iguais |
+
+- **O "vencido" é o relógio do banco**, conferido pelo SQL emitido (3.2):
+  `o0."ExpirationDate" < now()`. O limite de idade é parâmetro calculado pelo
+  `TimeProvider`. Nenhum `DELETE` roda na transação do lock: ela sempre termina em
+  rollback, e as remoções persistem.
+- **Plano das consultas com 150.000 tokens (3.6).** A rodada válida começou com
+  `CPU_Speed_Limit = 100` (e terminou em 62). Nela, o prune de tokens levou 36 ms, o de
+  autorizações 3,6 ms, a revogação por autorização 3,5 ms e a revogação por subject
+  43 ms. As rodadas com throttling deram o mesmo plano e os mesmos buffers em até
+  1.588 ms. O dono decidiu manter o D6 sem índice nem migration.
+- **Build `--no-incremental`** dos três projetos de teste, nos dois worktrees: o mesmo
+  conjunto de avisos.
+- **Verificação manual (6.3):** `apps/api` local com 30 tokens mortos e 5 vivos semeados.
+  Start às 02:45:27Z; o primeiro tique, às 03:45:43Z, logou "removeu 30 tokens e 0
+  autorizações" (`EventId` 1186), e sobraram os 5 `valid`.
+
+### Guardas contra o defeito real (convenção 15)
+
+Cada defeito foi reintroduzido, o teste rodado e a árvore restaurada e conferida:
+
+| guarda | defeito reintroduzido | resultado com o defeito |
+|---|---|---|
+| D1 | registro do `ClientCredentialsAccessTokenStorageHandler` comentado | `IdentityTokenStorageTests` vê 1 linha em vez de 0; o teste de ordem não acha o handler nas opções compostas |
+| idade mínima | limite do pruner com `TimeSpan.Zero` | `Pruned(10, 2)` em vez de `Pruned(5, 2)`; sem a asserção da contagem, o reuso do refresh resgatado ontem deixa a cadeia `valid` |
+| lock | chave da rotação no lugar da da limpeza | com o lock da rotação preso, a limpeza devolve `Skipped`; com o da limpeza preso, ela roda |
+| desigualdade do boot | checagem retirada do `ValidateIdentityIssuerConfiguration` | com refresh de 15 dias, o host sobe |
+
+### Divergências do desenho aprovado (convenção 9)
+
+- **D6, correção na implementação.** A revogação por subject não varre a tabela: o
+  Postgres 18 usa o índice composto `(ApplicationId, Status, Subject, Type)` por skip
+  scan. O custo do prune de tokens vem da forma do `DELETE … WHERE "Id" IN (… LIMIT 1000)`
+  do OpenIddict, um `Hash Semi Join` sobre a tabela inteira, e não de índice faltando. Um
+  índice em `"CreationDate"`, medido num experimento descartável, não mudou o plano.
+- **A medição da 3.6 parou a change** (parada obrigatória, acima de 100 ms). A causa foi
+  o throttling da máquina: o mesmo plano levou de 36 a 1.588 ms. O dono aceitou a rodada
+  com a CPU em 100 na largada.
+- **A fixture da limpeza não desliga o D1:** o access token do grant de refresh já tem
+  linha, e é ele o access token real removido.
+- **O guarda da idade mínima entra no pruner, e não na constante:** com a constante em
+  zero, a checagem de boot derrubaria o host, e o teste reprovaria pelo motivo errado.
+- **O servidor de teste usa `AllowRefreshTokenFlow()` completo,** porque é ele que
+  registra o escopo `offline_access`. Só com o grant, o pedido sai `invalid_scope`. O
+  OpenIddict assina o grant de refresh sozinho, sem handler de teste.
+- **`PeriodicTimer` não aceita período acima de ~49 dias:** a fixture que anda o relógio
+  por dias usa `Timeout.InfiniteTimeSpan` para o serviço não rodar sozinho.
+- **Entrou a interface `IIdentityTokenPruner`**, para o teste do serviço usar um pruner
+  falso.
+- **6.3 com o intervalo real:** o intervalo é constante (convenção 2), então o ciclo não
+  pode ser forçado mais cedo sem mudar código. A verificação manual esperou o primeiro
+  tique, 1 h depois do start.
+
+### Achados fora do escopo (convenção 23)
+
+Nenhum.
+
+### Herança para a #180 e a #186 (registrada nas duas)
+
+- **#180:**
+  - se o access token do usuário continua gravado;
+  - teto de 14 dias na duração do refresh token, ou subir a `MinimumAge` junto;
+  - `id_token_hint` com mais de 14 dias é recusado;
+  - "último acesso" com campo próprio;
+  - lista só de sessões vivas;
+  - "encerrar sessões" e desativar usuário revogam pelas autorizações (0,5 a 5,7 ms) e
+    não pelos tokens (43 a 251 ms), também em "Decisões em aberto".
+- **#186:**
+  - revogar o segredo não corta o token já emitido;
+  - aplicação externa sem `gt:refresh_token`;
+  - "último uso" com registro próprio;
+  - em "Decisões em aberto": duração curta (5 a 10 min) ou introspecção para o "Revogar
+    corta na hora" do protótipo.
+
+### Deploy
+
+- Só o `apps/api` muda; sem variável nova, sem migration, sem mudança no compose.
+- **Conferir**, 1 h depois da subida, com o `grep` de `docs/deployment.md` ("Limpeza das
+  entradas de token do emissor"): nenhuma linha `Limpeza das entradas de token falhou`.
+- **Rollback:** a imagem anterior do `apps/api`. Nada a desfazer.
