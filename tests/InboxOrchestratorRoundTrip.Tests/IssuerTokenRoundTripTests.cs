@@ -1,46 +1,46 @@
+extern alias ApiAssembly;
+
 using System.Net;
 using System.Net.Http.Headers;
-using System.Text.Json;
 using InboxOrchestratorRoundTrip.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
-using OpenIddict.Abstractions;
-using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace InboxOrchestratorRoundTrip.Tests;
 
 /// <summary>
-/// Acordo com o emissor real (spec <c>issuer-token-validation</c>; design.md da change
-/// validacao-jwks-inbox-connectors, D9; convenção 11): o token que o <c>apps/api</c> emite
-/// por <c>client_credentials</c> é aceito pelo <c>apps/inbox</c>, com as chaves obtidas do
-/// <c>apps/api</c> pelo endereço interno, e continua aceito com o <c>apps/api</c>
-/// inalcançável. Prova com o artefato real o que os testes do <c>apps/inbox</c> provam
-/// contra o <c>TestIssuer</c>: <c>typ</c>, <c>kid</c>, <c>iss</c> com barra final,
-/// <c>client_id</c> e <c>aud</c>.
+/// Acordo com o emissor real (spec <c>issuer-token-validation</c>; design.md das changes
+/// validacao-jwks-inbox-connectors, D9, e usuarios-locais-login-emissor, D5; convenção 11):
+/// o token de usuário do fluxo real (sessão, authorize com PKCE e troca do código, pelo
+/// cliente público <c>buteco-painel</c> que o próprio <c>apps/api</c> mantém) é aceito pelo
+/// <c>apps/inbox</c>, com as chaves obtidas do <c>apps/api</c> pelo endereço interno, e
+/// continua aceito com o <c>apps/api</c> inalcançável. Prova com o artefato real o que os
+/// testes do <c>apps/inbox</c> provam contra o <c>TestIssuer</c>: <c>typ</c>, <c>kid</c>,
+/// <c>iss</c> com barra final, <c>client_id</c> e <c>aud</c>.
 /// <para>
-/// O cliente confidencial <c>buteco-painel</c> existe só aqui, cadastrado depois do
-/// <c>MigrateAsync</c>; em produção a #180 o cadastra público.
+/// Até a #180 o teste cadastrava um <c>buteco-painel</c> confidencial; a sincronização do
+/// catálogo o sobrescreveria para público, e ele deixou de existir.
 /// </para>
 /// </summary>
 public class IssuerTokenRoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripFixture>
 {
-    private const string PanelClientId = "buteco-painel";
-    private const string PanelClientSecret = "segredo-do-painel-de-teste";
-    private const string InboxScope = "teste.inbox";
-    private const string InboxResource = "buteco-inbox";
-
     [Fact]
-    public async Task RealIssuerToken_IsAcceptedByTheInbox_AndStillAcceptedWithTheApiUnreachable()
+    public async Task RealUserToken_IsAcceptedByTheInbox_AndStillAcceptedWithTheApiUnreachable()
     {
-        await EnsurePanelClientAsync();
-        var accessToken = await RequestTokenAsync();
+        var accessToken = await IssuerUserFlow.AccessTokenAsync(
+            fixture.ApiFactory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
+            WarmUpAsync,
+            RoundTripFixture.ApiPublicBaseUrl,
+            RoundTripFixture.OperatorPassword,
+            "openid offline_access buteco-inbox");
 
         var token = new JsonWebToken(accessToken);
         Assert.Equal("at+jwt", token.Typ);
         Assert.False(string.IsNullOrEmpty(token.Kid));
         Assert.Equal(RoundTripFixture.ApiPublicBaseUrl + "/", token.Issuer);
-        Assert.Equal(PanelClientId, token.GetPayloadValue<string>("client_id"));
-        Assert.Contains(InboxResource, token.Audiences);
+        Assert.Equal("buteco-painel", token.GetPayloadValue<string>("client_id"));
+        Assert.Equal(["buteco-inbox"], token.Audiences);
+        Assert.True(Guid.TryParse(token.Subject, out _), $"sub não é o id do usuário: {token.Subject}");
 
         var inbox = fixture.InboxFactory.CreateClient();
         inbox.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -64,46 +64,11 @@ public class IssuerTokenRoundTripTests(RoundTripFixture fixture) : IClassFixture
         }
     }
 
-    private async Task EnsurePanelClientAsync()
+    private async Task WarmUpAsync()
     {
         await using var scope = fixture.ApiFactory.Services.CreateAsyncScope();
-        var scopes = scope.ServiceProvider.GetRequiredService<IOpenIddictScopeManager>();
-        var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
-
-        if (await scopes.FindByNameAsync(InboxScope) is null)
-        {
-            await scopes.CreateAsync(new OpenIddictScopeDescriptor { Name = InboxScope, Resources = { InboxResource } });
-        }
-
-        if (await applications.FindByClientIdAsync(PanelClientId) is null)
-        {
-            await applications.CreateAsync(new OpenIddictApplicationDescriptor
-            {
-                ClientId = PanelClientId,
-                ClientSecret = PanelClientSecret,
-                ClientType = ClientTypes.Confidential,
-                Permissions =
-                {
-                    Permissions.Endpoints.Token,
-                    Permissions.GrantTypes.ClientCredentials,
-                    Permissions.Prefixes.Scope + InboxScope,
-                },
-            });
-        }
-    }
-
-    private async Task<string> RequestTokenAsync()
-    {
-        var response = await fixture.ApiFactory.CreateClient().PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            [Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [Parameters.ClientId] = PanelClientId,
-            [Parameters.ClientSecret] = PanelClientSecret,
-            [Parameters.Scope] = InboxScope,
-        }));
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.True(response.StatusCode == HttpStatusCode.OK, body);
-        return JsonDocument.Parse(body).RootElement.GetProperty(Parameters.AccessToken).GetString()!;
+        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Identity.Clients.IIdentityClientCatalog>().SyncAsync(CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Users.Bootstrap.IUserBootstrapper>().RunAsync(CancellationToken.None);
     }
 
     private static async Task<HttpResponseMessage> PollAsync(Func<Task<HttpResponseMessage>> send, Func<HttpResponseMessage, bool> done)

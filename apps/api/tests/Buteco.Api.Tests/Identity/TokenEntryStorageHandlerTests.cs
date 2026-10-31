@@ -17,12 +17,13 @@ using static OpenIddict.Server.OpenIddictServerHandlers.Protection;
 namespace Buteco.Api.Tests.Identity;
 
 /// <summary>
-/// Só o access token do grant <c>client_credentials</c> sai sem linha (spec
-/// <c>issuer-token-storage</c>; design.md da change limpeza-tokens-openiddict, D1), e o
-/// handler fica, nas opções compostas pelo registro real, entre os dois handlers internos
-/// de que depende.
+/// Nenhum access token, de nenhum grant, e nenhum id token gera linha; o código e o refresh
+/// geram (spec <c>issuer-token-storage</c>, "Access token e id token não geram entrada de
+/// token"; design.md da change usuarios-locais-login-emissor, D3.8). O handler fica, nas
+/// opções compostas pelo registro real, entre os dois handlers internos de que depende.
+/// Era o <c>ClientCredentialsAccessTokenStorageHandlerTests</c>.
 /// </summary>
-public class ClientCredentialsAccessTokenStorageHandlerTests
+public class TokenEntryStorageHandlerTests
 {
     public static TheoryData<string, string, bool> Matrix()
     {
@@ -40,7 +41,7 @@ public class ClientCredentialsAccessTokenStorageHandlerTests
         {
             foreach (var grant in grants)
             {
-                var stored = !(type == TokenTypeIdentifiers.AccessToken && grant == GrantTypes.ClientCredentials);
+                var stored = type is not (TokenTypeIdentifiers.AccessToken or TokenTypeIdentifiers.IdentityToken);
                 data.Add(type, grant, stored);
             }
         }
@@ -50,7 +51,7 @@ public class ClientCredentialsAccessTokenStorageHandlerTests
 
     [Theory]
     [MemberData(nameof(Matrix))]
-    public async Task OnlyTheClientCredentialsAccessToken_LosesItsEntry(string tokenType, string grantType, bool stored)
+    public async Task OnlyTheCodeAndTheRefreshToken_KeepTheirEntry(string tokenType, string grantType, bool stored)
     {
         var context = new GenerateTokenContext(new OpenIddictServerTransaction
         {
@@ -63,7 +64,7 @@ public class ClientCredentialsAccessTokenStorageHandlerTests
             CreateTokenEntry = true,
         };
 
-        await new ClientCredentialsAccessTokenStorageHandler().HandleAsync(context);
+        await new TokenEntryStorageHandler().HandleAsync(context);
 
         Assert.Equal(stored, context.CreateTokenEntry);
     }
@@ -75,7 +76,7 @@ public class ClientCredentialsAccessTokenStorageHandlerTests
             .Where(descriptor => descriptor.ContextType == typeof(GenerateTokenContext))
             .ToList();
 
-        var ours = handlers.IndexOf(ClientCredentialsAccessTokenStorageHandler.Descriptor);
+        var ours = handlers.IndexOf(TokenEntryStorageHandler.Descriptor);
         var credentials = handlers.IndexOf(AttachSecurityCredentials.Descriptor);
         var createEntry = handlers.IndexOf(CreateTokenEntry.Descriptor);
 

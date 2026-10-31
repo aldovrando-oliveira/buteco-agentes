@@ -14,38 +14,43 @@ using ApiProgram = ApiAssembly::Program;
 namespace ApiConnectorsRoundTrip.Tests;
 
 /// <summary>
-/// Acordo com o emissor real (spec <c>issuer-token-validation</c>; design.md da change
-/// validacao-jwks-inbox-connectors, D9; convenção 11): o token que o <c>apps/api</c> emite
-/// para <c>buteco-painel</c> com o recurso <c>buteco-connectors</c> é aceito pelo
-/// <c>apps/connectors</c>, com as chaves obtidas do <c>apps/api</c> pelo endereço interno,
-/// e continua aceito com o <c>apps/api</c> inalcançável; o token só com o recurso
-/// <c>buteco-inbox</c> é recusado.
+/// Acordo com o emissor real (spec <c>issuer-token-validation</c>; design.md das changes
+/// validacao-jwks-inbox-connectors, D9, e usuarios-locais-login-emissor, D5; convenção 11):
+/// o token de usuário do fluxo real, pelo cliente público <c>buteco-painel</c> com o
+/// recurso <c>buteco-connectors</c>, é aceito pelo <c>apps/connectors</c>, com as chaves
+/// obtidas do <c>apps/api</c> pelo endereço interno, e continua aceito com o
+/// <c>apps/api</c> inalcançável.
 /// <para>
-/// O cliente confidencial <c>buteco-painel</c> existe só aqui, cadastrado depois do
-/// <c>MigrateAsync</c>; em produção a #180 o cadastra público.
+/// A recusa por <c>aud</c> cruzada continua provada com um cliente confidencial de teste
+/// de outro nome, <c>teste-so-inbox</c>, fora do prefixo <c>buteco-</c> e só com o escopo
+/// <c>buteco-inbox</c>. Até a #180 os dois tokens vinham de um <c>buteco-painel</c>
+/// confidencial, que a sincronização do catálogo sobrescreveria para público.
 /// </para>
 /// </summary>
 public class IssuerTokenRoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripFixture>
 {
-    private const string PanelClientId = "buteco-painel";
-    private const string PanelClientSecret = "segredo-do-painel-de-teste";
-    private const string ConnectorsScope = "teste.connectors";
-    private const string InboxScope = "teste.inbox";
+    private const string InboxOnlyClientId = "teste-so-inbox";
+    private const string InboxOnlyClientSecret = "segredo-do-cliente-so-inbox";
 
     [Fact]
-    public async Task RealIssuerToken_IsAcceptedByTheConnectors_AndTheInboxOnlyTokenIsRefused()
+    public async Task RealUserToken_IsAcceptedByTheConnectors_AndTheInboxOnlyTokenIsRefused()
     {
         var (api, connectors) = fixture.Build(RoundTripFixture.TokenSigningKey);
-        await EnsurePanelClientAsync(api);
-        var connectorsToken = await RequestTokenAsync(api, ConnectorsScope);
-        var inboxOnlyToken = await RequestTokenAsync(api, InboxScope);
+        var connectorsToken = await IssuerUserFlow.AccessTokenAsync(
+            api.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
+            () => WarmUpAsync(api),
+            RoundTripFixture.ApiPublicBaseUrl,
+            RoundTripFixture.AdminPassword,
+            "openid offline_access buteco-connectors");
+        var inboxOnlyToken = await InboxOnlyTokenAsync(api);
 
         var token = new JsonWebToken(connectorsToken);
         Assert.Equal("at+jwt", token.Typ);
         Assert.False(string.IsNullOrEmpty(token.Kid));
         Assert.Equal(RoundTripFixture.ApiPublicBaseUrl + "/", token.Issuer);
-        Assert.Equal(PanelClientId, token.GetPayloadValue<string>("client_id"));
+        Assert.Equal("buteco-painel", token.GetPayloadValue<string>("client_id"));
         Assert.Equal(["buteco-connectors"], token.Audiences);
+        Assert.Equal(["buteco-inbox"], new JsonWebToken(inboxOnlyToken).Audiences);
 
         var client = connectors.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", connectorsToken);
@@ -71,46 +76,42 @@ public class IssuerTokenRoundTripTests(RoundTripFixture fixture) : IClassFixture
         }
     }
 
-    private static async Task EnsurePanelClientAsync(WebApplicationFactory<ApiProgram> api)
+    private static async Task WarmUpAsync(WebApplicationFactory<ApiProgram> api)
     {
         await using var scope = api.Services.CreateAsyncScope();
-        var scopes = scope.ServiceProvider.GetRequiredService<IOpenIddictScopeManager>();
-        var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
+        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Identity.Clients.IIdentityClientCatalog>().SyncAsync(CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Users.Bootstrap.IUserBootstrapper>().RunAsync(CancellationToken.None);
+    }
 
-        foreach (var (name, resource) in new[] { (ConnectorsScope, "buteco-connectors"), (InboxScope, "buteco-inbox") })
+    /// <summary>Token de <c>client_credentials</c> do cliente de teste, só com <c>buteco-inbox</c>.</summary>
+    private static async Task<string> InboxOnlyTokenAsync(WebApplicationFactory<ApiProgram> api)
+    {
+        await using (var scope = api.Services.CreateAsyncScope())
         {
-            if (await scopes.FindByNameAsync(name) is null)
+            var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
+            if (await applications.FindByClientIdAsync(InboxOnlyClientId) is null)
             {
-                await scopes.CreateAsync(new OpenIddictScopeDescriptor { Name = name, Resources = { resource } });
+                await applications.CreateAsync(new OpenIddictApplicationDescriptor
+                {
+                    ClientId = InboxOnlyClientId,
+                    ClientSecret = InboxOnlyClientSecret,
+                    ClientType = ClientTypes.Confidential,
+                    Permissions =
+                    {
+                        Permissions.Endpoints.Token,
+                        Permissions.GrantTypes.ClientCredentials,
+                        Permissions.Prefixes.Scope + "buteco-inbox",
+                    },
+                });
             }
         }
 
-        if (await applications.FindByClientIdAsync(PanelClientId) is null)
-        {
-            await applications.CreateAsync(new OpenIddictApplicationDescriptor
-            {
-                ClientId = PanelClientId,
-                ClientSecret = PanelClientSecret,
-                ClientType = ClientTypes.Confidential,
-                Permissions =
-                {
-                    Permissions.Endpoints.Token,
-                    Permissions.GrantTypes.ClientCredentials,
-                    Permissions.Prefixes.Scope + ConnectorsScope,
-                    Permissions.Prefixes.Scope + InboxScope,
-                },
-            });
-        }
-    }
-
-    private static async Task<string> RequestTokenAsync(WebApplicationFactory<ApiProgram> api, string scope)
-    {
         var response = await api.CreateClient().PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
         {
             [Parameters.GrantType] = GrantTypes.ClientCredentials,
-            [Parameters.ClientId] = PanelClientId,
-            [Parameters.ClientSecret] = PanelClientSecret,
-            [Parameters.Scope] = scope,
+            [Parameters.ClientId] = InboxOnlyClientId,
+            [Parameters.ClientSecret] = InboxOnlyClientSecret,
+            [Parameters.Scope] = "buteco-inbox",
         }));
         var body = await response.Content.ReadAsStringAsync();
         Assert.True(response.StatusCode == HttpStatusCode.OK, body);

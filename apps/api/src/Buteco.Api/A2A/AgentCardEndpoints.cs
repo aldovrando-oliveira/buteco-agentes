@@ -44,9 +44,8 @@ public static class AgentCardEndpoints
 
         // Mesmo ponto de montagem que a resposta de agente usa, para os dois
         // nunca anunciarem endereços diferentes (design.md da change
-        // agente-enderecos-a2a, D1). Sem URL pública configurada, o endereço
-        // fica vazio aqui como sempre ficou — corrigir isso mudaria o contrato
-        // do card, que é outra change.
+        // agente-enderecos-a2a, D1). A URL pública é obrigatória desde a change
+        // usuarios-locais-login-emissor (D3.4).
         var addresses = AgentA2AAddressBuilder.Build(publicUrlOptions.Value, agent.Id);
 
         var card = new AgentCard
@@ -58,7 +57,7 @@ public static class AgentCardEndpoints
             [
                 new AgentInterface
                 {
-                    Url = addresses?.Url ?? string.Empty,
+                    Url = addresses.Url,
                     ProtocolBinding = "JSONRPC",
                     ProtocolVersion = "1.0",
                 },

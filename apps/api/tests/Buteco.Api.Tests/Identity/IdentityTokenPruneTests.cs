@@ -25,7 +25,8 @@ namespace Buteco.Api.Tests.Identity;
 /// O servidor de teste liga o grant de refresh, e cada sessão é um cliente de fixture com
 /// <c>gt:refresh_token</c> (<see cref="IdentityIssuerTestClient.EnsureRefreshClientAsync"/>):
 /// o <c>client_credentials</c> com <c>offline_access</c> grava autorização ad hoc e refresh
-/// token, e cada renovação grava access e refresh novos, como o login da #180. O relógio
+/// token, e cada renovação grava um refresh novo. Desde a #180 (D3.8), nenhum access token
+/// tem linha, nem o da renovação. O relógio
 /// do app começa 30 dias atrás e anda até o presente; o OpenIddict grava as datas por ele
 /// (F15). O "vencido" do critério é o relógio do banco (D3), daí as margens de dias.
 /// </para>
@@ -121,15 +122,16 @@ public class IdentityTokenPruneTests(IdentityTokenPruneTests.PruneFixture factor
         At(now);
         var live = await SessionAsync(LiveSession);
 
-        // Removíveis: DeadSession (refresh inicial resgatado, access e refresh da
-        // renovação), o primeiro refresh de OldLiveSession (resgatado há 20 dias) e o de
-        // RevokedSession; e as autorizações de DeadSession e de RevokedSession, que ficam
-        // sem token. O access de client_credentials não tem linha (D1).
+        // Removíveis: DeadSession (refresh inicial resgatado e o refresh da renovação), o
+        // primeiro refresh de OldLiveSession (resgatado há 20 dias) e o de RevokedSession; e
+        // as autorizações de DeadSession e de RevokedSession, que ficam sem token. Nenhum
+        // access token tem linha (D1 da #209, estendido pela #180 D3.8): eram 5 tokens
+        // antes da #180, com o access da renovação de DeadSession.
         var pruner = factory.Services.GetRequiredService<IIdentityTokenPruner>();
         IdentityTokenPruneResult result = null!;
         var commands = await factory.SqlCapture.CaptureAsync(async () => result = await pruner.RunCycleAsync(CancellationToken.None));
 
-        Assert.Equal(IdentityTokenPruneResult.Pruned(tokens: 5, authorizations: 2), result);
+        Assert.Equal(IdentityTokenPruneResult.Pruned(tokens: 4, authorizations: 2), result);
 
         // O "vencido" dos tokens é o relógio do Postgres, dentro do DELETE (D3).
         var tokenDeletes = commands.Where(command => command.Contains("DELETE FROM openiddict_tokens", StringComparison.Ordinal)).ToList();

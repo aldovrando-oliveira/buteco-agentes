@@ -109,14 +109,17 @@ services:
       Gemini__ApiKey: ${GEMINI_API_KEY:-}
       Mcp__CredentialEncryptionKey: ${MCP_CREDENTIAL_ENCRYPTION_KEY:?defina MCP_CREDENTIAL_ENCRYPTION_KEY — use --env-file .env.prod}
       # Cifra em repouso das chaves de assinatura do emissor OIDC (#179). Só no
-      # apps/api, e com valor distinto da MCP_CREDENTIAL_ENCRYPTION_KEY. Com
-      # PUBLIC_DOMAIN definido o emissor está ligado, e sem esta chave o api não
-      # sobe. Perdê-la torna as chaves gravadas ilegíveis (docs/deployment.md).
+      # apps/api, e com valor distinto da MCP_CREDENTIAL_ENCRYPTION_KEY. O emissor
+      # está sempre ligado (url pública obrigatória desde a #180), e sem esta chave
+      # o api não sobe. Perdê-la torna as chaves gravadas ilegíveis (docs/deployment.md).
       Identity__SigningKeyEncryptionKey: ${IDENTITY_SIGNING_KEY_ENCRYPTION_KEY:?defina IDENTITY_SIGNING_KEY_ENCRYPTION_KEY — use --env-file .env.prod}
       PublicUrl__BaseUrl: ${PUBLIC_DOMAIN:?defina PUBLIC_DOMAIN — use --env-file .env.prod}
       Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY:?defina AUTH_TOKEN_SIGNING_KEY — use --env-file .env.prod}
       Auth__OperatorUsername: ${AUTH_OPERATOR_USERNAME:?defina AUTH_OPERATOR_USERNAME — use --env-file .env.prod}
       Auth__OperatorPasswordHash: ${AUTH_OPERATOR_PASSWORD_HASH:?defina AUTH_OPERATOR_PASSWORD_HASH — use --env-file .env.prod}
+      # E-mail do primeiro Admin (#180): o bootstrap o cria com o hash acima quando não
+      # há nenhum usuário. Sem :?, porque depois do primeiro boot ela é opcional.
+      Auth__BootstrapAdminEmail: ${AUTH_BOOTSTRAP_ADMIN_EMAIL}
       # Endereço interno do apps/connectors, usado só na validação de pasta do
       # cadastro de base sincronizada (#104). Fixo, não é segredo; vazio faria o
       # cadastro Synced responder 503 connectors-not-configured.

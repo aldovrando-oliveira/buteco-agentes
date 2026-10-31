@@ -7,6 +7,8 @@ using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Auth;
 using Buteco.Api.Auth.Endpoints;
 using Buteco.Api.Identity;
+using Buteco.Api.Identity.Flow;
+using Buteco.Api.Identity.Validation;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Insights;
 using Buteco.Api.Insights.Endpoints;
@@ -25,6 +27,8 @@ using Buteco.Api.Options;
 using Buteco.Api.Providers;
 using Buteco.Api.Providers.Endpoints;
 using Buteco.Api.RejectionMetrics;
+using Buteco.Api.Users;
+using Buteco.Api.Users.Login;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 
@@ -118,13 +122,12 @@ builder.Services.AddSingleton<AgentA2AServerRegistry>();
 builder.Services.AddSingleton<IAgentA2AServerRegistry>(sp => sp.GetRequiredService<AgentA2AServerRegistry>());
 builder.Services.AddSingleton<RoutingA2ARequestHandler>();
 
-// Esquema único de autenticação (design.md, Decision 1/3) — aceita
-// token de operador e token de serviço de apps/inbox, ambos validados
-// pela mesma assinatura via ITokenService.
-builder.Services
-    .AddAuthentication(OperatorTokenAuthenticationHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, OperatorTokenAuthenticationHandler>(
-        OperatorTokenAuthenticationHandler.SchemeName, _ => { });
+// Autenticação das rotas: o token HMAC de operador e de serviço, validado pela mesma
+// assinatura via ITokenService, e o access token do próprio emissor, validado pelas
+// chaves do anel. Um esquema de política escolhe pela forma do token, e um token recusado
+// por um esquema não é tentado no outro (design.md da change usuarios-locais-login-emissor,
+// D3.3).
+builder.Services.AddIssuerTokenAuthentication();
 builder.Services.AddSingleton<IAuthorizationHandler, ServiceScopeAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
@@ -132,12 +135,15 @@ builder.Services.AddAuthorization(options =>
         .AddRequirements(new ServiceScopeRequirement())
         .Build());
 
-// Emissor OIDC (design.md da change emissor-oidc-api). Liga só com PublicUrl:BaseUrl,
-// e o registro não lança, para o migration bundle continuar subindo até o Build(): a
-// configuração errada é reprovada por ValidateIdentityIssuerConfiguration, abaixo. O
-// esquema do OpenIddict entra AO LADO do esquema acima, que continua o padrão (D9):
-// o token do emissor não é credencial das rotas do apps/api nesta change.
+// Emissor OIDC (design.md da change emissor-oidc-api). O registro não lança, para o
+// migration bundle continuar subindo até o Build(): a configuração errada é reprovada por
+// ValidateIdentityIssuerConfiguration, abaixo. O esquema do OpenIddict entra AO LADO do
+// esquema de política acima, que continua o padrão.
 builder.Services.AddIdentityIssuer(builder.Configuration);
+
+// Usuários locais, hash de senha, bloqueio e bootstrap do primeiro Admin (design.md da
+// change usuarios-locais-login-emissor, D2 e D4). Sem I/O no registro nem no boot.
+builder.Services.AddLocalUsers(builder.Configuration);
 
 var corsOptions = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new CorsOptions();
 builder.Services.AddCors(options =>
@@ -171,11 +177,14 @@ app.ValidateMetricsRegimeConfiguration();
 // .RealComposition_WithInvalidBaseUrl_FailsToStart.
 app.ValidateConnectorsConfiguration();
 
-// Convenção 8: url pública inválida, ou emissor ligado sem Identity:SigningKeyEncryptionKey,
-// derruba o boot; sem url pública sobe com aviso e sem emissor (design.md da change
-// emissor-oidc-api, D8). Provado pela composição real em
-// IdentityIssuerStartupValidationTests.
+// Convenção 8: url pública ausente ou inválida, ou sem Identity:SigningKeyEncryptionKey,
+// derruba o boot (design.md das changes emissor-oidc-api, D8, e usuarios-locais-login-
+// emissor, D3.4). Provado pela composição real em IdentityIssuerStartupValidationTests.
 app.ValidateIdentityIssuerConfiguration();
+
+// Convenção 8: todo subject de destino da tabela de clientes do token do emissor existe na
+// tabela de subjects do apps/api (usuarios-locais-login-emissor, D3.3).
+app.ValidateIssuerClientSubjects();
 
 // Sem UseHttpsRedirection: no compose de servidor (containerizacao-stack-servidor),
 // apps/api só recebe tráfego HTTP puro do nginx interno do stack — TLS termina
@@ -186,16 +195,22 @@ app.UseCors();
 
 // Antes do UseAuthentication, porque é lá dentro que o OpenIddict monta as opções, em
 // toda requisição, e sem chave a montagem lança: até o anel carregar, toda rota
-// responde 503 com Retry-After (design.md da change emissor-oidc-api, D6). Não faz
-// nada com o emissor desligado.
+// responde 503 com Retry-After (design.md da change emissor-oidc-api, D6).
 app.UseIdentityKeyRingGate();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// O limite global do POST /auth/session; as outras rotas passam sem limitador
+// (design.md da change usuarios-locais-login-emissor, D4).
+app.UseRateLimiter();
 
 app.MapHealthChecks("/health")
     .AllowAnonymous()
     .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.HealthProbe));
 app.MapAuthEndpoints();
+app.MapSessionEndpoints();
+app.MapAuthorizeEndpoint();
+app.MapEndSessionEndpoint();
 app.MapAgentEndpoints();
 app.MapProviderEndpoints();
 app.MapMcpServerEndpoints();
@@ -217,6 +232,9 @@ app.MapAgentCardEndpoint();
 app.ValidateRouteAuthenticationClassification(
     "/health",
     "/auth/login",
+    "/auth/session",
+    "/connect/authorize",
+    "/connect/logout",
     "/agents/{id:guid}/.well-known/agent-card.json");
 
 // Cada rota das listas dos subjects de serviço precisa existir entre os

@@ -39,6 +39,9 @@ public class IdentityIssuerDiscoveryTests(ApiFactoryFixture factory) : IClassFix
 
         Assert.Equal(Issuer + ".well-known/jwks", root.GetProperty("jwks_uri").GetString());
         Assert.Equal(Issuer + "connect/token", root.GetProperty("token_endpoint").GetString());
+        // Os dois endpoints do fluxo do usuário (#180, spec oidc-issuer).
+        Assert.Equal(Issuer + "connect/authorize", root.GetProperty("authorization_endpoint").GetString());
+        Assert.Equal(Issuer + "connect/logout", root.GetProperty("end_session_endpoint").GetString());
         Assert.DoesNotContain("outro-host", root.ToString());
     }
 

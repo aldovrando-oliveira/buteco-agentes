@@ -18,18 +18,15 @@ public sealed record AgentA2AAddresses(string Url, string AgentCardUrl);
 public static class AgentA2AAddressBuilder
 {
     /// <summary>
-    /// Devolve <c>null</c> quando a URL pública não está configurada, em vez de
-    /// montar endereço relativo. Sem a configuração não existe endereço
-    /// público, e afirmar um quebrado é pior que declarar a ausência (D2).
+    /// Sempre a partir da URL pública, e nunca do host da requisição. Ela é
+    /// obrigatória desde a change usuarios-locais-login-emissor (D3.4): sem ela o
+    /// boot falha, e o ramo "sem URL, endereço ausente" deixou de ser alcançável.
+    /// O tipo da resposta de agente continua anulável, para o contrato do painel
+    /// não mudar.
     /// </summary>
-    public static AgentA2AAddresses? Build(PublicUrlOptions options, Guid agentId)
+    public static AgentA2AAddresses Build(PublicUrlOptions options, Guid agentId)
     {
-        var baseUrl = options.BaseUrl?.TrimEnd('/');
-
-        if (string.IsNullOrWhiteSpace(baseUrl))
-        {
-            return null;
-        }
+        var baseUrl = options.BaseUrl!.TrimEnd('/');
 
         return new AgentA2AAddresses(
             $"{baseUrl}/agents/{agentId}/a2a",

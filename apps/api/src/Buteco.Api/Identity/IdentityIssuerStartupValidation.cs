@@ -1,5 +1,8 @@
+using Buteco.Api.Auth;
 using Buteco.Api.Identity.Keys;
 using Buteco.Api.Identity.Storage;
+using Buteco.Api.Options;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
 
@@ -13,8 +16,8 @@ namespace Buteco.Api.Identity;
 public static class IdentityIssuerStartupValidation
 {
     /// <summary>
-    /// Com o emissor desligado, só avisa. Ligado, reprova url pública inválida, chave de
-    /// cifra ausente ou malformada, retenção menor que a duração do access token mais o
+    /// Reprova url pública ausente ou inválida, chave de
+    /// cifra ausente ou malformada, retenção menor que a maior duração (access ou refresh) mais o
     /// intervalo da verificação de rotação, e idade mínima da limpeza menor que a duração
     /// do refresh token (change limpeza-tokens-openiddict, D3).
     /// </summary>
@@ -23,31 +26,42 @@ public static class IdentityIssuerStartupValidation
         var state = host.Services.GetRequiredService<IdentityIssuerState>();
         var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(IdentityIssuerStartupValidation));
 
-        if (!state.Enabled)
-        {
-            logger.LogWarning("Emissor OIDC desligado: PublicUrl:BaseUrl não configurada. O login e as demais rotas seguem iguais.");
-            return;
-        }
-
+        // Obrigatória desde a #180 (D3.4): sem issuer não há login de usuário.
         if (state.Issuer is null)
         {
-            throw new InvalidOperationException(
-                "PublicUrl:BaseUrl inválido: o valor precisa ser uma URI absoluta http ou https, sem query nem fragmento " +
-                "(por exemplo https://agentes.exemplo.com), ou ficar vazio para subir sem o emissor OIDC.");
+            var configured = host.Services.GetRequiredService<IConfiguration>()[$"{PublicUrlOptions.SectionName}:{nameof(PublicUrlOptions.BaseUrl)}"];
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(configured)
+                ? "PublicUrl:BaseUrl não configurada: a url pública é obrigatória, porque é o issuer do emissor OIDC e o login " +
+                  "de usuário depende dele (por exemplo https://agentes.exemplo.com)."
+                : "PublicUrl:BaseUrl inválido: o valor precisa ser uma URI absoluta http ou https, sem query nem fragmento " +
+                  "(por exemplo https://agentes.exemplo.com).");
         }
 
         IdentityKeyMaterialCipher.ParseKey(
             host.Services.GetRequiredService<IOptions<IdentityIssuerOptions>>().Value.SigningKeyEncryptionKey);
 
+        // A retenção cobre o token mais longo que o emissor valida com as próprias chaves: o
+        // refresh também é validado por elas (usuarios-locais-login-emissor, D3.7). Só as
+        // durações globais: uma duração por aplicação (#186) não aparece aqui. Refresh sem
+        // prazo (nulo) não cabe em retenção nenhuma.
         var composed = ComposeWithoutKeys(host.Services);
         var accessTokenLifetime = composed.AccessTokenLifetime ?? TimeSpan.Zero;
         var checkInterval = host.Services.GetRequiredService<IdentityKeyRotationSchedule>().CheckInterval;
-        if (IdentityKeyRotationPolicy.Retention < accessTokenLifetime + checkInterval)
+        if (composed.RefreshTokenLifetime is not { } refreshLifetime)
         {
             throw new InvalidOperationException(
-                $"Retenção das chaves do emissor ({IdentityKeyRotationPolicy.Retention}) menor que a duração do access token " +
-                $"({accessTokenLifetime}) mais o intervalo da verificação de rotação ({checkInterval}): um token assinado " +
-                "pela chave anterior deixaria de validar antes de expirar.");
+                $"Refresh token sem prazo: nenhuma retenção das chaves do emissor ({IdentityKeyRotationPolicy.Retention}) o cobre.");
+        }
+
+        var (longestName, longest) = refreshLifetime >= accessTokenLifetime
+            ? ("refresh token", refreshLifetime)
+            : ("access token", accessTokenLifetime);
+        if (IdentityKeyRotationPolicy.Retention < longest + checkInterval)
+        {
+            throw new InvalidOperationException(
+                $"Retenção das chaves do emissor ({IdentityKeyRotationPolicy.Retention}) menor que a duração do {longestName} " +
+                $"({longest}) mais o intervalo da verificação de rotação ({checkInterval}): um token assinado pela chave " +
+                "anterior deixaria de validar antes de expirar.");
         }
 
         // A linha de um refresh token resgatado precisa existir enquanto ele estiver no
@@ -71,15 +85,12 @@ public static class IdentityIssuerStartupValidation
     /// Aplica as configurações registradas na composição real, menos a das chaves, a uma
     /// instância nova de opções, e compara as URIs de todo tipo de endpoint, nos dois
     /// sentidos, com <see cref="IdentityIssuerEndpoints.Expected"/>. Reprova também URI
-    /// que coincide com rota mapeada. Precisa rodar depois de todos os <c>Map*</c>.
+    /// sem passthrough que coincide com rota mapeada, e URI com passthrough sem rota
+    /// mapeada anônima e de mesmo motivo (change usuarios-locais-login-emissor, D3.6).
+    /// Precisa rodar depois de todos os <c>Map*</c>.
     /// </summary>
     public static void ValidateIdentityIssuerEndpoints(this WebApplication app)
     {
-        if (app.Services.GetRequiredService<IdentityIssuerState>().Issuer is null)
-        {
-            return;
-        }
-
         var options = ComposeWithoutKeys(app.Services);
         var configured = ConfiguredEndpoints(options).ToList();
         var configuredPaths = configured.Select(endpoint => endpoint.Path).ToHashSet(StringComparer.Ordinal);
@@ -105,12 +116,23 @@ public static class IdentityIssuerStartupValidation
         var mappedRoutes = ((IEndpointRouteBuilder)app).DataSources
             .SelectMany(dataSource => dataSource.Endpoints)
             .OfType<RouteEndpoint>()
-            .Select(endpoint => "/" + (endpoint.RoutePattern.RawText ?? "").TrimStart('/'))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .GroupBy(endpoint => "/" + (endpoint.RoutePattern.RawText ?? "").TrimStart('/'), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
 
-        foreach (var path in configuredPaths.Where(mappedRoutes.Contains))
+        foreach (var path in configuredPaths)
         {
-            problems.Add($"'{path}' é endpoint do servidor OIDC e também rota mapeada do app");
+            var passthrough = IdentityIssuerEndpoints.Expected.TryGetValue(path, out var expected) && expected.Passthrough;
+            var routes = mappedRoutes.GetValueOrDefault(path) ?? [];
+
+            if (!passthrough && routes.Count > 0)
+            {
+                problems.Add($"'{path}' é endpoint do servidor OIDC e também rota mapeada do app");
+            }
+            else if (passthrough && !routes.Any(route => IsAnonymousWithReason(route, expected!.Reason)))
+            {
+                problems.Add(
+                    $"'{path}' é endpoint em passthrough e não tem rota mapeada de mesmo caminho, anônima e classificada como {expected!.Reason}");
+            }
         }
 
         if (problems.Count > 0)
@@ -119,6 +141,10 @@ public static class IdentityIssuerStartupValidation
                 $"Endpoints do emissor OIDC divergem da lista esperada: {string.Join("; ", problems)}.");
         }
     }
+
+    private static bool IsAnonymousWithReason(RouteEndpoint route, AnonymousRouteReason reason) =>
+        route.Metadata.GetMetadata<IAllowAnonymous>() is not null &&
+        route.Metadata.GetMetadata<AnonymousRouteClassification>()?.Reason == reason;
 
     private static OpenIddictServerOptions ComposeWithoutKeys(IServiceProvider services)
     {
