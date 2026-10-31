@@ -314,7 +314,8 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` | api, inbox, connectors | sim, fail-fast | **sim, byte-idêntica** (risco aceito abaixo, #117) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` | connectors | não — vazia, o provedor `google-drive` não aparece; **inválida, o `apps/connectors` não sobe** | N/A |
-| `AUTH_OPERATOR_USERNAME`/`AUTH_OPERATOR_PASSWORD_HASH` | `Auth__OperatorUsername`/`Auth__OperatorPasswordHash` | api | sim, fail-fast | N/A |
+| `AUTH_OPERATOR_USERNAME`/`AUTH_OPERATOR_PASSWORD_HASH` | `Auth__OperatorUsername`/`Auth__OperatorPasswordHash` | api | sim, fail-fast (até a #217) | N/A. O hash é também o inicial do primeiro Admin (#180) |
+| `AUTH_BOOTSTRAP_ADMIN_EMAIL` | `Auth__BootstrapAdminEmail` | api | não (sem `:?`) | N/A. Ver "Primeiro Admin", abaixo |
 | `STACK_HTTP_PORT` | (porta do host, não config do app) | frontend (nginx do stack) | sim | N/A |
 
 O compose garante os valores idênticos via interpolação `${VAR}` — a
@@ -351,7 +352,9 @@ Se a chave estiver perdida de vez, apague as linhas de `identity_keys`: o
 validar. Desde a #208, o `apps/inbox` e o `apps/connectors` validam esses
 tokens: um token assinado pela chave nova recebe `401` uma vez em cada um, que
 busca as chaves de novo e aceita a próxima requisição (no máximo uma busca por
-minuto). Nenhum token do emissor circula até a #180, então hoje o efeito é nulo.
+minuto). Desde a #180, apagar as chaves também invalida todo refresh token de
+usuário, e cada usuário precisa entrar de novo. Enquanto o painel entrar pelo
+HMAC (até a #217), ninguém usa esse fluxo em produção.
 
 **`503` até o primeiro acesso ao banco.** O anel de chaves carrega do banco
 logo depois do start, em segundo plano, e tenta de novo a cada 5 s. Até
@@ -376,6 +379,97 @@ curl -s -X POST https://<PUBLIC_DOMAIN>/connect/token \
 
 Se algum devolver HTML, o `nginx.conf` do `frontend` está sem os blocos do
 emissor (imagem antiga do `frontend`).
+
+### Usuários locais e login pelo emissor (#180)
+
+**Duas migrations**, aplicadas pelo `migrator`:
+- `AddLocalUsers`: as tabelas `users` e `identity_login_throttle`;
+- `ExtendIdentityKeyRetention`: só dados. Estende para `signs_until + 15 dias` a
+  janela das chaves de assinatura já gravadas em `identity_keys`, sem encurtar
+  nenhuma e sem tocar a chave de cifra. A retenção da chave aposentada passou de
+  24 h para 15 dias, porque o refresh token de 14 dias é validado pelas mesmas
+  chaves. Uma chave aposentada há menos de 15 dias volta ao JWKS.
+
+**Ordem do deploy:** `migrator` → `api` → `frontend`. O `inbox` e o `connectors`
+não mudam. O `frontend` muda só no `nginx.conf` (blocos novos de
+`/connect/authorize` e `/connect/logout`), e o painel continua entrando pelo
+HMAC: a troca do login é da #217.
+
+**`PUBLIC_DOMAIN` é obrigatória** para o `apps/api` (sempre foi no compose, com
+`:?`): sem url pública, o boot falha.
+
+#### Primeiro Admin
+
+No primeiro boot sem nenhum usuário, o bootstrap cria um usuário ativo com o
+e-mail de `AUTH_BOOTSTRAP_ADMIN_EMAIL` e o hash de `AUTH_OPERATOR_PASSWORD_HASH`,
+o mesmo PBKDF2 do operador de hoje, marcado como legado. O primeiro login dele
+refaz o hash em Argon2id. Ele roda no aquecimento, logo depois do start, sem
+bloquear o boot, e tenta de novo a cada 5 s se falhar.
+
+```
+$C logs api | grep -E 'Primeiro Admin criado|Bootstrap do primeiro Admin ignorado|Nenhum usuário; defina'
+```
+
+| linha | leitura |
+|---|---|
+| `Primeiro Admin criado pelo bootstrap, usuário <id>.` | certo: o usuário existe. O log nunca traz o hash |
+| `Bootstrap do primeiro Admin ignorado: já existem usuários.` | certo, em todo boot seguinte com a variável ainda definida. Nada é sobrescrito |
+| `Nenhum usuário; defina Auth:BootstrapAdminEmail e Auth:OperatorPasswordHash ...` | falta o e-mail, ou ele não é um endereço válido. Defina e recrie o `api` |
+
+**Depois da #217**, com o painel entrando pelo emissor: entre uma vez, troque a
+senha do Admin pela tela de Minha conta (#219), e então `AUTH_OPERATOR_PASSWORD_HASH`
+e `AUTH_BOOTSTRAP_ADMIN_EMAIL` podem sair do `.env.prod`. Antes da #217, o hash
+continua obrigatório para o `POST /auth/login` do HMAC.
+
+**Bloqueio e limite.** Cada e-mail é bloqueado por 5 min depois de 5 falhas
+seguidas. Depois de um bloqueio vencido, uma falha dobra o próximo, até 60 min, e
+24 h sem falha voltam ao início. O bloqueio vale também para e-mail sem conta,
+para não revelar quem tem conta: um terceiro pode pausar o login de alguém por
+até 60 min. O `apps/api` limita as verificações de senha globalmente (`429`), e
+**não vê o IP real do cliente** (#221). **O limite por IP é do proxy de fora**
+(nginx externo ou Cloudflare), e fica como recomendação de deploy, e não como
+garantia do código.
+
+**Logout e desativação: janela de até 15 min, aceita na M1.** O access token já
+emitido não é gravado e é validado só pelas chaves, nos três apps, sem consulta
+ao emissor. Depois do logout ou da desativação, ele continua valendo até vencer,
+em no máximo 15 min, e a renovação seguinte é recusada. A revogação para as
+aplicações externas é da #186.
+
+**O cookie de sessão do emissor** (`buteco-sessao`, 5 min) é protegido pelo Data
+Protection do ASP.NET Core, com as chaves dele dentro do contêiner do `api`. Com
+uma instância, um reinício só invalida um login em andamento, e a pessoa entra de
+novo. **Com mais de uma instância do `api` atrás de balanceador**, o cookie
+gravado numa não seria lido na outra: as chaves do Data Protection teriam de ser
+compartilhadas antes (#222, `aguardando gatilho`, com a segunda instância como gatilho).
+
+**Conferência depois do deploy**, no stack (porta `STACK_HTTP_PORT`):
+
+```
+curl -si -H 'Sec-Fetch-Mode: navigate' 'http://localhost:<porta>/connect/authorize?client_id=buteco-painel&response_type=code&scope=openid&redirect_uri=https://<PUBLIC_DOMAIN>/entrar/retorno&code_challenge=<s256>&code_challenge_method=S256'
+  → 302 com Location: /entrar?retorno=...   (do apps/api, e não 200 com o HTML do SPA)
+curl -si -H 'Sec-Fetch-Mode: navigate' 'http://localhost:<porta>/connect/logout'
+  → 302 com Location: /entrar   (do apps/api, e não o shell do SPA)
+curl -si -H 'Sec-Fetch-Mode: navigate' 'http://localhost:<porta>/connect/token'
+  → o shell do SPA (o desvio de navegação continua para o token)
+curl -si -X POST -H 'Content-Type: application/json' -H 'Origin: https://<PUBLIC_DOMAIN>' \
+     --data '{"email":"<admin>","senha":"<senha>"}' 'http://localhost:<porta>/auth/session'
+  → 204 com Set-Cookie: buteco-sessao (HttpOnly, SameSite=Strict, Secure)
+```
+
+Se o authorize ou o logout devolverem HTML, o `frontend` está com o `nginx.conf`
+antigo.
+
+**Rollback:** a imagem anterior do `api` e do `frontend`.
+- As tabelas novas ficam sem uso, e o cliente `buteco-painel` sincronizado também,
+  porque a versão anterior não o lê.
+- A janela de 15 dias gravada nas chaves continua, porque a versão anterior lê
+  `validates_until` da linha; as chaves que ela criar voltam a 24 h.
+- A versão anterior volta a gravar a linha do access token de usuário, que nenhum
+  usuário emite com ela.
+- A url pública continua definida, então a versão anterior sobe com o emissor
+  ligado, como antes.
+- O painel nunca deixou de usar o HMAC.
 
 ### Limpeza das entradas de token do emissor (#209)
 
@@ -408,8 +502,8 @@ variável do `PublicUrl__BaseUrl` do `apps/api`, e obtêm as chaves pelo
 `Api__BaseUrl` (`http://api:8080`). Nenhuma variável nova no `.env.prod`, e
 nenhuma migration.
 
-**Ordem de deploy:** qualquer uma. O `apps/api` não muda nesta entrega, e
-nenhum token do emissor circula até a #180. Os dois sobem com o `apps/api`
+**Ordem de deploy:** qualquer uma. O `apps/api` não mudou naquela entrega, e
+nenhum token do emissor circulava antes da #180. Os dois sobem com o `apps/api`
 fora do ar e atendem o HMAC normalmente.
 
 **Conferência depois do deploy:**

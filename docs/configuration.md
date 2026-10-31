@@ -122,12 +122,14 @@ restrito, a extensão precisa ser criada antes, por fora da migração.
 | `ConnectionStrings__Postgres` | sim | Banco compartilhado com `apps/workers` (`buteco_agents`) |
 | `RabbitMq__Host` / `__Port` / `__Username` / `__Password` | sim | Broker para publicar jobs de task |
 | `Auth__TokenSigningKey` | **fail-fast** | Chave HMAC de assinatura de token. Mesmo valor de `apps/inbox` |
-| `Auth__OperatorUsername` | **fail-fast** | Operador único; não há tabela de usuários |
-| `Auth__OperatorPasswordHash` | **fail-fast** | `{iterations}.{saltBase64}.{hashBase64}`, PBKDF2-HMAC-SHA256, gerado offline — ver [development.md](development.md#autenticação-em-desenvolvimento) |
+| `Auth__OperatorUsername` | **fail-fast** | Operador do `POST /auth/login` (HMAC), até a #217 |
+| `Auth__OperatorPasswordHash` | **fail-fast** | `{iterations}.{saltBase64}.{hashBase64}`, PBKDF2-HMAC-SHA256, gerado offline — ver [development.md](development.md#autenticação-em-desenvolvimento). Serve ao `POST /auth/login` e, desde a #180, de hash inicial do primeiro Admin do bootstrap |
+| `Auth__BootstrapAdminEmail` | não | E-mail do primeiro Admin (#180). Sem nenhum usuário, o bootstrap cria um usuário ativo com este e-mail e o hash de `Auth__OperatorPasswordHash`, marcado como legado; o primeiro login refaz em Argon2id. Com usuários, é ignorado, com log, e nunca sobrescreve senha nem e-mail. Vazio e sem usuário, o boot avisa no log. Ver [deployment.md](deployment.md#primeiro-admin) |
 | `Auth__OperatorTokenLifetime` | não | TTL do token de operador. Default de 30 min fixado no próprio tipo, não em `appsettings.json` |
 | `Mcp__CredentialEncryptionKey` | sim | AES-256 (32 bytes) em base64. Mesmo valor de `apps/workers`. Gerar com `openssl rand -base64 32` |
-| `PublicUrl__BaseUrl` | sim | URL pública da própria API, usada em `AgentCard.SupportedInterfaces` para descoberta A2A externa e como **issuer do emissor OIDC** (#179). Não afeta `SendMessage`/`GetTask`. Ver abaixo |
-| `Identity__SigningKeyEncryptionKey` | sim, com o emissor ligado | AES-256 (32 bytes) em base64, para cifrar em repouso as chaves de assinatura do emissor OIDC. **Distinta** de `Mcp__CredentialEncryptionKey`. Gerar com `openssl rand -base64 32`. Ausente, fora de base64 ou sem 32 bytes, com `PublicUrl__BaseUrl` definida, derruba o boot. O `appsettings.Development.json` traz uma chave de desenvolvimento |
+| `PublicUrl__BaseUrl` | **fail-fast** (desde a #180) | URL pública da própria API, usada em `AgentCard.SupportedInterfaces` para descoberta A2A externa e como **issuer do emissor OIDC** (#179). Não afeta `SendMessage`/`GetTask`. Ver abaixo |
+| `Identity__SigningKeyEncryptionKey` | **fail-fast** | AES-256 (32 bytes) em base64, para cifrar em repouso as chaves de assinatura do emissor OIDC. **Distinta** de `Mcp__CredentialEncryptionKey`. Gerar com `openssl rand -base64 32`. Ausente, fora de base64 ou sem 32 bytes, derruba o boot. O `appsettings.Development.json` traz uma chave de desenvolvimento |
+| `Identity__PanelBaseUrl` | não | Base do painel quando ele não fica na origem do issuer (#180). Alimenta o `redirect_uri` e o `post_logout_redirect_uri` do cliente `buteco-painel`, e é a segunda origem aceita no `POST /auth/session`. Ausente, vale `PublicUrl__BaseUrl`, que é o caso de produção. Em desenvolvimento, `http://localhost:5173` (o Vite) |
 | `OpenAI__BaseUrl` / `OpenAI__ApiKey` / `OpenAI__Model` | não | Presença habilita o provedor em `GET /providers` |
 | `Anthropic__ApiKey` | não | Idem, para Claude |
 | `Gemini__ApiKey` | não | Idem, para Gemini |
@@ -151,14 +153,17 @@ montar a lista de provedores disponíveis.
 `Cors` define quem pode **chamar** a API (entrada); `PublicUrl` é a URL pela
 qual a própria API é **alcançada** de fora, do ponto de vista do AgentCard.
 
-`PublicUrl__BaseUrl` também liga ou desliga o **emissor OIDC** (#179), e tem
-três estados:
+`PublicUrl__BaseUrl` também é o issuer do **emissor OIDC** (#179), e desde a
+#180 é obrigatória, porque o login de usuário depende dele:
 
 | valor | boot | emissor | demais rotas |
 |---|---|---|---|
-| ausente ou vazio | sobe, com o aviso "Emissor OIDC desligado" no log | não existe: `/.well-known/openid-configuration`, `/.well-known/jwks` e `/connect/token` não respondem | sem mudança |
+| ausente ou vazio | **falha**, com "PublicUrl:BaseUrl não configurada" | — | — |
 | URI absoluta `http` ou `https`, sem query nem fragmento | sobe, se `Identity__SigningKeyEncryptionKey` for válida | ligado, com essa URL como issuer; todos os endereços do discovery saem dela | `503` até as chaves carregarem do banco (ver [deployment.md](deployment.md)) |
-| qualquer outro valor | **falha**, com mensagem que cita `PublicUrl:BaseUrl` | — | — |
+| qualquer outro valor | **falha**, com "PublicUrl:BaseUrl inválido" | — | — |
+
+Até a #180, a url ausente subia o app com o emissor desligado e os endereços A2A
+ausentes; esse estado deixou de existir.
 
 ---
 
