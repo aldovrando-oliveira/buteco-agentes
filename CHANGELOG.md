@@ -208,6 +208,37 @@ o versionamento pretende seguir
   instância por ciclo, por advisory lock do Postgres em chave própria. O boot
   falha se a duração do refresh token passar da idade mínima da limpeza. Sem
   variável nova e sem migration.
+- **Usuários locais no `apps/api`** (#180), na tabela `users`:
+  - id imutável, que é o `sub`, e e-mail normalizado como identificador de login;
+  - estado ativo ou desativado, sem exclusão.
+  - **Senha em Argon2id**, com `NSec.Cryptography` 26.4.0 sobre a libsodium
+    1.0.22, a primeira dependência nativa do `apps/api`: m = 19.456 KiB, t = 2,
+    p = 1, em string PHC.
+  - **Primeiro Admin pelo bootstrap**: sem nenhum usuário, o `apps/api` cria um com
+    `Auth__BootstrapAdminEmail` (variável nova, `AUTH_BOOTSTRAP_ADMIN_EMAIL`,
+    opcional) e o hash PBKDF2 de `Auth__OperatorPasswordHash`. O primeiro login
+    refaz o hash em Argon2id, e o bootstrap nunca sobrescreve nada.
+  - **Bloqueio progressivo por e-mail, exista ou não a conta**: 5 falhas → 5 min,
+    depois uma falha dobra até 60 min, e 24 h sem falha voltam ao início.
+  - **Limite global de verificações de senha** (`429`), sem IP.
+  - Resposta igual para conta inexistente e senha errada.
+- **Login pelo emissor, com authorization code + PKCE** (#180).
+  - `POST /auth/session` (só JSON, `Origin` conferida) grava o cookie
+    `buteco-sessao`: `HttpOnly`, `SameSite=Strict`, 5 min.
+  - `GET /connect/authorize` e `GET /connect/logout` são endpoints novos do
+    emissor, em passthrough, com blocos exatos no nginx do stack.
+  - Refresh token de 14 dias, rotativo e deslizante.
+  - **Todo token novo de usuário relê o usuário**: o desativado, o inexistente e
+    o de carimbo de segurança diferente recebem `invalid_grant`.
+  - O logout revoga a sessão e sempre termina.
+  - O único cliente mantido pelo `apps/api` é o público `buteco-painel`, com os
+    escopos `buteco-api`, `buteco-inbox` e `buteco-connectors`, sincronizados no
+    aquecimento.
+  - O painel continua entrando pelo HMAC até a #217.
+- **O `apps/api` aceita o próprio token** (#180) nas rotas autenticadas, ao lado
+  do HMAC, com o desenho da #208: esquema pela forma, `aud` `buteco-api` e
+  subject pela tabela de clientes. A diferença é que as chaves vêm do anel do
+  próprio processo, sem HTTP. Sem `libs/`.
 
 **Contexto temporal e de canal**
 
@@ -781,6 +812,23 @@ o versionamento pretende seguir
   `scripts/check-docs.py`.
 
 ### Changed
+
+- **`PublicUrl__BaseUrl` passa a ser obrigatória no `apps/api`** (#180): sem ela,
+  o boot falha. Até aqui, a url ausente subia o app com o emissor desligado e os
+  endereços A2A ausentes. O compose de produção já a exigia.
+- **A chave de assinatura aposentada do emissor valida por 15 dias, e não por
+  24 h** (#180). O refresh token de 14 dias é validado pelas mesmas chaves, e o
+  boot passa a exigir retenção ≥ a maior duração mais o intervalo da verificação.
+  A migration de dados `ExtendIdentityKeyRetention` estende as chaves já
+  gravadas.
+- **Todo access token do emissor dura 15 min** (#180), inclusive o de
+  `client_credentials`, que durava 1 h (o padrão do OpenIddict).
+- **Nenhum access token, de nenhum fluxo, e nenhum id token gera linha em
+  `openiddict_tokens`** (#180, estendendo a #209). O handler passa a se chamar
+  `TokenEntryStorageHandler`.
+- **O aquecimento do `apps/api` tem três passos independentes** (#180): as chaves
+  do emissor, o catálogo de clientes e o bootstrap do primeiro Admin. A falha de
+  um não impede os outros, e o que falhou tenta de novo a cada 5 s.
 
 - **O `apps/api` responde `503` em toda rota até carregar as chaves do emissor
   do banco** (#179), inclusive `/health`, com `Retry-After: 5`. O carregamento

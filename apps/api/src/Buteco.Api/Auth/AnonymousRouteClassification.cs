@@ -8,6 +8,13 @@ public enum AnonymousRouteReason
     HealthProbe,
     AuthEntryPoint,
     PublicDiscovery,
+
+    /// <summary>
+    /// Encerramento de sessão do emissor: <c>/connect/logout</c> (design.md da change
+    /// usuarios-locais-login-emissor, D3.6). Anônimo porque o painel pode chamar com o
+    /// access token vencido; quem identifica a sessão é o <c>id_token_hint</c>.
+    /// </summary>
+    SessionEnd,
 }
 
 public sealed class AnonymousRouteClassification(AnonymousRouteReason reason)

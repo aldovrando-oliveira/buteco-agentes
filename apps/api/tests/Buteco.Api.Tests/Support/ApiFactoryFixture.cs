@@ -17,7 +17,7 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
     // Url pública usada pelos testes. Fixada aqui pela mesma razão dos
     // provedores logo abaixo: appsettings.Development.json é ajustado
     // livremente por quem desenvolve e não deveria ser pré-requisito de
-    // nenhum teste. Sobrescrevível para exercitar o caso de ausência.
+    // nenhum teste. Obrigatória desde a change usuarios-locais-login-emissor (D3.4).
     public const string PublicBaseUrl = "https://api.exemplo.test";
 
     protected virtual string? ConfiguredPublicBaseUrl => PublicBaseUrl;

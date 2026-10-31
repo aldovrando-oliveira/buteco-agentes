@@ -15,4 +15,12 @@ public sealed class IdentityIssuerOptions
     /// nunca do banco, e com valor distinto de <c>Mcp:CredentialEncryptionKey</c>.
     /// </summary>
     public string? SigningKeyEncryptionKey { get; set; }
+
+    /// <summary>
+    /// Base do painel, quando ele não fica na mesma origem do issuer (desenvolvimento:
+    /// <c>http://localhost:5173</c>, design.md da change usuarios-locais-login-emissor,
+    /// D3.4). Opcional: ausente, vale a url pública. Alimenta os endereços de retorno do
+    /// <c>buteco-painel</c> e a segunda origem aceita no <c>POST /auth/session</c>.
+    /// </summary>
+    public string? PanelBaseUrl { get; set; }
 }

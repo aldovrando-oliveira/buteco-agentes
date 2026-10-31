@@ -45,6 +45,16 @@ public static class TestAuthentication
         // com PublicUrl:BaseUrl, inclusive pelo appsettings.Development.json (design.md da
         // change emissor-oidc-api, D8). Só de teste, distinta da chave de desenvolvimento.
         ["Identity:SigningKeyEncryptionKey"] = IdentitySigningKeyEncryptionKey,
+
+        // Vazio por cima do http://localhost:5173 do appsettings.Development.json (o Vite):
+        // nos testes, o painel fica na origem do issuer, como em produção, e o
+        // redirect_uri do buteco-painel sai da url pública (usuarios-locais-login-emissor,
+        // D3.4).
+        ["Identity:PanelBaseUrl"] = "",
+
+        // Vazio por cima do e-mail de desenvolvimento: só as fixtures do bootstrap criam o
+        // primeiro Admin (UserBootstrapFixture), e o resto começa sem usuário.
+        ["Auth:BootstrapAdminEmail"] = "",
     };
 
     public const string IdentitySigningKeyEncryptionKey = "dGVzdC1pZGVudGl0eS1rZXktMzItYnl0ZXMtLS0tLS0=";
@@ -61,7 +71,7 @@ public static class TestAuthentication
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
 
-    private static string ComputeKnownOperatorPasswordHash()
+    public static string ComputeKnownOperatorPasswordHash()
     {
         const int iterations = 100_000;
         var salt = "fixed-test-salt-not-for-production"u8.ToArray();

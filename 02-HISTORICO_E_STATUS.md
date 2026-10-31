@@ -8725,25 +8725,42 @@ M1 Autenticação com provedor próprio            acompanhamento #194
    1 #179  emissor OIDC no apps/api
    2 #208  inbox/connectors aceitam o JWKS, com HMAC   ← #179
    3 #209  limpeza das entradas de token do OpenIddict ← #179
-   4 #180  usuários locais: e-mail, senha, 2 etapas    ← #179 #208
-   5 #181  convites e redefinição por link             ← #180
-   6 #182  remove o HMAC e a chave compartilhada       ← #180   (fecha #117 e #122)
-   7 #211  rota de leitura do emissor e das chaves     ← #179
-   8 #183  painel da M1                                ← #179 #208 #180 #181 #182 #211   (absorve #170 se couber)
+   4 #180  usuários locais e login pelo emissor        ← #179 #208
+   5 #217  o painel entra pelo emissor                 ← #180
+   6 #218  2 etapas (TOTP)                             ← #180
+   7 #219  Minha conta e Usuários                      ← #180 #218
+   8 #181  convites e redefinição por link             ← #180
+   9 #182  remove o HMAC e a chave compartilhada       ← #180 #217   (fecha #117 e #122)
+  10 #211  rota de leitura do emissor e das chaves     ← #179
+  11 #183  painel da M1                                ← #179 #208 #180 #181 #182 #211 #217 #218 #219   (absorve #170 se couber)
+  12 #220  2 etapas obrigatórias para todo usuário     ← #183
 M2 Diferentes acessos                            acompanhamento #195
-   9 #184  papéis Admin, Operador, Leitor              ← #180 #208
-  10 #185  painel: papéis, menu, 403                   ← #183 #184
-  11 #186  aplicações externas com credencial          ← #179 #184
-  12 #187  agentes liberados por aplicação             ← #186
-  13 #188  painel de aplicações externas               ← #185 #186 #187
+  13 #184  papéis Admin, Operador, Leitor              ← #180 #208 #217
+  14 #185  painel: papéis, menu, 403                   ← #183 #184
+  15 #186  aplicações externas com credencial          ← #179 #184
+  16 #187  agentes liberados por aplicação             ← #186
+  17 #188  painel de aplicações externas               ← #185 #186 #187
 M3 Autenticação com Google                       acompanhamento #196
-  14 #189  provedores federados e Google               ← #181 #184
-  15 #190  painel: login com provedor e recusas        ← #185 #189
+  18 #189  provedores federados e Google               ← #181 #184
+  19 #190  painel: login com provedor e recusas        ← #185 #189
 M4 Autenticação corporativa                      acompanhamento #197
-  16 #191  provedor OIDC genérico                      ← #189
-  17 #192  aplicações federadas (troca de token)       ← #187 #191
-  18 #193  painel da M4                                ← #188 #190 #192
+  20 #191  provedor OIDC genérico                      ← #189
+  21 #192  aplicações federadas (troca de token)       ← #187 #191
+  22 #193  painel da M4                                ← #188 #190 #192
 ```
+
+*(Atualizada em 31/10/2026, pela `usuarios-locais-login-emissor`: a M1 passou de 8 para
+12 itens. A #180 foi dividida por decisão do dono, em 28/10/2026, e ficou com o backend do
+login e do fluxo. Saíram dela:*
+- *a **#217**, que troca o login do painel e herda o critério de aceite "o painel faz login
+  e acessa o `apps/api`, o `apps/inbox` e o `apps/connectors"`;*
+- *a **#218**, o TOTP;*
+- *a **#219**, Minha conta e Usuários;*
+- *a **#220**, que liga as 2 etapas obrigatórias para todo usuário depois da tela da #183.*
+
+*A #182 passou a depender também da #217, a #183 da #217, da #218 e da #219, e a #184 da
+#217. Cada dependência está gravada como `blocked-by` nativo. A ordem acima é a do
+board.)*
 
 *(Atualizada em 24/10/2026, pela `emissor-oidc-api`: a M1 passou de 6 para 8
 itens. Entraram a **#209**, aberta nesta change para limpar as entradas de token e
@@ -8836,6 +8853,13 @@ chave compartilhada (#119), e o destino dela é a #182.
 | #203 | perfil Auditor | um pedido de acesso de auditoria que o papel Leitor não atenda |
 | #204 | permissão por agente e por base de conhecimento | a primeira instalação com duas equipes que não podem ver os agentes ou as bases uma da outra |
 | #205 | logotipo customizado do provedor federado | um provedor corporativo em uso cujo nome e subtítulo não bastem para reconhecer o botão (pedido real) |
+| #221 | `apps/api` enxerga o IP real do cliente por cabeçalho de proxy confiável, para limite de login por IP | o primeiro `429` num login legítimo, ou uma necessidade de limite por IP que o proxy de fora não atenda (#180, D4) |
+| #222 | chaves do Data Protection persistidas e compartilhadas no `apps/api` | a segunda instância do `apps/api` atrás de balanceador (#180, D1: cookie `buteco-sessao`, 5 min) |
+
+**`libs/` de autenticação, `aguardando gatilho`, sem issue** (#180, D3.3): o código de
+validação do token do emissor continua copiado no `apps/api`, no `apps/inbox` e no
+`apps/connectors`. **Gatilho:** um quarto consumidor, ou uma correção que precise ser
+aplicada idêntica nos três.
 
 **ACRÉSCIMO DE 18/10/2026: a serialização por sessão do inbox, e o que ela destrava**
 (a posição de cada uma é esta, e as entradas delas apontam para cá):
@@ -16858,3 +16882,240 @@ Nenhum.
 - **Conferir**, 1 h depois da subida, com o `grep` de `docs/deployment.md` ("Limpeza das
   entradas de token do emissor"): nenhuma linha `Limpeza das entradas de token falhou`.
 - **Rollback:** a imagem anterior do `apps/api`. Nada a desfazer.
+
+## `usuarios-locais-login-emissor` — usuários locais e login com e-mail e senha pelo emissor, com authorization code + PKCE (#180)
+
+**Change proposta em 27–31/10/2026 e implementada em 31/10/2026**, na branch
+`feat/180-usuarios-locais-login-emissor`, num worktree próprio, a partir de `3bb8236`.
+Entrega M1 · 4 de 12 (acompanhamento #194).
+- **Capacidades novas:** `local-users` e `issuer-user-login`.
+- **Capacidades alteradas:** `oidc-issuer`, `issuer-token-storage`,
+  `route-authentication`, `issuer-token-validation`, `identity-signing-keys` e
+  `agent-catalog`.
+- **Arquivo:** a change foi arquivada em
+  `openspec/changes/archive/2026-10-31-usuarios-locais-login-emissor/`, com a 12.4 (push
+  e PR) e a 12.5 (limpeza pós-merge) abertas.
+
+**A divisão foi aceita pelo dono em 28/10/2026.** A #180 ficou com o backend do login e
+do fluxo, e o resto saiu em quatro issues:
+- #217, o painel entrando pelo emissor;
+- #218, o TOTP;
+- #219, Minha conta e Usuários;
+- #220, as 2 etapas obrigatórias.
+
+**Duas revisões do dono antes do apply** (28 e 31/10/2026) mudaram estes pontos:
+- a retenção das chaves;
+- a regra do bloqueio, com um cenário por caso;
+- o carimbo de segurança no refresh e, depois, na troca do código;
+- o aquecimento em passos independentes;
+- o `retorno` montado pelo servidor;
+- a janela de 15 min documentada.
+
+Relacionadas: #217 a #223, #181 a #184, #186, #189 e #211.
+
+### O que entrou
+
+- **Usuários locais** (`users`, D4):
+  - id imutável, que é o `sub`, e e-mail normalizado como identificador de login, com
+    índice único;
+  - estado ativo ou desativado, e `security_stamp` trocado ao desativar.
+- **Senha em Argon2id** com `NSec.Cryptography` 26.4.0 sobre a libsodium 1.0.22, a
+  primeira dependência nativa do `apps/api`: m = 19.456 KiB, t = 2, p = 1, em string PHC
+  no formato da referência, com a senha em UTF-8. Há um teto de sanidade no parse (m ≤
+  256 MiB, t ≤ 16), e um formato desconhecido reprova sem exceção.
+- **Bootstrap do primeiro Admin** (D2), no aquecimento, sob o lock `BUTECOU1`. Sem
+  nenhum usuário e com `Auth:BootstrapAdminEmail`, cria o usuário com o PBKDF2 de
+  `Auth:OperatorPasswordHash` marcado como legado, e o primeiro login refaz em Argon2id.
+  Nunca sobrescreve nada.
+- **Bloqueio por e-mail, exista ou não a conta** (`identity_login_throttle`):
+  - 5 falhas → 5 min;
+  - depois de um bloqueio vencido, uma falha dobra até 60 min;
+  - 24 h sem falha voltam ao início, pela regra do tempo e não da limpeza;
+  - durante o bloqueio, `423` sem verificar a senha;
+  - o desativado com a senha certa não conta nem zera.
+
+  A limpeza das linhas paradas entra no ciclo horário da #209.
+- **Limite global** de verificações de senha, sem IP: concorrência 4 com fila de 16, e
+  token bucket de 10/s com rajada de 20. Acima disso, `429` com `Retry-After: 1`.
+- **Sessão do emissor e fluxo do painel** (D1):
+  - `POST /auth/session`, só JSON e com `Origin` conferida, grava o cookie
+    `buteco-sessao`: `HttpOnly`, `Strict`, 5 min, com o id e o stamp;
+  - `/connect/authorize` e `/connect/logout` entram em passthrough, sem
+    `EnableErrorPassthrough`;
+  - `authorization_code` com PKCE obrigatório e refresh rotativo e deslizante de 14
+    dias;
+  - **todo token novo de usuário confere estado e stamp**: a troca do código e a
+    renovação recusam com `invalid_grant`.
+- **Catálogo de clientes** (D3.1, D3.2): o `buteco-painel` público e os escopos
+  `buteco-api`, `buteco-inbox` e `buteco-connectors`, sincronizados e corrigidos no
+  aquecimento e a cada hora, sob o lock `BUTECOC1`.
+- **O `apps/api` aceita o próprio token** (D3.3): o desenho da #208, com as chaves do
+  anel e sem HTTP. A resposta ao `libs/` é "não", com o gatilho abaixo.
+- **Url pública obrigatória** (D3.4): sem ela, o boot falha. Saíram o ramo "emissor
+  desligado", o ramo nulo dos endereços A2A e os testes deles.
+- **Retenção das chaves de 24 h para 15 dias** (D3.7), com a checagem de boot pela maior
+  duração e a migration de dados `ExtendIdentityKeyRetention`.
+- **Armazenamento** (D3.8): nenhum access token e nenhum id token gera linha
+  (`TokenEntryStorageHandler`, que era o `ClientCredentialsAccessTokenStorageHandler`).
+- **Aquecimento em três passos independentes** (D3.13): o anel, o catálogo e o
+  bootstrap. O gate do `503` não espera o catálogo.
+- **Duas migrations** (`AddLocalUsers`, `ExtendIdentityKeyRetention`) e uma variável
+  nova, `AUTH_BOOTSTRAP_ADMIN_EMAIL`, sem `:?`. O nginx do `frontend` ganha os blocos
+  exatos de `/connect/authorize` e `/connect/logout`.
+- **Docs:** `01` (Autenticação), `docs/architecture.md`, `docs/configuration.md`,
+  `docs/deployment.md`, `docs/development.md` e o `CHANGELOG`.
+
+### O que a implementação mediu
+
+Suítes por nome, no protocolo da 1.1 da #179: `DOCKER_HOST` do Podman,
+`TESTCONTAINERS_RYUK_DISABLED`, `DOTNET_SYSTEM_NET_DISABLEIPV6` e `TZ=America/Sao_Paulo`.
+Antes de cada suíte, o script esperou `CPU_Speed_Limit = 100` e load abaixo de 8, acertou
+o relógio da VM e conferiu `podman ps` vazio. A CPU ficou em 100 no início e no fim das
+três. A baseline foi feita no worktree limpo em `3bb8236`.
+
+| suíte | baseline em `3bb8236` | fechamento | diferença por nome |
+|---|---|---|---|
+| `apps/api` | 889/889 + 1 ignorado, 1m44s | **1009/1009 + 1 ignorado**, 1m57s | 4 removidos (os da url pública ausente), 14 renomeados, 124 novos; 0 com resultado mudado |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 12/12 | **12/12** | 1 renomeado (o acordo, agora com o fluxo real) |
+| `tests/ApiConnectorsRoundTrip.Tests` | 8/8 | **8/8** | 1 renomeado (idem) |
+
+- **A primeira rodada do fechamento falhou por configuração minha:**
+  - **sintoma:** 21 casos no `apps/api` e 1 em cada acordo;
+  - **causa:** o `Identity:PanelBaseUrl` de desenvolvimento chegava às fixtures, que sobem
+    em `Development`, e todo authorize de teste respondia `400`;
+  - **correção:** as fixtures passam a deixar vazios esse valor e o e-mail de bootstrap.
+    A rodada ficou guardada à parte, e a da tabela é a segunda.
+- **Build `--no-incremental`** dos três projetos de teste, nos dois worktrees: o mesmo
+  conjunto de avisos (9, 2 e 2).
+- **Rodada com build limpo, a pedido do dono,** para provar que nenhum binário veio das
+  rodadas de guarda:
+  - antes de cada suíte, `dotnet clean` e `--no-incremental`, e depois `test --no-build`;
+  - o `Buteco.Api.dll` foi recompilado nas três vezes, com o mesmo SHA-256;
+  - deu 1009 + 1 ignorado, 12/12 e 8/8, idêntica por nome à rodada da tabela.
+
+- **Verificação manual (12.2), contra o banco de desenvolvimento:**
+  - **migration de dados:** alterou **uma linha só**, a chave de assinatura
+    `fniY4qt8pBcSxBan9KihTw`. O `validates_until` dela foi de 2027-01-24 01:08:38+00 (24 h
+    depois de `signs_until`) para 2027-02-07 01:08:38+00 (15 dias), e a chave de cifra não
+    mudou;
+  - **`dotnet run`:** subiu com o emissor ligado, o catálogo criado e o primeiro Admin
+    criado (`EventId` 1188);
+  - **fluxo por `curl`:** sessão, authorize, token, `GET /agents` com o token do emissor
+    (`200`), refresh e logout, depois do qual o refresh deu `invalid_grant`. O `POST
+    /auth/login` do HMAC continua igual, e o primeiro login refez o hash em Argon2id;
+  - **nginx:** os quatro `curl` do D3.5 passaram pelo `nginx:1.30-alpine` com o
+    `nginx.conf` versionado. Só o `upstream` do `api` foi trocado pelo IP do host, porque o
+    `apps/api` rodava fora de contêiner.
+
+- **Verificação antes de qualquer código** (grupo 2), sem parada:
+  - **restore:** entram só `NSec.Cryptography` e `libsodium`, com os mesmos `NU1903` da
+    baseline;
+  - **Argon2id de verdade:** no macOS (x86_64, ~25 ms por verificação) e na
+    `aspnet:10.0`, que é Ubuntu 24.04 e não Debian como o design dizia. No
+    `linux-x64`, ~22 ms; no `linux-arm64`, emulado, ~290 ms, um tempo da emulação e não
+    do hardware;
+  - **referência:** o hash é idêntico ao do `argon2-cffi`, e a string PHC é aceita por
+    ele.
+
+### Guardas contra o defeito real (convenção 15)
+
+Cada defeito foi reintroduzido, o teste rodado e a árvore restaurada:
+
+| guarda | defeito reintroduzido | resultado com o defeito |
+|---|---|---|
+| legado só com marcador | PBKDF2 aceito sem o marcador | `WithoutTheMarker_TheSameStringFails` reprova |
+| reincidência | 5 falhas de novo depois do bloqueio vencido | 4 de 8 do `LoginThrottlePolicyTests` reprovam |
+| 24 h pelo tempo | `Effective` sem as 24 h | 2 de 8 reprovam |
+| bootstrap não sobrescreve | ramo "já há usuário" trocando o hash | `WithUsers_*` reprova |
+| aquecimento independente | o laço de antes, só do anel | `IdentityWarmupTests` reprova: o usuário nunca é criado |
+| `Origin` | conferência retirada | `SessionCsrfTests` 2 de 4 |
+| chave do bloqueio pelo e-mail | falha contada só com conta | `UnknownEmail_BlocksTheSame` reprova |
+| desativado não mexe na contagem | `403` zerando a linha | `Deactivated_RightPassword_NeitherCountsNorZeroes` reprova |
+| passthrough | rota do authorize removida; ramo da checagem retirado | a composição real não sobe; 3 de 5 do `IdentityIssuerEndpointsPassthroughTests` |
+| catálogo | `client_credentials` no descritor; sincronização que só cria | `Panel_IsPublic_*` e `ATamperedPanel_*` reprovam |
+| armazenamento | registro do handler retirado | `IdentityUserTokenStorageTests` reprova |
+| PKCE | sem o global **e** sem o `ft:pkce` do cliente | `WithoutCodeChallenge_NoCodeIsIssued` reprova (só com os dois: defesa em profundidade) |
+| `retorno` | `GetDisplayUrl()` | o caso do `Host` reprova |
+| gate | o gate exigindo o catálogo | `/health` `503`, o caso reprova |
+| releitura | handler do grant retirado | `DeactivatedUser_CannotRefresh` reprova (tirar só o status não basta: desativar troca o stamp) |
+| stamp | comparação retirada | o caso do reativado reprova |
+| troca do código | handler só no `refresh_token` | o caso "desativado entre o authorize e a troca" reprova |
+| subject pela tabela | `sub` como `NameIdentifier` | `ForgedOperatorSub_IsNotTheOperator` reprova |
+| um esquema por token | o esquema do emissor chamando o HMAC na falha | `InvalidJwt_Is401_WithoutCallingTheHmacValidator` reprova |
+| retenção | 24 h e checagem só pelo access (o estado de antes) | `invalid_grant` ID2090, "The signing key associated to the specified token was not found." |
+| migration de dados | `UPDATE` sem efeito | `ExtendIdentityKeyRetentionMigrationTests` reprova |
+
+### Divergências do desenho aprovado (convenção 9)
+
+- **Premissa falsa achada na revisão do dono (2.4 (f)):** a retenção de 24 h da #179 só
+  cobria o access token. O OpenIddict valida o refresh, o código e o `id_token_hint` com
+  as mesmas chaves. Virou a retenção de 15 dias e a migration de dados. A janela fica
+  gravada por linha, e só a constante não bastaria.
+- **2.4 (b) corrigida na implementação:**
+  - o hint inválido **não** é recusado pelo OpenIddict, porque é opcional
+    (`OpenIddictServerHandlers.cs` l. 364–377), e chega à rota;
+  - o `AuthenticateAsync` devolve um principal vazio, e não nulo
+    (`OpenIddictServerAspNetCoreHandler.cs` l. 207–209);
+  - só o endereço não registrado é recusado antes.
+
+  O comportamento da spec é o mesmo, e só muda o lugar de cada caso: a rota trata o hint
+  ausente ou inválido, e um handler de `ApplyEndSessionResponseContext` trata o endereço
+  não registrado. O `EnableErrorPassthrough` ficou de fora, porque é global e levaria à
+  rota os erros do authorize.
+- **Token de usuário é o que traz o claim do stamp.** Recusar todo grant sem usuário
+  quebraria os refresh de cliente dos testes da #209.
+- **O guarda da 6.2 não reprovava como escrito:** sem a rota, quem reprova primeiro é a
+  checagem de rotas anônimas. Entrou o `IdentityIssuerEndpointsPassthroughTests`, e o
+  teste da composição real passou a exigir boot sem exceção.
+- **Testes renomeados ou mudados:**
+  - **renomeados:** `ClientCredentialsAccessTokenStorageHandlerTests` vira
+    `TokenEntryStorageHandlerTests`; `AfterTheSwitch_*For24Hours` vira
+    `*ForTheRetention`; `OnlyTheClientCredentialsAccessToken_LosesItsEntry` vira
+    `OnlyTheCodeAndTheRefreshToken_KeepTheirEntry`;
+  - **com número mudado:** o `IdentityTokenPruneTests` passa a contar 4 tokens, e não 5,
+    porque o access da renovação também deixou de ter linha;
+  - **com duração mudada:** o caso da limpeza com refresh acima de 14 dias passa de 15
+    dias para 14 d 30 min, porque 15 dias reprovam antes na retenção.
+- **A imagem `aspnet:10.0` é Ubuntu 24.04**, e não Debian como o design dizia. O que
+  importa ao binário nativo é a glibc, e ela se manteve.
+- **Incidente no script de guarda, e não no código.** O `guard.py` restaurava o arquivo
+  com o `mtime` antigo, e duas rodadas normais seguintes reaproveitaram o binário do
+  último defeito. Elas foram descartadas e refeitas, e o script foi corrigido. O registro
+  completo está no `tasks.md` (grupo 6).
+- **O acordo de `tests/` repetia o login até o bootstrap concluir**, e o bloqueio fez
+  seu papel: na quinta tentativa, `423`. Agora o teste roda o bootstrap e o catálogo
+  direto, porque os dois são idempotentes.
+
+### Achados fora do escopo (convenção 23)
+
+- **O cookie de sessão usa o Data Protection do ASP.NET Core sem chaves persistidas.**
+  Com uma instância, o efeito de um reinício é só refazer um login em andamento. Com mais
+  de uma instância atrás de balanceador, o cookie gravado numa não seria lido na outra.
+  Está registrado no `docs/deployment.md` e virou a **#222**, `aguardando gatilho`, sem
+  milestone. O gatilho é a segunda instância do `apps/api` atrás de balanceador.
+- **Divergência de versão de collation no Postgres de desenvolvimento** (glibc 2.41 no
+  banco, 2.36 na imagem atual da tag `pgvector/pgvector:pg18`), vista na 12.2. O aviso é
+  anterior à change. A produção usa a mesma tag flutuante, e isso não foi verificado lá.
+  Abri a **#223** (`tipo: risco`, Backlog, sem milestone).
+
+### Gatilho do `libs/` (D3.3)
+
+A resposta da #180 é que o código de validação do token não vai para `libs/`.
+**Gatilho para voltar à pergunta:** um quarto consumidor, ou uma correção que precise
+ser aplicada idêntica no `apps/api`, no `apps/inbox` e no `apps/connectors`.
+
+### Deploy
+
+- **Ordem:** `migrator` → `api` → `frontend`. O `inbox` e o `connectors` não mudam.
+- **Migrations:**
+  - `AddLocalUsers`, com `users` e `identity_login_throttle`;
+  - `ExtendIdentityKeyRetention`, só dados, que estende para `signs_until + 15 dias` as
+    chaves de assinatura com janela menor.
+- **`.env.prod`:** `AUTH_BOOTSTRAP_ADMIN_EMAIL`, nova, opcional depois do primeiro boot.
+  `PUBLIC_DOMAIN` e `AUTH_OPERATOR_PASSWORD_HASH` continuam obrigatórias.
+- **Conferir:**
+  - o log `Primeiro Admin criado pelo bootstrap`;
+  - os quatro `curl` de `docs/deployment.md` ("Usuários locais e login pelo emissor").
+- **O painel continua entrando pelo HMAC** até a #217.
+- **Rollback:** a imagem anterior do `api` e do `frontend`. As tabelas novas ficam sem
+  uso, e as janelas de 15 dias continuam valendo para a versão anterior.

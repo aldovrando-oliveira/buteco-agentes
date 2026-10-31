@@ -1,4 +1,5 @@
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Users.Login;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
 
@@ -24,6 +25,10 @@ public interface IIdentityTokenPruner
 /// limpeza inteira. O rollback no fim solta o lock; se o processo morre, a conexão fecha
 /// e o Postgres solta;</item>
 /// <item><b>tokens antes de autorizações:</b> a autorização só sai sem token;</item>
+/// <item><b>as linhas paradas de <c>identity_login_throttle</c></b> saem no mesmo ciclo e
+/// no mesmo lock: sem falha há <see cref="LoginThrottlePolicy.ResetAfter"/> e fora de
+/// bloqueio (design.md da change usuarios-locais-login-emissor, D4). É só arrumação: a
+/// política já trata essas linhas como inexistentes;</item>
 /// <item><b>o limite sai do <see cref="TimeProvider"/></b>; o "vencido" do critério dos
 /// tokens é o relógio do Postgres, dentro do <c>DELETE</c> (D3, "Dois relógios").</item>
 /// </list>
@@ -56,7 +61,14 @@ public sealed class IdentityTokenPruner(IServiceScopeFactory scopeFactory, TimeP
             var authorizations = await pruneScope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>()
                 .PruneAsync(threshold, cancellationToken);
 
-            return IdentityTokenPruneResult.Pruned(tokens, authorizations);
+            var now = timeProvider.GetUtcNow();
+            var throttleThreshold = now - LoginThrottlePolicy.ResetAfter;
+            var loginThrottles = await pruneScope.ServiceProvider.GetRequiredService<AppDbContext>().LoginThrottles
+                .Where(throttle => throttle.LastFailureAt < throttleThreshold &&
+                    (throttle.LockedUntil == null || throttle.LockedUntil < now))
+                .ExecuteDeleteAsync(cancellationToken);
+
+            return IdentityTokenPruneResult.Pruned(tokens, authorizations, loginThrottles);
         }
         finally
         {
@@ -66,10 +78,10 @@ public sealed class IdentityTokenPruner(IServiceScopeFactory scopeFactory, TimeP
 }
 
 /// <summary>O que um ciclo fez: pulou por não ter o lock, ou removeu tantas linhas de cada tabela.</summary>
-public sealed record IdentityTokenPruneResult(bool WasSkipped, long Tokens, long Authorizations)
+public sealed record IdentityTokenPruneResult(bool WasSkipped, long Tokens, long Authorizations, long LoginThrottles = 0)
 {
     public static readonly IdentityTokenPruneResult Skipped = new(WasSkipped: true, Tokens: 0, Authorizations: 0);
 
-    public static IdentityTokenPruneResult Pruned(long tokens, long authorizations) =>
-        new(WasSkipped: false, tokens, authorizations);
+    public static IdentityTokenPruneResult Pruned(long tokens, long authorizations, long loginThrottles = 0) =>
+        new(WasSkipped: false, tokens, authorizations, loginThrottles);
 }

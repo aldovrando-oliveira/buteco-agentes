@@ -8,9 +8,10 @@ namespace Buteco.Api.Tests;
 
 // Os endereços A2A do agente na resposta da API. O que estes testes protegem é
 // menos o formato e mais duas invariantes: que a resposta e o card de
-// descoberta nunca anunciem endereços diferentes, e que sem url pública
-// configurada a API declare a ausência em vez de montar endereço quebrado
-// (design.md da change agente-enderecos-a2a, D1 e D2).
+// descoberta nunca anunciem endereços diferentes, e que o endereço saia da url
+// pública e nunca do host da requisição (design.md da change agente-enderecos-a2a,
+// D1). A url pública é obrigatória desde a change usuarios-locais-login-emissor
+// (D3.4), e o caso "sem url, endereço ausente" saiu com ela.
 public class AgentA2AAddressesTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>
 {
     private const string Provider = "openai";
@@ -72,6 +73,20 @@ public class AgentA2AAddressesTests(ApiFactoryFixture factory) : IClassFixture<A
         Assert.NotNull(agent.A2A);
     }
 
+    [Fact]
+    public async Task Addresses_DoNotComeFromTheRequestHost()
+    {
+        var created = await CreateAgentAsync("Atendente");
+        var request = new HttpRequestMessage(HttpMethod.Get, $"/agents/{created.Id}");
+        request.Headers.Host = "outro-host.exemplo";
+
+        var response = await _client.SendAsync(request);
+        var agent = await response.Content.ReadFromJsonAsync<AgentResponse>();
+
+        Assert.StartsWith($"{ApiFactoryFixture.PublicBaseUrl}/", agent!.A2A!.Url);
+        Assert.StartsWith($"{ApiFactoryFixture.PublicBaseUrl}/", agent.A2A.AgentCardUrl);
+    }
+
     private async Task<AgentResponse> CreateAgentAsync(string name)
     {
         var response = await _client.PostAsJsonAsync(
@@ -79,28 +94,5 @@ public class AgentA2AAddressesTests(ApiFactoryFixture factory) : IClassFixture<A
             new CreateAgentRequest(name, "Instruções.", Provider, Model));
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<AgentResponse>())!;
-    }
-}
-
-public class AgentA2AAddressesWithoutPublicUrlTests(ApiFactoryWithoutPublicUrlFixture factory)
-    : IClassFixture<ApiFactoryWithoutPublicUrlFixture>
-{
-    private readonly HttpClient _client = factory.CreateClient();
-
-    [Fact]
-    public async Task WithoutPublicUrlConfigured_AddressesAreAbsent()
-    {
-        var response = await _client.PostAsJsonAsync(
-            "/agents",
-            new CreateAgentRequest("Atendente", "Instruções.", "openai", "gpt-5.6-sol"));
-        response.EnsureSuccessStatusCode();
-        var created = (await response.Content.ReadFromJsonAsync<AgentResponse>())!;
-
-        var agent = await _client.GetFromJsonAsync<AgentResponse>($"/agents/{created.Id}");
-
-        // Sem url pública não existe endereço público. Declarar a ausência é o
-        // que transforma uma configuração faltando em informação, em vez de num
-        // endereço quebrado que só aparece quando alguém tenta usá-lo.
-        Assert.Null(agent!.A2A);
     }
 }

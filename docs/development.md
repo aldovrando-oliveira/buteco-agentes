@@ -168,8 +168,12 @@ são **obrigatórios**: o processo falha ao subir sem eles. Ver
 gerar o hash.
 
 Toda rota exige `Authorization: Bearer <token>`, exceto `GET /health`,
-`POST /auth/login` e `GET /agents/{id}/.well-known/agent-card.json`. Os
-exemplos abaixo fazem login primeiro e reaproveitam o token:
+`POST /auth/login`, `POST /auth/session`, `GET /connect/authorize`,
+`GET /connect/logout` e `GET /agents/{id}/.well-known/agent-card.json` (mais os
+endpoints do emissor OIDC, `/.well-known/*` e `/connect/token`). O token pode
+ser o HMAC do `POST /auth/login` ou o access token do emissor ("Primeiro Admin
+local e o fluxo do emissor", abaixo). Os exemplos abaixo fazem login pelo HMAC e
+reaproveitam o token:
 
 ```bash
 curl -i http://localhost:5017/health
@@ -401,8 +405,9 @@ funciona igual.
 
 `apps/api` e `apps/inbox` compartilham a mesma `Auth:TokenSigningKey` e
 validam localmente qualquer token assinado com ela, sem chamada de rede entre
-os dois processos. Há um único operador, com credencial vinda de
-configuração — não existe tabela de usuários.
+os dois processos. O painel entra pelo operador, com credencial vinda de
+configuração, até a #217. Desde a #180 há também usuários locais (tabela
+`users`), com login por e-mail e senha pelo emissor, ainda sem tela no painel.
 
 Default de desenvolvimento (`appsettings.Development.json`): usuário
 `operator`, senha `changeme`.
@@ -429,6 +434,38 @@ Cole a saída em `Auth:OperatorPasswordHash` (variável de ambiente
 `Auth:OperatorTokenLifetime` é opcional, com default de 30 minutos fixado no
 próprio tipo (`TokenSigningOptions`, não no `appsettings.json`). Ajuste por
 ambiente só se precisar de um TTL diferente.
+
+### Primeiro Admin local e o fluxo do emissor
+
+Com o banco sem nenhum usuário, o `apps/api` cria no aquecimento o usuário
+`operador@buteco.local` (`Auth:BootstrapAdminEmail` do
+`appsettings.Development.json`), com a mesma senha do operador de
+desenvolvimento (`changeme`). O log traz `Primeiro Admin criado pelo bootstrap`.
+O primeiro login refaz o hash em Argon2id, e o bootstrap não roda de novo
+enquanto houver usuário. Para recomeçar, apague as linhas de `users`.
+
+Sem a tela do painel (#217), o fluxo se exercita por `curl`, contra o `apps/api`
+em `http://localhost:5017`:
+
+```bash
+# 1. Sessão do emissor: só JSON, e o Origin precisa ser o do issuer ou o do painel
+curl -si -c /tmp/buteco-cookie -X POST http://localhost:5017/auth/session \
+     -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' \
+     --data '{"email":"operador@buteco.local","senha":"changeme"}'          # 204
+
+# 2. Authorize com PKCE: o verifier e o challenge saem de um par S256 qualquer
+curl -si -b /tmp/buteco-cookie 'http://localhost:5017/connect/authorize?client_id=buteco-painel&response_type=code&scope=openid%20offline_access%20buteco-api&redirect_uri=http://localhost:5173/entrar/retorno&code_challenge=<challenge>&code_challenge_method=S256'
+# 302 para http://localhost:5173/entrar/retorno?code=...
+
+# 3. Troca do código
+curl -s -X POST http://localhost:5017/connect/token -d grant_type=authorization_code \
+     -d client_id=buteco-painel -d code=<code> -d redirect_uri=http://localhost:5173/entrar/retorno \
+     -d code_verifier=<verifier>
+```
+
+O `redirect_uri` usa `Identity:PanelBaseUrl` (`http://localhost:5173`, o Vite).
+Cinco senhas erradas seguidas pausam o e-mail por 5 minutos, e isso vale também
+em desenvolvimento.
 
 ---
 

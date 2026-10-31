@@ -13,6 +13,8 @@ using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeFragments.Entities;
 using Buteco.Api.McpServers.Entities;
 using Buteco.Api.RejectionMetrics.Entities;
+using Buteco.Api.Users;
+using Buteco.Api.Users.Login;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using OpenIddict.EntityFrameworkCore.Models;
@@ -56,6 +58,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<TaskRejection> TaskRejections => Set<TaskRejection>();
 
     public DbSet<IdentityKey> IdentityKeys => Set<IdentityKey>();
+
+    public DbSet<User> Users => Set<User>();
+
+    public DbSet<LoginThrottle> LoginThrottles => Set<LoginThrottle>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -676,6 +682,47 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             // A carga do anel: as chaves de cada uso que ainda validam.
             entity.HasIndex(key => new { key.Usage, key.ValidatesUntil });
+        });
+
+        // Usuários locais (design.md da change usuarios-locais-login-emissor, D4). Nomes
+        // em snake_case, como identity_keys. O apps/workers não espelha: ninguém lá lê.
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.ToTable("users");
+            entity.HasKey(user => user.Id);
+            entity.Property(user => user.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(user => user.Email).HasColumnName("email").IsRequired();
+            entity.Property(user => user.NormalizedEmail).HasColumnName("normalized_email").IsRequired();
+            entity.Property(user => user.Name).HasColumnName("name").IsRequired();
+            entity.Property(user => user.Status).HasColumnName("status").IsRequired()
+                .HasConversion(
+                    status => status == UserStatus.Active ? "active" : "deactivated",
+                    value => value == "active" ? UserStatus.Active : UserStatus.Deactivated);
+            entity.Property(user => user.PasswordHash).HasColumnName("password_hash").IsRequired(false);
+            entity.Property(user => user.PasswordHashIsBootstrapLegacy).HasColumnName("password_hash_is_bootstrap_legacy");
+            entity.Property(user => user.SecurityStamp).HasColumnName("security_stamp").IsRequired();
+            entity.Property(user => user.CreatedAt).HasColumnName("created_at");
+            entity.Property(user => user.LastAccessAt).HasColumnName("last_access_at");
+            entity.Property(user => user.DeactivatedAt).HasColumnName("deactivated_at");
+            entity.Ignore(user => user.IsActive);
+
+            // O identificador de login; a unicidade é do banco, não de uma consulta antes.
+            entity.HasIndex(user => user.NormalizedEmail).IsUnique();
+        });
+
+        // Contagem de falhas de login por e-mail, exista ou não a conta (D4).
+        modelBuilder.Entity<LoginThrottle>(entity =>
+        {
+            entity.ToTable("identity_login_throttle");
+            entity.HasKey(throttle => throttle.NormalizedEmail);
+            entity.Property(throttle => throttle.NormalizedEmail).HasColumnName("normalized_email");
+            entity.Property(throttle => throttle.ConsecutiveFailures).HasColumnName("consecutive_failures");
+            entity.Property(throttle => throttle.LastLockMinutes).HasColumnName("last_lock_minutes");
+            entity.Property(throttle => throttle.LockedUntil).HasColumnName("locked_until");
+            entity.Property(throttle => throttle.LastFailureAt).HasColumnName("last_failure_at");
+
+            // A limpeza horária procura as linhas paradas.
+            entity.HasIndex(throttle => throttle.LastFailureAt);
         });
     }
 }

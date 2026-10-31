@@ -38,13 +38,14 @@ public sealed class IdentityTokenPruneService(
                 {
                     logger.LogDebug("Limpeza das entradas de token pulada: outra instância está com o ciclo.");
                 }
-                else if (result.Tokens + result.Authorizations > 0)
+                else if (result.Tokens + result.Authorizations + result.LoginThrottles > 0)
                 {
                     logger.LogInformation(
                         PrunedEvent,
-                        "Limpeza das entradas de token removeu {Tokens} tokens e {Authorizations} autorizações.",
+                        "Limpeza das entradas de token removeu {Tokens} tokens, {Authorizations} autorizações e {LoginThrottles} contagens de login paradas.",
                         result.Tokens,
-                        result.Authorizations);
+                        result.Authorizations,
+                        result.LoginThrottles);
                 }
                 else
                 {

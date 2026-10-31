@@ -315,19 +315,16 @@ daquele agente: o endpoint de execução e o endereço do card de descoberta.
 Os endereços SHALL ser montados no servidor, a partir da URL pública
 configurada, e SHALL ser idênticos aos que o card de descoberta do mesmo agente
 anuncia. Nenhum consumidor SHALL precisar concatenar host com identificador para
-obtê-los.
-
-Quando a URL pública não estiver configurada, os endereços SHALL estar ausentes
-da resposta, e a API SHALL NOT devolver endereço relativo, vazio ou construído
-a partir do host da requisição.
+obtê-los. A API SHALL NOT devolver endereço relativo, vazio ou construído a
+partir do host da requisição. A URL pública é obrigatória, e sem ela o
+`apps/api` não sobe (capability `oidc-issuer`).
 
 Os endereços SHALL ser expostos independentemente do estado do agente, porque o
 card de descoberta também é — a resposta descreve onde o agente é alcançável,
 não se ele aceitará o que receber.
 
 #### Scenario: Consulta por id inclui os endereços
-- **WHEN** um cliente consulta um agente existente pelo seu identificador, com a
-  URL pública configurada
+- **WHEN** um cliente consulta um agente existente pelo seu identificador
 - **THEN** a resposta inclui o endereço do endpoint de execução e o endereço do
   card de descoberta daquele agente
 
@@ -340,11 +337,9 @@ não se ele aceitará o que receber.
 - **WHEN** um agente desativado é consultado
 - **THEN** a resposta inclui os dois endereços normalmente
 
-#### Scenario: Sem URL pública configurada, os endereços ficam ausentes
-- **WHEN** a URL pública do servidor não está configurada e um agente é
-  consultado
-- **THEN** a resposta não inclui os endereços A2A, em vez de incluir endereço
-  incompleto ou construído a partir do host da requisição
+#### Scenario: Endereço não sai do host da requisição
+- **WHEN** um agente é consultado com o header `Host` diferente da URL pública
+- **THEN** os endereços da resposta começam pela URL pública configurada
 
 #### Scenario: A listagem carrega os mesmos endereços
 - **WHEN** um cliente lista os agentes

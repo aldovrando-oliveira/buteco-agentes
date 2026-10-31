@@ -526,10 +526,12 @@ um laço que falharia pelo mesmo motivo.
 
 **Hoje convivem dois mecanismos.** O token HMAC, descrito abaixo, continua
 emitindo e validando todas as rotas até a #182. Ao lado dele, desde a #179, o
-`apps/api` é emissor OpenID Connect (ver "Emissor OIDC", abaixo), e desde a
-#208 o `apps/inbox` e o `apps/connectors` aceitam o access token dele, validado
-pelo JWKS ("Validação do token do emissor", abaixo). O `apps/api` ainda não o
-aceita nas próprias rotas (#180).
+`apps/api` é emissor OpenID Connect (ver "Emissor OIDC", abaixo). Desde a #208,
+o `apps/inbox` e o `apps/connectors` aceitam o access token dele, validado pelo
+JWKS ("Validação do token do emissor", abaixo). Desde a #180, o próprio `apps/api`
+também o aceita, e há usuários locais com login por e-mail e senha pelo fluxo
+authorization code + PKCE ("Usuários locais" e "Sessão do emissor", abaixo). O
+painel continua entrando pelo HMAC até a #217, que troca o login dele.
 
 **Token stateless assinado com HMAC**, sem sessão em banco. O texto anterior
 dizia "sem biblioteca JWT"; essa convenção foi **revogada em 24/10/2026**
@@ -564,8 +566,9 @@ texto também omitia o `apps/connectors`, que valida o HMAC do mesmo jeito desde
 a #103.)*
 
 - **Operador único**, credencial via variável de ambiente (usuário +
-  hash PBKDF2), `POST /auth/login` em `apps/api`. Sem tabela de usuários,
-  sem RBAC. TTL de 30 minutos por padrão, configurável — o default vive
+  hash PBKDF2), `POST /auth/login` em `apps/api`, até a #217. Os usuários
+  locais da #180 ainda não têm papel (RBAC é da M2), e todo usuário tem o acesso
+  do operador. TTL de 30 minutos por padrão, configurável — o default vive
   no tipo de Options, não no `appsettings.json`.
 - **Tokens de serviço**: mesmo mecanismo de assinatura, `sub` distinto,
   assinados pelo próprio serviço a cada requisição de saída com TTL fixo
@@ -589,29 +592,48 @@ a #103.)*
   (ler/anexar/limpar em `401`), importado por cada `request<T>` de
   feature — sem cliente HTTP compartilhado (convenção 7 preservada).
 
-- **Emissor OIDC** (#179), com OpenIddict 7.7.2, só o servidor:
-  discovery (`/.well-known/openid-configuration`), JWKS (`/.well-known/jwks`)
-  e token (`/connect/token`), anônimos. Só o fluxo `client_credentials` está
-  habilitado, sem nenhum cliente cadastrado: o primeiro é da #186. O issuer é
-  a `PublicUrl:BaseUrl`, e sem ela o emissor fica desligado, com aviso no boot.
-  Os endereços do discovery saem do issuer, nunca do host da requisição. Até a
-  #180, um token do emissor enviado a uma rota do `apps/api` recebe `401`. O
-  access token sai com `typ` `at+jwt` e com `client_id`, os dois postos pelo
-  próprio OpenIddict; o `IdentityIssuerTokenTests` guarda esse contrato, porque
-  os apps que validam dependem dele.
+- **Emissor OIDC** (#179), com OpenIddict 7.7.2, só o servidor. Endpoints
+  anônimos:
+  - discovery (`/.well-known/openid-configuration`) e JWKS (`/.well-known/jwks`);
+  - token (`/connect/token`);
+  - desde a #180, authorize (`/connect/authorize`) e encerramento de sessão
+    (`/connect/logout`), em passthrough.
+
+  Fluxos: `client_credentials`, `authorization_code` com PKCE obrigatório e
+  `refresh_token`.
+  - **Clientes e escopos.** O único cliente que o `apps/api` mantém é o público
+    `buteco-painel`, sincronizado com os escopos `buteco-api`, `buteco-inbox` e
+    `buteco-connectors` no aquecimento e a cada hora. Divergência é corrigida; um
+    cliente `buteco-*` que o código não declara só é logado.
+  - **Durações.** Access token de 15 min para todo fluxo. Refresh de 14 dias,
+    rotativo e deslizante.
+  - **Issuer.** É a `PublicUrl:BaseUrl`, **obrigatória desde a #180**: sem ela o
+    boot falha. Os endereços do discovery saem do issuer, nunca do host da
+    requisição.
+  - **Contrato do access token.** Sai com `typ` `at+jwt` e com `client_id`, os
+    dois postos pelo próprio OpenIddict. O `IdentityIssuerTokenTests` guarda esse
+    contrato, porque os apps que validam dependem dele.
 - **Chaves do emissor**: RSA (RS256) em `identity_keys`, com a parte privada
   cifrada por AES-256-GCM com `Identity:SigningKeyEncryptionKey`, distinta da
   chave do MCP. A rotação é automática a cada 90 dias, sem reiniciar: a
   próxima chave é publicada no JWKS 7 dias antes de assinar, e a anterior
-  valida por mais 24 h. Um advisory lock do Postgres impede duas rotações
-  simultâneas. Até o anel carregar do banco, toda rota do `apps/api` responde
+  valida por mais **15 dias** (eram 24 h até a #180).
+  - **Por que o refresh manda:** o OpenIddict valida o refresh, o código e o
+    `id_token_hint` com as mesmas chaves do access token. Com 24 h, quem ficasse
+    um dia sem usar o painel na troca de chave perderia a sessão antes dos 14 dias
+    do refresh.
+  - **O boot afirma** `retenção ≥ max(access, refresh) + intervalo da verificação`.
+  - **Chaves já gravadas.** A janela de cada chave é gravada na linha, e a
+    migration de dados `ExtendIdentityKeyRetention` estendeu as que já existiam.
+  - Um advisory lock do Postgres impede duas rotações simultâneas. Até o anel carregar do banco, toda rota do `apps/api` responde
   `503`, inclusive `/health`.
 - **O que o emissor grava em `openiddict_tokens` e `openiddict_authorizations`**
-  (#209). O access token de `client_credentials` **não** gera linha: um handler
-  do `GenerateTokenContext` (`ClientCredentialsAccessTokenStorageHandler`) desliga
-  o `CreateTokenEntry` só para ele, porque ninguém lê essa linha (a validação é
-  pelo JWKS). Os outros tipos de token e os outros fluxos continuam gravados,
-  porque a revogação de sessão depende deles. A **limpeza**
+  (#209, estendido na #180). **Nenhum access token, de nenhum fluxo, e nenhum id
+  token** gera linha. Um handler do `GenerateTokenContext`
+  (`TokenEntryStorageHandler`) desliga o `CreateTokenEntry` para eles, porque
+  ninguém lê essas linhas: a validação é pelo JWKS. O código de autorização e o
+  refresh token continuam gravados, porque o resgate único, a rotação, o reuso e a
+  revogação de sessão dependem deles. A **limpeza**
   (`IdentityTokenPruneService`) roda a cada 1 h, com o primeiro ciclo 1 h depois
   do start. Ela chama o `PruneAsync` do OpenIddict, primeiro para tokens e
   depois para autorizações, e só remove linhas mortas com mais de 14 dias. Uma
@@ -622,12 +644,75 @@ a #103.)*
   de 1.000 não viram uma transação longa. **O boot falha se a idade mínima da
   limpeza for menor que a duração do refresh token** (ou se ele não tiver prazo),
   porque a linha do refresh resgatado precisa existir enquanto ele estiver no
-  prazo, para a detecção de reuso valer. Quem subir a duração do refresh (#180)
-  sobe a `MinimumAge` junto.
+  prazo, para a detecção de reuso valer. Quem subir a duração do refresh sobe a
+  `MinimumAge` e a retenção das chaves junto. O mesmo ciclo remove as contagens
+  de login paradas (`identity_login_throttle`, abaixo).
 - **Os endpoints do OpenIddict não passam pelo roteamento**, então a checagem
   de rotas anônimas não os vê. Eles têm lista esperada própria, com motivo
   (`IdentityIssuerEndpoints.Expected`), conferida no boot nos dois sentidos
-  contra as URIs configuradas no servidor (convenção 8).
+  contra as URIs configuradas no servidor (convenção 8). Desde a #180, o authorize
+  e o logout são **passthrough**: o OpenIddict valida o pedido e uma rota mapeada
+  do app decide a resposta. Para eles a checagem exige a rota, anônima e com o
+  mesmo motivo (`AuthEntryPoint`, `SessionEnd`). Para os outros, continua
+  proibido coincidir com rota. O `EnableErrorPassthrough` **não** é usado, porque
+  é global e mandaria à rota os erros do authorize.
+- **Usuários locais** (#180), na tabela `users`:
+  - **Identificação.** O id é imutável e é o `sub`. O e-mail normalizado é o
+    identificador de login, com índice único. O estado é ativo ou desativado: não
+    se exclui usuário.
+  - **Senha.** É guardada em **Argon2id** (`NSec.Cryptography` 26.4.0 sobre a
+    libsodium 1.0.22, a primeira dependência nativa do `apps/api`), com m = 19.456
+    KiB, t = 2 e p = 1, numa string PHC no formato da implementação de
+    referência. A senha entra em UTF-8.
+  - **Bootstrap do primeiro Admin.** Sem nenhum usuário e com
+    `Auth:BootstrapAdminEmail`, o bootstrap cria um usuário com o PBKDF2 de
+    `Auth:OperatorPasswordHash` marcado como legado, e o primeiro login refaz o
+    hash em Argon2id. O verificador PBKDF2 só vale para a linha com o marcador. Com
+    usuários, o bootstrap nunca sobrescreve nada. Ele roda no aquecimento, com o
+    lock `BUTECOU1`.
+  - **Bloqueio por e-mail, exista ou não a conta** (`identity_login_throttle`):
+    - 5 falhas seguidas bloqueiam por 5 min;
+    - depois de um bloqueio vencido, uma falha bloqueia pelo dobro, até 60 min;
+    - 24 h sem falha voltam ao início, pela regra do tempo e não da limpeza;
+    - durante o bloqueio, `423` sem verificar a senha;
+    - o desativado que acerta a senha não conta nem zera.
+  - **Limite global de verificações**, sem IP, porque o `apps/api` não vê o IP
+    real (#221): concorrência 4 com fila de 16, e token bucket de 10/s com rajada
+    de 20. Acima disso, `429`. O limite por IP é do proxy de fora.
+  - **Sem enumeração.** E-mail sem conta e senha errada respondem igual, com o
+    hash fictício. O "Acesso desativado" só aparece para quem acertou a senha.
+- **Sessão do emissor e fluxo do painel** (#180):
+  - `POST /auth/session` (só JSON, `Origin` conferida contra a do issuer e a de
+    `Identity:PanelBaseUrl`) grava o cookie `buteco-sessao`. Ele é `HttpOnly` e
+    `SameSite=Strict`, `Secure` fora de `Development`, vale 5 min e leva o id do
+    usuário e o `security_stamp`;
+  - o authorize em passthrough lê o cookie. Sem sessão, responde `302 /entrar?retorno=`
+    com o caminho relativo montado pelo servidor; com sessão de usuário ativo e
+    stamp igual, emite o código;
+  - **todo token novo de usuário confere estado e stamp**: a troca do código e
+    cada renovação relêem o usuário e recusam com `invalid_grant` o desativado, o
+    inexistente e o de stamp diferente. Por isso, reativar não traz de volta um
+    refresh de antes;
+  - o logout revoga a autorização do `id_token_hint` e sempre termina: sem hint
+    válido, apaga o cookie e vai a `/entrar`;
+  - a sessão de verdade é a autorização do OpenIddict, com o refresh do painel.
+- **O access token já emitido continua valendo até 15 min depois do logout ou da
+  desativação**, nos três apps: ele não é gravado e é validado só pelo JWKS, sem
+  consulta ao emissor. Isso é **aceito na M1**. A renovação seguinte é recusada.
+  A revogação para as aplicações externas é da #186.
+- **O `apps/api` aceita o próprio token** (#180), com o mesmo desenho da #208:
+  - esquema de política pela forma do token;
+  - `aud` `buteco-api`;
+  - principal pela tabela de clientes (`buteco-painel` → `operator`), nunca pelo
+    `sub`.
+
+  A diferença é que **as chaves vêm do anel do próprio processo**, sem HTTP. O
+  boot confere que todo subject de destino da tabela existe. **`libs/` continua
+  sem autenticação.** O núcleo comum é de ~40 linhas, e é exatamente o que difere
+  em valor entre os apps (`aud`, tabela de clientes, tabela de subjects). Uma
+  `libs/` de fronteira de segurança abriria os três apps a um mesmo defeito, e a
+  #182 encolhe o código. **Gatilho para voltar à pergunta:** um quarto
+  consumidor, ou uma correção que precise ser aplicada idêntica nos três.
 - **Validação do token do emissor** (#208), no `apps/inbox` e no
   `apps/connectors`, com `Microsoft.AspNetCore.Authentication.JwtBearer`
   10.0.13 e `ConfigurationManager` próprio. **Um esquema por token, pela
@@ -642,7 +727,8 @@ a #103.)*
   `client_id`**, por uma tabela fechada por app (`buteco-painel` → `operator`),
   e nunca do `sub`: cliente fora da tabela recebe `403`. As tabelas de subjects
   de cada app não mudam. Código copiado entre os dois apps, sem `libs/`; a
-  pergunta volta na #180, com o terceiro consumidor.
+  pergunta voltou na #180, com o terceiro consumidor, e a resposta continua
+  "não" (ver "O `apps/api` aceita o próprio token", acima).
 
 Rotas anônimas são decisão de segurança, não detalhe de implementação:
 adicionar uma passa por revisão.

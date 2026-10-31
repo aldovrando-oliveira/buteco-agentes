@@ -3,28 +3,14 @@
 ## Purpose
 
 Diz o que o emissor OIDC do `apps/api` grava em `openiddict_tokens` e
-`openiddict_authorizations`, e quando as linhas saem. O access token de
-`client_credentials` não gera linha. A limpeza periódica remove as entradas mortas com
+`openiddict_authorizations`, e quando as linhas saem. Nenhum access token e nenhum id
+token gera linha (desde a #180; antes, só o de `client_credentials`), e o código e o
+refresh continuam gravados. A limpeza periódica remove as entradas mortas com
 mais de 14 dias, uma instância por ciclo, sob lock próprio, e preserva o que a revogação
 de sessão usa. O boot amarra a idade mínima da limpeza à duração do refresh token.
 Criada pela change `limpeza-tokens-openiddict` (#209).
 
 ## Requirements
-
-### Requirement: O access token de client_credentials não gera entrada de token
-Com o emissor ligado, um access token emitido pelo grant `client_credentials` SHALL NOT gerar linha em `openiddict_tokens` nem em `openiddict_authorizations`, e SHALL continuar verificável pelo JWKS exatamente como antes. Os demais tipos de token (código de autorização, refresh token, id token, e access token de qualquer outro grant) SHALL continuar gerando a linha que o OpenIddict grava por padrão.
-
-#### Scenario: Pedido de client_credentials não grava nada
-- **WHEN** um cliente confidencial cadastrado obtém um access token por `client_credentials`
-- **THEN** a resposta traz o access token, o token é verificável pelo JWKS do emissor, e `openiddict_tokens` e `openiddict_authorizations` continuam sem nenhuma linha
-
-#### Scenario: Refresh token continua gravado
-- **WHEN** um cliente com permissão de refresh obtém um refresh token
-- **THEN** existe uma linha em `openiddict_tokens` com o tipo `refresh_token` e status `valid`, ligada a uma linha `valid` de `openiddict_authorizations`
-
-#### Scenario: Só o par access token e client_credentials muda
-- **WHEN** o OpenIddict gera um token de qualquer tipo (access, refresh, id, código de autorização) em qualquer grant (`client_credentials`, `authorization_code`, `refresh_token`)
-- **THEN** a criação da linha fica desligada só para o access token do grant `client_credentials`, e ligada em todas as outras combinações
 
 ### Requirement: Entradas mortas de token e de autorização são removidas periodicamente
 Com o emissor ligado, o `apps/api` SHALL remover, a cada 1 hora, as linhas de `openiddict_tokens` e de `openiddict_authorizations` criadas há mais de 14 dias que o OpenIddict considera removíveis: token vencido, ou com status diferente de `valid` e de `inactive`, ou cuja autorização não está `valid`; e autorização sem nenhum token que não esteja `valid` ou seja ad hoc. Os tokens SHALL ser removidos antes das autorizações, no mesmo ciclo. A remoção SHALL acontecer em lotes, sem uma transação que abranja o ciclo inteiro. O primeiro ciclo SHALL acontecer um intervalo depois do start, sem acesso ao banco no boot.
@@ -85,3 +71,22 @@ Com o emissor ligado, o boot SHALL falhar quando a idade mínima da limpeza (14 
 #### Scenario: Duração padrão sobe
 - **WHEN** o servidor do emissor é composto com a duração padrão do refresh token
 - **THEN** o boot segue
+
+### Requirement: Access token e id token não geram entrada de token
+Com o emissor ligado, nenhum access token, de nenhum grant, e nenhum id token SHALL gerar linha em `openiddict_tokens`. Os tokens SHALL continuar verificáveis pelo JWKS exatamente como antes. O código de autorização e o refresh token SHALL continuar gerando a linha que o OpenIddict grava por padrão. O `client_credentials` SHALL continuar sem gerar linha em `openiddict_authorizations`.
+
+#### Scenario: Pedido de client_credentials não grava nada
+- **WHEN** um cliente confidencial cadastrado obtém um access token por `client_credentials`
+- **THEN** a resposta traz o access token, o token é verificável pelo JWKS do emissor, e `openiddict_tokens` e `openiddict_authorizations` continuam sem nenhuma linha
+
+#### Scenario: Fluxo do usuário grava só código e refresh
+- **WHEN** um usuário completa o fluxo authorization code com `openid` e `offline_access`
+- **THEN** `openiddict_tokens` tem a linha do código de autorização (resgatado) e a do refresh token (`valid`), ligadas a uma autorização `valid`, e nenhuma linha de access token nem de id token
+
+#### Scenario: Renovação grava só o refresh novo
+- **WHEN** o refresh token do usuário é trocado por um novo par
+- **THEN** entra uma linha de refresh token, e nenhuma de access token nem de id token
+
+#### Scenario: Só código e refresh ficam ligados
+- **WHEN** o OpenIddict gera um token de qualquer tipo (access, refresh, id, código de autorização) em qualquer grant (`client_credentials`, `authorization_code`, `refresh_token`)
+- **THEN** a criação da linha fica desligada para todo access token e todo id token, e ligada para o refresh token e o código de autorização

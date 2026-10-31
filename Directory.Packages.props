@@ -52,6 +52,12 @@
          validacao-jwks-inbox-connectors D1). A cadeia Microsoft.IdentityModel.*
          fica na mínima declarada (8.19.2), sem fixar aqui. -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+
+    <!-- Hash de senha Argon2id dos usuários locais (apps/api, change
+         usuarios-locais-login-emissor D4): NSec sobre a libsodium, a primeira
+         dependência nativa do apps/api. A carga do binário foi verificada no
+         macOS e no aspnet:10.0 (linux-x64 e linux-arm64) antes do uso. -->
+    <PackageVersion Include="NSec.Cryptography" Version="26.4.0" />
     <!-- CQRS mediator (apps/api) -->
     <PackageVersion Include="Mediator.Abstractions" Version="3.0.2" />
     <PackageVersion Include="Mediator.SourceGenerator" Version="3.0.2" />

@@ -90,7 +90,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
     // coordenação em runtime.
     private const string TokenSigningKey = "test-signing-key-shared-between-api-and-inbox-fixtures";
     private const string OperatorUsername = "operator";
-    private const string OperatorPassword = "correct-horse-battery-staple";
+    public const string OperatorPassword = "correct-horse-battery-staple";
 
     public WebApplicationFactory<ApiProgram> ApiFactory => _apiFactory!;
 
@@ -189,6 +189,13 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     ["Auth:TokenSigningKey"] = TokenSigningKey,
                     ["Auth:OperatorUsername"] = OperatorUsername,
                     ["Auth:OperatorPasswordHash"] = ComputeOperatorPasswordHash(),
+                    // O primeiro Admin do bootstrap, com o mesmo hash do operador
+                    // (usuarios-locais-login-emissor, D2): é quem faz o fluxo real do
+                    // IssuerTokenRoundTripTests.
+                    ["Auth:BootstrapAdminEmail"] = IssuerUserFlow.BootstrapAdminEmail,
+                    // Vazio por cima do Vite do appsettings.Development.json: o
+                    // redirect_uri do buteco-painel sai da url pública.
+                    ["Identity:PanelBaseUrl"] = "",
                 }));
 
             builder.ConfigureServices(services =>

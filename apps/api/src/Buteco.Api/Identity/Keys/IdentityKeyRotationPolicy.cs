@@ -17,11 +17,21 @@ public static class IdentityKeyRotationPolicy
 
     /// <summary>
     /// Quanto tempo a chave que parou de assinar continua publicada e validando. Precisa
-    /// ser ≥ duração do access token + intervalo da verificação, porque a troca efetiva
-    /// acontece no primeiro tique depois de <c>signs_from</c>; o boot afirma isso
-    /// (<c>ValidateIdentityIssuerConfiguration</c>).
+    /// ser ≥ a maior duração entre access e refresh token + intervalo da verificação,
+    /// porque a troca efetiva acontece no primeiro tique depois de <c>signs_from</c>; o boot
+    /// afirma isso (<c>ValidateIdentityIssuerConfiguration</c>).
+    ///
+    /// <para>
+    /// <b>Quem manda é o refresh</b> (design.md da change usuarios-locais-login-emissor,
+    /// D3.7): o OpenIddict valida o refresh, o código e o <c>id_token_hint</c> com as mesmas
+    /// chaves de <c>SigningCredentials</c> (<c>OpenIddictServerConfiguration.cs</c> l.
+    /// 556–558, <c>OpenIddictServerHandlers.Protection.cs</c> l. 189 e 476). Com 24 h, quem
+    /// ficasse um dia sem usar o painel na troca de chave perderia a sessão antes dos 14
+    /// dias. 15 dias cobrem 14 d + 1 h. A janela gravada nas chaves já existentes é
+    /// estendida pela migration <c>ExtendIdentityKeyRetention</c>.
+    /// </para>
     /// </summary>
-    public static readonly TimeSpan Retention = TimeSpan.FromHours(24);
+    public static readonly TimeSpan Retention = TimeSpan.FromDays(15);
 
     /// <summary>Intervalo da verificação de rotação.</summary>
     public static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);

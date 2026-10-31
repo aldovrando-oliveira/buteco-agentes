@@ -70,7 +70,7 @@ provedores de arquivos (Google Drive) para as bases de conhecimento.
 
 | App | Papel | Stack | Banco |
 |---|---|---|---|
-| `apps/api` | CRUD de agentes, catálogo MCP, delegação, bases de conhecimento, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, emissão de push notification, login do operador e emissão de token, emissor OIDC (discovery, JWKS, token) | .NET 10, ASP.NET Core Minimal API, OpenIddict 7.7.2 (servidor), CQRS via `Mediator`, EF Core + Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` |
+| `apps/api` | CRUD de agentes, catálogo MCP, delegação, bases de conhecimento, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, emissão de push notification, login do operador e emissão de token, emissor OIDC (discovery, JWKS, token, authorize, logout), usuários locais e login por e-mail e senha | .NET 10, ASP.NET Core Minimal API, OpenIddict 7.7.2 (servidor), CQRS via `Mediator`, EF Core + Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` |
 | `apps/workers` | Executa tasks: chama o LLM, resolve tools MCP, executa delegação, dispara push notification | .NET 10 Worker Service, `Microsoft.Agents.AI` (`ChatClientAgent`, `Compaction`), EF Core espelhado, consumidor RabbitMQ | Mesmo Postgres de `apps/api` |
 | `apps/inbox` | Catálogo de canais de entrada, CRM (`Contact`/`Session`), histórico de mensagens, orquestrador de debounce, adapters de canal | .NET 10 Minimal API, CQRS próprio, EF Core | Postgres **próprio** (`buteco_inbox`), isolado |
 | `apps/connectors` | Conectores de provedor de arquivos para bases de conhecimento: navegação de pastas, descrição de pasta, listagem da raiz e markdown de arquivo. Hoje, Google Drive por service account | .NET 10 Minimal API, chamadas REST ao Google sem biblioteca do provedor | — |
@@ -852,8 +852,10 @@ Change `ciclo-de-sincronizacao` (#105).
 **Hoje convivem dois mecanismos.** O token HMAC, descrito logo abaixo, autentica
 todas as rotas até a #182. O emissor OIDC do `apps/api` (#179, "Emissor OIDC",
 no fim desta seção) emite access token, que o `apps/inbox` e o `apps/connectors`
-aceitam desde a #208 ("Validação do token do emissor", depois dele); o
-`apps/api` passa a aceitá-lo na #180.
+aceitam desde a #208 ("Validação do token do emissor", depois dele) e o próprio
+`apps/api` desde a #180. A #180 trouxe também os usuários locais e o login do
+painel pelo fluxo authorization code + PKCE ("Usuários locais e login", depois do
+emissor). O painel troca de login na #217; até lá, entra pelo HMAC.
 
 **Token stateless assinado com HMAC**, sem sessão em banco. A convenção "sem
 biblioteca JWT" foi revogada em 24/10/2026 pela `emissor-oidc-api` (ver o
@@ -941,29 +943,37 @@ adicionar uma passa por revisão.
 ### Emissor OIDC (`apps/api`, #179)
 
 O `apps/api` é servidor OpenID Connect com OpenIddict 7.7.2, só o pacote de
-servidor (`OpenIddict.Server.AspNetCore`), e expõe três endpoints anônimos:
+servidor (`OpenIddict.Server.AspNetCore`), e expõe cinco endpoints anônimos:
 
 ```
-cliente ──GET  /.well-known/openid-configuration──▶ issuer, jwks_uri, token_endpoint
+cliente ──GET  /.well-known/openid-configuration──▶ issuer, jwks_uri, token, authorize, end_session
         ──GET  /.well-known/jwks──────────────────▶ chaves públicas RSA (kid)
-        ──POST /connect/token (client_credentials)▶ JWT RS256 com iss, sub, aud, iat, exp
+        ──POST /connect/token─────────────────────▶ JWT RS256 com iss, sub, aud, iat, exp
+        ──GET  /connect/authorize (passthrough)───▶ código, pela sessão do emissor (#180)
+        ──GET  /connect/logout (passthrough)──────▶ revoga a sessão e volta ao painel (#180)
                                                       │
-quem valida (a partir da #208) ◀── verifica a assinatura só pelo JWKS
+quem valida (os três apps) ◀── verifica a assinatura pelas chaves do emissor
 ```
 
-- **Issuer = `PublicUrl:BaseUrl`**, o mesmo valor dos endereços A2A. Sem url
-  pública, o emissor não é registrado e o boot avisa no log; o resto do app
-  segue igual. Url inválida, ou emissor ligado sem
-  `Identity:SigningKeyEncryptionKey`, derruba o boot.
+- **Issuer = `PublicUrl:BaseUrl`**, o mesmo valor dos endereços A2A, e
+  **obrigatória desde a #180**: sem ela, url inválida ou sem
+  `Identity:SigningKeyEncryptionKey`, o boot falha.
 - **Endereços do discovery saem do issuer.** No OpenIddict, os endpoints do
   documento são montados pelo esquema e pelo host da requisição, e atrás do
   nginx do stack isso anunciaria `http://`. O
   `Identity/DiscoveryEndpointsFromIssuerHandler.cs` troca a base da transação de
   discovery pelo issuer, e com isso cobre também qualquer endpoint que uma
   change futura habilitar.
-- **Fluxo:** só `client_credentials`, sem nenhum cliente cadastrado; em produção
-  o endpoint de token responde `invalid_client`. O token sai JWT **não cifrado**,
-  com `sub` = `client_id` e `aud` = os recursos dos escopos concedidos.
+- **Fluxos:** `client_credentials` (sem cliente em produção até a #186),
+  `authorization_code` com PKCE obrigatório e `refresh_token`, rotativo e
+  deslizante, de 14 dias. Todo access token dura 15 min e sai JWT **não cifrado**,
+  com `aud` = os recursos dos escopos concedidos. O `sub` é o `client_id` no
+  `client_credentials` e o id do usuário no fluxo do painel.
+- **O único cliente mantido pelo `apps/api`** é o público `buteco-painel`, com
+  os escopos `buteco-api`, `buteco-inbox` e `buteco-connectors`, cada um com o
+  recurso de mesmo nome. Um `IdentityClientCatalog` sincroniza e corrige no
+  aquecimento e a cada hora, sob o lock `BUTECOC1`. Um cliente `buteco-*` que o
+  código não declara só é logado.
 - **Chaves** em `identity_keys`, no banco do `apps/api` (o `AppDbContext` do
   `apps/workers` não as mapeia), junto das quatro tabelas do OpenIddict em
   snake_case:
@@ -972,16 +982,20 @@ quem valida (a partir da #208) ◀── verifica a assinatura só pelo JWKS
     são de acesso;
   - rotação a cada 90 dias por um `BackgroundService` que verifica de hora em
     hora: a próxima chave aparece no JWKS 7 dias antes de assinar, e a anterior
-    continua no JWKS por 24 h depois de parar de assinar;
+    continua no JWKS por **15 dias** depois de parar de assinar (24 h até a
+    #180). O OpenIddict valida o refresh, o código e o `id_token_hint` com as
+    mesmas chaves, e a retenção cobre os 14 dias do refresh mais o intervalo da
+    verificação; o boot afirma isso;
   - a verificação roda sob `pg_advisory_xact_lock`, então duas instâncias não
     criam duas chaves;
   - cada chave vai ao OpenIddict embrulhada num certificado X.509 em memória,
     com validade igual à janela de assinatura, porque é pela validade do
     certificado que o OpenIddict escolhe com qual chave assinar.
-- **Linhas de token e de autorização** (#209). O access token de
-  `client_credentials` sai sem linha em `openiddict_tokens`
-  (`Identity/Storage/ClientCredentialsAccessTokenStorageHandler.cs`). Código,
-  refresh e id token continuam gravados, porque a revogação de sessão os usa.
+- **Linhas de token e de autorização** (#209, estendido na #180). Nenhum access
+  token e nenhum id token sai com linha em `openiddict_tokens`
+  (`Identity/Storage/TokenEntryStorageHandler.cs`). O código e o refresh
+  continuam gravados, porque o resgate único, a rotação, o reuso e a revogação de
+  sessão os usam.
   Um segundo `BackgroundService`, o `IdentityTokenPruneService`, roda de hora em
   hora o `PruneAsync` do OpenIddict, primeiro para tokens e depois para
   autorizações. Ele remove só o que está morto (vencido, resgatado, revogado,
@@ -993,23 +1007,78 @@ quem valida (a partir da #208) ◀── verifica a assinatura só pelo JWKS
     lotes saem fora dela;
   - o boot afirma que a idade mínima (14 dias) é ≥ a duração do refresh token.
 - **Até o anel carregar do banco, toda rota responde `503` com `Retry-After`**,
-  inclusive `/health`. Um aquecimento em segundo plano tenta logo depois do
-  start e repete a cada 5 s, sem bloquear o boot; a primeira requisição também
-  tenta, sem guardar a falha.
+  inclusive `/health`. Um aquecimento em segundo plano roda logo depois do start,
+  sem bloquear o boot, em três passos independentes (#180): o anel, o catálogo de
+  clientes e o bootstrap do primeiro Admin. Cada passo tem o próprio `try/catch`,
+  a falha de um não impede os outros, e o que falhou tenta de novo a cada 5 s. A
+  primeira requisição também tenta carregar o anel, sem guardar a falha. **O gate
+  não espera o catálogo**: antes da primeira sincronização, o authorize do
+  `buteco-painel` recebe `400 invalid_request`, sem redirecionar.
 - **Checagem de boot própria.** Os endpoints do OpenIddict não são rotas
   mapeadas, então a `ValidateRouteAuthenticationClassification` não os vê. A
   `ValidateIdentityIssuerEndpoints()` compara as URIs configuradas no servidor,
   de todos os tipos de endpoint, com `IdentityIssuerEndpoints.Expected`, nos
-  dois sentidos.
-- **Não é credencial das rotas do `apps/api`** (até a #180). O `apps/api` não
-  registra validação do token; um JWT do emissor em `GET /agents` passa pelo
-  handler HMAC e recebe `401`.
+  dois sentidos. O authorize e o logout são passthrough: para eles, exige uma
+  rota mapeada de mesmo caminho, anônima e com o mesmo motivo; para os outros,
+  continua proibido coincidir com rota.
+- **É credencial das rotas do `apps/api`** desde a #180, com o mesmo desenho da
+  #208 ("Validação do token do emissor", abaixo): esquema de política pela forma,
+  `aud` `buteco-api`, principal pela tabela de clientes. A diferença é que as
+  chaves vêm do anel do próprio processo, sem HTTP, e sem o `503` de "sem chaves",
+  porque o gate já cobre isso.
 - **O access token sai com `typ` `at+jwt` e `client_id`**, os dois postos pelo
   próprio OpenIddict (`PrepareAccessTokenPrincipal`, RFC 9068). Os apps que
   validam dependem dos dois, e o `IdentityIssuerTokenTests` guarda o contrato.
-- **nginx do stack:** blocos exatos para `/.well-known/openid-configuration` e
-  `/.well-known/jwks`, e um de prefixo para `/connect`, com o desvio de
-  navegação.
+- **nginx do stack:** blocos exatos, sem o desvio de navegação, para
+  `/.well-known/openid-configuration`, `/.well-known/jwks`, `/connect/authorize`
+  e `/connect/logout`. Um bloco de prefixo para o resto de `/connect` (hoje só o
+  token) mantém o desvio de navegação.
+
+### Usuários locais e login (`apps/api`, #180)
+
+```
+painel                     nginx                apps/api
+  │  navega a /connect/authorize?client_id=buteco-painel&code_challenge=…
+  │ ───────────────────────────▶ location = ──▶ OpenIddict valida o pedido
+  │                                              rota em passthrough: sem cookie
+  │ ◀──────────────── 302 /entrar?retorno=/connect/authorize?… (caminho relativo)
+  │  tela /entrar (SPA): POST /auth/session {email, senha}, só JSON, Origin conferida
+  │ ───────────────────────────────────────────▶ bloqueio, Argon2id, estado
+  │ ◀──────────────── 204 Set-Cookie buteco-sessao (HttpOnly, Strict, 5 min)
+  │  segue o retorno (só se começar por /connect/authorize?)
+  │ ───────────────────────────────────────────▶ cookie + usuário ativo + stamp igual
+  │ ◀──────────────── 302 {painel}/entrar/retorno?code=…
+  │  POST /connect/token (code + code_verifier)
+  │ ───────────────────────────────────────────▶ relê o usuário: ativo e stamp igual
+  │ ◀──────────────── access (15 min, aud dos três apps) + refresh (14 d) + id token
+```
+
+- **`users`**: id imutável, que é o `sub`, e e-mail normalizado como
+  identificador de login, com índice único. O estado é ativo ou desativado, e não
+  se exclui usuário. O `security_stamp` muda ao desativar.
+- **Senha em Argon2id**, pelo `NSec.Cryptography` sobre a libsodium, com m =
+  19.456 KiB, t = 2 e p = 1, em string PHC. É a primeira dependência nativa do
+  `apps/api`, e a carga do binário foi conferida no macOS e na `aspnet:10.0`
+  (`linux-x64`, `linux-arm64`).
+- **Bootstrap do primeiro Admin**, no aquecimento: sem nenhum usuário e com
+  `Auth:BootstrapAdminEmail`, cria o usuário com o PBKDF2 de
+  `Auth:OperatorPasswordHash` marcado como legado. O primeiro login refaz o hash
+  em Argon2id. Nunca sobrescreve nada.
+- **Bloqueio por e-mail, exista ou não a conta** (`identity_login_throttle`):
+  5 falhas → 5 min; depois, uma falha dobra até 60 min; 24 h sem falha voltam ao
+  início. Mais um limite global de verificações (concorrência 4 + fila 16,
+  10/s com rajada de 20), sem IP, porque o `apps/api` não vê o IP real (#221).
+- **Todo token novo de usuário confere estado e stamp**: a troca do código e
+  cada renovação relêem o usuário, e o desativado, o inexistente ou o de stamp
+  diferente recebem `invalid_grant`. O stamp vai no código e no refresh, sem sair
+  em token que o cliente lê.
+- **Logout** (`/connect/logout`): revoga a autorização do `id_token_hint`, apaga o
+  cookie e volta ao endereço registrado. Sem hint válido, ou com endereço não
+  registrado, apaga o cookie e vai a `/entrar`.
+- **Janela aceita na M1:** depois do logout ou da desativação, o access token já
+  emitido continua valendo até 15 min nos três apps, porque não é gravado e é
+  validado só pelas chaves. A renovação seguinte é recusada. A revogação para as
+  aplicações externas é da #186.
 
 ### Validação do token do emissor (`apps/inbox` e `apps/connectors`, #208)
 
@@ -1055,6 +1124,10 @@ quem valida (a partir da #208) ◀── verifica a assinatura só pelo JWKS
   subjects existentes. Sem `Identity:Issuer`, a validação fica desligada, com
   aviso.
 - **Código copiado entre os dois apps**, sem `libs/`; cada cópia nomeia a outra.
+  O `apps/api`, terceiro consumidor desde a #180, tem uma versão menor, com as
+  chaves do anel. A pergunta do `libs/` foi respondida "não" na #180 (ver o
+  `01`), e volta com um quarto consumidor ou com uma correção que precise ser
+  aplicada idêntica nos três.
 
 ---
 

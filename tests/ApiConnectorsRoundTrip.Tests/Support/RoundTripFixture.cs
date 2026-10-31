@@ -56,6 +56,9 @@ public sealed class RoundTripFixture : IAsyncLifetime
     // fora.
     public const string ApiPublicBaseUrl = "https://api.exemplo.test";
 
+    /// <summary>A senha do primeiro Admin do bootstrap.</summary>
+    public const string AdminPassword = "senha-do-admin-do-acordo";
+
     public IssuerKeysGate ApiIssuerKeys { get; } = new();
 
     private readonly PostgreSqlContainer _apiPostgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
@@ -151,6 +154,13 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     ["PublicUrl:BaseUrl"] = ApiPublicBaseUrl,
                     ["Identity:SigningKeyEncryptionKey"] = "dGVzdC1pZGVudGl0eS1rZXktMzItYnl0ZXMtLS0tLS0=",
                     ["Auth:TokenSigningKey"] = TokenSigningKey,
+                    // O primeiro Admin do bootstrap (usuarios-locais-login-emissor, D2): é
+                    // quem faz o fluxo real do IssuerTokenRoundTripTests.
+                    ["Auth:BootstrapAdminEmail"] = IssuerUserFlow.BootstrapAdminEmail,
+                    // Vazio por cima do Vite do appsettings.Development.json: o
+                    // redirect_uri do buteco-painel sai da url pública.
+                    ["Identity:PanelBaseUrl"] = "",
+                    ["Auth:OperatorPasswordHash"] = IssuerUserFlow.LegacyPasswordHash(AdminPassword),
                     ["Connectors:BaseUrl"] = ConnectorsBaseUrl,
                     // A checagem de fuso do apps/api compara com o fuso da máquina.
                     ["TZ"] = TimeZoneInfo.Local.Id,

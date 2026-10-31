@@ -5,8 +5,8 @@ namespace Buteco.Api.Tests.Identity;
 
 /// <summary>
 /// As janelas da rotação (design.md da change emissor-oidc-api, D7), andando com o
-/// relógio: primeira chave, publicação antecipada a 7 dias, troca, e saída do anel 24 h
-/// depois de parar de assinar.
+/// relógio: primeira chave, publicação antecipada a 7 dias, troca, e saída do anel uma
+/// retenção (15 dias, change usuarios-locais-login-emissor D3.7) depois de parar de assinar.
 /// </summary>
 public class IdentityKeyRotationPolicyTests
 {
@@ -34,7 +34,7 @@ public class IdentityKeyRotationPolicyTests
         Assert.True(plan.NeedsEncryptionKey);
         Assert.Equal(now, plan.NewSigningKey!.SignsFrom);
         Assert.Equal(now.AddDays(90), plan.NewSigningKey.SignsUntil);
-        Assert.Equal(now.AddDays(90).AddHours(24), plan.NewSigningKey.ValidatesUntil);
+        Assert.Equal(now.AddDays(90).AddDays(15), plan.NewSigningKey.ValidatesUntil);
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class IdentityKeyRotationPolicyTests
     }
 
     [Fact]
-    public void AfterTheSwitch_TheNewKeySigns_TheOldOneStaysInTheRingFor24Hours()
+    public void AfterTheSwitch_TheNewKeySigns_TheOldOneStaysInTheRingForTheRetention()
     {
         var keys = Initial(_clock.GetUtcNow());
         var old = keys.Single(key => key.Usage == IdentityKeyUsage.Signing);
@@ -93,11 +93,18 @@ public class IdentityKeyRotationPolicyTests
         Assert.False(IdentityKeyRotationPolicy.SignsAt(old, _clock.GetUtcNow()));
         Assert.True(IdentityKeyRotationPolicy.IsInRing(old, _clock.GetUtcNow()));
 
-        _clock.Advance(TimeSpan.FromHours(24) - TimeSpan.FromSeconds(1));
+        _clock.Advance(IdentityKeyRotationPolicy.Retention - TimeSpan.FromSeconds(1));
         Assert.True(IdentityKeyRotationPolicy.IsInRing(old, _clock.GetUtcNow()));
 
         _clock.Advance(TimeSpan.FromSeconds(1));
         Assert.False(IdentityKeyRotationPolicy.IsInRing(old, _clock.GetUtcNow()));
+    }
+
+    [Fact]
+    public void Retention_CoversTheFourteenDayRefreshPlusTheCheckInterval()
+    {
+        Assert.Equal(TimeSpan.FromDays(15), IdentityKeyRotationPolicy.Retention);
+        Assert.True(IdentityKeyRotationPolicy.Retention >= TimeSpan.FromDays(14) + IdentityKeyRotationPolicy.CheckInterval);
     }
 
     [Fact]
