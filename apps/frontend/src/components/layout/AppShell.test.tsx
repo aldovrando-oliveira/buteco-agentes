@@ -1,10 +1,15 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
 import { MemoryRouter } from 'react-router';
 import { AppShell } from './AppShell';
 import { theme } from '../../theme';
+import { authRuntime } from '../../auth/session';
+import { SESSION_LOCK } from '../../auth/renewal';
+import { SESSION_KEY } from '../../auth/sessionStore';
+import { deferred } from '../../test/fakeLocks';
+import { signInForTest } from '../../test/authFakes';
 
 // O mesmo defaultColorScheme da aplicação: sem preferência salva, o esquema
 // vem do sistema operacional. O matchMedia de src/test/setup.ts responde
@@ -36,6 +41,10 @@ function prefersDark() {
 describe('AppShell', () => {
   beforeEach(() => {
     window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('lista os itens de navegação Inventário, Agentes, Servidores MCP, Conhecimento e Canais', () => {
@@ -165,13 +174,76 @@ describe('AppShell', () => {
     expect(screen.getAllByText('Buteco Agentes')).toHaveLength(1);
   });
 
-  it('não afirma a identidade do operador no rodapé', () => {
-    const { container } = renderAppShell();
+  // O rodapé do protótipo de autenticação (quadro "Editar usuário"): avatar com as
+  // iniciais, o nome e o e-mail do id token em duas linhas, e os botões de tema e de
+  // Sair, nesta ordem.
+  function rodape(container: HTMLElement) {
+    const sair = screen.getByRole('button', { name: /^(Sair|Saindo…)$/ });
+    const secao = sair.closest('.mantine-AppShell-section') as HTMLElement;
+    expect(secao).not.toBeNull();
+    return { secao, avatar: secao.querySelector('.mantine-Avatar-root'), container };
+  }
 
-    // O login devolve só credencial e validade: não há nome nem e-mail a
-    // exibir, e inventá-los seria afirmar o que o backend não confirma.
-    expect(container.querySelector('img')).toBeNull();
-    expect(screen.queryByText(/@/)).not.toBeInTheDocument();
+  it('nome com duas palavras: avatar com as duas iniciais, o nome e, abaixo, o e-mail', () => {
+    signInForTest();
+    const { container } = renderAppShell();
+    const { secao, avatar } = rodape(container);
+
+    expect(avatar).toHaveTextContent(/^AS$/);
+    expect(avatar).toHaveAttribute('aria-hidden', 'true');
+    const textos = [...secao.querySelectorAll('p')].map((p) => p.textContent);
+    expect(textos).toEqual(['Ana Souza', 'ana@exemplo.test']);
+    const botoes = [...secao.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'));
+    expect(botoes).toEqual(['Mudar para tema escuro', 'Sair']);
+    expect(screen.getByRole('button', { name: 'Sair' })).toHaveAttribute('title', 'Sair');
+  });
+
+  it('nome de uma palavra: avatar com uma inicial', () => {
+    const s = signInForTest();
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...s, nome: 'admin', email: 'admin@exemplo.test' }));
+    const { container } = renderAppShell();
+    const { secao, avatar } = rodape(container);
+
+    expect(avatar).toHaveTextContent(/^A$/);
+    expect([...secao.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['admin', 'admin@exemplo.test']);
+  });
+
+  it('sem nome no id token, o e-mail vai na primeira linha e a segunda fica vazia', () => {
+    const s = signInForTest();
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...s, nome: null, email: 'bia@exemplo.test' }));
+    const { container } = renderAppShell();
+    const { secao, avatar } = rodape(container);
+
+    expect(avatar).toHaveTextContent(/^B$/);
+    expect([...secao.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['bia@exemplo.test']);
+    expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+  });
+
+  it('Sair mostra "Saindo…" enquanto espera o lock, e depois vai ao logout do emissor sem o registro', async () => {
+    const s = signInForTest();
+    const assign = vi.spyOn(authRuntime, 'assign').mockImplementation(() => {});
+    const renovacao = deferred<void>();
+    // Uma renovação "em voo" em outra aba segura o lock.
+    const held = navigator.locks.request(SESSION_LOCK, () => renovacao.promise);
+    const user = userEvent.setup();
+    renderAppShell();
+
+    await user.click(screen.getByRole('button', { name: 'Sair' }));
+
+    const saindo = screen.getByRole('button', { name: 'Saindo…' });
+    expect(saindo).toBeDisabled();
+    // O indicador de carregamento no lugar do ícone: o Mantine esconde o ícone com
+    // `data-loading` e monta o loader por uma transição.
+    expect(saindo).toHaveAttribute('data-loading', 'true');
+    await waitFor(() => expect(saindo.querySelector('.mantine-ActionIcon-loader')).not.toBeNull());
+    expect(assign).not.toHaveBeenCalled();
+    renovacao.resolve();
+    await held;
+    await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+    expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+    const url = new URL(assign.mock.calls[0][0], 'http://localhost');
+    expect(url.pathname).toBe('/connect/logout');
+    expect(url.searchParams.get('id_token_hint')).toBe(s.idToken);
   });
 
   it('não renderiza barra superior nem controle de gaveta', () => {

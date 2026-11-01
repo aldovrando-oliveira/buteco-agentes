@@ -239,6 +239,23 @@ o versionamento pretende seguir
   do HMAC, com o desenho da #208: esquema pela forma, `aud` `buteco-api` e
   subject pela tabela de clientes. A diferença é que as chaves vêm do anel do
   próprio processo, sem HTTP. Sem `libs/`.
+- **O painel entra pelo emissor** (#217), com o módulo de sessão
+  `apps/frontend/src/auth/`:
+  - `/entrar` com e-mail e senha pelo `POST /auth/session` e, no `204`, o
+    authorize com PKCE S256 e `state` gerados no navegador. Estados do protótipo
+    sem provedor: credencial inválida, desativado, bloqueado por N minutos (do
+    `Retry-After`), muitas tentativas, painel iniciando, sessão expirada e falha na
+    entrada;
+  - `/entrar/retorno` tira o código da URL antes de trocá-lo no `/connect/token`;
+  - a sessão fica no `localStorage` (`buteco.sessao`), compartilhada entre as abas,
+    e é renovada antes de cada chamada quando faltam menos de 60 s, sem timer. Todo
+    escritor do registro escreve sob o Web Lock `buteco.sessao.renovar`, e duas
+    abas renovando juntas fazem um pedido só;
+  - **o rodapé da navegação** mostra o avatar com as iniciais, o nome e o e-mail do
+    id token, e os botões de tema e de "Sair"; o "Sair" encerra a autorização no
+    emissor pelo `/connect/logout`;
+  - em desenvolvimento, o `vite.config.ts` faz proxy de `/auth`, `/connect` e
+    `/.well-known` para o `apps/api`.
 
 **Contexto temporal e de canal**
 
@@ -813,6 +830,26 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **O `401` renova a sessão uma vez antes de encerrá-la** (#217). O segundo `401`
+  do `apps/api` ou do `apps/inbox`, ou o `invalid_grant` na renovação, apaga a
+  sessão e leva a `/entrar?motivo=sessao-expirada`, guardando a rota atual. O
+  `apps/connectors` continua sem encerrar no segundo `401`. O `503`, ou o emissor
+  fora do ar ao renovar, nunca desloga.
+- **O painel repete consulta que recebe `503` esperando o `Retry-After`** (#217),
+  limitado a 1–30 s, até 3 vezes. Mutação não repete, e os outros erros mantêm a
+  repetição de antes.
+- **O nginx do `frontend` manda `Content-Security-Policy` e
+  `Referrer-Policy: no-referrer`** (#217), no `server` e no
+  `location = /index.html`. A CSP libera só os scripts da própria origem e o
+  script inline do `index.html`, pelo hash. O beacon do Web Analytics que o
+  Cloudflare injeta é bloqueado, e a injeção deve ser desligada na zona
+  ([`docs/deployment.md`](docs/deployment.md)).
+- **`AUTH_OPERATOR_PASSWORD_HASH` deixa de ser obrigatória no compose de
+  produção** (#217): só o bootstrap do primeiro Admin a lê, e ela pode sair do
+  `.env.prod` depois do primeiro login dele, junto com o
+  `AUTH_BOOTSTRAP_ADMIN_EMAIL`.
+- **A rota `/login` do painel redireciona para `/entrar`** (#217), para links e
+  favoritos.
 - **`PublicUrl__BaseUrl` passa a ser obrigatória no `apps/api`** (#180): sem ela,
   o boot falha. Até aqui, a url ausente subia o app com o emissor desligado e os
   endereços A2A ausentes. O compose de produção já a exigia.
@@ -1048,6 +1085,17 @@ o versionamento pretende seguir
 - Teste de conexão de servidor MCP no formulário passou a escolher o endpoint
   pelo estado da credencial — credencial em branco na edição significa
   "manter a atual".
+
+### Removed
+
+- **`POST /auth/login` e o operador único** (#217). Nenhuma rota emite mais o
+  token HMAC de operador; os já emitidos valem até o próprio prazo (no máximo
+  30 min depois do deploy). Saem `Auth__OperatorUsername`
+  (`AUTH_OPERATOR_USERNAME` no `.env.prod`) e `Auth__OperatorTokenLifetime`. Sem
+  token, o `apps/api` responde `401` a `/auth/login`, como a toda rota que não
+  existe. O HMAC continua validado até a #184 e a #182.
+- **O módulo de token do painel sobre `sessionStorage`** (#217), substituído pelo
+  módulo de sessão do emissor.
 
 ### Fixed
 

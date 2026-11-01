@@ -264,6 +264,13 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--buteco-heat-3': 'var(--mantine-color-butecoBlue-4)',
     '--buteco-heat-4': 'var(--mantine-color-butecoBlue-5)',
     '--buteco-heat-5': 'var(--mantine-color-butecoBlue-6)',
+
+    // O AVATAR DO RODAPÉ (change painel-entra-pelo-emissor, rodapé do protótipo de
+    // autenticação, quadro "Editar usuário"): fundo azul-claro e iniciais
+    // azul-escuras, o tom 1 e o tom 9. O protótipo só desenha o claro; no escuro o
+    // par se inverte, porque o tom 1 de fundo seria o elemento mais claro da barra.
+    '--buteco-avatar-bg': 'var(--mantine-color-butecoBlue-1)',
+    '--buteco-avatar-ink': 'var(--mantine-color-butecoBlue-9)',
   },
   dark: {
     '--buteco-page-bg': 'var(--mantine-color-dark-9)',
@@ -278,5 +285,8 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--buteco-heat-3': 'var(--mantine-color-butecoBlue-6)',
     '--buteco-heat-4': 'var(--mantine-color-butecoBlue-5)',
     '--buteco-heat-5': 'var(--mantine-color-butecoBlue-4)',
+
+    '--buteco-avatar-bg': 'var(--mantine-color-butecoBlue-9)',
+    '--buteco-avatar-ink': 'var(--mantine-color-butecoBlue-1)',
   },
 });

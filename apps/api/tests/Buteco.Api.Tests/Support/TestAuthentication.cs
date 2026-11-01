@@ -14,7 +14,6 @@ namespace Buteco.Api.Tests.Support;
 // produção) em cada uma das seis fixtures.
 public static class TestAuthentication
 {
-    public const string KnownOperatorUsername = "operator";
     public const string KnownOperatorPassword = "correct-horse-battery-staple";
 
     // Mesmo valor usado por InboxFactoryFixture (apps/inbox) — prova que
@@ -26,7 +25,6 @@ public static class TestAuthentication
     public static Dictionary<string, string?> ConfigOverrides { get; } = new()
     {
         ["Auth:TokenSigningKey"] = TokenSigningKey,
-        ["Auth:OperatorUsername"] = KnownOperatorUsername,
         ["Auth:OperatorPasswordHash"] = ComputeKnownOperatorPasswordHash(),
 
         // TZ é PRÉ-REQUISITO DE BOOT desde a change rotas-de-agregacao-sistema:

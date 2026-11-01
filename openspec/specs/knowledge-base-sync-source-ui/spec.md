@@ -14,9 +14,7 @@ sincronizada fica indisponível e nada é chamado. Duas regras a protegem: a tel
 nunca afirma mais do que sabe (carregando não é erro, lista vazia não é travessão,
 listagem de bases indisponível não marca pasta como livre), e o texto vem do
 `code`, nunca do `title` do servidor.
-
 ## Requirements
-
 ### Requirement: Endereço do apps/connectors opcional no build do painel
 O painel SHALL ler o endereço do `apps/connectors` de `VITE_CONNECTORS_BASE_URL`,
 resolvida em tempo de build. Ausente (`undefined`), a opção Sincronizada do card
@@ -217,9 +215,13 @@ que o operador preencheu, e SHALL dizer que nenhuma base foi criada. O texto de
 ocupada mesmo com a base inativa, e orientar escolher outra pasta ou desativar e
 excluir essa base para liberar a pasta, avisando que a exclusão apaga os documentos
 dela e não pode ser desfeita. Sem `knowledgeBaseName` na resposta, o texto SHALL se
-referir a "a base que usa esta pasta", e SHALL NOT dizer "sem nome". O `401` do
-`apps/connectors` SHALL NOT encerrar a sessão do operador nem redirecionar para o
-login.
+referir a "a base que usa esta pasta", e SHALL NOT dizer "sem nome".
+
+O `401` do `apps/connectors` SHALL ser tratado como nas outras chamadas
+autenticadas até a renovação: o painel renova a sessão uma vez e repete a chamada
+(`panel-issuer-session`). O segundo `401` SHALL NOT encerrar a sessão do operador
+nem redirecionar para o login: a chamada falha com o texto de sessão recusada pelo
+serviço de conectores, e o registro da sessão continua.
 
 A orientação de excluir existe desde a change `exclusao-base-painel` (#136), que
 trouxe a exclusão de base ao painel; até ali o texto era proibido de falar em
@@ -258,9 +260,9 @@ excluir, porque a tela não oferecia a ação.
 - **THEN** o painel exibe o texto genérico com `folder-too-deep`
 
 #### Scenario: Token recusado pelo apps/connectors não desloga
-- **WHEN** a consulta de pastas responde `401`
-- **THEN** o token do operador continua guardado, o painel não navega para
-  `/login`, e o seletor exibe o texto de sessão recusada pelo serviço de conectores
+- **WHEN** a consulta de pastas responde `401` antes e depois da renovação da sessão
+- **THEN** o registro da sessão continua, o painel não navega para `/entrar`, e o
+  seletor exibe o texto de sessão recusada pelo serviço de conectores
 
 ### Requirement: Cadastro de base sincronizada
 Com Sincronizada marcada, provedor e pasta escolhidos, o formulário SHALL enviar
@@ -278,3 +280,4 @@ detalhe da base criada, com a notificação de cadastro de hoje.
 #### Scenario: Criação bem-sucedida
 - **WHEN** o `apps/api` responde `201`
 - **THEN** o operador é levado a `/knowledge-bases/{id}` da base criada
+

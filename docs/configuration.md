@@ -71,8 +71,6 @@ Ausentes, estes valores **derrubam o processo no boot** (fail-fast):
 | Variável | Processo |
 |---|---|
 | `Auth__TokenSigningKey` | `apps/api`, `apps/inbox`, `apps/connectors` |
-| `Auth__OperatorUsername` | `apps/api` |
-| `Auth__OperatorPasswordHash` | `apps/api` |
 | `Api__BaseUrl` | `apps/inbox` |
 | `TZ` | `apps/workers` |
 | `VITE_API_BASE_URL` | `apps/frontend` (build) |
@@ -122,10 +120,8 @@ restrito, a extensão precisa ser criada antes, por fora da migração.
 | `ConnectionStrings__Postgres` | sim | Banco compartilhado com `apps/workers` (`buteco_agents`) |
 | `RabbitMq__Host` / `__Port` / `__Username` / `__Password` | sim | Broker para publicar jobs de task |
 | `Auth__TokenSigningKey` | **fail-fast** | Chave HMAC de assinatura de token. Mesmo valor de `apps/inbox` |
-| `Auth__OperatorUsername` | **fail-fast** | Operador do `POST /auth/login` (HMAC), até a #217 |
-| `Auth__OperatorPasswordHash` | **fail-fast** | `{iterations}.{saltBase64}.{hashBase64}`, PBKDF2-HMAC-SHA256, gerado offline — ver [development.md](development.md#autenticação-em-desenvolvimento). Serve ao `POST /auth/login` e, desde a #180, de hash inicial do primeiro Admin do bootstrap |
+| `Auth__OperatorPasswordHash` | não (desde a #217) | Hash inicial do primeiro Admin, lido só pelo bootstrap: `{iterations}.{saltBase64}.{hashBase64}`, PBKDF2-HMAC-SHA256, gerado offline — ver [development.md](development.md#autenticação-em-desenvolvimento). Depois do primeiro login do Admin, pode sair, junto com o `Auth__BootstrapAdminEmail` ([deployment.md](deployment.md#primeiro-admin)). Nome e formato em revisão na #225 |
 | `Auth__BootstrapAdminEmail` | não | E-mail do primeiro Admin (#180). Sem nenhum usuário, o bootstrap cria um usuário ativo com este e-mail e o hash de `Auth__OperatorPasswordHash`, marcado como legado; o primeiro login refaz em Argon2id. Com usuários, é ignorado, com log, e nunca sobrescreve senha nem e-mail. Vazio e sem usuário, o boot avisa no log. Ver [deployment.md](deployment.md#primeiro-admin) |
-| `Auth__OperatorTokenLifetime` | não | TTL do token de operador. Default de 30 min fixado no próprio tipo, não em `appsettings.json` |
 | `Mcp__CredentialEncryptionKey` | sim | AES-256 (32 bytes) em base64. Mesmo valor de `apps/workers`. Gerar com `openssl rand -base64 32` |
 | `PublicUrl__BaseUrl` | **fail-fast** (desde a #180) | URL pública da própria API, usada em `AgentCard.SupportedInterfaces` para descoberta A2A externa e como **issuer do emissor OIDC** (#179). Não afeta `SendMessage`/`GetTask`. Ver abaixo |
 | `Identity__SigningKeyEncryptionKey` | **fail-fast** | AES-256 (32 bytes) em base64, para cifrar em repouso as chaves de assinatura do emissor OIDC. **Distinta** de `Mcp__CredentialEncryptionKey`. Gerar com `openssl rand -base64 32`. Ausente, fora de base64 ou sem 32 bytes, derruba o boot. O `appsettings.Development.json` traz uma chave de desenvolvimento |
@@ -320,6 +316,11 @@ Ambas são resolvidas em **tempo de build** e embutidas no bundle. O build
 Os valores vazios existem para o cenário do stack de servidor, em que o nginx
 interno serve o SPA e faz proxy para os dois backends no mesmo domínio.
 
+O login pelo emissor (`/auth/session`, `/connect/*` e `/.well-known/*`) usa
+sempre caminho relativo, sem variável: em produção, o nginx leva esses prefixos
+ao `apps/api`; em desenvolvimento, o proxy do `vite.config.ts` faz o mesmo
+([development.md](development.md#autenticação-em-desenvolvimento)).
+
 ### `VITE_CONNECTORS_BASE_URL` (opcional)
 
 Base de `apps/connectors`, também resolvida em build, mas **opcional**: o build
@@ -360,7 +361,7 @@ de configuração que o processo enxerga.
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` — só `apps/inbox` |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` — byte-idêntica entre `apps/api`, `apps/inbox` e `apps/connectors` (risco aceito, ver [deployment.md](deployment.md)) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` de `apps/connectors`. **Opcional**: vazia, o provedor `google-drive` não aparece. Inválida, só o `apps/connectors` não sobe; o painel continua no ar |
-| `AUTH_OPERATOR_USERNAME` / `AUTH_OPERATOR_PASSWORD_HASH` | `Auth__OperatorUsername` / `Auth__OperatorPasswordHash` |
+| `AUTH_OPERATOR_PASSWORD_HASH` / `AUTH_BOOTSTRAP_ADMIN_EMAIL` | `Auth__OperatorPasswordHash` / `Auth__BootstrapAdminEmail` de `apps/api`. **Opcionais** (sem `:?`): só o bootstrap do primeiro Admin as lê, e elas podem sair do `.env.prod` depois do primeiro login dele |
 | `STACK_HTTP_PORT` | porta interna do host onde o nginx do stack escuta. Nunca 80 ou 443 diretamente — o proxy externo faz `proxy_pass` para cá |
 
 Três valores do stack não vêm do `.env.prod`, porque não são segredo nem variam

@@ -3,55 +3,25 @@
 ## Purpose
 
 TBD - defined by change auth-login-e-servico. Update Purpose after archive.
-
 ## Requirements
+### Requirement: Token HMAC de operador só é validado, e nenhum é emitido por rota
+`apps/api` SHALL NOT expor rota que emita token HMAC de operador. `POST /auth/login` SHALL responder como rota inexistente, inclusive para quem envia credencial válida do Admin do bootstrap: `401 Unauthorized` sem `Authorization`, como qualquer rota inexistente, o que não revela quais rotas existem; e `404 Not Found` com um access token válido de usuário do emissor.
 
-### Requirement: Login do operador único
-`apps/api` SHALL expor `POST /auth/login`, recebendo `username` e
-`password`, validando contra um único operador configurado via variável
-de ambiente (usuário e hash de senha). Em caso de sucesso, SHALL
-responder `200 OK` com um token e seu instante de expiração. Em caso de
-usuário ou senha incorretos, SHALL responder `401 Unauthorized` com a
-mesma mensagem genérica em ambos os casos, sem indicar qual campo estava
-incorreto.
+As rotas autenticadas dos três apps SHALL continuar aceitando o token HMAC de operador assinado com `Auth:TokenSigningKey` dentro do prazo do próprio token, e SHALL recusar com `401` o que estiver expirado, até a #184 recusar o subject `operator` no HMAC e a #182 remover o HMAC. `Auth:OperatorUsername` e `Auth:OperatorTokenLifetime` SHALL NOT ser lidas.
 
-#### Scenario: Login com credenciais corretas
-- **WHEN** um cliente envia `POST /auth/login` com o `username` e
-  `password` que correspondem ao operador configurado
-- **THEN** a API responde `200 OK` com um token não vazio e um instante
-  de expiração futuro
+#### Scenario: A rota de login não existe mais
+- **WHEN** um cliente envia `POST /auth/login` com `{"username":"admin","password":"<a senha do bootstrap>"}` e o access token de um usuário obtido do emissor
+- **THEN** a resposta é `404 Not Found`, e nenhum token é devolvido
 
-#### Scenario: Login com usuário incorreto
-- **WHEN** um cliente envia `POST /auth/login` com um `username` que não
-  corresponde ao operador configurado
-- **THEN** a API responde `401 Unauthorized` com uma mensagem genérica de
-  credencial inválida
+#### Scenario: Sem token, a rota de login responde como qualquer rota inexistente
+- **WHEN** um cliente envia `POST /auth/login` com `{"username":"admin","password":"<a senha do bootstrap>"}`, sem `Authorization`
+- **THEN** a resposta é `401 Unauthorized`, igual à de `GET /rota-que-nao-existe` sem token, e nenhum token é devolvido
 
-#### Scenario: Login com senha incorreta
-- **WHEN** um cliente envia `POST /auth/login` com o `username` correto e
-  um `password` que não corresponde à senha configurada
-- **THEN** a API responde `401 Unauthorized` com a mesma mensagem
-  genérica de credencial inválida usada no caso de usuário incorreto
+#### Scenario: Token HMAC de operador dentro do prazo continua aceito
+- **WHEN** um token HMAC de operador assinado com `Auth:TokenSigningKey`, ainda no prazo, chama `GET /agents`
+- **THEN** a resposta é `200 OK`
 
-### Requirement: Token de operador assinado com TTL curto e configurável
-O sistema SHALL emitir o token do operador assinado, com expiração após
-um intervalo configurável (`Auth:OperatorTokenLifetime`), cujo valor
-padrão quando não configurado SHALL ser 30 minutos. Um token
-estruturalmente válido porém expirado SHALL ser tratado como inválido por
-qualquer verificação subsequente.
+#### Scenario: Token HMAC de operador expirado é recusado
+- **WHEN** um token HMAC de operador cujo instante de expiração já passou chama `GET /agents`
+- **THEN** a resposta é `401 Unauthorized`
 
-#### Scenario: Token dentro do prazo é aceito
-- **WHEN** um token de operador emitido há menos tempo que seu TTL
-  configurado é apresentado em uma requisição a uma rota autenticada
-- **THEN** a requisição é autenticada com sucesso, sem erro `401`
-
-#### Scenario: Token expirado é rejeitado
-- **WHEN** um token de operador cujo instante de expiração já passou é
-  apresentado em uma requisição a uma rota autenticada
-- **THEN** a requisição é rejeitada com `401 Unauthorized`
-
-#### Scenario: TTL assume 30 minutos quando não configurado
-- **WHEN** `Auth:OperatorTokenLifetime` não está presente na configuração
-  e um login é realizado com sucesso
-- **THEN** o instante de expiração do token retornado é 30 minutos após a
-  emissão

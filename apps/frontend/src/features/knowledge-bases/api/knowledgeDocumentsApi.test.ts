@@ -9,7 +9,7 @@ import {
   updateKnowledgeDocument,
 } from './knowledgeDocumentsApi';
 import { ApiError } from './knowledgeBasesApi';
-import { clearToken } from '../../../auth/token';
+import { signOutForTest } from '../../../test/authFakes';
 import type { KnowledgeDocument } from '../types/knowledgeDocument';
 
 const knowledgeBaseId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -54,7 +54,7 @@ function callOf(fetchMock: ReturnType<typeof vi.fn>) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  clearToken();
+  signOutForTest();
 });
 
 describe('listKnowledgeDocuments', () => {

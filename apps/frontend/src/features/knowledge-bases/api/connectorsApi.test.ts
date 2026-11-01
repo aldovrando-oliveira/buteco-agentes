@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ConnectorsError,
   connectorsBaseUrl,
@@ -6,7 +6,8 @@ import {
   listConnectorProviders,
   requestKnowledgeBaseSync,
 } from './connectorsApi';
-import { clearToken, getToken, setToken } from '../../../auth/token';
+import { signInForTest, signOutForTest } from '../../../test/authFakes';
+import { sessionFetchContract } from '../../../test/sessionContract';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -28,7 +29,7 @@ function calledUrl(fetchMock: ReturnType<typeof vi.fn>): string {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  clearToken();
+  signOutForTest();
 });
 
 describe('connectorsBaseUrl', () => {
@@ -51,7 +52,7 @@ describe('connectorsBaseUrl', () => {
 describe('listConnectorProviders', () => {
   it('chama /connectors/providers no endereço configurado, com o token do operador', async () => {
     vi.stubEnv('VITE_CONNECTORS_BASE_URL', 'http://localhost:5037');
-    setToken('token-do-operador');
+    signInForTest('token-do-operador');
     const fetchMock = stubFetch([
       { key: 'google-drive', accountEmail: 'a@b.iam.gserviceaccount.com' },
     ]);
@@ -154,31 +155,12 @@ describe('erros', () => {
     expect(error.code).toBeUndefined();
   });
 
-  it('401 NÃO limpa o token nem redireciona para /login', async () => {
-    vi.stubEnv('VITE_CONNECTORS_BASE_URL', 'http://localhost:5037');
-    setToken('token-valido-no-apps-api');
-    stubFetch({ title: 'unauthorized' }, 401);
-    const originalLocation = window.location;
-    Object.defineProperty(window, 'location', {
-      value: { ...originalLocation, href: 'http://localhost/knowledge-bases/new' },
-      writable: true,
-      configurable: true,
+  describe('sessão pelo sessionFetch', () => {
+    beforeEach(() => {
+      vi.stubEnv('VITE_CONNECTORS_BASE_URL', 'http://localhost:5037');
     });
 
-    try {
-      const error = (await listConnectorProviders().catch((e: unknown) => e)) as ConnectorsError;
-
-      expect(error).toBeInstanceOf(ConnectorsError);
-      expect(error.status).toBe(401);
-      expect(getToken()).toBe('token-valido-no-apps-api');
-      expect(window.location.href).toBe('http://localhost/knowledge-bases/new');
-    } finally {
-      Object.defineProperty(window, 'location', {
-        value: originalLocation,
-        writable: true,
-        configurable: true,
-      });
-    }
+    sessionFetchContract(() => listConnectorProviders(), { endsSession: false });
   });
 });
 
@@ -187,7 +169,7 @@ describe('requestKnowledgeBaseSync', () => {
 
   it('faz POST em /connectors/knowledge-bases/{id}/sync e resolve no 202 sem corpo', async () => {
     vi.stubEnv('VITE_CONNECTORS_BASE_URL', 'http://localhost:5037');
-    setToken('token-do-operador');
+    signInForTest('token-do-operador');
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
     vi.stubGlobal('fetch', fetchMock);
 

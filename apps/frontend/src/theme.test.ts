@@ -108,6 +108,20 @@ describe('theme — âncoras da identidade visual', () => {
     expect(shades('dark')[0]).toBe('#e9eaec');
   });
 
+  it('o avatar do rodapé usa o par do protótipo no claro e o inverte no escuro', () => {
+    const resolvido = cssVariablesResolver(DEFAULT_THEME);
+
+    // Fundo azul-claro (#eef3fb) e iniciais azul-escuras (#1a3f78) no quadro
+    // "Editar usuário" do protótipo de autenticação. No escuro o par troca de
+    // ponta (convenção 16), sem cor nova.
+    expect(resolvido.light?.['--buteco-avatar-bg']).toBe('var(--mantine-color-butecoBlue-1)');
+    expect(resolvido.light?.['--buteco-avatar-ink']).toBe('var(--mantine-color-butecoBlue-9)');
+    expect(resolvido.dark?.['--buteco-avatar-bg']).toBe('var(--mantine-color-butecoBlue-9)');
+    expect(resolvido.dark?.['--buteco-avatar-ink']).toBe('var(--mantine-color-butecoBlue-1)');
+    expect(shades('butecoBlue')[1]).toBe('#eef3fb');
+    expect(shades('butecoBlue')[9]).toBe('#1a3f78');
+  });
+
   it('mantém o fundo da página fora da escala neutra', () => {
     const pageBackground = cssVariablesResolver(DEFAULT_THEME).light?.['--buteco-page-bg'];
 

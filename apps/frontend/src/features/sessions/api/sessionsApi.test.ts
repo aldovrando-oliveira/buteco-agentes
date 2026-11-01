@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, getMessagesSummary, getSessionsSummary } from './sessionsApi';
+import { ApiError, getMessagesSummary, getSessionsSummary, listChannelSessions } from './sessionsApi';
+import { sessionFetchContract } from '../../../test/sessionContract';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -74,4 +75,8 @@ describe.each([
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(400);
   });
+});
+
+describe('sessionsApi: sessão pelo sessionFetch', () => {
+  sessionFetchContract(() => listChannelSessions('canal-1'));
 });

@@ -47,15 +47,32 @@ supplied through environment variables. Credentials are write-only and are
 never returned in any API response. Anything that could expose a stored
 credential, or that weakens the encryption, is in scope.
 
-**Authentication tokens.** Tokens are stateless and HMAC-signed, with no JWT
-library and no session store. `apps/api` issues both the operator token
-(from `POST /auth/login`) and the service token used by `apps/inbox`; both
-apps validate locally using a shared signing key. Token forgery, signature
-bypass, scope escalation from the service token, and TTL handling are all in
-scope.
+**Authentication tokens.** Two mechanisms coexist. `apps/api` is an OpenID
+Connect issuer (OpenIddict): people sign in to the panel with an email and
+password through the authorization code flow with PKCE, and receive an RS256
+access token (15 minutes) and a rotating refresh token (14 days). All three
+HTTP apps validate that access token locally against the issuer's signing keys.
+Service-to-service calls still use stateless HMAC tokens signed with a shared
+key, each service signing its own; no route issues an operator HMAC token any
+more. Token forgery, signature bypass, `aud`/`iss`/`typ` confusion, scope
+escalation from a service token, refresh token reuse, and lifetime handling
+are all in scope.
+
+**Panel session in the browser.** The panel keeps its tokens (access, refresh
+and ID token) in `localStorage`, shared across tabs. This is an accepted cost:
+a script running in the panel's origin can read them. It is contained by a
+Content Security Policy that allows only the panel's own scripts (the inline
+script of `index.html` by hash) and by `Referrer-Policy: no-referrer`, both
+sent by the panel's nginx. The authorization code is removed from the URL
+before it is exchanged. After signing out ("Sair"), or after a user is deactivated, an
+access token already issued stays valid for up to 15 minutes, because it is
+validated by signature only; the next refresh is refused. Anything that lets
+script run in the panel's origin, bypasses the CSP, leaks a token or code
+through a URL or referrer, or keeps a session alive past sign-out beyond that
+window is in scope.
 
 **Shared secrets across processes.** `Auth:TokenSigningKey` (shared between
-`apps/api` and `apps/inbox`) and `Mcp:CredentialEncryptionKey` (shared
+`apps/api`, `apps/inbox` and `apps/connectors`) and `Mcp:CredentialEncryptionKey` (shared
 between `apps/api` and `apps/workers`) must hold identical values across
 processes. Anything that leaks these values, or that would let one process
 accept material signed with a different key, is in scope.

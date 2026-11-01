@@ -5,7 +5,6 @@ using Buteco.Api.AgentDelegations.Endpoints;
 using Buteco.Api.AgentKnowledgeBindings.Endpoints;
 using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Auth;
-using Buteco.Api.Auth.Endpoints;
 using Buteco.Api.Identity;
 using Buteco.Api.Identity.Flow;
 using Buteco.Api.Identity.Validation;
@@ -45,7 +44,6 @@ builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(Rab
 builder.Services.Configure<McpCryptoOptions>(builder.Configuration.GetSection(McpCryptoOptions.SectionName));
 builder.Services.Configure<PublicUrlOptions>(builder.Configuration.GetSection(PublicUrlOptions.SectionName));
 builder.Services.Configure<TokenSigningOptions>(builder.Configuration.GetSection(TokenSigningOptions.SectionName));
-builder.Services.Configure<OperatorCredentialOptions>(builder.Configuration.GetSection(OperatorCredentialOptions.SectionName));
 
 // Configuração da agregação de métricas. O fuso NÃO vem da seção: vem de TZ, a
 // mesma variável entregue a apps/workers com :? no compose (design.md, D1). É o
@@ -207,7 +205,6 @@ app.UseRateLimiter();
 app.MapHealthChecks("/health")
     .AllowAnonymous()
     .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.HealthProbe));
-app.MapAuthEndpoints();
 app.MapSessionEndpoints();
 app.MapAuthorizeEndpoint();
 app.MapEndSessionEndpoint();
@@ -231,7 +228,6 @@ app.MapAgentCardEndpoint();
 // (apps/inbox). Precisa rodar depois de todos os Map* acima.
 app.ValidateRouteAuthenticationClassification(
     "/health",
-    "/auth/login",
     "/auth/session",
     "/connect/authorize",
     "/connect/logout",

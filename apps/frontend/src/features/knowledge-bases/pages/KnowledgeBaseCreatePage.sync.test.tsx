@@ -7,7 +7,8 @@ import { Notifications } from '@mantine/notifications';
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import { theme } from '../../../theme';
 import { KnowledgeBaseCreatePage } from './KnowledgeBaseCreatePage';
-import { clearToken, getToken, setToken } from '../../../auth/token';
+import { SESSION_KEY } from '../../../auth/sessionStore';
+import { signInForTest, signOutForTest, tokenResponse } from '../../../test/authFakes';
 import { ApiError } from '../api/knowledgeBasesApi';
 import { ConnectorsError } from '../api/connectorsApi';
 import { connectorErrorMessage } from '../utils/connectorErrors';
@@ -98,6 +99,14 @@ function problem(status: number, extra: Record<string, unknown>) {
 }
 
 // Respostas padrão de um caminho feliz; `overrides` vem antes e vence.
+function parseBody(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return body;
+  }
+}
+
 function installFetch(overrides: Handler = () => undefined) {
   const calls: Call[] = [];
   const fetchMock = vi.fn((input: string, init?: RequestInit) => {
@@ -105,7 +114,8 @@ function installFetch(overrides: Handler = () => undefined) {
     calls.push({
       url: url.toString(),
       method: init?.method ?? 'GET',
-      body: init?.body ? JSON.parse(init.body as string) : undefined,
+      // O corpo do `/connect/token` é form-urlencoded, e não JSON: fica como texto.
+      body: init?.body ? parseBody(init.body as string) : undefined,
     });
     const reply =
       overrides(url, init) ??
@@ -205,7 +215,7 @@ async function pickFaq(user: ReturnType<typeof userEvent.setup>) {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  clearToken();
+  signOutForTest();
 });
 
 describe('sem VITE_CONNECTORS_BASE_URL', () => {
@@ -474,12 +484,16 @@ describe('texto de cada código', () => {
     );
   });
 
-  it('navegação: 401 do apps/connectors não desloga nem navega para /login', async () => {
+  it('navegação: 401 do apps/connectors renova e repete, e o segundo não desloga nem navega para /entrar', async () => {
     vi.stubEnv('VITE_CONNECTORS_BASE_URL', CONNECTORS);
-    setToken('token-do-operador');
+    signInForTest('token-do-operador');
     const user = userEvent.setup();
     const calls = installFetch((url) =>
-      url.pathname.endsWith('/folders') ? json({ title: 'unauthorized' }, 401) : undefined,
+      url.pathname === '/connect/token'
+        ? tokenResponse(2)
+        : url.pathname.endsWith('/folders')
+          ? json({ title: 'unauthorized' }, 401)
+          : undefined,
     );
 
     const router = renderPage();
@@ -488,8 +502,9 @@ describe('texto de cada código', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Escolher pasta' });
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(/não aceitou a sua sessão/);
-    expect(calls.some((call) => call.url.endsWith('/folders'))).toBe(true);
-    expect(getToken()).toBe('token-do-operador');
+    expect(calls.filter((call) => call.url.endsWith('/folders'))).toHaveLength(2);
+    expect(calls.filter((call) => call.url.endsWith('/connect/token'))).toHaveLength(1);
+    expect(JSON.parse(localStorage.getItem(SESSION_KEY)!).accessToken).toBe('access-2');
     expect(router.state.location.pathname).toBe('/knowledge-bases/new');
   });
 

@@ -13,9 +13,7 @@ esperava JSON; e shell do SPA guardado pelo browser sob uma URL que também é d
 API. Fecha com o que o stack exige do ambiente: segredos compartilhados vindos
 de fonte única, e TLS terminado fora dele. Não cobre o proxy externo nem a borda
 (Cloudflare), que ficam fora do repositório.
-
 ## Requirements
-
 ### Requirement: Dockerfile por app, na pasta do próprio app, imagem final sem SDK nem código-fonte
 O sistema SHALL prover um `Dockerfile` multi-stage para cada um dos cinco
 apps, localizado dentro da pasta do próprio app —
@@ -115,6 +113,13 @@ do `apps/connectors`) SHALL ser **opcional** na interpolação: ausente, o
 `apps/connectors` sobe sem o provedor `google-drive`, e nenhum outro serviço muda
 de comportamento.
 
+O hash e o e-mail do bootstrap do primeiro Admin (`Auth__OperatorPasswordHash` e
+`Auth__BootstrapAdminEmail` do `apps/api`) SHALL ser **opcionais** na
+interpolação: eles só são lidos quando não há nenhum usuário, e a orientação do
+`docs/deployment.md` é tirá-los do `.env.prod` depois do primeiro login do Admin.
+Ausentes numa instalação nova, o `apps/api` sobe e registra o aviso do bootstrap.
+O compose SHALL NOT passar `Auth__OperatorUsername` ao `apps/api`.
+
 O `apps/connectors` SHALL subir somente depois de o `apps/api` estar saudável. O
 nginx do stack SHALL subir depois de `apps/api` e `apps/inbox` saudáveis, e SHALL
 NOT depender do `apps/connectors`: uma falha de boot do `apps/connectors` afeta só
@@ -173,6 +178,12 @@ o prefixo `/connectors`, nunca o painel nem as rotas dos outros apps.
 - **THEN** o Compose falha ao processar o arquivo, identificando qual variável
   falta e como fornecê-la — nenhum serviço é criado, e o Postgres **não** sobe com
   credencial vazia
+
+#### Scenario: Stack sobe sem as variáveis do bootstrap
+- **WHEN** o stack é iniciado com o arquivo de ambiente completo, exceto
+  `AUTH_OPERATOR_PASSWORD_HASH` e `AUTH_BOOTSTRAP_ADMIN_EMAIL`, ausentes
+- **THEN** o Compose processa o arquivo, o `apps/api` reporta saudável, e o
+  ambiente do contêiner do `apps/api` não tem `Auth__OperatorUsername`
 
 ### Requirement: Nginx do stack roteia por prefixo, sem expor porta pública diretamente
 O sistema SHALL prover um container de nginx, parte do
@@ -470,3 +481,34 @@ configuração do nginx do stack roteia o prefixo `/connectors` para o
   abre `/knowledge-bases/new`
 - **THEN** a origem "Sincronizada" está habilitada e lista o provedor
   `google-drive` com o e-mail da conta de serviço
+
+### Requirement: Shell do SPA entregue com CSP e Referrer-Policy
+O nginx do stack SHALL entregar o shell do SPA com os cabeçalhos abaixo, com
+`always`, em **todo** caminho que o entrega (os mesmos do requisito "Shell do SPA
+não é armazenado em cache"), declarados no `server` e repetidos no
+`location = /index.html`, porque `add_header` num nível suprime os do nível de
+cima:
+
+- `Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-<hash>'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
+  em que `<hash>` é o SHA-256, em base64, do script inline do `index.html`;
+- `Referrer-Policy: no-referrer`.
+
+O painel em produção SHALL carregar sem violação da CSP no console do navegador.
+
+#### Scenario: /entrar traz a CSP e o Referrer-Policy
+- **WHEN** o browser navega para `/entrar` no domínio público do stack
+- **THEN** a resposta é o `index.html` com `Cache-Control: no-store`, a
+  `Content-Security-Policy` acima e `Referrer-Policy: no-referrer`
+
+#### Scenario: /entrar/retorno com código traz os mesmos cabeçalhos
+- **WHEN** o browser navega para `/entrar/retorno?code=x&state=y`
+- **THEN** a resposta é o `index.html` com os mesmos três cabeçalhos
+
+#### Scenario: Navegação em prefixo de API traz os mesmos cabeçalhos
+- **WHEN** o browser faz uma navegação real (`Sec-Fetch-Mode: navigate`) em `/agents`
+- **THEN** a resposta é o `index.html` com os mesmos três cabeçalhos
+
+#### Scenario: O hash da CSP é o do script do index.html
+- **WHEN** o script inline do `index.html` muda e o `nginx.conf` não
+- **THEN** o teste que compara o hash do script com o da CSP do `nginx.conf` reprova
+

@@ -525,13 +525,15 @@ um laço que falharia pelo mesmo motivo.
 ## Autenticação
 
 **Hoje convivem dois mecanismos.** O token HMAC, descrito abaixo, continua
-emitindo e validando todas as rotas até a #182. Ao lado dele, desde a #179, o
-`apps/api` é emissor OpenID Connect (ver "Emissor OIDC", abaixo). Desde a #208,
-o `apps/inbox` e o `apps/connectors` aceitam o access token dele, validado pelo
-JWKS ("Validação do token do emissor", abaixo). Desde a #180, o próprio `apps/api`
-também o aceita, e há usuários locais com login por e-mail e senha pelo fluxo
-authorization code + PKCE ("Usuários locais" e "Sessão do emissor", abaixo). O
-painel continua entrando pelo HMAC até a #217, que troca o login dele.
+validado em todas as rotas até a #182, e é emitido só pelos serviços, para si
+mesmos. Ao lado dele, desde a #179, o `apps/api` é emissor OpenID Connect (ver
+"Emissor OIDC", abaixo). Desde a #208, o `apps/inbox` e o `apps/connectors`
+aceitam o access token dele, validado pelo JWKS ("Validação do token do
+emissor", abaixo). Desde a #180, o próprio `apps/api` também o aceita, e há
+usuários locais com login por e-mail e senha pelo fluxo authorization code +
+PKCE ("Usuários locais" e "Sessão do emissor", abaixo). **Desde a #217, o painel
+entra pelo emissor** ("O painel e a sessão do emissor", abaixo), e o
+`POST /auth/login` não existe mais: nenhuma rota emite HMAC de operador.
 
 **Token stateless assinado com HMAC**, sem sessão em banco. O texto anterior
 dizia "sem biblioteca JWT"; essa convenção foi **revogada em 24/10/2026**
@@ -539,7 +541,8 @@ dizia "sem biblioteca JWT"; essa convenção foi **revogada em 24/10/2026**
 terceiro, é exatamente o caso em que biblioteca mantida vence implementação
 própria: rotação, JWKS, discovery e validação de `aud`/`iss`/`exp` são o tipo
 de código em que defeito vira falha de segurança. O HMAC continua sem
-biblioteca até sair, na #182. `apps/api` emite o token do operador, no login; cada serviço
+biblioteca até sair, na #182. Nenhuma rota emite o HMAC de operador desde a #217;
+ele continua aceito até a #184 recusar o subject `operator` no HMAC. Cada serviço
 assina o **próprio** token de serviço com a mesma chave (o `apps/inbox` com
 `service:inbox` em `apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs`,
 e, desde a #104, o `apps/api` com `service:api` em
@@ -565,11 +568,12 @@ validar token." A obtenção das chaves é a única chamada, e não afeta o HMAC
 texto também omitia o `apps/connectors`, que valida o HMAC do mesmo jeito desde
 a #103.)*
 
-- **Operador único**, credencial via variável de ambiente (usuário +
-  hash PBKDF2), `POST /auth/login` em `apps/api`, até a #217. Os usuários
-  locais da #180 ainda não têm papel (RBAC é da M2), e todo usuário tem o acesso
-  do operador. TTL de 30 minutos por padrão, configurável — o default vive
-  no tipo de Options, não no `appsettings.json`.
+- **Sem operador único desde a #217.** O `POST /auth/login`, o
+  `Auth:OperatorUsername` e o `Auth:OperatorTokenLifetime` saíram. O
+  `Auth:OperatorPasswordHash` ficou só para o bootstrap do primeiro Admin
+  ("Usuários locais", abaixo). Os usuários locais ainda não têm papel (RBAC é da
+  M2), e todo usuário tem o acesso do operador, pela tabela de clientes
+  (`buteco-painel` → `operator`).
 - **Tokens de serviço**: mesmo mecanismo de assinatura, `sub` distinto,
   assinados pelo próprio serviço a cada requisição de saída com TTL fixo
   curto, **escopados** no `apps/api` por uma tabela de subjects
@@ -588,9 +592,14 @@ a #103.)*
 - **Enforcement por padrão**: toda rota HTTP de `apps/api` e `apps/inbox`
   exige token; as exceções vivem numa allowlist explícita com motivo
   classificado por enum, validada no startup (ver convenção 8).
-- **Frontend**: módulo fino de token sobre `sessionStorage`
-  (ler/anexar/limpar em `401`), importado por cada `request<T>` de
-  feature — sem cliente HTTP compartilhado (convenção 7 preservada).
+- **Frontend**: o módulo de sessão `src/auth/` (abaixo) exporta o
+  `sessionFetch`, que cada `request<T>` de feature usa no lugar do `fetch`, sem
+  cliente HTTP compartilhado (convenção 7, com a leitura registrada lá).
+- **Rota inexistente sem token responde `401`**, e não `404`, no `apps/api`: o
+  `FallbackPolicy` (`RequireAuthenticatedUser`) vale também para o pedido que não
+  casa com rota, e o `401` sai com o corpo vazio e sem `WWW-Authenticate`. É
+  intencional: quem chega sem token não descobre quais rotas existem. Com token
+  válido, a rota inexistente responde `404`.
 
 - **Emissor OIDC** (#179), com OpenIddict 7.7.2, só o servidor. Endpoints
   anônimos:
@@ -729,6 +738,40 @@ a #103.)*
   de cada app não mudam. Código copiado entre os dois apps, sem `libs/`; a
   pergunta voltou na #180, com o terceiro consumidor, e a resposta continua
   "não" (ver "O `apps/api` aceita o próprio token", acima).
+
+- **O painel e a sessão do emissor** (#217), em `apps/frontend/src/auth/`:
+  - **Entrada.** `/entrar` envia e-mail e senha ao `POST /auth/session` e, no
+    `204`, navega ao `/connect/authorize` com PKCE S256 e `state`, gerados e
+    conferidos no SPA. O login em andamento fica no `sessionStorage` da aba
+    (`buteco.login`), de uso único, por até 10 min. Um `retorno` vindo do
+    `apps/api` só é seguido quando começa por `/connect/authorize?`, e com
+    exatamente a string recebida; qualquer outro valor termina na tela inicial.
+  - **Retorno.** `/entrar/retorno` tira o código da URL por `replace` antes de
+    trocá-lo no `/connect/token`, e grava o registro da sessão.
+  - **O registro.** `buteco.sessao` no `localStorage` (access, refresh e id token,
+    o vencimento e o nome e o e-mail do id token), compartilhado entre as abas.
+    O custo aceito, um script injetado lê os tokens, é contido pela CSP com hash
+    do script do `index.html` e pelo `Referrer-Policy: no-referrer`
+    (`deploy/nginx.conf`, no `server` e no `location = /index.html`).
+  - **Renovação sem timer.** Antes de cada chamada, o painel renova quando o
+    access token vence em menos de 60 s. Todo escritor do registro (troca do
+    código, renovação, logout e fim de sessão) escreve sob o Web Lock
+    `buteco.sessao.renovar`: duas abas renovando juntas fazem um pedido só, e a
+    tolerância de reuso do refresh no emissor (30 s) cobre a corrida que sobrar.
+    Sem contexto seguro (Web Locks, `crypto.subtle`), o `/entrar` não envia e
+    avisa que o painel precisa de HTTPS.
+  - **`401` e `503`.** No `401`, renova uma vez e repete. O segundo `401` do
+    `apps/api` ou do `apps/inbox`, ou o `invalid_grant` na renovação, encerra a
+    sessão e vai a `/entrar?motivo=sessao-expirada` com a rota atual. O
+    `apps/connectors` não encerra no segundo `401`. Indisponibilidade (`503`, ou o
+    emissor fora do ar ao renovar) nunca desloga, e o `QueryClient` repete
+    consulta com `503` esperando o `Retry-After`.
+  - **Sair** revoga a autorização pelo `/connect/logout` com o `id_token_hint`,
+    depois de apagar o registro. O access token já emitido vale até 15 min
+    depois, como no logout do emissor (acima).
+  - **Desenvolvimento.** O `vite.config.ts` faz proxy de `/auth`, `/connect` e
+    `/.well-known` para o `apps/api`, e o painel fala com o emissor pela própria
+    origem, como em produção.
 
 Rotas anônimas são decisão de segurança, não detalhe de implementação:
 adicionar uma passa por revisão.
@@ -1150,7 +1193,12 @@ de propor algo nesta base:
    Cada feature mantém seu próprio `request<T>`/`ApiError` fino — sem
    cliente HTTP compartilhado entre features. Preocupação transversal
    (token) entra como módulo fino que cada `request<T>` importa, não como
-   cliente comum. Feature se organiza por conceito de domínio, não por
+   cliente comum. **Leitura desde a #217:** o módulo transversal pode envolver o
+   `fetch` (o `sessionFetch` anexa o token, renova, repete o `401` uma vez e
+   encerra a sessão) desde que não conheça o contrato de nenhuma API: a URL
+   base, o erro, a leitura do corpo e o `204` continuam em cada `request<T>`.
+   Repetir o laço de renovação nas sete cópias poria a regra mais delicada em
+   sete lugares. Feature se organiza por conceito de domínio, não por
    origem do dado — uma rota `/channels/{id}/algo` pode pertencer a outra
    feature que não `channels`.
 8. **Checagem de integridade no startup** é o padrão para todo registro

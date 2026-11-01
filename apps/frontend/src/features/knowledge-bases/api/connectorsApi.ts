@@ -1,8 +1,9 @@
 import type { ConnectorFolder, ConnectorProvider } from '../types/connectors';
-import { getToken } from '../../../auth/token';
+import { sessionFetch } from '../../../auth/session';
+import { retryAfterSeconds } from '../../../auth/transient';
 
 // CLIENTE DO apps/connectors, no molde do cliente do apps/inbox (sessionsApi.ts):
-// request<T> e erro próprios, token do operador pelo módulo fino auth/token, sem
+// request<T> e erro próprios, token pelo `sessionFetch` do módulo de sessão, sem
 // cliente HTTP comum (convenção 7). Mora em `knowledge-bases` porque a feature se
 // organiza por conceito de domínio, não por origem do dado: os consumidores são
 // telas de base (frontend-cadastro-base-sincronizada, D2).
@@ -23,6 +24,8 @@ export class ConnectorsError extends Error {
   readonly status?: number;
   readonly code?: string;
   readonly detail?: string;
+  /** O `Retry-After` do `503`, em segundos, para o QueryClient esperar (auth/transient.ts). */
+  readonly retryAfter?: number;
   // Extensões do ProblemDetails além de `code` e `detail` (ex.: `knowledgeBaseName`
   // no 409 do apps/api), para quem traduz o erro em texto.
   readonly extensions: Record<string, unknown>;
@@ -35,6 +38,7 @@ export class ConnectorsError extends Error {
       code?: string;
       detail?: string;
       extensions?: Record<string, unknown>;
+      retryAfter?: number;
     } = {},
   ) {
     super(message);
@@ -43,6 +47,7 @@ export class ConnectorsError extends Error {
     this.status = options.status;
     this.code = options.code;
     this.detail = options.detail;
+    this.retryAfter = options.retryAfter;
     this.extensions = options.extensions ?? {};
   }
 }
@@ -72,26 +77,28 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ConnectorsError('network', 'Endereço do apps/connectors não configurado no build.');
   }
 
-  const token = getToken();
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...init?.headers,
+    response = await sessionFetch(
+      `${baseUrl}${path}`,
+      {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          ...init?.headers,
+        },
       },
-    });
+      { endsSessionOn401: false },
+    );
   } catch {
     throw new ConnectorsError('network', `Falha de rede ao chamar ${path}`);
   }
 
-  // 401 NÃO limpa o token nem redireciona para /login, ao contrário dos clientes
-  // do apps/api e do apps/inbox. Aqui ele também pode ser chave de assinatura
-  // divergente entre os processos, e deslogar a cada abertura do seletor seria um
-  // laço sem saída; token vencido de verdade é pego pela próxima chamada ao
-  // apps/api, que já desloga (design.md, D2).
+  // O 401 renova a sessão e repete uma vez, como nos outros clientes, mas o segundo
+  // 401 NÃO encerra a sessão: aqui ele pode ser configuração errada do apps/connectors
+  // (`aud`, issuer), que recusaria todo token, e deslogar a cada abertura do seletor
+  // seria um laço sem saída; token vencido de verdade é pego pela próxima chamada ao
+  // apps/api (design.md da change painel-entra-pelo-emissor, D5, decisão do dono P5).
   if (!response.ok) {
     const problem = (await response.json().catch(() => undefined)) as
       Record<string, unknown> | undefined;
@@ -103,6 +110,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       code: typeof problem?.code === 'string' ? problem.code : undefined,
       detail: typeof problem?.detail === 'string' ? problem.detail : undefined,
       extensions,
+      retryAfter: retryAfterSeconds(response),
     });
   }
 

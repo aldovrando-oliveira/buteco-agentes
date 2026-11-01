@@ -40,8 +40,8 @@ export function useAgentInsightsQuery(agentId: string, period: InsightsPeriod) {
     // antes de a aba poder apresentar o estado de recusa (D17).
     //
     // O `3` NÃO É NÚMERO SOLTO: é o default da biblioteca, e
-    // `src/app/queryClient.ts` monta o cliente SEM `defaultOptions`, então é o
-    // que todas as outras consultas do painel já usam. Repeti-lo aqui mantém o
+    // `src/app/queryClient.ts` o mantém para todas as outras consultas do
+    // painel (só a espera do `503` muda lá). Repeti-lo aqui mantém o
     // comportamento igual ao do resto da casa para tudo que não é `404`.
     //
     // CONSEQUÊNCIA QUE CUSTA UM TESTE: política declarada na consulta vence a

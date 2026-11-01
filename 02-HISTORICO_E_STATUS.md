@@ -17119,3 +17119,215 @@ ser aplicada idêntica no `apps/api`, no `apps/inbox` e no `apps/connectors`.
 - **O painel continua entrando pelo HMAC** até a #217.
 - **Rollback:** a imagem anterior do `api` e do `frontend`. As tabelas novas ficam sem
   uso, e as janelas de 15 dias continuam valendo para a versão anterior.
+
+## `painel-entra-pelo-emissor` — o painel entra pelo emissor, e o `POST /auth/login` sai (#217)
+
+**Change proposta em 31/10–01/11/2026 e implementada em 01/11/2026**, na branch
+`feat/217-painel-entra-pelo-emissor`, num worktree próprio, a partir de `ca2bd71`.
+Entrega M1 · 5 de 12 (acompanhamento #194). Herda da #180 o critério de aceite: o
+painel faz login e acessa o `apps/api`, o `apps/inbox` e o `apps/connectors` com o
+token do emissor.
+- **Capacidade nova:** `panel-issuer-session`.
+- **Capacidades alteradas:** `operator-login-ui`, `operator-authentication`,
+  `route-authentication`, `oidc-issuer`, `issuer-user-login`, `frontend-app-shell`,
+  `knowledge-base-sync-source-ui` e `server-deployment`.
+
+**Decisões do dono antes do apply** (01/11/2026), P1 a P9 do design:
+- o SPA começa pelo `/entrar` e só navega ao authorize depois do `204`;
+- os tokens ficam no `localStorage`, com a renovação coordenada por Web Lock;
+- a CSP e o `Referrer-Policy: no-referrer` entram nesta change;
+- o `QueryClient` repete `503` só em consulta;
+- o `apps/connectors` continua sem encerrar a sessão no `401`;
+- "Sair" mínimo no rodapé, até a #183;
+- o hash do bootstrap sem `:?`, com nome e formato na #225;
+- "Esqueceu a senha?" e o convite fora, até a #181 e a #183;
+- um `sessionFetch` único, com a leitura registrada na convenção 7.
+
+### O que entrou
+
+- **Módulo de sessão `apps/frontend/src/auth/`** (D1–D7, D13), com as dependências do
+  navegador injetadas (`runtime.ts`), para os testes rodarem com storage, lock e
+  relógio falsos:
+  - `pkce.ts`, `loginFlow.ts`: PKCE S256 e `state` de 32 bytes, o login em andamento
+    no `sessionStorage` da aba (`buteco.login`, uso único, 10 min), o `voltarPara`
+    só como caminho relativo do painel, e o `retorno` seguido só com o prefixo
+    `/connect/authorize?`, com exatamente a string recebida;
+  - `sessionStore.ts`: o registro `buteco.sessao` no `localStorage`, que avisa a
+    própria aba e as outras (evento `storage`);
+  - `renewal.ts`: renovação sob o Web Lock `buteco.sessao.renovar`, com margem de
+    60 s, janela de 25 s para o `503` e prazo de 10 s por tentativa; todo escritor
+    (troca do código, renovação, logout, fim de sessão) escreve sob o lock;
+  - `sessionFetch.ts`: o `fetch` de cada `request<T>`, com o token, a renovação, o
+    `401` com uma nova tentativa e o fim de sessão;
+  - `logout.ts`, `transient.ts` (o `Retry-After` e a regra do `503` no
+    `QueryClient`) e `secureContext.ts`.
+- **Telas** (D6): `/entrar` (o cartão do protótipo sem provedor, com os estados `401`,
+  `403`, `423` com N minutos do `Retry-After`, `429`, `503`, rede, sessão expirada,
+  falha na entrada e o aviso de HTTPS) e `/entrar/retorno`; o `/login` vira
+  `<Navigate to="/entrar">`; o `ProtectedRoute` lê o registro.
+- **As 7 cópias do `request<T>`** trocam o `fetch` pelo `sessionFetch`, e o `ApiError`
+  de cada uma leva o `retryAfter`. O `connectorsApi` usa `{ endsSessionOn401: false }`.
+  O `channelsApi`, o `sessionsApi` e o `mcpServersApi` ganharam o caso de `401`, que
+  não tinham, por um contrato de teste comum (`test/sessionContract.ts`).
+- **O rodapé da casca segue o protótipo de autenticação** (D7, refeito na validação
+  visual): avatar com as iniciais, nome e e-mail do id token, e os botões de tema e de
+  "Sair" só de ícone. As cores do avatar são variáveis do tema, com o par invertido
+  no escuro.
+- **Lint** (D2): `no-restricted-syntax` para `dangerouslySetInnerHTML` e
+  `no-restricted-imports` para `rehype-raw`.
+- **`deploy/nginx.conf`**: a CSP com o hash do script inline do `index.html` e o
+  `Referrer-Policy: no-referrer`, no `server` e no `location = /index.html`, com
+  teste sobre o texto do arquivo. **`vite.config.ts`**: proxy de `/auth`, `/connect`
+  e `/.well-known` para o `apps/api`, sem `changeOrigin`.
+- **Saíram do `apps/api`** (D8): `AuthEndpoints`, `LoginRequest`, `LoginResponse`,
+  `OperatorCredentialOptions`, `TokenSigningOptions.OperatorTokenLifetime` e o
+  `/auth/login` da allowlist. **Do `apps/frontend`:** `token.ts`, `authApi.ts`,
+  `useAuth.ts`, `types/auth.ts`, `LoginPage` e `LoginForm`.
+- **Compose e `.env`** (D9): sai o `Auth__OperatorUsername`; o
+  `Auth__OperatorPasswordHash` fica sem `:?`.
+- **Testes do `apps/api`:** o `RefreshRotationTests` ganhou o caso da tolerância de 30
+  s (H2, em sequência); o `AuthLoginTests` e o caso HMAC do `Coexistence` saíram; o
+  `GoneLoginTests` prova a ausência da rota.
+- **Docs:** `01` (Autenticação e a leitura da convenção 7), `docs/configuration.md`,
+  `docs/deployment.md`, `docs/development.md`, `SECURITY.md` e o `CHANGELOG`.
+
+### O que a implementação mediu
+
+Suítes por nome, no protocolo da baseline (1.1 e 1.2 do `tasks.md`): `DOCKER_HOST` do
+Podman, `TESTCONTAINERS_RYUK_DISABLED`, `DOTNET_SYSTEM_NET_DISABLEIPV6` e
+`TZ=America/Sao_Paulo`; antes de cada suíte, `CPU_Speed_Limit = 100`, load abaixo do
+limite, relógio da VM acertado e `podman ps` registrado. Baseline no worktree limpo em
+`ca2bd71`.
+
+| suíte | baseline em `ca2bd71` | fechamento | diferença por nome |
+|---|---|---|---|
+| `apps/frontend` | 1839/1839, 138 arquivos (2ª rodada da 1.2) | **1978/1978**, 154 arquivos, 162 s (3ª rodada, depois do rodapé da 11.5) | 16 ausentes (o login antigo e os casos de `401` que limpavam o token, substituídos), 155 novos; 0 com resultado mudado |
+| `apps/api` | 1009/1009 + 1 ignorado | **1007/1007 + 1 ignorado**, 121 s | 7 ausentes (os 4 do `AuthLoginTests`, o caso HMAC do `Coexistence` e 2 renomeados), 5 novos; 0 com resultado mudado |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 12/12 | **12/12**, 44 s | 1 renomeado (8.1) |
+| `tests/ApiConnectorsRoundTrip.Tests` | 8/8 | **8/8**, 22 s | igual |
+
+A CPU estava em 100 no início das quatro e no fim das três suítes .NET; a do
+`apps/frontend` terminou em 48, sem timeout. A 1ª rodada dela, antes do rodapé da
+11.5, deu 1970/1970; a 2ª e a 3ª, antes e depois da correção do fundo do avatar,
+deram o mesmo 1978/1978, idênticas por nome.
+
+- **A 1ª rodada da baseline do `apps/frontend` deu 1837/1839**, com dois timeouts no
+  `KnowledgeBaseCreatePage.sync.test.tsx` e a CPU em 53 no fim; a 2ª deu 1839/1839 e é
+  a baseline. Virou a **#226** (abaixo).
+- **H2, a tolerância de reuso do refresh (2.1):** confirmada, mas o caso previsto, com
+  `Task.WhenAll`, aprovava também com a tolerância zerada. A tolerância só é consultada
+  com o refresh já marcado como resgatado (`OpenIddictServerHandlers.Protection.cs` l.
+  1245–1247 e 1366–1369), e dois pedidos de fato simultâneos passam os dois pela
+  validação antes do resgate. O caso virou sequencial, 10 s depois do resgate, e reprova
+  com a tolerância zerada.
+- **O id token traz `name` e `email`** com os escopos do painel, na troca e na renovação
+  (2.4), e o script inline do `index.html` não muda no build (2.5).
+- **`podman compose config`** (9.2): sem as duas variáveis do bootstrap, passa, e o
+  serviço `api` recebe `Auth__OperatorPasswordHash: ''` e `Auth__BootstrapAdminEmail:
+  ''`, que o bootstrap trata como não configurado; sem a `AUTH_TOKEN_SIGNING_KEY`,
+  reprova com a mensagem do `:?`.
+- **A borda de produção** (10.3, só leitura, `GET /` e `GET /entrar` com cabeçalhos de
+  navegador): a única injeção do Cloudflare é o beacon do Web Analytics, de
+  `static.cloudflareinsights.com`, que envia a `/cdn-cgi/rum` na própria origem. A
+  borda não manda nenhum cabeçalho de segurança. **Decisão do dono:** o painel não usa
+  o Web Analytics, e a CSP não libera o beacon.
+
+### Guardas contra o defeito real (convenção 15)
+
+Cada defeito foi reintroduzido, o teste rodado e a árvore restaurada; os logs estão em
+`217-verificacao/guardas/`, um par `-reprova`/`-aprova` por guarda. São 48:
+- **PKCE e login em andamento:** challenge igual ao verifier; base64 com padding;
+  leitura que não apaga; sem o prazo de 10 min; `voltarPara` aceitando `//`;
+- **`retorno`:** prefixo sem o `?`; decodificar antes de conferir; devolver o valor
+  decodificado de novo (no `loginFlow` e na navegação do `/entrar`);
+- **registro e renovação:** `JSON.parse` sem `try`; sem o ouvinte do `storage`; lock
+  sem exclusão; renovação sem lock; releitura fora do lock; `503` tratado como fim;
+  sem o prazo de 25 s; fim de sessão sem comparar o token; logout fora do lock; logout
+  navegando antes de apagar;
+- **`401` e `503`:** encerrar no primeiro `401`; ignorar o `endsSessionOn401`; o
+  `apps/connectors` encerrando; `fetch` cru no `channelsApi`; repetição em mutação; sem
+  o limite do `Retry-After`;
+- **telas:** N fixo em 5; sem contexto seguro; `navigate` só no sucesso, `push` no
+  lugar de `replace` e sem `navigate` no `/entrar/retorno`; troca sem conferir o
+  `state`; o `ProtectedRoute` lendo o `sessionStorage` antigo; nome fixo no rodapé; o
+  aviso do `falha-na-entrada` tirado;
+- **rodapé (validação visual):** só a primeira inicial; sem a linha do e-mail; o
+  e-mail duas vezes sem nome; os botões trocados de lugar; o rótulo fixo no
+  "Saindo…"; sem o carregamento; o avatar sem inverter no escuro;
+- **build e configuração:** a regra de lint; `changeOrigin` no proxy; script sem o
+  hash; sem o `Referrer-Policy` no `location = /index.html`;
+- **`apps/api` e `tests/`:** a tolerância do refresh zerada (H2); só a rota
+  `POST /auth/login` de volta (o caso com o token do emissor reprova pelo `200`); a
+  chave HMAC do `apps/inbox` diferente da do `apps/api` (o caso do HMAC no
+  `apps/inbox` reprova com `401`).
+
+O primeiro guarda da 7.3 restaurou o `apps/api/src` inteiro ao `HEAD`, e foi refeito,
+a pedido do dono, com só a rota de volta: o guarda reintroduz só o defeito nomeado.
+
+### Divergências do desenho aprovado (convenção 9)
+
+Cada uma foi uma parada, com a decisão do dono no mesmo dia.
+- **Retorno fora da regra depois do `204` (4.1):** o D6 dizia que o `ProtectedRoute`
+  começaria um fluxo novo, mas ele manda para o `/entrar`, que pediria a senha de novo.
+  O `/entrar` chama o `beginLogin('/')`, e o cookie recém-gravado devolve o código sem
+  formulário.
+- **A conferência do `retorno` por `new URL` era redundante (3.6):** retirada, nenhum
+  caso da tabela reprovava. Fica só o prefixo, com o caso que prova a navegação com a
+  string exata.
+- **Três decisões da implementação, aceitas:** o `?motivo=falha-na-entrada` para o
+  código recusado; o emissor fora do ar depois de um `401` devolve o `401` à tela, sem
+  encerrar a sessão; o `invalid_grant` na renovação encerra também no
+  `apps/connectors`, porque o registro já foi apagado.
+- **Rota inexistente sem token responde `401`, e não `404` (7.3):** o `FallbackPolicy`
+  do `apps/api` vale também para o que não casa com rota, e o `401` vem com o corpo
+  vazio e **sem** `WWW-Authenticate`. É intencional: não revela quais rotas existem. O
+  `GoneLoginTests` afirma `401` com o corpo vazio sem token e `404` com o access token
+  de usuário do emissor, e não com o HMAC de operador, que a #184 vai recusar. A
+  premissa do `404` estava em cinco lugares (D8, D11, D12 e dois specs).
+- **O acordo de `tests/` (8.1):** o `LoginAsOperatorAsync` tinha 10 chamadores, 9 no
+  `apps/api` e 1 que provava o HMAC no `apps/inbox` sem rede. Os 9 passam ao token do
+  emissor; o do `apps/inbox` recebe um HMAC assinado pelo `ITokenService` do `apps/api`,
+  é renomeado de `OperatorToken_IssuedByApi_IsAcceptedByInboxWithoutNetworkCallToApi`
+  para `OperatorHmacToken_SignedWithTheSharedKey_IsAcceptedByInboxWithoutNetworkCallToApi`
+  e passa a rodar com o portão das chaves do emissor fechado. Comentado na #184 e na
+  #182.
+- **O `apps/inbox` muda num comentário** (7.4), que citava o
+  `Auth:OperatorTokenLifetime` como se existisse. A suíte dele fica fora da medição.
+- **O rodapé (11.5):** o design deixava a forma para a #183; na validação visual, o
+  dono pediu o rodapé do protótipo de autenticação atualizado. A cor do avatar no
+  escuro, que o protótipo não desenha, é o par do claro invertido. Comentado na #184
+  (a segunda linha vira o papel) e na #183 (só revisa).
+- **A CSP e o beacon do Cloudflare (10.3):** o D2 não considerava a injeção da borda.
+  Medida e decidida (acima).
+- **Achados só de comentário ou documentação**, resolvidos sem parar pelo critério do
+  dono: o `.env.example` falava em "login do operador" na chave HMAC; o `SECURITY.md`
+  descrevia só o HMAC e não citava o `apps/connectors` entre os que compartilham a
+  chave.
+
+### Achados fora do escopo (convenção 23)
+
+- **#226** (`tipo: teste`, sem milestone): os casos da tabela de códigos do
+  `KnowledgeBaseCreatePage.sync.test.tsx` levam de 8 a 13 s e estouram os 15 s com a
+  CPU estrangulada.
+- **#227** (`tipo: risco`, sem milestone): a borda do Cloudflare não manda HSTS no
+  domínio do painel. A CSP e o `Referrer-Policy` vêm do nginx desde esta change.
+- **#189, comentário:** o painel não confere o `iss` da resposta do authorize; passa a
+  ser obrigatório com o segundo emissor.
+- **#225** (aberta na proposta): o nome e o formato do `AUTH_OPERATOR_PASSWORD_HASH`.
+
+### Deploy
+
+- **Ordem:** `migrator` (sem migration) → `api` e `frontend` juntos. O `inbox` e o
+  `connectors` não mudam.
+- **`.env.prod`:** `AUTH_OPERATOR_USERNAME` não é mais lida (guarde o valor até
+  descartar o rollback); `AUTH_OPERATOR_PASSWORD_HASH` fica opcional. Depois do
+  primeiro login do Admin, tire o hash e o `AUTH_BOOTSTRAP_ADMIN_EMAIL` do `.env.prod`
+  e dos backups.
+- **Cloudflare:** desligar a injeção automática do Web Analytics na zona.
+- **Conferir:** os `curl` de `docs/deployment.md` ("O painel entra pelo emissor") e o
+  critério de aceite (agentes, canais e uma sincronização, com o token do emissor).
+- **Janela conhecida:** o `400` do catálogo nos primeiros segundos depois do start do
+  `api` aparece como texto puro; recarregar resolve.
+- **Rollback:** a versão anterior do `api` e do `frontend`, com
+  `AUTH_OPERATOR_USERNAME` e `AUTH_OPERATOR_PASSWORD_HASH` de volta. Quem entrou pelo
+  emissor entra de novo pelo `/login`.

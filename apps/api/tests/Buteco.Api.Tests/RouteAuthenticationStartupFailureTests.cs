@@ -45,8 +45,8 @@ public class RouteAuthenticationStartupFailureTests
             .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.HealthProbe));
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => app.ValidateRouteAuthenticationClassification("/health", "/auth/login"));
+            () => app.ValidateRouteAuthenticationClassification("/health", "/rota-anonima-que-nao-existe"));
 
-        Assert.Contains("/auth/login", exception.Message);
+        Assert.Contains("/rota-anonima-que-nao-existe", exception.Message);
     }
 }

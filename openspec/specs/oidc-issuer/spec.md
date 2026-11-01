@@ -9,9 +9,7 @@ requisição. Cobre os fluxos habilitados e o único cliente que o próprio `app
 (`buteco-painel`, desde a #180), o formato do token emitido, a convivência com o login e
 a validação HMAC, e o `503` enquanto as chaves não carregam. O fluxo do usuário é da
 capability `issuer-user-login`; quem cadastra clientes externos (#186) fica fora.
-
 ## Requirements
-
 ### Requirement: Emissor OIDC publica discovery, JWKS e endpoint de token
 O `apps/api` SHALL atuar como emissor OpenID Connect, com a url pública configurada (`PublicUrl:BaseUrl`), e expor, sem exigir `Authorization`:
 
@@ -54,21 +52,6 @@ O cabeçalho do JWT SHALL conter o `kid` da chave ativa e o `typ` `at+jwt`. A as
 - **WHEN** o mesmo cliente envia `POST /connect/token` com o segredo errado
 - **THEN** a resposta é `invalid_client` e nenhum `access_token` é emitido
 
-### Requirement: O emissor convive com o login e a validação HMAC sem mudá-los
-Com o emissor ligado, `POST /auth/login` SHALL continuar emitindo o token HMAC do operador, e toda rota autenticada do `apps/api` SHALL continuar aceitando os tokens HMAC de operador e de serviço exatamente como antes. Ao lado deles, as rotas autenticadas do `apps/api` SHALL aceitar o access token do emissor que satisfaça a capability `route-authentication` (audience `buteco-api`, principal pela tabela de clientes).
-
-#### Scenario: Token HMAC do operador continua aceito com o emissor ligado
-- **WHEN** o emissor está ligado e o operador faz login e chama `GET /agents` com o token HMAC
-- **THEN** a resposta é `200 OK`
-
-#### Scenario: Token do emissor do painel é credencial das rotas do app
-- **WHEN** um access token emitido pelo fluxo do `buteco-painel`, com a audience `buteco-api`, é enviado como `Bearer` em `GET /agents`
-- **THEN** a resposta é `200 OK`
-
-#### Scenario: Token do emissor de cliente fora da tabela não é credencial
-- **WHEN** um access token emitido por `client_credentials` para um cliente de teste fora da tabela de clientes, com a audience `buteco-api`, é enviado em `GET /agents`
-- **THEN** a resposta é `403 Forbidden`
-
 ### Requirement: Endpoints do emissor respondem 503 enquanto as chaves não carregam
 Com o emissor ligado, enquanto o conjunto de chaves não puder ser carregado do banco, o `apps/api` SHALL responder `503 Service Unavailable` com `Retry-After` a toda requisição, e SHALL tentar carregar de novo na requisição seguinte, sem guardar a falha. Carregadas as chaves, SHALL atender normalmente sem consultar o banco por requisição.
 
@@ -107,3 +90,19 @@ O boot do `apps/api` SHALL falhar, depois da construção do host e com mensagem
 #### Scenario: Url pública inválida derruba o boot
 - **WHEN** o app sobe com `PublicUrl:BaseUrl` igual a `api.exemplo.test` (sem esquema)
 - **THEN** o boot falha com uma mensagem que cita `PublicUrl:BaseUrl`
+
+### Requirement: O emissor convive com a validação HMAC sem mudá-la
+Com o emissor ligado, toda rota autenticada do `apps/api` SHALL continuar aceitando os tokens HMAC de operador e de serviço exatamente como antes. Ao lado deles, as rotas autenticadas do `apps/api` SHALL aceitar o access token do emissor que satisfaça a capability `route-authentication` (audience `buteco-api`, principal pela tabela de clientes). Nenhuma rota do `apps/api` SHALL emitir token HMAC de operador.
+
+#### Scenario: Token HMAC do operador continua aceito com o emissor ligado
+- **WHEN** o emissor está ligado e um token HMAC de operador assinado com `Auth:TokenSigningKey`, dentro do prazo, chama `GET /agents`
+- **THEN** a resposta é `200 OK`
+
+#### Scenario: Token do emissor do painel é credencial das rotas do app
+- **WHEN** um access token emitido pelo fluxo do `buteco-painel`, com a audience `buteco-api`, é enviado como `Bearer` em `GET /agents`
+- **THEN** a resposta é `200 OK`
+
+#### Scenario: Token do emissor de cliente fora da tabela não é credencial
+- **WHEN** um access token emitido por `client_credentials` para um cliente de teste fora da tabela de clientes, com a audience `buteco-api`, é enviado em `GET /agents`
+- **THEN** a resposta é `403 Forbidden`
+

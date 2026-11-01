@@ -1,6 +1,8 @@
 import { afterEach } from 'vitest';
 import { cleanup, configure } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+import { MemoryStorage } from './authFakes';
+import { FakeLockManager } from './fakeLocks';
 
 // O padrão de 1s das consultas assíncronas do Testing Library é curto para esta
 // suíte: os formulários abrem dropdowns do Mantine, que montam em portal depois
@@ -88,36 +90,9 @@ Element.prototype.getBoundingClientRect = () => ({
 // A partir do Node 22, `localStorage`/`sessionStorage` são globais nativos
 // (experimentais) que exigem flag para funcionar; sem ela, sombreiam as
 // implementações do jsdom com algo inutilizável. Substituímos os dois por
-// uma implementação em memória equivalente à da Storage API — sessionStorage
-// é usado por src/auth/token.ts (design.md, Decision 7 de auth-login-e-servico).
-class MemoryStorage implements Storage {
-  private store = new Map<string, string>();
-
-  get length() {
-    return this.store.size;
-  }
-
-  clear() {
-    this.store.clear();
-  }
-
-  getItem(key: string) {
-    return this.store.has(key) ? this.store.get(key)! : null;
-  }
-
-  key(index: number) {
-    return Array.from(this.store.keys())[index] ?? null;
-  }
-
-  removeItem(key: string) {
-    this.store.delete(key);
-  }
-
-  setItem(key: string, value: string) {
-    this.store.set(key, String(value));
-  }
-}
-
+// uma implementação em memória equivalente à da Storage API — o registro da
+// sessão vive no localStorage, e o login em andamento no sessionStorage
+// (design.md da change painel-entra-pelo-emissor, D2).
 Object.defineProperty(window, 'localStorage', {
   value: new MemoryStorage(),
   writable: true,
@@ -125,6 +100,15 @@ Object.defineProperty(window, 'localStorage', {
 });
 Object.defineProperty(window, 'sessionStorage', {
   value: new MemoryStorage(),
+  writable: true,
+  configurable: true,
+});
+
+// jsdom não implementa Web Locks (medido em 31/10/2026, design.md da change
+// painel-entra-pelo-emissor, Context). O módulo de sessão pede o lock da renovação
+// pelo `navigator.locks`; o falso tem exclusão mútua real, como o do navegador.
+Object.defineProperty(navigator, 'locks', {
+  value: new FakeLockManager(),
   writable: true,
   configurable: true,
 });
