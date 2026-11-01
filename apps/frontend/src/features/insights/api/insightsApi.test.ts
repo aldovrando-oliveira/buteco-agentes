@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, getAgentInsights, getSystemInsights } from './insightsApi';
+import { getAgentInsights, getSystemInsights } from './insightsApi';
 import { systemInsightsFixture } from '../test/systemInsightsFixture';
 import { AGENT_ID, agentInsightsFixture } from '../test/agentInsightsFixture';
-import { setToken, getToken } from '../../../auth/token';
+import { signInForTest, signOutForTest } from '../../../test/authFakes';
+import { sessionFetchContract } from '../../../test/sessionContract';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers(),
     json: async () => body,
   } as Response;
 }
@@ -20,6 +22,7 @@ describe('insightsApi', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    signOutForTest();
   });
 
   it('monta a URL com os DOIS limites obrigatórios', async () => {
@@ -36,7 +39,7 @@ describe('insightsApi', () => {
   });
 
   it('anexa o token quando existe', async () => {
-    setToken('token-de-teste');
+    signInForTest('token-de-teste');
     vi.mocked(fetch).mockResolvedValue(jsonResponse(systemInsightsFixture()));
 
     await getSystemInsights('a', 'b');
@@ -47,13 +50,8 @@ describe('insightsApi', () => {
     );
   });
 
-  it('401 limpa o token', async () => {
-    setToken('token-que-expirou');
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({ title: 'Não autorizado' }, 401));
-
-    await expect(getSystemInsights('a', 'b')).rejects.toThrow(ApiError);
-
-    expect(getToken()).toBeNull();
+  describe('sessão pelo sessionFetch', () => {
+    sessionFetchContract(() => getSystemInsights('a', 'b'));
   });
 
   it('o ValidationProblem da janela chega como ApiError com o corpo preservado', async () => {
@@ -136,13 +134,8 @@ describe('insightsApi', () => {
       ).rejects.toMatchObject({ name: 'ApiError', status: 400, problem });
     });
 
-    it('401 limpa o token', async () => {
-      setToken('token-que-expirou');
-      vi.mocked(fetch).mockResolvedValue(jsonResponse({ title: 'Não autorizado' }, 401));
-
-      await expect(getAgentInsights(AGENT_ID, 'a', 'b')).rejects.toThrow(ApiError);
-
-      expect(getToken()).toBeNull();
+    describe('sessão pelo sessionFetch', () => {
+      sessionFetchContract(() => getAgentInsights(AGENT_ID, 'a', 'b'));
     });
 
     it('devolve o corpo desserializado sem tocar em nenhum campo', async () => {

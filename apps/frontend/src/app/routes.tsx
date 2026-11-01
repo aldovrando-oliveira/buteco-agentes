@@ -2,7 +2,8 @@ import { Navigate, Route, createRoutesFromElements, redirect } from 'react-route
 import type { RouteObject } from 'react-router';
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from './ProtectedRoute';
-import { LoginPage } from '../features/auth/pages/LoginPage';
+import { EntrarPage } from '../features/auth/pages/EntrarPage';
+import { EntrarRetornoPage } from '../features/auth/pages/EntrarRetornoPage';
 import { AgentListPage } from '../features/agents/pages/AgentListPage';
 import { AgentCreatePage } from '../features/agents/pages/AgentCreatePage';
 import { AgentDetailPage } from '../features/agents/pages/AgentDetailPage';
@@ -34,7 +35,11 @@ import { SystemInsightsPage } from '../features/insights/pages/SystemInsightsPag
 // diff restrito ao invólucro (Decision 1).
 export const appRoutes: RouteObject[] = createRoutesFromElements(
   <>
-    <Route path="login" element={<LoginPage />} />
+    {/* As únicas rotas sem sessão. `/login` fica para links e favoritos de antes do
+        login pelo emissor (design.md da change painel-entra-pelo-emissor, D8). */}
+    <Route path="entrar" element={<EntrarPage />} />
+    <Route path="entrar/retorno" element={<EntrarRetornoPage />} />
+    <Route path="login" element={<Navigate to="/entrar" replace />} />
     <Route element={<ProtectedRoute />}>
       <Route element={<AppShell />}>
         {/* A raiz redireciona para o inventário; ela não É o inventário. O item

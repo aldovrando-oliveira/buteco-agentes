@@ -23,10 +23,8 @@ using InboxAppDbContext = InboxAssembly::Buteco.Inbox.Infrastructure.AppDbContex
 using InboxA2AClientFactory = InboxAssembly::Buteco.Inbox.Orchestration.A2AClientFactory;
 using InboxIssuerKeysRetriever = InboxAssembly::Buteco.Inbox.Auth.IssuerKeysRetriever;
 using InboxProgram = InboxAssembly::Program;
-using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Buteco.Workers.Mcp;
 using InboxOrchestratorRoundTrip.Tests.Support;
 
@@ -89,7 +87,6 @@ public sealed class RoundTripFixture : IAsyncLifetime
     // design.md: token emitido por apps/api aceito por apps/inbox sem
     // coordenação em runtime.
     private const string TokenSigningKey = "test-signing-key-shared-between-api-and-inbox-fixtures";
-    private const string OperatorUsername = "operator";
     public const string OperatorPassword = "correct-horse-battery-staple";
 
     public WebApplicationFactory<ApiProgram> ApiFactory => _apiFactory!;
@@ -187,7 +184,6 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     // real ao LLM nunca acontece, IChatClientResolver está mockado em apps/workers.
                     ["OpenAI:ApiKey"] = "test-api-key",
                     ["Auth:TokenSigningKey"] = TokenSigningKey,
-                    ["Auth:OperatorUsername"] = OperatorUsername,
                     ["Auth:OperatorPasswordHash"] = ComputeOperatorPasswordHash(),
                     // O primeiro Admin do bootstrap, com o mesmo hash do operador
                     // (usuarios-locais-login-emissor, D2): é quem faz o fluxo real do
@@ -385,18 +381,33 @@ public sealed class RoundTripFixture : IAsyncLifetime
         _secondWorkersHost = null;
     }
 
-    // Login real contra apps/api (não um token forjado com a mesma
-    // chave) — prova de verdade o Risco 1 do design.md: o token que
-    // apps/api emite é aceito por apps/inbox sem coordenação em runtime
-    // entre os dois processos, só pela chave de assinatura compartilhada.
-    public async Task<string> LoginAsOperatorAsync()
-    {
-        var client = ApiFactory.CreateClient();
-        var response = await client.PostAsJsonAsync("/auth/login", new { username = OperatorUsername, password = OperatorPassword });
-        response.EnsureSuccessStatusCode();
+    // O access token de usuário do fluxo real contra apps/api (sessão,
+    // authorize com PKCE e troca do código), do primeiro Admin do
+    // bootstrap: o mesmo token com que o painel chama apps/api.
+    public Task<string> UserAccessTokenAsync() =>
+        IssuerUserFlow.AccessTokenAsync(
+            ApiFactory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
+            WarmUpIssuerAsync,
+            ApiPublicBaseUrl,
+            OperatorPassword,
+            "openid buteco-api");
 
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        return body.GetProperty("token").GetString()!;
+    // Um HMAC de operador assinado pelo ITokenService do próprio apps/api,
+    // com a chave compartilhada. Nenhuma rota do apps/api emite este token;
+    // ele existe para provar que apps/inbox valida o HMAC só pela chave.
+    public string OperatorHmacToken()
+    {
+        var tokens = ApiFactory.Services.GetRequiredService<ApiAssembly::Buteco.Api.Auth.ITokenService>();
+        return tokens.Issue(ApiAssembly::Buteco.Api.Auth.ServiceScopeAuthorizationHandler.OperatorSubject, TimeSpan.FromMinutes(5)).Token;
+    }
+
+    // O bootstrap e o catálogo pelos serviços do apps/api, idempotentes
+    // (IssuerUserFlow.AccessTokenAsync, parâmetro warmUp).
+    private async Task WarmUpIssuerAsync()
+    {
+        await using var scope = ApiFactory.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Identity.Clients.IIdentityClientCatalog>().SyncAsync(CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Users.Bootstrap.IUserBootstrapper>().RunAsync(CancellationToken.None);
     }
 
     private static string ComputeOperatorPasswordHash()

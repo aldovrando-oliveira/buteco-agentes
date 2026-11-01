@@ -28,6 +28,19 @@ export default defineConfig({
       },
     }),
   ],
+  // Em desenvolvimento, o fluxo do emissor passa pelo próprio Vite, para o cookie
+  // `buteco-sessao` e as navegações do login ficarem na origem do painel, como o nginx
+  // faz em produção (design.md da change painel-entra-pelo-emissor, D10; #180 D3.4).
+  // SEM `changeOrigin`: o apps/api não lê o `Host` (o issuer vem de PublicUrl:BaseUrl),
+  // e o `Origin` que o `POST /auth/session` confere chega como o do painel. As rotas dos
+  // três apps continuam nos `VITE_*_BASE_URL`, com CORS.
+  server: {
+    proxy: {
+      '/auth': { target: 'http://localhost:5017' },
+      '/connect': { target: 'http://localhost:5017' },
+      '/.well-known': { target: 'http://localhost:5017' },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

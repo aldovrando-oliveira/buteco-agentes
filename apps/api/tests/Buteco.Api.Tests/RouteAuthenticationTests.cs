@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using Buteco.Api.Auth.Requests;
 using Buteco.Api.Tests.Support;
 
 namespace Buteco.Api.Tests;
@@ -49,14 +48,21 @@ public class RouteAuthenticationTests(ApiFactoryFixture factory) : IClassFixture
     }
 
     [Fact]
-    public async Task Login_WithoutToken_StaysAnonymous()
+    public async Task Session_WithoutToken_StaysAnonymous()
     {
+        // O POST /auth/session é a entrada do login pelo emissor, e anônimo; o
+        // /auth/login saiu na change painel-entra-pelo-emissor (D8). Sem e-mail nem
+        // senha, a rota responde o 400 dela, e não o 401 de rota autenticada.
         var client = UnauthenticatedClient();
-        var request = new LoginRequest(ApiFactoryFixture.KnownOperatorUsername, ApiFactoryFixture.KnownOperatorPassword);
+        var request = new HttpRequestMessage(HttpMethod.Post, "/auth/session")
+        {
+            Content = JsonContent.Create(new { email = "", senha = "" }),
+        };
+        request.Headers.Add("Origin", LocalUserSeed.IssuerOrigin);
 
-        var response = await client.PostAsJsonAsync("/auth/login", request);
+        var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

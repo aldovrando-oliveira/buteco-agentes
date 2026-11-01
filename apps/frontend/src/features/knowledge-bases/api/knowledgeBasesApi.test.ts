@@ -11,7 +11,8 @@ import {
   request,
   updateKnowledgeBase,
 } from './knowledgeBasesApi';
-import { clearToken, getToken, setToken } from '../../../auth/token';
+import { signInForTest, signOutForTest } from '../../../test/authFakes';
+import { sessionFetchContract } from '../../../test/sessionContract';
 import type { KnowledgeBase, KnowledgeBaseIndexingSummary } from '../types/knowledgeBase';
 
 const id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -43,12 +44,12 @@ function stubFetch(body: unknown = knowledgeBase, status = 200) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  clearToken();
+  signOutForTest();
 });
 
 describe('request', () => {
   it('anexa o header Authorization quando há token armazenado', async () => {
-    setToken('token-valido');
+    signInForTest('token-valido');
     const fetchMock = stubFetch();
 
     await request('/knowledge-bases');
@@ -66,26 +67,8 @@ describe('request', () => {
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 
-  it('em 401, limpa o token armazenado e redireciona para /login', async () => {
-    setToken('token-expirado');
-    stubFetch({ title: 'unauthorized' }, 401);
-    const originalLocation = window.location;
-    Object.defineProperty(window, 'location', {
-      value: { ...originalLocation, href: 'http://localhost/knowledge-bases' },
-      writable: true,
-      configurable: true,
-    });
-
-    await expect(request('/knowledge-bases')).rejects.toThrow();
-
-    expect(getToken()).toBeNull();
-    expect(window.location.href).toBe('/login');
-
-    Object.defineProperty(window, 'location', {
-      value: originalLocation,
-      writable: true,
-      configurable: true,
-    });
+  describe('sessão pelo sessionFetch', () => {
+    sessionFetchContract(() => request('/knowledge-bases'));
   });
 
   it('carrega status e problem no ApiError', async () => {

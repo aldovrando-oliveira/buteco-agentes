@@ -314,7 +314,7 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` | api, inbox, connectors | sim, fail-fast | **sim, byte-idêntica** (risco aceito abaixo, #117) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` | connectors | não — vazia, o provedor `google-drive` não aparece; **inválida, o `apps/connectors` não sobe** | N/A |
-| `AUTH_OPERATOR_USERNAME`/`AUTH_OPERATOR_PASSWORD_HASH` | `Auth__OperatorUsername`/`Auth__OperatorPasswordHash` | api | sim, fail-fast (até a #217) | N/A. O hash é também o inicial do primeiro Admin (#180) |
+| `AUTH_OPERATOR_PASSWORD_HASH` | `Auth__OperatorPasswordHash` | api | não (sem `:?` desde a #217); só o bootstrap a lê | N/A. Hash inicial do primeiro Admin. Ver "Primeiro Admin", abaixo. `AUTH_OPERATOR_USERNAME` não é mais lida desde a #217, e só volta num rollback para antes dela |
 | `AUTH_BOOTSTRAP_ADMIN_EMAIL` | `Auth__BootstrapAdminEmail` | api | não (sem `:?`) | N/A. Ver "Primeiro Admin", abaixo |
 | `STACK_HTTP_PORT` | (porta do host, não config do app) | frontend (nginx do stack) | sim | N/A |
 
@@ -353,8 +353,8 @@ validar. Desde a #208, o `apps/inbox` e o `apps/connectors` validam esses
 tokens: um token assinado pela chave nova recebe `401` uma vez em cada um, que
 busca as chaves de novo e aceita a próxima requisição (no máximo uma busca por
 minuto). Desde a #180, apagar as chaves também invalida todo refresh token de
-usuário, e cada usuário precisa entrar de novo. Enquanto o painel entrar pelo
-HMAC (até a #217), ninguém usa esse fluxo em produção.
+usuário, e cada usuário precisa entrar de novo. Desde a #217 o painel entra por
+esse fluxo: apagar as chaves desloga todo mundo do painel.
 
 **`503` até o primeiro acesso ao banco.** O anel de chaves carrega do banco
 logo depois do start, em segundo plano, e tenta de novo a cada 5 s. Até
@@ -416,10 +416,17 @@ $C logs api | grep -E 'Primeiro Admin criado|Bootstrap do primeiro Admin ignorad
 | `Bootstrap do primeiro Admin ignorado: já existem usuários.` | certo, em todo boot seguinte com a variável ainda definida. Nada é sobrescrito |
 | `Nenhum usuário; defina Auth:BootstrapAdminEmail e Auth:OperatorPasswordHash ...` | falta o e-mail, ou ele não é um endereço válido. Defina e recrie o `api` |
 
-**Depois da #217**, com o painel entrando pelo emissor: entre uma vez, troque a
-senha do Admin pela tela de Minha conta (#219), e então `AUTH_OPERATOR_PASSWORD_HASH`
-e `AUTH_BOOTSTRAP_ADMIN_EMAIL` podem sair do `.env.prod`. Antes da #217, o hash
-continua obrigatório para o `POST /auth/login` do HMAC.
+**Depois do primeiro login do Admin** (desde a #217, pelo `/entrar` do painel):
+- **tire `AUTH_OPERATOR_PASSWORD_HASH` e `AUTH_BOOTSTRAP_ADMIN_EMAIL` do
+  `.env.prod` e dos backups dele.** O primeiro login já refez o hash em Argon2id
+  na linha do usuário, e a variável não é mais lida. Enquanto ela existir, cada
+  cópia do `.env.prod` guarda o PBKDF2 de 100.000 iterações **da senha atual do
+  Admin**, material de ataque offline contra ela;
+- não é preciso trocar a senha para tirar as variáveis. A #219 entrega as rotas
+  de conta, mas não a tela: **troque a senha do Admin quando a tela de Minha conta
+  existir (#183)**, porque cópias antigas do `.env.prod` guardam o hash fraco da
+  senha de hoje;
+- o nome e o formato da variável estão em revisão na #225.
 
 **Bloqueio e limite.** Cada e-mail é bloqueado por 5 min depois de 5 falhas
 seguidas. Depois de um bloqueio vencido, uma falha dobra o próximo, até 60 min, e
@@ -470,6 +477,94 @@ antigo.
 - A url pública continua definida, então a versão anterior sobe com o emissor
   ligado, como antes.
 - O painel nunca deixou de usar o HMAC.
+
+### O painel entra pelo emissor (#217)
+
+**Ordem do deploy:** `migrator` (sem migration nesta mudança) → `api` e
+`frontend` juntos. O `inbox` e o `connectors` não mudam. Um `frontend` novo com o
+`api` antigo, ou o contrário, não tem login que funcione: o painel novo não usa
+mais o `POST /auth/login`, e o `api` novo não o tem.
+
+**`.env.prod`:**
+- `AUTH_OPERATOR_USERNAME` não é mais lida, e pode sair. **Guarde o valor até
+  descartar o rollback** (abaixo);
+- `AUTH_OPERATOR_PASSWORD_HASH` deixa de ser obrigatória no compose. Numa
+  instalação que já tem o primeiro Admin, ela pode sair junto com o
+  `AUTH_BOOTSTRAP_ADMIN_EMAIL` ("Primeiro Admin", acima).
+
+**Quem estava com o painel aberto** continua com o token HMAC antigo até ele
+vencer (no máximo 30 min depois do último login antes do deploy), e no primeiro
+`401` vai ao `/entrar`. Cada pessoa entra uma vez com e-mail e senha.
+
+**Janela do `400` logo depois do deploy.** Nos primeiros segundos depois do start
+do `api`, antes de o catálogo de clientes sincronizar o `buteco-painel`, quem
+entrar pode ver a página de texto `error:invalid_request` do `apps/api` em vez do
+painel. É o primeiro ciclo do aquecimento, de segundos. Recarregar resolve. O
+`503` do anel de chaves, que vem antes, o `/entrar` mostra como "O painel está
+iniciando".
+
+**"Sair" com o `apps/api` no `503`.** O "Sair" apaga a sessão no navegador e
+navega ao `/connect/logout`. Se o `apps/api` estiver no `503` do anel de chaves
+nesse instante, a navegação mostra a página de texto do `apps/api`, e não o
+`/entrar`. A sessão local já foi apagada, mas a autorização no emissor continua
+viva até a pessoa entrar e sair de novo, ou até vencer (14 dias de refresh).
+
+**Conferência depois do deploy**, no stack (porta `STACK_HTTP_PORT`):
+
+```
+curl -si -H 'Sec-Fetch-Mode: navigate' http://localhost:<porta>/entrar
+  → 200, shell do SPA, Cache-Control: no-store, Content-Security-Policy, Referrer-Policy: no-referrer
+curl -si -H 'Sec-Fetch-Mode: navigate' 'http://localhost:<porta>/entrar/retorno?code=x&state=y'
+  → 200, shell do SPA, os mesmos três cabeçalhos
+curl -si -H 'Sec-Fetch-Mode: navigate' http://localhost:<porta>/agents
+  → 200, shell do SPA, os mesmos três cabeçalhos
+curl -si -X POST http://localhost:<porta>/auth/login -H 'Content-Type: application/json' -d '{}'
+  → 401 do apps/api, com o corpo vazio e sem Content-Type: text/html
+curl -si -H 'Sec-Fetch-Mode: navigate' 'http://localhost:<porta>/connect/authorize?client_id=buteco-painel&…'
+  → 302 com Location: /entrar?retorno=…
+```
+
+- **`/auth/login` com `401`, e não `404`, é o certo:** sem token, o `apps/api`
+  responde `401` a toda rota que não existe, para não revelar quais existem. O que
+  reprova é `200` com HTML (o shell do SPA no lugar do `apps/api`) ou `200` com
+  JSON (o `api` antigo, com a rota).
+- **Sem a CSP ou o `Referrer-Policy` no shell**, o `frontend` está com o
+  `nginx.conf` antigo. Os dois cabeçalhos aparecem também em `/index.html`.
+
+**Web Analytics do Cloudflare: desligue a injeção automática na zona** para o
+domínio do painel. O painel não o usa, e a CSP não libera nenhum host do
+Cloudflare: o beacon (`https://static.cloudflareinsights.com/beacon.min.js`, que a
+borda põe antes do `</body>` dos pedidos de navegador) é bloqueado. Enquanto a
+injeção não for desligada, o console do navegador mostra a violação de CSP do
+beacon em toda página, sem efeito no painel. Para conferir, o HTML com cabeçalhos
+de navegador não deve trazer `cloudflareinsights`:
+
+```
+curl -s https://<PUBLIC_DOMAIN>/entrar -H 'Sec-Fetch-Mode: navigate' -H 'Accept: text/html' \
+     -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+  | grep -c cloudflareinsights      # 0 com a injeção desligada
+```
+
+Se um dia o Web Analytics for desejado no painel, libere na CSP do `nginx.conf`
+(nos dois níveis, `server` e `location = /index.html`) **só o
+`script-src https://static.cloudflareinsights.com`**. O envio do beacon vai a
+`/cdn-cgi/rum` na própria origem, que o `connect-src 'self'` já cobre, enquanto o
+`data-cf-beacon` do HTML trouxer `version` (medido em 01/11/2026). Só se ele vier
+sem `version` o beacon envia a `https://cloudflareinsights.com/cdn-cgi/rum`, e aí
+o `connect-src` precisa desse host.
+
+Depois dos `curl`, o critério de aceite: entrar no painel e abrir a lista de
+agentes (`apps/api`), a de canais (`apps/inbox`) e uma sincronização de base
+(`apps/connectors`).
+
+**Rollback:** a versão anterior do `api` e do `frontend` (o código, e com ele o
+`docker-compose.prod.yml`), **com `AUTH_OPERATOR_USERNAME` e
+`AUTH_OPERATOR_PASSWORD_HASH` de volta no `.env.prod`**: o compose anterior exige
+as duas com `:?`, e o `POST /auth/login` confere o usuário e o hash.
+- Quem entrou pelo emissor fica com a sessão no `localStorage`, que o painel
+  anterior não lê, e entra de novo pelo `/login`.
+- As autorizações do emissor ficam no banco sem uso, e a limpeza da #209 as
+  remove quando vencerem.
 
 ### Limpeza das entradas de token do emissor (#209)
 

@@ -7,9 +7,7 @@ emissor aberta pelo `POST /auth/session`, o fluxo authorization code com PKCE do
 público `buteco-painel`, o catálogo de cliente e escopos que o próprio `apps/api` mantém,
 a renovação que relê o usuário e o encerramento de sessão. Introduzida pela change
 `usuarios-locais-login-emissor` (#180). A tela de login do painel é da #217.
-
 ## Requirements
-
 ### Requirement: Rota de login abre a sessão do emissor
 O `apps/api` SHALL expor `POST /auth/session`, anônima, que recebe `{ "email", "senha" }` em JSON. Com credenciais válidas de um usuário ativo, SHALL responder `204` e gravar o cookie de sessão do emissor `buteco-sessao` com:
 
@@ -124,6 +122,8 @@ A cada sincronização, qualquer divergência do cliente gravado em relação a 
 ### Requirement: Refresh rotativo e deslizante de 14 dias; todo token novo relê o usuário
 O emissor SHALL emitir refresh token com duração de 14 dias, rotativo: o refresh apresentado vira resgatado, e um novo é emitido com a duração inteira. O access token SHALL durar 15 minutos.
 
+O refresh resgatado SHALL continuar aceito por 30 segundos depois do primeiro resgate, para renovações concorrentes do mesmo cliente, cada uma recebendo um par novo. Reapresentado depois disso, SHALL ser recusado com `invalid_grant`, e os tokens da autorização dele SHALL ser revogados. O painel conta com essa tolerância para repetir uma renovação por até 25 segundos (`panel-issuer-session`).
+
 O principal do usuário SHALL carregar o carimbo de segurança (`security_stamp`) vigente no authorize. O código de autorização e o refresh SHALL levá-lo adiante, o refresh a cada rotação. O carimbo SHALL NOT sair no access token nem no id token.
 
 Todo token novo de usuário SHALL conferir o estado e o carimbo: na troca do código (grant `authorization_code`) e em cada renovação (grant `refresh_token`), o emissor SHALL reler o usuário e SHALL recusar com `invalid_grant` quando:
@@ -135,6 +135,14 @@ Todo token novo de usuário SHALL conferir o estado e o carimbo: na troca do có
 #### Scenario: Renovação emite novo par
 - **WHEN** um refresh token válido de um usuário ativo é apresentado
 - **THEN** a resposta traz um novo access token e um novo refresh token, e o refresh apresentado passa a resgatado
+
+#### Scenario: O mesmo refresh reapresentado dentro da tolerância dá outro par
+- **WHEN** um refresh token é resgatado, e o mesmo refresh é apresentado de novo 10 segundos depois (a segunda aba, que chegou depois do resgate)
+- **THEN** as duas respostas são `200 OK` com pares novos, e o refresh mais novo de cada uma renova de novo com `200 OK`
+
+#### Scenario: Reuso depois da tolerância revoga a cadeia
+- **WHEN** um refresh resgatado há mais de 30 segundos é reapresentado
+- **THEN** a resposta é `invalid_grant`, e o refresh emitido no primeiro resgate também passa a ser recusado
 
 #### Scenario: Access token dura 15 minutos
 - **WHEN** um access token de usuário é emitido
@@ -170,3 +178,4 @@ O emissor SHALL atender `GET /connect/logout`. Com um `id_token_hint` válido, S
 #### Scenario: Endereço de volta não registrado é ignorado
 - **WHEN** `/connect/logout` recebe um `post_logout_redirect_uri` que não está registrado
 - **THEN** a resposta não redireciona para ele
+

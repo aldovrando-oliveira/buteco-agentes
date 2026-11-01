@@ -24,7 +24,6 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
     // Compatibilidade com testes que já referenciavam estas constantes
     // diretamente nesta fixture — mesmos valores de TestAuthentication.
-    public const string KnownOperatorUsername = TestAuthentication.KnownOperatorUsername;
     public const string KnownOperatorPassword = TestAuthentication.KnownOperatorPassword;
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")

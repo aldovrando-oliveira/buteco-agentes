@@ -3,13 +3,12 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using Buteco.Api.Auth.Requests;
-using Buteco.Api.Auth.Responses;
 using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeDocuments.Options;
 using Buteco.Api.KnowledgeDocuments.Requests;
 using Buteco.Api.KnowledgeDocuments.Responses;
 using Buteco.Api.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Buteco.Api.Tests.Knowledge;
 
@@ -394,18 +393,18 @@ public partial class KnowledgeDocumentCatalogTests(ApiFactoryFixture factory) : 
         Assert.Equal(0, await KnowledgeTestClient.CountDocumentEventsInDatabaseAsync(factory.Services, missingBaseId));
     }
 
-    // O token vem do LOGIN de verdade, não do atalho que a fixture anexa: o que
-    // se afirma é que o subject que o esquema de autenticação emite é o que o
-    // endpoint lê (D6). Com a leitura errada as três escritas responderiam 500.
+    // O token é um HMAC de operador emitido pelo ITokenService, num cliente sem o
+    // cabeçalho que a fixture anexa: o que se afirma é que o subject que o esquema de
+    // autenticação valida é o que o endpoint lê (D6). Com a leitura errada as três
+    // escritas responderiam 500. Até a change painel-entra-pelo-emissor o token vinha
+    // do POST /auth/login, que saiu (D8); quem emite o HMAC de operador agora é só o
+    // ITokenService, e o esquema que o valida não mudou.
     [Fact]
-    public async Task DocumentWrites_WithTokenFromLogin_RecordOperatorAsAuthor()
+    public async Task DocumentWrites_WithOperatorHmacToken_RecordOperatorAsAuthor()
     {
         var client = factory.CreateClient();
-        var login = await client.PostAsJsonAsync(
-            "/auth/login",
-            new LoginRequest(ApiFactoryFixture.KnownOperatorUsername, ApiFactoryFixture.KnownOperatorPassword));
-        login.EnsureSuccessStatusCode();
-        var token = (await login.Content.ReadFromJsonAsync<LoginResponse>())!.Token;
+        var (token, _) = factory.Services.GetRequiredService<Buteco.Api.Auth.ITokenService>()
+            .Issue(Buteco.Api.Auth.ServiceScopeAuthorizationHandler.OperatorSubject, TimeSpan.FromMinutes(30));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var knowledgeBase = await client.CreateBaseAsync("Base Histórico Autor");

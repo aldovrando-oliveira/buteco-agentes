@@ -14,9 +14,8 @@ public sealed class ServiceTokenDelegatingHandler(ITokenService tokenService) : 
     // TTL fixo, não configurável (design.md, Decision 3) — o token
     // nunca sai do processo nem é observado por um humano: só precisa
     // sobreviver ao tempo de rede + processamento até apps/api validar
-    // a assinatura. Diferente do TTL do operador (Auth:OperatorTokenLifetime),
-    // não há decisão de produto por trás deste valor que justifique
-    // torná-lo configurável por ambiente.
+    // a assinatura. Não há decisão de produto por trás deste valor que
+    // justifique torná-lo configurável por ambiente.
     private static readonly TimeSpan ServiceTokenLifetime = TimeSpan.FromMinutes(5);
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

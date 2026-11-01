@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import {
   ActionIcon,
   AppShell as MantineAppShell,
+  Avatar,
   Group,
   NavLink,
   ScrollArea,
+  Stack,
   Text,
 } from '@mantine/core';
 import {
@@ -11,6 +14,7 @@ import {
   Bot,
   ChartColumn,
   LayoutGrid,
+  LogOut,
   MessagesSquare,
   Moon,
   Server,
@@ -19,6 +23,8 @@ import {
 import { Link, Outlet, useLocation } from 'react-router';
 import { Logo } from '../brand/Logo';
 import { useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
+import { logout, useSession } from '../../auth/session';
+import { userInitials } from './userInitials';
 
 const navItems = [
   // Aponta para /inventory, e NÃO para '/', embora a raiz redirecione para cá:
@@ -47,6 +53,16 @@ export function AppShell() {
   // rótulo do botão mentiria e o primeiro clique não mudaria nada na tela de
   // quem usa o SO no escuro.
   const isDark = useComputedColorScheme('light') === 'dark';
+  const session = useSession();
+  const [saindo, setSaindo] = useState(false);
+
+  // O logout espera o lock da renovação: com uma renovação em voo em outra aba, isso
+  // leva até ela terminar (no pior caso, 35 s), e o item diz "Saindo…" enquanto isso
+  // (design.md da change painel-entra-pelo-emissor, D3 e D7).
+  const sair = async () => {
+    setSaindo(true);
+    await logout();
+  };
 
   return (
     // Sem header: a marca sobe para o topo da barra e o controle de tema desce
@@ -95,19 +111,67 @@ export function AppShell() {
           ))}
         </MantineAppShell.Section>
 
+        {/* O rodapé do protótipo de autenticação (quadro "Editar usuário"): avatar com
+            as iniciais, o nome e o e-mail do id token, e os botões de tema e de Sair.
+            Nenhum dado que não venha do id token; a #184 troca a segunda linha pelo
+            papel (design.md da change painel-entra-pelo-emissor, D7). */}
         <MantineAppShell.Section
-          p="sm"
+          p={10}
           style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
         >
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            size="lg"
-            aria-label={isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-            onClick={() => setColorScheme(isDark ? 'light' : 'dark')}
-          >
-            {isDark ? <Sun size={18} /> : <Moon size={18} />}
-          </ActionIcon>
+          <Group gap={6} wrap="nowrap">
+            <Avatar
+              size={30}
+              radius="xl"
+              aria-hidden="true"
+              // O fundo vai no placeholder, que cobre a raiz inteira com o cinza do
+              // próprio Avatar. Visto só no navegador: o jsdom não carrega o CSS do
+              // Mantine (validação visual da 11.5).
+              styles={{
+                placeholder: {
+                  background: 'var(--buteco-avatar-bg)',
+                  color: 'var(--buteco-avatar-ink)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                },
+              }}
+            >
+              {userInitials(session?.nome, session?.email)}
+            </Avatar>
+            <Stack gap={0} style={{ flex: 1, minWidth: 0, lineHeight: 1.25 }}>
+              <Text fz="sm" fw={500} lh={1.25} truncate="end" title={session?.nome ?? session?.email ?? undefined}>
+                {session?.nome ?? session?.email}
+              </Text>
+              {session?.nome && (
+                <Text fz={11} c="dimmed" lh={1.25} truncate="end" title={session.email ?? undefined}>
+                  {session.email}
+                </Text>
+              )}
+            </Stack>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size={32}
+              aria-label={isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+              title={isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+              onClick={() => setColorScheme(isDark ? 'light' : 'dark')}
+            >
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size={32}
+              aria-label={saindo ? 'Saindo…' : 'Sair'}
+              title={saindo ? 'Saindo…' : 'Sair'}
+              loading={saindo}
+              loaderProps={{ size: 14 }}
+              disabled={saindo}
+              onClick={() => void sair()}
+            >
+              <LogOut size={16} />
+            </ActionIcon>
+          </Group>
         </MantineAppShell.Section>
       </MantineAppShell.Navbar>
 

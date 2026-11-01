@@ -11,34 +11,18 @@ namespace Buteco.Api.Tests.Identity;
 
 /// <summary>
 /// A fronteira entre esta change e a #180 (spec <c>oidc-issuer</c>; design.md da change
-/// emissor-oidc-api, D9): com o emissor ligado, o login e a validação HMAC seguem iguais,
-/// e o token do emissor <b>não</b> é credencial das rotas do <c>apps/api</c>.
+/// emissor-oidc-api, D9): com o emissor ligado, a validação HMAC segue igual, e o token
+/// do emissor <b>não</b> é credencial das rotas do <c>apps/api</c>. O caso do login HMAC
+/// saiu com o <c>POST /auth/login</c> (change painel-entra-pelo-emissor, D8): o HMAC de
+/// operador aceito em <c>/agents</c> é provado por toda fixture, pelo
+/// <see cref="TestAuthentication.AttachOperatorToken"/>, e o 404 da rota pelo
+/// <see cref="GoneLoginTests"/>.
 /// </summary>
 public class IdentityIssuerCoexistenceTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>, IAsyncLifetime
 {
     public Task InitializeAsync() => IdentityIssuerTestClient.EnsureAsync(factory.Services);
 
     public Task DisposeAsync() => Task.CompletedTask;
-
-    [Fact]
-    public async Task HmacLogin_StillIssuesTheOperatorToken_AndItIsAcceptedOnAgents()
-    {
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = null;
-
-        var login = await client.PostAsJsonAsync("/auth/login", new
-        {
-            username = TestAuthentication.KnownOperatorUsername,
-            password = TestAuthentication.KnownOperatorPassword,
-        });
-        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
-
-        using var document = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
-        var token = document.RootElement.GetProperty("token").GetString();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/agents")).StatusCode);
-    }
 
     [Fact]
     public async Task IssuerJwt_OnAgents_IsUnauthorized()

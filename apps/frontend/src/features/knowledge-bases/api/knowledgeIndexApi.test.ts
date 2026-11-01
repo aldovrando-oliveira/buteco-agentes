@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { listKnowledgeIndexDiagnostics } from './knowledgeIndexApi';
 import { ApiError } from './knowledgeBasesApi';
-import { clearToken } from '../../../auth/token';
+import { signOutForTest } from '../../../test/authFakes';
+import { sessionFetchContract } from '../../../test/sessionContract';
 import type { KnowledgeIndexProvenance } from '../types/knowledgeIndex';
 
 // Os corpos abaixo são os CORPOS REAIS da rota, capturados à mão com apps/api de
@@ -35,7 +36,7 @@ function stubFetch(body: unknown, status = 200) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  clearToken();
+  signOutForTest();
 });
 
 describe('listKnowledgeIndexDiagnostics', () => {
@@ -84,25 +85,10 @@ describe('listKnowledgeIndexDiagnostics', () => {
     await expect(listKnowledgeIndexDiagnostics()).rejects.toBeInstanceOf(ApiError);
   });
 
-  // A rota é autenticada por omissão, pela FallbackPolicy de apps/api. Sem token
-  // ela responde 401, e o caminho de `request<T>` limpa o token e navega para o
-  // login — o mesmo de qualquer outra rota da feature.
-  it('em 401 segue o caminho de request<T>', async () => {
-    stubFetch({ title: 'unauthorized' }, 401);
-    const originalLocation = window.location;
-    Object.defineProperty(window, 'location', {
-      value: { ...originalLocation, href: 'http://localhost/knowledge-bases/k1' },
-      writable: true,
-      configurable: true,
-    });
-
-    await expect(listKnowledgeIndexDiagnostics()).rejects.toBeInstanceOf(ApiError);
-    expect(window.location.href).toBe('/login');
-
-    Object.defineProperty(window, 'location', {
-      value: originalLocation,
-      writable: true,
-      configurable: true,
-    });
+  // A rota é autenticada por omissão, pela FallbackPolicy de apps/api, e o 401
+  // segue o caminho de `request<T>`: o `sessionFetch` renova e repete uma vez, e o
+  // segundo encerra a sessão — o mesmo de qualquer outra rota da feature.
+  describe('sessão pelo sessionFetch', () => {
+    sessionFetchContract(() => listKnowledgeIndexDiagnostics());
   });
 });

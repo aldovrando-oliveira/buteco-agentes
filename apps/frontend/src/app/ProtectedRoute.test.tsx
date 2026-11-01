@@ -1,40 +1,65 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { act, render, screen } from '@testing-library/react';
+import { RouterProvider, createMemoryRouter } from 'react-router';
 import { ProtectedRoute } from './ProtectedRoute';
-import { clearToken, setToken } from '../auth/token';
+import { SESSION_KEY } from '../auth/sessionStore';
+import { signInForTest, signOutForTest } from '../test/authFakes';
 
-function renderWithProtectedRoute() {
-  return render(
-    <MemoryRouter initialEntries={['/agents']}>
-      <Routes>
-        <Route path="/login" element={<div>Tela de login</div>} />
-        <Route element={<ProtectedRoute />}>
-          <Route path="/agents" element={<div>Conteúdo protegido</div>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+function renderAt(path = '/agents?filtro=x') {
+  const router = createMemoryRouter(
+    [
+      { path: '/entrar', element: <div>Tela do entrar</div> },
+      {
+        element: <ProtectedRoute />,
+        children: [{ path: '/agents', element: <div>Conteúdo protegido</div> }],
+      },
+    ],
+    { initialEntries: [path] },
   );
+  render(<RouterProvider router={router} />);
+  return router;
 }
 
 describe('ProtectedRoute', () => {
   afterEach(() => {
-    clearToken();
+    signOutForTest();
+    sessionStorage.clear();
   });
 
-  it('sem token armazenado, redireciona para /login sem renderizar o conteúdo', () => {
-    renderWithProtectedRoute();
+  it('sem o registro, vai ao /entrar com a rota pedida como voltarPara, sem renderizar o conteúdo', () => {
+    const router = renderAt();
 
-    expect(screen.getByText('Tela de login')).toBeInTheDocument();
+    expect(screen.getByText('Tela do entrar')).toBeInTheDocument();
     expect(screen.queryByText('Conteúdo protegido')).not.toBeInTheDocument();
+    expect(new URLSearchParams(router.state.location.search).get('voltarPara')).toBe('/agents?filtro=x');
   });
 
-  it('com token armazenado, renderiza o conteúdo da rota', () => {
-    setToken('token-valido');
+  it('outra aba usa a mesma sessão: com o registro no localStorage, renderiza a rota', () => {
+    signInForTest();
 
-    renderWithProtectedRoute();
+    renderAt();
 
     expect(screen.getByText('Conteúdo protegido')).toBeInTheDocument();
-    expect(screen.queryByText('Tela de login')).not.toBeInTheDocument();
+  });
+
+  it('registro corrompido é ausência: vai ao /entrar, sem erro na tela', () => {
+    localStorage.setItem(SESSION_KEY, '{nada');
+
+    renderAt();
+
+    expect(screen.getByText('Tela do entrar')).toBeInTheDocument();
+  });
+
+  it('quando outra aba apaga o registro, esta vai ao /entrar', () => {
+    signInForTest();
+    renderAt();
+    expect(screen.getByText('Conteúdo protegido')).toBeInTheDocument();
+
+    act(() => {
+      localStorage.removeItem(SESSION_KEY);
+      window.dispatchEvent(new StorageEvent('storage', { key: SESSION_KEY, newValue: null }));
+    });
+
+    expect(screen.getByText('Tela do entrar')).toBeInTheDocument();
   });
 });

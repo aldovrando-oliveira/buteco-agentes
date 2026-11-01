@@ -4,7 +4,8 @@ import type {
   SessionMessage,
   SessionsSummary,
 } from '../types/session';
-import { clearToken, getToken } from '../../../auth/token';
+import { sessionFetch } from '../../../auth/session';
+import { retryAfterSeconds } from '../../../auth/transient';
 
 export interface ValidationProblemDetails {
   title?: string;
@@ -16,12 +17,20 @@ export interface ValidationProblemDetails {
 export class ApiError extends Error {
   readonly status: number;
   readonly problem?: ValidationProblemDetails;
+  /** O `Retry-After` do `503`, em segundos, para o QueryClient esperar (auth/transient.ts). */
+  readonly retryAfter?: number;
 
-  constructor(status: number, message: string, problem?: ValidationProblemDetails) {
+  constructor(
+    status: number,
+    message: string,
+    problem?: ValidationProblemDetails,
+    retryAfter?: number,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.problem = problem;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -38,20 +47,15 @@ export class ApiError extends Error {
 const INBOX_BASE_URL = import.meta.env.VITE_INBOX_BASE_URL ?? 'http://localhost:5027';
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getToken();
-  const response = await fetch(`${INBOX_BASE_URL}${path}`, {
+  // O token, a renovação e o `401` são do `sessionFetch` (design.md da change
+  // painel-entra-pelo-emissor, D5 e D13); a URL, o erro e o corpo continuam daqui.
+  const response = await sessionFetch(`${INBOX_BASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });
-
-  if (response.status === 401) {
-    clearToken();
-    window.location.href = '/login';
-  }
 
   if (!response.ok) {
     const problem = (await response.json().catch(() => undefined)) as
@@ -60,6 +64,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       response.status,
       problem?.title ?? `Erro ${response.status} ao chamar ${path}`,
       problem,
+      retryAfterSeconds(response),
     );
   }
 

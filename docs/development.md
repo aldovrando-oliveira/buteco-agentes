@@ -162,26 +162,22 @@ Lê `ConnectionStrings:Postgres`, `RabbitMq:*` e `Auth:*` via
 ou por variáveis de ambiente (`ConnectionStrings__Postgres`,
 `RabbitMq__Host`, `Auth__TokenSigningKey`, etc.) — nunca fixados em código.
 
-`Auth:TokenSigningKey`, `Auth:OperatorUsername` e `Auth:OperatorPasswordHash`
-são **obrigatórios**: o processo falha ao subir sem eles. Ver
-[Autenticação em desenvolvimento](#autenticação-em-desenvolvimento) para
-gerar o hash.
+`Auth:TokenSigningKey` é **obrigatória**: o processo falha ao subir sem ela.
+`Auth:BootstrapAdminEmail` e `Auth:OperatorPasswordHash` só servem para criar o
+primeiro Admin ([Autenticação em desenvolvimento](#autenticação-em-desenvolvimento)).
 
 Toda rota exige `Authorization: Bearer <token>`, exceto `GET /health`,
-`POST /auth/login`, `POST /auth/session`, `GET /connect/authorize`,
-`GET /connect/logout` e `GET /agents/{id}/.well-known/agent-card.json` (mais os
-endpoints do emissor OIDC, `/.well-known/*` e `/connect/token`). O token pode
-ser o HMAC do `POST /auth/login` ou o access token do emissor ("Primeiro Admin
-local e o fluxo do emissor", abaixo). Os exemplos abaixo fazem login pelo HMAC e
-reaproveitam o token:
+`POST /auth/session`, `GET /connect/authorize`, `GET /connect/logout` e
+`GET /agents/{id}/.well-known/agent-card.json` (mais os endpoints do emissor
+OIDC, `/.well-known/*` e `/connect/token`). Sem token, rota inexistente também
+responde `401`. O token é o access token do emissor, obtido pelo fluxo de
+["Primeiro Admin local e o fluxo do emissor"](#primeiro-admin-local-e-o-fluxo-do-emissor),
+abaixo, que termina com ele em `$TOKEN`. Os exemplos abaixo o reaproveitam:
 
 ```bash
 curl -i http://localhost:5017/health
 
-# login do operador (default de dev: operator / changeme)
-TOKEN=$(curl -s -X POST http://localhost:5017/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"operator","password":"changeme"}' | jq -r '.token')
+# $TOKEN: o access token do emissor (ver "Primeiro Admin local e o fluxo do emissor")
 
 # provedores de LLM disponíveis — só aparecem os que têm variável
 # de ambiente configurada no ambiente de apps/api
@@ -389,9 +385,21 @@ npm install   # primeira vez
 npm run dev
 ```
 
-Abra `http://localhost:5173`. A aplicação redireciona para `/login` — entre
-com o operador configurado em `apps/api` (default de dev: `operator` /
-`changeme`).
+Abra `http://localhost:5173`. A aplicação redireciona para `/entrar`: entre com
+o e-mail e a senha do primeiro Admin de desenvolvimento (`operador@buteco.local` /
+`changeme`, ver "Primeiro Admin local e o fluxo do emissor").
+
+- **O `apps/api` precisa estar de pé** em `http://localhost:5017`. O
+  `vite.config.ts` faz proxy de `/auth`, `/connect` e `/.well-known` para ele, e o
+  painel fala com o emissor pela própria origem, como em produção. O proxy não
+  troca o `Origin`, que o `POST /auth/session` confere contra o
+  `Identity:PanelBaseUrl` (`http://localhost:5173`).
+- **Contexto seguro:** o login usa Web Locks e Web Crypto, que só existem em
+  HTTPS ou em `localhost`. Aberto por outro endereço (o IP da máquina na rede, por
+  exemplo), o `/entrar` mostra "O painel precisa ser aberto por HTTPS." e não
+  envia.
+- A sessão fica no `localStorage` (`buteco.sessao`), compartilhada entre as abas.
+  "Sair" no rodapé da navegação encerra também a autorização no emissor.
 
 O cadastro de base sincronizada chama `apps/connectors` direto do navegador, e só
 quando o painel conhece o endereço dele: copie `apps/frontend/.env.example` para
@@ -403,17 +411,18 @@ funciona igual.
 
 ## Autenticação em desenvolvimento
 
-`apps/api` e `apps/inbox` compartilham a mesma `Auth:TokenSigningKey` e
-validam localmente qualquer token assinado com ela, sem chamada de rede entre
-os dois processos. O painel entra pelo operador, com credencial vinda de
-configuração, até a #217. Desde a #180 há também usuários locais (tabela
-`users`), com login por e-mail e senha pelo emissor, ainda sem tela no painel.
+O painel e os exemplos de `curl` entram pelo emissor do `apps/api`, com os
+usuários locais (tabela `users`). O primeiro usuário vem do bootstrap
+(abaixo). `apps/api`, `apps/inbox` e `apps/connectors` ainda compartilham a
+`Auth:TokenSigningKey`, mas ela assina só os tokens de serviço: nenhuma rota emite
+HMAC de operador.
 
-Default de desenvolvimento (`appsettings.Development.json`): usuário
-`operator`, senha `changeme`.
+Default de desenvolvimento (`appsettings.Development.json`): e-mail
+`operador@buteco.local`, senha `changeme`, que valem para o primeiro Admin.
 
-Para gerar um `Auth:OperatorPasswordHash` novo — em produção, ou para trocar
-a senha de dev — use o formato composto
+Para gerar um `Auth:OperatorPasswordHash` novo, o hash inicial do primeiro
+Admin (em produção, ou para trocar a senha de dev antes do primeiro login), use
+o formato composto
 `{iterations}.{saltBase64}.{hashBase64}`, PBKDF2-HMAC-SHA256. O hash é
 gerado **offline**, nunca por código de produção:
 
@@ -429,39 +438,44 @@ print(f'{iterations}.{base64.b64encode(salt).decode()}.{base64.b64encode(h).deco
 ```
 
 Cole a saída em `Auth:OperatorPasswordHash` (variável de ambiente
-`Auth__OperatorPasswordHash` em `apps/api`).
-
-`Auth:OperatorTokenLifetime` é opcional, com default de 30 minutos fixado no
-próprio tipo (`TokenSigningOptions`, não no `appsettings.json`). Ajuste por
-ambiente só se precisar de um TTL diferente.
+`Auth__OperatorPasswordHash` em `apps/api`). Ele só é lido quando não há nenhum
+usuário: depois do primeiro login, a senha está em Argon2id na tabela `users`.
 
 ### Primeiro Admin local e o fluxo do emissor
 
 Com o banco sem nenhum usuário, o `apps/api` cria no aquecimento o usuário
 `operador@buteco.local` (`Auth:BootstrapAdminEmail` do
-`appsettings.Development.json`), com a mesma senha do operador de
-desenvolvimento (`changeme`). O log traz `Primeiro Admin criado pelo bootstrap`.
+`appsettings.Development.json`), com a senha de desenvolvimento (`changeme`). O
+log traz `Primeiro Admin criado pelo bootstrap`.
 O primeiro login refaz o hash em Argon2id, e o bootstrap não roda de novo
 enquanto houver usuário. Para recomeçar, apague as linhas de `users`.
 
-Sem a tela do painel (#217), o fluxo se exercita por `curl`, contra o `apps/api`
-em `http://localhost:5017`:
+O painel faz esse fluxo pelo `/entrar`. Para chamar o `apps/api` por `curl`, o
+mesmo fluxo, contra `http://localhost:5017`, termina com o access token em
+`$TOKEN`:
 
 ```bash
+# PKCE: um verifier aleatório e o challenge S256 dele, em base64url
+VERIFIER=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')
+CHALLENGE=$(printf %s "$VERIFIER" | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '=')
+
 # 1. Sessão do emissor: só JSON, e o Origin precisa ser o do issuer ou o do painel
-curl -si -c /tmp/buteco-cookie -X POST http://localhost:5017/auth/session \
+curl -s -o /dev/null -w '%{http_code}\n' -c /tmp/buteco-cookie -X POST http://localhost:5017/auth/session \
      -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' \
      --data '{"email":"operador@buteco.local","senha":"changeme"}'          # 204
 
-# 2. Authorize com PKCE: o verifier e o challenge saem de um par S256 qualquer
-curl -si -b /tmp/buteco-cookie 'http://localhost:5017/connect/authorize?client_id=buteco-painel&response_type=code&scope=openid%20offline_access%20buteco-api&redirect_uri=http://localhost:5173/entrar/retorno&code_challenge=<challenge>&code_challenge_method=S256'
-# 302 para http://localhost:5173/entrar/retorno?code=...
+# 2. Authorize: 302 para http://localhost:5173/entrar/retorno?code=...
+CODE=$(curl -s -o /dev/null -w '%{redirect_url}' -b /tmp/buteco-cookie \
+  "http://localhost:5017/connect/authorize?client_id=buteco-painel&response_type=code&scope=openid%20offline_access%20buteco-api&redirect_uri=http://localhost:5173/entrar/retorno&code_challenge=$CHALLENGE&code_challenge_method=S256" \
+  | sed -n 's/.*[?&]code=\([^&]*\).*/\1/p')
 
 # 3. Troca do código
-curl -s -X POST http://localhost:5017/connect/token -d grant_type=authorization_code \
-     -d client_id=buteco-painel -d code=<code> -d redirect_uri=http://localhost:5173/entrar/retorno \
-     -d code_verifier=<verifier>
+TOKEN=$(curl -s -X POST http://localhost:5017/connect/token -d grant_type=authorization_code \
+     -d client_id=buteco-painel -d code="$CODE" \
+     -d redirect_uri=http://localhost:5173/entrar/retorno -d code_verifier="$VERIFIER" | jq -r .access_token)
 ```
+
+O access token vale 15 minutos; depois, repita os três passos.
 
 O `redirect_uri` usa `Identity:PanelBaseUrl` (`http://localhost:5173`, o Vite).
 Cinco senhas erradas seguidas pausam o e-mail por 5 minutos, e isso vale também

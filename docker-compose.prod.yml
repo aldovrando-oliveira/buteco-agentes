@@ -115,10 +115,12 @@ services:
       Identity__SigningKeyEncryptionKey: ${IDENTITY_SIGNING_KEY_ENCRYPTION_KEY:?defina IDENTITY_SIGNING_KEY_ENCRYPTION_KEY — use --env-file .env.prod}
       PublicUrl__BaseUrl: ${PUBLIC_DOMAIN:?defina PUBLIC_DOMAIN — use --env-file .env.prod}
       Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY:?defina AUTH_TOKEN_SIGNING_KEY — use --env-file .env.prod}
-      Auth__OperatorUsername: ${AUTH_OPERATOR_USERNAME:?defina AUTH_OPERATOR_USERNAME — use --env-file .env.prod}
-      Auth__OperatorPasswordHash: ${AUTH_OPERATOR_PASSWORD_HASH:?defina AUTH_OPERATOR_PASSWORD_HASH — use --env-file .env.prod}
-      # E-mail do primeiro Admin (#180): o bootstrap o cria com o hash acima quando não
-      # há nenhum usuário. Sem :?, porque depois do primeiro boot ela é opcional.
+      # Hash e e-mail do primeiro Admin: o bootstrap cria o usuário com eles quando não
+      # há nenhum, e o primeiro login refaz o hash em Argon2id. Sem :?, porque só o
+      # primeiro boot precisa deles: depois do primeiro login, tire os dois do
+      # .env.prod e dos backups (docs/deployment.md, "Primeiro Admin"). O nome e o
+      # formato do hash estão em revisão na #225.
+      Auth__OperatorPasswordHash: ${AUTH_OPERATOR_PASSWORD_HASH}
       Auth__BootstrapAdminEmail: ${AUTH_BOOTSTRAP_ADMIN_EMAIL}
       # Endereço interno do apps/connectors, usado só na validação de pasta do
       # cadastro de base sincronizada (#104). Fixo, não é segredo; vazio faria o

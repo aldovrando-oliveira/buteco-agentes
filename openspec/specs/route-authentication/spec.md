@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - defined by change auth-login-e-servico. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Rotas de negócio exigem token válido por padrão
 `apps/api` e `apps/inbox` SHALL exigir um token válido (`Authorization:
 Bearer <token>`) em toda rota HTTP, exceto as explicitamente
@@ -34,12 +32,11 @@ negócio da rota.
 
 ### Requirement: Rotas classificadas como anônimas permanecem acessíveis sem token
 `apps/api` e `apps/inbox` SHALL manter acessível, sem nenhum header
-`Authorization`, toda rota explicitamente classificada como anônima —
-tanto as rotas pré-existentes a esta mudança (sondas de saúde, webhook de
-canal, `AgentCard`, push notifications), que continuam com o mesmo
-comportamento de antes, quanto a rota nova introduzida por esta mudança
-(`POST /auth/login`), que é anônima por definição — ela é o próprio ponto
-de entrada de autenticação, não pode exigir o que ainda não emitiu.
+`Authorization`, toda rota explicitamente classificada como anônima: as sondas
+de saúde, o webhook de canal, o `AgentCard`, as push notifications e os pontos de
+entrada do emissor (`POST /auth/session`, `/connect/authorize` e
+`/connect/logout`), que são anônimos por definição, porque não podem exigir o que
+ainda não emitiram. `POST /auth/login` SHALL NOT existir.
 
 #### Scenario: Descoberta do AgentCard continua anônima
 - **WHEN** um cliente envia `GET /agents/{id}/.well-known/agent-card.json`
@@ -62,11 +59,16 @@ de entrada de autenticação, não pode exigir o que ainda não emitiu.
   `Authorization`
 - **THEN** a API responde `200 OK`, sem exigir token
 
-#### Scenario: Login é acessível sem token
-- **WHEN** um cliente envia `POST /auth/login` com credenciais válidas,
-  sem o header `Authorization`
-- **THEN** a API responde `200 OK` com um token, sem rejeitar a
-  requisição por ausência do header `Authorization`
+#### Scenario: Abrir a sessão do emissor é acessível sem token
+- **WHEN** um cliente envia `POST /auth/session` com credenciais válidas, da
+  origem do painel e sem o header `Authorization`
+- **THEN** a API responde `204 No Content`, sem rejeitar a requisição por
+  ausência do header `Authorization`
+
+#### Scenario: A rota de login antiga não é anônima, porque não existe
+- **WHEN** um cliente envia `POST /auth/login`, sem o header `Authorization`
+- **THEN** a API responde `401 Unauthorized`, como a qualquer rota inexistente
+  sem token, e não processa credencial nenhuma
 
 #### Scenario: Push notification continua anônimo para o middleware novo
 - **WHEN** uma requisição `POST /internal/push-notifications` é enviada
@@ -103,19 +105,18 @@ código que não corresponda a nenhuma rota de fato mapeada.
   a entrada sem rota correspondente, e não chega a aceitar requisições
 
 ### Requirement: Token de operador emitido por apps/api é aceito por apps/inbox sem chamada de rede entre os processos
-`apps/inbox` SHALL aceitar, em suas rotas autenticadas, um token de
-operador emitido por `apps/api`, validando-o localmente (mesma chave de
-assinatura compartilhada) sem realizar nenhuma chamada de rede a
-`apps/api` para validar esse token. Isso SHALL valer também com a validação
-do token do emissor ligada (`Identity:Issuer` configurado) e nenhuma chave do
-emissor obtida: o token HMAC SHALL NOT depender das chaves do emissor.
+`apps/inbox` SHALL aceitar, em suas rotas autenticadas, um token HMAC de
+operador assinado com a chave compartilhada (`Auth:TokenSigningKey`),
+validando-o localmente sem realizar nenhuma chamada de rede a `apps/api` para
+validar esse token. Isso SHALL valer também com a validação do token do emissor
+ligada (`Identity:Issuer` configurado) e nenhuma chave do emissor obtida: o token
+HMAC SHALL NOT depender das chaves do emissor. Nenhuma rota emite esse token
+depois da #217; ele vale enquanto o prazo dele durar, e até a #184 e a #182.
 
-#### Scenario: Token emitido por apps/api é aceito por apps/inbox
-- **WHEN** um operador realiza login com sucesso em `apps/api`
-  (`POST /auth/login`) e usa o token retornado para acessar uma rota
-  autenticada de `apps/inbox` (ex. `GET /channels`), mesmo com
-  `apps/inbox` configurado sem conseguir alcançar `apps/api` pela rede
-  nesse instante
+#### Scenario: Token HMAC de operador é aceito por apps/inbox
+- **WHEN** um token HMAC de operador assinado com a chave compartilhada, dentro do
+  prazo, é usado numa rota autenticada de `apps/inbox` (ex. `GET /channels`),
+  com `apps/inbox` sem conseguir alcançar `apps/api` pela rede nesse instante
 - **THEN** `apps/inbox` responde de acordo com a rota (`200 OK`), sem
   `401 Unauthorized`
 
@@ -253,13 +254,16 @@ A checagem SHALL NOT consultar o banco.
 - **WHEN** o app sobe
 - **THEN** as rotas mapeadas classificadas como anônimas são exatamente:
   - `/health`;
-  - `/auth/login`;
   - `/auth/session`;
   - `/connect/authorize`;
   - `/connect/logout`;
   - `/agents/{id:guid}/.well-known/agent-card.json`.
 
   Toda outra rota mapeada continua exigindo token válido.
+
+#### Scenario: Allowlist com rota que não existe derruba o boot
+- **WHEN** a allowlist de rotas anônimas contém um caminho que nenhuma rota mapeada tem
+- **THEN** o boot falha com uma mensagem que cita esse caminho
 
 ### Requirement: apps/api aceita o access token do emissor ao lado do HMAC
 O `apps/api` SHALL autenticar cada requisição com `Authorization: Bearer` por exatamente um esquema, escolhido pela forma do token antes de qualquer validação:
@@ -296,9 +300,10 @@ O subject usado pela autorização SHALL vir de uma tabela fechada `client_id` �
 - **THEN** a resposta é `401 Unauthorized`, e o validador HMAC não foi chamado
 
 #### Scenario: Token HMAC continua igual
-- **WHEN** o operador faz login em `POST /auth/login` e chama `GET /agents` com o token HMAC, e um token HMAC inválido chama a mesma rota
+- **WHEN** um token HMAC de operador assinado com `Auth:TokenSigningKey`, dentro do prazo, chama `GET /agents`, e um token HMAC inválido chama a mesma rota
 - **THEN** as respostas são `200 OK` e `401 Unauthorized`, como antes
 
 #### Scenario: Cliente apontando para subject inexistente derruba a checagem
 - **WHEN** a checagem da tabela de clientes roda com uma entrada cujo subject não está na tabela de subjects do `apps/api`
 - **THEN** ela falha nomeando o `client_id` e o subject
+

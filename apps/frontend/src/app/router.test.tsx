@@ -23,7 +23,7 @@ import {
   tokensFixture,
 } from '../features/insights/test/systemInsightsFixture';
 import { agentInsightsFixture } from '../features/insights/test/agentInsightsFixture';
-import { clearToken, setToken } from '../auth/token';
+import { signInForTest, signOutForTest } from '../test/authFakes';
 
 // importOriginal preserva ApiError: o detalhe do agente faz `instanceof
 // ApiError` a cada render, e um mock que apagasse a classe quebraria a
@@ -52,9 +52,9 @@ vi.mock('../features/channels/api/channelsApi', () => ({
 // stuba `fetch`.
 //
 // O modo de falha é indireto e por isso caro: contra uma API real a chamada volta
-// 401, `request<T>` chama `clearToken()` e navega para `/login`, e quem reprova é
-// o teste SEGUINTE, renderizando a tela de login em vez da rota pedida. Aconteceu
-// com `listKnowledgeBaseIndexingSummary` quando ela nasceu.
+// 401, o `sessionFetch` tenta renovar e, sem conseguir, encerra a sessão, e quem
+// reprova é o teste SEGUINTE, renderizando a tela de entrada em vez da rota pedida.
+// Aconteceu com `listKnowledgeBaseIndexingSummary` quando ela nasceu.
 vi.mock('../features/knowledge-bases/api/knowledgeBasesApi', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('../features/knowledge-bases/api/knowledgeBasesApi')>();
@@ -69,7 +69,7 @@ vi.mock('../features/knowledge-bases/api/knowledgeBasesApi', async (importOrigin
 //
 // Registro do apply: sem este mock o arquivo ainda passava, mas só porque
 // apps/inbox não estava de pé na máquina — a chamada falhava como erro de rede,
-// sem 401 e sem redirecionar para /login. Com o inbox rodando, o modo de falha
+// sem 401 e sem redirecionar para /entrar. Com o inbox rodando, o modo de falha
 // descrito acima apareceria. Passar por ambiente não é passar.
 vi.mock('../features/sessions/api/sessionsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../features/sessions/api/sessionsApi')>();
@@ -82,7 +82,7 @@ vi.mock('../features/insights/api/insightsApi', async (importOriginal) => {
   // `getAgentInsights` ENTRA AQUI porque a aba de Insights do agente é
   // alcançável pela árvore de rotas — pelo link do card "Consumo por agente" —,
   // e o aviso acima vale para ela: função de rota que falta escapa para a rede,
-  // e quem reprova é o caso SEGUINTE, na tela de login.
+  // e quem reprova é o caso SEGUINTE, na tela de entrada.
   return { ...actual, getSystemInsights: vi.fn(), getAgentInsights: vi.fn() };
 });
 
@@ -148,19 +148,19 @@ describe('appRoutes', () => {
     vi.mocked(getSystemInsights).mockResolvedValue(systemInsightsFixture());
     vi.mocked(getAgentInsights).mockReset();
     vi.mocked(getAgentInsights).mockResolvedValue(agentInsightsFixture({ agentId: agent.id }));
-    setToken('token-de-teste');
+    signInForTest();
   });
 
   afterEach(() => {
-    clearToken();
+    signOutForTest();
   });
 
-  it('sem token armazenado, leva para o login em vez do conteúdo protegido', async () => {
-    clearToken();
+  it('sem sessão, leva ao /entrar em vez do conteúdo protegido', async () => {
+    signOutForTest();
 
     renderRoutesFrom('/');
 
-    expect(await screen.findByLabelText(/usuário/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText('E-mail')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Inventário' })).not.toBeInTheDocument();
   });
 
@@ -412,13 +412,31 @@ describe('appRoutes', () => {
     expect(screen.getByText(new RegExp(`${contagem} agentes cadastrados`))).toBeInTheDocument();
   });
 
-  it('monta a partir de uma rota interna sem token e leva para o login', async () => {
-    clearToken();
+  it('monta a partir de uma rota interna sem sessão e leva ao /entrar', async () => {
+    signOutForTest();
 
     renderRoutesFrom('/channels');
 
-    expect(await screen.findByLabelText(/usuário/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText('E-mail')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Canais' })).not.toBeInTheDocument();
+  });
+
+  it('link antigo para /login chega ao /entrar', async () => {
+    signOutForTest();
+    const router = createMemoryRouter(appRoutes, { initialEntries: ['/login'] });
+
+    renderProviders(<RouterProvider router={router} />);
+
+    expect(await screen.findByLabelText('E-mail')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/entrar');
+  });
+
+  it('/entrar e /entrar/retorno abrem sem sessão', async () => {
+    signOutForTest();
+
+    renderRoutesFrom('/entrar/retorno');
+
+    expect(await screen.findByText('Não foi possível concluir a entrada. Entre de novo.')).toBeInTheDocument();
   });
 });
 
@@ -444,11 +462,11 @@ describe('AppRouter', () => {
     vi.mocked(getMessagesSummary).mockResolvedValue({ inboundCount: 0 });
     vi.mocked(getSystemInsights).mockReset();
     vi.mocked(getSystemInsights).mockResolvedValue(systemInsightsFixture());
-    setToken('token-de-teste');
+    signInForTest();
   });
 
   afterEach(() => {
-    clearToken();
+    signOutForTest();
   });
 
   // Fumaça sobre o ponto de entrada real: prova que o browser router criado

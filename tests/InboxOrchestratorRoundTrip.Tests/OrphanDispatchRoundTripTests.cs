@@ -168,7 +168,7 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
 
     private async Task<JsonElement> GetRawStatusAsync(Guid agentId, string taskId)
     {
-        var token = await fixture.LoginAsOperatorAsync();
+        var token = await fixture.UserAccessTokenAsync();
         var client = fixture.ApiFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var payload = new { jsonrpc = "2.0", id = 1, method = "GetTask", @params = new { id = taskId } };
@@ -227,7 +227,7 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
 
     private async Task<Guid> CreateAgentAsync()
     {
-        var token = await fixture.LoginAsOperatorAsync();
+        var token = await fixture.UserAccessTokenAsync();
         var client = fixture.ApiFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -282,7 +282,7 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
 
     private async Task<string> GetTaskStateAsync(Guid agentId, string taskId)
     {
-        var token = await fixture.LoginAsOperatorAsync();
+        var token = await fixture.UserAccessTokenAsync();
         var client = fixture.ApiFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var payload = new { jsonrpc = "2.0", id = 1, method = "GetTask", @params = new { id = taskId } };
