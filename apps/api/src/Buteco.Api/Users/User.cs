@@ -3,12 +3,15 @@ namespace Buteco.Api.Users;
 /// <summary>
 /// Usuário local do <c>apps/api</c> (design.md da change usuarios-locais-login-emissor,
 /// D4). O <see cref="Id"/> é imutável e é o <c>sub</c> dos tokens; o e-mail é só o
-/// identificador de login, e trocá-lo (#219) não muda o <c>sub</c>.
+/// identificador de login, e trocá-lo (<see cref="UpdateProfile"/>) não muda o <c>sub</c>.
 ///
 /// <para>
 /// <see cref="SecurityStamp"/> vai no cookie de sessão do emissor, no código e no refresh
-/// token. Ele muda ao desativar, ao trocar a senha (#219) e ao redefinir as 2 etapas
-/// (<see cref="ResetTwoFactor"/>), e todo token novo de usuário confere o valor gravado (D4).
+/// token. Ele muda ao desativar (<see cref="Deactivate"/>), ao trocar a senha
+/// (<see cref="ChangePassword"/>) e ao redefinir as 2 etapas (<see cref="ResetTwoFactor"/>), e
+/// todo token novo de usuário confere o valor gravado (D4). Quem troca o stamp revoga também
+/// as autorizações da pessoa, na mesma transação (<c>UserSessions.EndAllAsync</c>; design.md
+/// da change rotas-conta-usuarios, D2).
 /// </para>
 /// </summary>
 public sealed class User
@@ -99,17 +102,48 @@ public sealed class User
         PasswordHashIsBootstrapLegacy = false;
     }
 
+    /// <summary>
+    /// A troca da própria senha (design.md da change rotas-conta-usuarios, D3): o hash novo, sem
+    /// o marcador de legado, e o stamp novo, que derruba toda renovação de antes.
+    /// </summary>
+    public void ChangePassword(string passwordHash)
+    {
+        ReplacePasswordHash(passwordHash);
+        SecurityStamp = NewSecurityStamp();
+    }
+
+    /// <summary>
+    /// Nome e e-mail, sem mudar o <c>sub</c> nem o stamp (D5): o e-mail é o identificador do
+    /// login, e não um segredo, e as sessões abertas continuam sendo da mesma pessoa.
+    /// </summary>
+    public void UpdateProfile(string name, string email)
+    {
+        Name = name.Trim();
+        Email = email.Trim();
+        NormalizedEmail = EmailNormalization.Normalize(email);
+    }
+
     public void RecordAccess(DateTimeOffset now) => LastAccessAt = now;
 
     /// <summary>
     /// Desativa e troca o stamp: o cookie em voo e todo código ou refresh emitido antes
-    /// deixam de valer, e uma reativação (#219) não os traz de volta.
+    /// deixam de valer, e a reativação (<see cref="Activate"/>) não os traz de volta.
     /// </summary>
     public void Deactivate(DateTimeOffset now)
     {
         Status = UserStatus.Deactivated;
         DeactivatedAt = now;
         SecurityStamp = NewSecurityStamp();
+    }
+
+    /// <summary>
+    /// Reativa sem trocar o stamp: o da desativação já invalidou tudo o que havia antes, e a
+    /// pessoa entra de novo com a mesma senha (design.md da change rotas-conta-usuarios, D7).
+    /// </summary>
+    public void Activate()
+    {
+        Status = UserStatus.Active;
+        DeactivatedAt = null;
     }
 
     /// <summary>Um cadastro novo substitui o anterior, se houver (D8).</summary>

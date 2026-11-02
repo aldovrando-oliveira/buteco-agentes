@@ -1,4 +1,3 @@
-using System.Globalization;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Passwords;
@@ -88,7 +87,7 @@ public static class AccountTwoFactorEndpoints
             return CurrentUser.Forbidden();
         }
 
-        if (await LockedAsync(httpContext, throttle, user, cancellationToken) is { } locked)
+        if (await LoginThrottleResponses.LockedAsync(httpContext, throttle, user, cancellationToken) is { } locked)
         {
             return locked;
         }
@@ -132,7 +131,7 @@ public static class AccountTwoFactorEndpoints
             return CurrentUser.Forbidden();
         }
 
-        if (await LockedAsync(httpContext, throttle, user, cancellationToken) is { } locked)
+        if (await LoginThrottleResponses.LockedAsync(httpContext, throttle, user, cancellationToken) is { } locked)
         {
             return locked;
         }
@@ -222,7 +221,7 @@ public static class AccountTwoFactorEndpoints
             return (null, TypedResults.Problem(title: "A verificação em 2 etapas não está ligada.", statusCode: StatusCodes.Status409Conflict));
         }
 
-        if (await LockedAsync(httpContext, throttle, user, cancellationToken) is { } locked)
+        if (await LoginThrottleResponses.LockedAsync(httpContext, throttle, user, cancellationToken) is { } locked)
         {
             return (null, locked);
         }
@@ -237,16 +236,5 @@ public static class AccountTwoFactorEndpoints
             default:
                 return (user, null);
         }
-    }
-
-    private static async Task<IResult?> LockedAsync(HttpContext httpContext, LoginThrottleStore throttle, User user, CancellationToken cancellationToken)
-    {
-        if (await throttle.GetLockRemainingAsync(user.NormalizedEmail, cancellationToken) is not { } remaining)
-        {
-            return null;
-        }
-
-        httpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(remaining.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
-        return TypedResults.Problem(title: SessionEndpoints.LockedMessage, statusCode: StatusCodes.Status423Locked);
     }
 }

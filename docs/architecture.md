@@ -70,7 +70,7 @@ provedores de arquivos (Google Drive) para as bases de conhecimento.
 
 | App | Papel | Stack | Banco |
 |---|---|---|---|
-| `apps/api` | CRUD de agentes, catálogo MCP, delegação, bases de conhecimento, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, emissão de push notification, login do operador e emissão de token, emissor OIDC (discovery, JWKS, token, authorize, logout), usuários locais e login por e-mail e senha | .NET 10, ASP.NET Core Minimal API, OpenIddict 7.7.2 (servidor), CQRS via `Mediator`, EF Core + Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` |
+| `apps/api` | CRUD de agentes, catálogo MCP, delegação, bases de conhecimento, protocolo A2A (`SendMessage`/`GetTask`), AgentCard, emissão de push notification, login do operador e emissão de token, emissor OIDC (discovery, JWKS, token, authorize, logout), usuários locais e login por e-mail e senha, Minha conta e gestão de usuários | .NET 10, ASP.NET Core Minimal API, OpenIddict 7.7.2 (servidor), CQRS via `Mediator`, EF Core + Npgsql, `RabbitMQ.Client` (publisher), pacote `A2A` | Postgres compartilhado com `apps/workers` |
 | `apps/workers` | Executa tasks: chama o LLM, resolve tools MCP, executa delegação, dispara push notification | .NET 10 Worker Service, `Microsoft.Agents.AI` (`ChatClientAgent`, `Compaction`), EF Core espelhado, consumidor RabbitMQ | Mesmo Postgres de `apps/api` |
 | `apps/inbox` | Catálogo de canais de entrada, CRM (`Contact`/`Session`), histórico de mensagens, orquestrador de debounce, adapters de canal | .NET 10 Minimal API, CQRS próprio, EF Core | Postgres **próprio** (`buteco_inbox`), isolado |
 | `apps/connectors` | Conectores de provedor de arquivos para bases de conhecimento: navegação de pastas, descrição de pasta, listagem da raiz e markdown de arquivo. Hoje, Google Drive por service account | .NET 10 Minimal API, chamadas REST ao Google sem biblioteca do provedor | — |
@@ -1055,7 +1055,9 @@ painel                     nginx                apps/api
 
 - **`users`**: id imutável, que é o `sub`, e e-mail normalizado como
   identificador de login, com índice único. O estado é ativo ou desativado, e não
-  se exclui usuário. O `security_stamp` muda ao desativar.
+  se exclui usuário. O `security_stamp` muda ao desativar, ao trocar a senha e ao
+  redefinir as 2 etapas, e cada troca revoga as sessões da pessoa na mesma
+  transação (#219).
 - **Senha em Argon2id**, pelo `NSec.Cryptography` sobre a libsodium, com m =
   19.456 KiB, t = 2 e p = 1, em string PHC. É a primeira dependência nativa do
   `apps/api`, e a carga do binário foi conferida no macOS e na `aspnet:10.0`
@@ -1079,6 +1081,42 @@ painel                     nginx                apps/api
   emitido continua valendo até 15 min nos três apps, porque não é gravado e é
   validado só pelas chaves. A renovação seguinte é recusada. A revogação para as
   aplicações externas é da #186.
+
+### Minha conta e Usuários (`apps/api`, #219)
+
+```
+painel                                      apps/api                      tabelas
+  │  GET /account/sessions  (Bearer, oi_au_id = A2)
+  │ ──────────────────────────────────────▶ CurrentUser (sub ativo)
+  │                                          autorizações ad hoc valid ──▶ openiddict_authorizations
+  │                                          com refresh valid e vivo  ──▶ openiddict_tokens
+  │ ◀──────── [{id: A1, ultimoUso}, {id: A2, atual: true}]
+  │  POST /account/sessions/revoke-others
+  │ ──────────────────────────────────────▶ UPDATE … SET status = revoked
+  │                                          WHERE subject = @eu AND status = valid AND id <> A2
+  │ ◀──────── {encerradas: 1}               (o refresh de A1 passa a receber invalid_grant)
+```
+
+- **Rotas**, todas para o usuário real do token (`CurrentUser`); o HMAC `operator`
+  recebe `403`. Na M1 todo usuário chama todas; a #184 restringe `/users` ao Admin:
+  - `GET /account`, `POST /account/password`, `GET /account/sessions`,
+    `POST /account/sessions/{id}/revoke`, `POST /account/sessions/revoke-others`;
+  - `GET /users`, `GET /users/{id}`, `PUT /users/{id}`, `POST /users/{id}/deactivate`,
+    `POST /users/{id}/activate`, `POST /users/{id}/sessions/revoke`, ao lado da
+    redefinição das 2 etapas (#218).
+- **Sessão = autorização ad hoc `valid` com refresh `valid` e não vencido.** Último
+  uso = a maior `creation_date` dos tokens dela, sem coluna. A sessão do token é o
+  `oi_au_id`, que o principal do `apps/api` guarda e que não muda na renovação.
+- **Toda troca do stamp revoga as sessões, na mesma transação**: trocar a senha
+  (inclusive a sessão atual, e o cookie em voo), desativar e redefinir as 2 etapas.
+  Encerrar sessão não troca o stamp.
+- **Editar nome e e-mail** não troca o stamp nem pede senha (nada é enviado ao
+  e-mail na M1). O `409` da colisão do e-mail normalizado vale na corrida, pelo
+  índice. A renovação leva ao id token o nome e o e-mail gravados.
+- **Desativar** recusa a si mesmo e roda sob o lock `BUTECOD1`, relendo quem chama
+  dentro dele: duas desativações cruzadas nunca deixam a instalação sem ativo.
+  Reativar não devolve as sessões de antes.
+- **Política de senha** (só a nova): 12 a 128 caracteres, sem composição.
 
 ### Validação do token do emissor (`apps/inbox` e `apps/connectors`, #208)
 

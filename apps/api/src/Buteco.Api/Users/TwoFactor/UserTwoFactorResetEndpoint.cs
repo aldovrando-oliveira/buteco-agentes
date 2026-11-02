@@ -1,4 +1,5 @@
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Users.Sessions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Buteco.Api.Users.TwoFactor;
@@ -6,9 +7,11 @@ namespace Buteco.Api.Users.TwoFactor;
 /// <summary>
 /// "Redefinir verificação" do admin, <c>POST /users/{id}/two-factor/reset</c> (design.md da
 /// change verificacao-2-etapas-totp, D9). Apaga o segredo, o cadastro pendente, o último passo
-/// e os códigos de recuperação, e troca o <c>security_stamp</c>, numa transação: o cookie em
-/// voo é recusado no authorize, e a renovação seguinte de toda sessão da pessoa recebe
-/// <c>invalid_grant</c>.
+/// e os códigos de recuperação, troca o <c>security_stamp</c> e revoga as autorizações da
+/// pessoa, numa transação: o cookie em voo é recusado no authorize, a renovação seguinte de toda
+/// sessão dela recebe <c>invalid_grant</c>, e a lista de sessões fica vazia na hora. Sem a
+/// revogação, a sessão morta pelo stamp apareceria viva por até 14 dias (design.md da change
+/// rotas-conta-usuarios, D2: toda troca do stamp revoga as autorizações).
 ///
 /// <list type="bullet">
 /// <item><b>Quem chama é o usuário real do token</b> (<see cref="CurrentUser"/>): o HMAC de
@@ -20,8 +23,7 @@ namespace Buteco.Api.Users.TwoFactor;
 /// desabilita o botão nesse estado.</item>
 /// </list>
 ///
-/// Na M1, sem papéis, qualquer usuário redefine a de outro (#184 restringe). A lista e o
-/// detalhe de Usuários, que mostram o estado, são da #219.
+/// Na M1, sem papéis, qualquer usuário redefine a de outro (#184 restringe).
 /// </summary>
 public static class UserTwoFactorResetEndpoint
 {
@@ -33,7 +35,8 @@ public static class UserTwoFactorResetEndpoint
         return app;
     }
 
-    private static async Task<IResult> ResetAsync(Guid id, HttpContext httpContext, AppDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task<IResult> ResetAsync(
+        Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
         {
@@ -62,6 +65,7 @@ public static class UserTwoFactorResetEndpoint
         target.ResetTwoFactor();
         await dbContext.SaveChangesAsync(cancellationToken);
         await dbContext.UserRecoveryCodes.Where(code => code.UserId == target.Id).ExecuteDeleteAsync(cancellationToken);
+        await sessions.EndAllAsync(target.Id, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return TypedResults.NoContent();

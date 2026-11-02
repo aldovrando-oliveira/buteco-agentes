@@ -37,6 +37,13 @@ public static class IssuerTokenAuthentication
     public const string ClientIdClaim = "client_id";
     public const string SubjectClaim = "sub";
 
+    /// <summary>
+    /// O id da autorização do OpenIddict, que o access token sempre leva e que não muda entre
+    /// renovações (design.md da change rotas-conta-usuarios, H1–H3). É a sessão do token: a
+    /// lista de Minha conta marca a atual por ele, e "encerrar as outras" o poupa.
+    /// </summary>
+    public const string AuthorizationIdClaim = "oi_au_id";
+
     public static IServiceCollection AddIssuerTokenAuthentication(this IServiceCollection services)
     {
         services
@@ -83,13 +90,21 @@ public static class IssuerTokenAuthentication
         return OperatorTokenAuthenticationHandler.SchemeName;
     }
 
-    // O principal é reconstruído. NameIdentifier só pela tabela de clientes; o sub nunca
-    // vira subject. Cliente ausente ou fora da tabela autentica sem NameIdentifier, e o
-    // ServiceScopeAuthorizationHandler responde 403.
     private static Task MapPrincipalByClient(TokenValidatedContext context)
     {
-        var clientId = context.Principal?.FindFirst(ClientIdClaim)?.Value;
-        var subject = context.Principal?.FindFirst(SubjectClaim)?.Value;
+        context.Principal = MapPrincipal(context.Principal);
+        return Task.CompletedTask;
+    }
+
+    // O principal é reconstruído. NameIdentifier só pela tabela de clientes; o sub nunca
+    // vira subject. Cliente ausente ou fora da tabela autentica sem NameIdentifier, e o
+    // ServiceScopeAuthorizationHandler responde 403. O sub e o oi_au_id vão como estão, para
+    // as rotas que agem sobre a própria pessoa e a própria sessão (CurrentUser, Minha conta).
+    public static ClaimsPrincipal MapPrincipal(ClaimsPrincipal? validated)
+    {
+        var clientId = validated?.FindFirst(ClientIdClaim)?.Value;
+        var subject = validated?.FindFirst(SubjectClaim)?.Value;
+        var authorizationId = validated?.FindFirst(AuthorizationIdClaim)?.Value;
 
         var claims = new List<Claim>();
         if (clientId is not null && IssuerClientSubjects.Table.TryGetValue(clientId, out var mappedSubject))
@@ -107,7 +122,11 @@ public static class IssuerTokenAuthentication
             claims.Add(new Claim(SubjectClaim, subject));
         }
 
-        context.Principal = new ClaimsPrincipal(new ClaimsIdentity(claims, IssuerSchemeName));
-        return Task.CompletedTask;
+        if (authorizationId is not null)
+        {
+            claims.Add(new Claim(AuthorizationIdClaim, authorizationId));
+        }
+
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, IssuerSchemeName));
     }
 }

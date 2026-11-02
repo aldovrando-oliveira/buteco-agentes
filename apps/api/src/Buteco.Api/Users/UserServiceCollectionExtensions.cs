@@ -1,6 +1,7 @@
 using Buteco.Api.Users.Bootstrap;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Passwords;
+using Buteco.Api.Users.Sessions;
 using Buteco.Api.Users.TwoFactor;
 
 namespace Buteco.Api.Users;
@@ -21,6 +22,9 @@ public static class UserServiceCollectionExtensions
         services.Configure<TwoFactorOptions>(configuration.GetSection(TwoFactorOptions.SectionName));
         services.AddSingleton<TwoFactorSecretCipher>();
         services.AddScoped<TwoFactorVerifier>();
+
+        // As sessões sobre as tabelas do OpenIddict (design.md da change rotas-conta-usuarios, D2 e D4).
+        services.AddScoped<UserSessions>();
         return services;
     }
 }

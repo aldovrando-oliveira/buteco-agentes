@@ -17486,3 +17486,128 @@ e a divergência do protótipo: o estado `mfa` não tem lugar para o código de 
 3. **Conferir:** os `curl` de `docs/deployment.md`, "Verificação em 2 etapas (#218)".
 4. **O cadastro continua fechado** até a tela da #183; não abrir antes.
 5. **Rollback:** a imagem anterior do `api` e do `frontend`; ninguém tem a verificação.
+
+## `rotas-conta-usuarios` — rotas de Minha conta e de Usuários: senha, sessões, editar, desativar e reativar (#219)
+
+**Change proposta e implementada em 01–02/11/2026**, na branch `feat/219-rotas-conta-usuarios`,
+num worktree próprio, a partir de `80f6c9a`. Entrega M1 · 7 de 12 (acompanhamento #194). Só o
+`apps/api` tem código; as telas são da #183.
+- **Capacidades novas:** `user-account` e `user-management`.
+- **Capacidades alteradas:** `two-factor-totp` (a redefinição revoga as sessões) e
+  `issuer-user-login` (a renovação leva o nome e o e-mail vigentes).
+
+**Decisões do dono antes do apply** (01/11/2026), P1 a P8 do design, todas como recomendadas:
+- são **11 operações**, e não 10: o corpo da #219 lista "encerrar uma" e "encerrar todas"
+  como duas, e "encerrar todas" virou "encerrar as outras";
+- **trocar a senha troca o stamp e revoga todas as sessões, inclusive a atual**; a #183 sai e
+  volta ao `/entrar` depois do `204`;
+- **toda troca do stamp revoga as autorizações na mesma transação**, inclusive na
+  redefinição das 2 etapas da #218, corrigida aqui (registro na #218);
+- trocar o próprio e-mail não pede a senha, até o primeiro envio de e-mail ao endereço
+  cadastrado (gatilho registrado na #181);
+- a renovação troca no principal o `name` e o `email`; lista sem filtro e sem paginação;
+  ninguém desativa a si mesmo, sob um lock.
+
+E, na revisão das specs: a política de senha vale só para a senha nova, com cenário para a
+senha atual mais curta; o SQL do store do OpenIddict registrado ao lado do nosso.
+
+### O que entrou
+
+- **`Users/Account/`:** `AccountEndpoints` (`GET /account`, `POST /account/password`) e
+  `AccountSessionEndpoints` (`GET /account/sessions`, `…/{id}/revoke`, `…/revoke-others`).
+- **`Users/Management/`:** `UserEndpoints` (`GET /users`, `GET`/`PUT /users/{id}`,
+  `deactivate`, `activate`, `sessions/revoke`) e `UserResponses`.
+- **`Users/Sessions/UserSessions`:** a sessão viva (autorização ad hoc `valid` com refresh
+  `valid` e não vencido), o último uso pela maior `creation_date` dos tokens (com piso na
+  criação), e as três revogações por um `UPDATE` próprio: o do `RevokeBySubjectAsync` do
+  store mais `"Status" = 'valid'` e, no "as outras", `"Id" <> @atual`.
+- **`Users/UserAdministration`:** o lock `BUTECOD1` (`4779819235982394417`) da desativação.
+- **`Users/Passwords/PasswordPolicy`:** 12 a 128 caracteres, só para a senha nova.
+- **`Users/Login/LoginThrottleResponses`:** o `423` com `Retry-After`, extraído do
+  `AccountTwoFactorEndpoints` no segundo consumidor.
+- **`User`:** `ChangePassword` (troca o stamp), `UpdateProfile` e `Activate` (não trocam).
+- **`IssuerTokenAuthentication`:** o principal guarda o `oi_au_id`; o mapeamento passou a
+  `MapPrincipal`, público, para o teste de unidade.
+- **`UserGrantTokenHandler`:** na renovação, `name` e `email` vigentes, com o destino regravado.
+- **`UserTwoFactorResetEndpoint`:** revoga as sessões na transação que já existia.
+- **Docs:** `01` (Autenticação), `docs/architecture.md`, `docs/deployment.md` (a seção da #219,
+  com a conferência e o rollback) e o `CHANGELOG`.
+
+### O que a implementação mediu
+
+Suítes por nome, no protocolo da baseline (1.1 do `tasks.md`), pelo
+`~/.cache/buteco-agents/bin/suite-219.sh`, com `CPU_Speed_Limit = 100` e os loads de 1 e
+5 min conferidos antes de cada uma. Baseline no worktree limpo em `80f6c9a`.
+
+| suíte | baseline | fechamento | diferença por nome |
+|---|---|---|---|
+| `apps/api` | 1102 + 1 ignorado | **1173 + 1 ignorado** | 0 ausentes, 71 novos, 0 com resultado mudado |
+| `apps/frontend` | 1978/1978 | **1978/1978**, 154 arquivos | igual (comparado pelo caminho relativo do arquivo) |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 12/12 | **12/12** | igual |
+| `tests/ApiConnectorsRoundTrip.Tests` | 8/8 | **8/8** | igual |
+
+- **O `apps/api` rodou três vezes no fechamento**, sempre verde, e a terceira é a que vale:
+  depois da primeira, o `UserEditTests` deixou de usar o `NpgsqlOptionsExtension` (API
+  interna, dois avisos `EF1001` novos no build); depois da segunda, o stack local achou o
+  último uso antes da criação, e a correção entrou com um caso novo (71º).
+- **Build `--no-incremental`:** o mesmo conjunto de avisos da baseline, por código, arquivo e
+  mensagem. Os `NU1903` do `SSH.NET` são os da #146.
+- **As duas corridas reproduziram em 20 de 20 rodadas.** Na edição concorrente, o `409` veio
+  do índice único em todas (as duas edições passam juntas pela pré-checagem). Na
+  desativação cruzada, a segunda caiu sempre na releitura dentro do lock. Os pares
+  determinísticos (o interceptor que grava o rival entre a conferência e o `UPDATE`; a
+  ordem lock → releitura → `UPDATE` no SQL capturado) reprovaram em três de três execuções
+  da classe com o defeito.
+- **Tamanho** (convenção 18, só código, sem `openspec/` nem `.md`, arquivos novos contados
+  por linha): produção **+765 / −31, 15 arquivos**; testes **+1.365, 17 arquivos**. A
+  projeção do design era ~980 / ~1.550: **−22 % / −12 %**, a primeira da série da M1 que
+  errou para cima. O custo por operação ficou em ~70 linhas de produção, abaixo da régua de
+  ~80 da #180, porque as 11 rotas dividem três arquivos e um serviço de sessões.
+
+### Divergências do design (convenção 9)
+
+- **A chave do lock:** a primeira redação do D7 propunha `BUTECOU1`, já usada pelo bootstrap;
+  achado na revisão do dono, antes do apply, e corrigido para `BUTECOD1`, com teste de
+  unicidade das cinco chaves.
+- **A revogação não usa o `RevokeBySubjectAsync`:** ele conta também as autorizações já
+  revogadas, e o `{ encerradas }` publicado na #183 conta só as que estavam `valid`.
+- **`EndOneAsync` é um `UPDATE` com o dono no `WHERE`**, e não `FindByIdAsync` +
+  `TryRevokeAsync`, sem mudar o comportamento.
+- **Três guardas estavam no lugar errado** (convenção 15, segunda forma), e foram corrigidos
+  antes de valer: a troca do stamp na troca de senha (a revogação já derruba a renovação; o
+  efeito próprio do stamp é o cookie em voo, caso e cenário novos), a pré-checagem do e-mail
+  (o índice e o `catch` cobrem sozinhos; o guarda foi para a normalização) e o "stamp
+  guardado" na reativação (não existe; o guarda foi para o estado).
+- **O `SetClaim` perde o destino do claim** (2.3): sem regravar o destino, o `name` some do id
+  token da renovação. A implementação regrava, e o guarda 7.2b o cobre.
+- **Último uso com piso na criação:** a data do token sai do `iat`, em segundos, e a da
+  autorização tem a fração; no stack local, o último uso saiu antes da criação. Corrigido,
+  com o caso `TheLastUse_IsNeverBeforeTheCreation` visto reprovar antes.
+
+### Stack local (9.3 do `tasks.md`)
+
+`docker-compose.prod.yml` com segredos descartáveis em `http://localhost:18219`, bootstrap do
+Admin e um segundo usuário semeado por SQL. Saídas em
+`~/.cache/buteco-agents/219-fechamento/stack/` (`9.3-fluxo.txt`, `9.3-piso.txt`):
+- sem token, `/users`, `/account`, `/account/sessions` e `deactivate` → `401` sem corpo do
+  `apps/api`; `/usersxyz` → o HTML do painel;
+- dois logins → duas sessões, a do token `atual`; encerrar uma → a renovação dela
+  `invalid_grant`; encerrar as outras → `{"encerradas":1}`, a atual renova;
+- desativar a si mesmo → `403`; desativar o outro → `200`, a sessão dele `invalid_grant`, o
+  login `403` "Acesso desativado"; reativar → `200`, a sessão de antes continua
+  `invalid_grant`, o login `204`;
+- trocar a senha (a nova curta → `400`) → `204`, a sessão que trocou → `invalid_grant`, a
+  senha antiga `401`, a nova `204`.
+
+### Registros (convenção 23)
+
+Publicados em 01/11/2026, com o ok do dono: **#184** (o que ela restringe), **#183** (o
+contrato das 11 rotas), **#181** (a política de senha, o precedente das sessões e o gatilho
+do e-mail), **#221** (o IP da sessão) e **#218** (a redefinição que não revogava).
+
+### Pós-merge
+
+1. **Deploy:** só o `api`, sem migration nem variável. Ver `docs/deployment.md`, "Minha conta
+   e Usuários (#219)".
+2. **Conferir:** os `curl` da mesma seção.
+3. **Rollback:** a imagem anterior do `api`.
