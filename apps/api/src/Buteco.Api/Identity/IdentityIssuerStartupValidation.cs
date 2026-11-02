@@ -1,7 +1,9 @@
 using Buteco.Api.Auth;
 using Buteco.Api.Identity.Keys;
 using Buteco.Api.Identity.Storage;
+using Buteco.Api.McpServers.Security;
 using Buteco.Api.Options;
+using Buteco.Api.Users.TwoFactor;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
@@ -37,8 +39,22 @@ public static class IdentityIssuerStartupValidation
                   "(por exemplo https://agentes.exemplo.com).");
         }
 
-        IdentityKeyMaterialCipher.ParseKey(
-            host.Services.GetRequiredService<IOptions<IdentityIssuerOptions>>().Value.SigningKeyEncryptionKey);
+        var identityOptions = host.Services.GetRequiredService<IOptions<IdentityIssuerOptions>>().Value;
+        var signingKey = IdentityKeyMaterialCipher.ParseKey(identityOptions.SigningKeyEncryptionKey);
+
+        // Chave por domínio (convenção 3): a do TOTP é obrigatória e distinta das outras duas,
+        // mesmo com o cadastro fechado (verificacao-2-etapas-totp, D5). Sem banco.
+        var twoFactorKey = TwoFactorSecretCipher.ParseKey(identityOptions.TwoFactorEncryptionKey);
+        if (twoFactorKey.AsSpan().SequenceEqual(signingKey))
+        {
+            throw new InvalidOperationException(DistinctKeysMessage("Identity:SigningKeyEncryptionKey"));
+        }
+
+        if (TryDecodeBase64(host.Services.GetRequiredService<IOptions<McpCryptoOptions>>().Value.CredentialEncryptionKey) is { } mcpKey &&
+            twoFactorKey.AsSpan().SequenceEqual(mcpKey))
+        {
+            throw new InvalidOperationException(DistinctKeysMessage("Mcp:CredentialEncryptionKey"));
+        }
 
         // A retenção cobre o token mais longo que o emissor valida com as próprias chaves: o
         // refresh também é validado por elas (usuarios-locais-login-emissor, D3.7). Só as
@@ -190,4 +206,25 @@ public static class IdentityIssuerStartupValidation
 
     private static string PathOf(Uri uri) =>
         uri.IsAbsoluteUri ? uri.AbsolutePath : "/" + uri.OriginalString.TrimStart('/');
+
+    private static string DistinctKeysMessage(string other) =>
+        $"{TwoFactorSecretCipher.ConfigurationName} é igual a {other}: as chaves precisam ser distintas, uma por domínio. " +
+        "Gere outra com `openssl rand -base64 32`.";
+
+    private static byte[]? TryDecodeBase64(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Convert.FromBase64String(value);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
 }

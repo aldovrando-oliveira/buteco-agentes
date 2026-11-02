@@ -65,6 +65,54 @@ public class IdentityIssuerStartupValidationTests
         Assert.Contains("Identity:SigningKeyEncryptionKey não configurado", Flatten(exception), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("", "Identity:TwoFactorEncryptionKey não configurado")]
+    [InlineData("isto não é base64!", "Identity:TwoFactorEncryptionKey não é uma string base64 válida.")]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAA==", "Identity:TwoFactorEncryptionKey deve decodificar para 32 bytes (AES-256); decodificou para 16 bytes.")]
+    public void RealComposition_WithoutAValidTwoFactorKey_FailsNamingTheSetting(string value, string expected)
+    {
+        using var factory = new Factory(new()
+        {
+            ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl,
+            ["Identity:TwoFactorEncryptionKey"] = value,
+        });
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.NotNull(exception);
+        Assert.Contains(expected, Flatten(exception), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RealComposition_WithTheTwoFactorKeyEqualToTheSigningKey_FailsSayingTheyMustDiffer()
+    {
+        using var factory = new Factory(new()
+        {
+            ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl,
+            ["Identity:TwoFactorEncryptionKey"] = TestAuthentication.IdentitySigningKeyEncryptionKey,
+        });
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.NotNull(exception);
+        Assert.Contains("Identity:TwoFactorEncryptionKey é igual a Identity:SigningKeyEncryptionKey", Flatten(exception), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RealComposition_WithTheTwoFactorKeyEqualToTheMcpKey_FailsSayingTheyMustDiffer()
+    {
+        using var factory = new Factory(new()
+        {
+            ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl,
+            ["Mcp:CredentialEncryptionKey"] = TestAuthentication.TwoFactorEncryptionKey,
+        });
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.NotNull(exception);
+        Assert.Contains("Identity:TwoFactorEncryptionKey é igual a Mcp:CredentialEncryptionKey", Flatten(exception), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void RealComposition_WithIntrospectionEndpoint_FailsToStart()
     {

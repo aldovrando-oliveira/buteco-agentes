@@ -311,6 +311,7 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` | `Embedding__Provider`/`__Model`/`__Dimensions` | workers | **sim** — o compose falha sem `MODEL` e `DIMENSIONS` | N/A. Sem elas o boot **passa** e a **primeira indexação** falha com modelo vazio e dimensão 0. A coluna do índice é `vector(4096)`, fixa na migration |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` | api (cifra), workers (decifra) | sim | **sim, byte-idêntica** |
 | `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` | `Identity__SigningKeyEncryptionKey` | api (cifra das chaves do emissor OIDC) | sim, fail-fast (o emissor está ligado, porque `PUBLIC_DOMAIN` é obrigatória) | N/A — só um processo. **Distinta** das outras chaves |
+| `IDENTITY_TWO_FACTOR_ENCRYPTION_KEY` | `Identity__TwoFactorEncryptionKey` | api (cifra do segredo do TOTP de cada usuário, #218) | sim, fail-fast, mesmo com o cadastro das 2 etapas fechado | N/A — só um processo. **Distinta** das outras chaves: o boot recusa a igual a `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` ou a `MCP_CREDENTIAL_ENCRYPTION_KEY` |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` | api, inbox, connectors | sim, fail-fast | **sim, byte-idêntica** (risco aceito abaixo, #117) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` | connectors | não — vazia, o provedor `google-drive` não aparece; **inválida, o `apps/connectors` não sobe** | N/A |
@@ -565,6 +566,64 @@ as duas com `:?`, e o `POST /auth/login` confere o usuário e o hash.
   anterior não lê, e entra de novo pelo `/login`.
 - As autorizações do emissor ficam no banco sem uso, e a limpeza da #209 as
   remove quando vencerem.
+
+### Verificação em 2 etapas (#218)
+
+**Antes do deploy, gerar a chave nova:**
+
+```
+openssl rand -base64 32   # → IDENTITY_TWO_FACTOR_ENCRYPTION_KEY no .env.prod
+```
+
+- Um valor novo, nunca o de `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` nem o de
+  `MCP_CREDENTIAL_ENCRYPTION_KEY`: com uma igual, o `api` não sobe, e a mensagem diz
+  qual. Sem ela, o Compose nem processa o arquivo.
+- **Guarde-a junto do backup do banco, e não a troque** sem antes redefinir a
+  verificação de todo usuário que a tem ligada. Com outra chave, o segredo gravado não
+  decifra: o código do app autenticador responde `500` ("Não foi possível conferir o
+  código do app autenticador…"), com o log `TwoFactorSecretUnreadable` (evento 1194), e
+  só os códigos de recuperação continuam valendo, porque são hash e não cifra. A saída é
+  a redefinição pelo admin (`POST /users/{id}/two-factor/reset`), e a pessoa cadastra de
+  novo. Não há recifragem dos segredos.
+
+**O relógio do host precisa de NTP ativo.** O código vale 30 s, com um passo de
+tolerância para cada lado. Um desvio maior que 30 s entre o relógio do host do stack (os
+contêineres usam o dele) e o dos celulares faz os códigos não baterem **para todos os
+usuários ao mesmo tempo**, e o sintoma parece "código errado". Conferir antes do deploy e
+depois de qualquer manutenção da VM:
+
+```
+timedatectl   # "System clock synchronized: yes" e "NTP service: active"
+```
+
+**Migration** `AddTwoFactor`, aplicada pelo `migrator`, só aditiva: cinco colunas nulas
+em `users` e a tabela `user_recovery_codes`.
+
+**Ordem do deploy:** `migrator` → `api` → `frontend`. O `frontend` muda só no
+`nginx.conf`: os prefixos `/account` e `/users` passam a ir ao `apps/api`. O `inbox`, o
+`connectors` e o `workers` não mudam.
+
+**O cadastro da verificação fica fechado** (`Identity__TwoFactor__EnrollmentEnabled`,
+falso por padrão; o compose não o passa). O painel ainda não tem a tela do código (#183)
+e só conhece o `204` do login: quem ligasse a verificação ficaria sem entrar. **Não abra
+o cadastro antes de o painel ter a tela do código.** Com o cadastro fechado, ninguém liga
+a verificação, e o login de todos continua igual. A verificação no login, a remoção e a
+redefinição pelo admin nunca fecham. A #220 remove a opção, junto com a obrigatoriedade.
+
+**Conferência depois do deploy**, contra o domínio, como fetch da SPA:
+
+```
+D=https://agentes.exemplo.com
+# 1. Os prefixos novos chegam ao apps/api: 401 sem corpo, e não 200 com o HTML do painel
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' $D/account/two-factor
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -X POST $D/users/00000000-0000-0000-0000-000000000000/two-factor/reset
+# 2. Com o token de um usuário (ver docs/development.md), o cadastro está fechado
+curl -s -H "Authorization: Bearer $TOKEN" $D/account/two-factor   # "cadastroDisponivel":false
+```
+
+**Rollback:** a imagem anterior do `api` e do `frontend`. As colunas e a tabela ficam sem
+efeito, e a variável sobra. Como o cadastro estava fechado, ninguém fica preso à
+verificação.
 
 ### Limpeza das entradas de token do emissor (#209)
 

@@ -256,6 +256,22 @@ o versionamento pretende seguir
     emissor pelo `/connect/logout`;
   - em desenvolvimento, o `vite.config.ts` faz proxy de `/auth`, `/connect` e
     `/.well-known` para o `apps/api`.
+- **Verificação em 2 etapas (TOTP)** (#218), para quem a liga:
+  - código pelo RFC 6238 (HMAC-SHA1, 6 dígitos, 30 s, um passo de tolerância para
+    cada lado), sem pacote, com o último passo aceito gravado: o mesmo código não
+    serve duas vezes;
+  - segredo cifrado com AES-256-GCM e a chave nova `Identity:TwoFactorEncryptionKey`,
+    distinta das outras e conferida no boot;
+  - cadastro em dois tempos em `/account/two-factor` (a senha, depois um código
+    válido), 10 códigos de recuperação de uso único guardados só em hash, regeneração
+    e remoção com um código;
+  - login em dois passos: a senha certa responde `200 {"segundoPasso":"totp"}` e
+    `POST /auth/session/second-factor` completa a sessão; as falhas de código contam
+    no mesmo bloqueio por e-mail da senha;
+  - "Redefinir verificação" pelo admin em `POST /users/{id}/two-factor/reset`, que
+    troca o carimbo de segurança;
+  - **o cadastro fica fechado em produção** até o painel ter a tela do código (#183),
+    e a obrigatoriedade é da #220.
 
 **Contexto temporal e de canal**
 

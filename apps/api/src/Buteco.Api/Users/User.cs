@@ -8,7 +8,7 @@ namespace Buteco.Api.Users;
 /// <para>
 /// <see cref="SecurityStamp"/> vai no cookie de sessão do emissor, no código e no refresh
 /// token. Ele muda ao desativar, ao trocar a senha (#219) e ao redefinir as 2 etapas
-/// (#218), e todo token novo de usuário confere o valor gravado (D4).
+/// (<see cref="ResetTwoFactor"/>), e todo token novo de usuário confere o valor gravado (D4).
 /// </para>
 /// </summary>
 public sealed class User
@@ -47,7 +47,26 @@ public sealed class User
 
     public DateTimeOffset? DeactivatedAt { get; private set; }
 
+    /// <summary>O segredo do TOTP cifrado (design.md da change verificacao-2-etapas-totp, D5); nulo sem a verificação.</summary>
+    public byte[]? TwoFactorSecret { get; private set; }
+
+    /// <summary>Quando a verificação foi ligada; nulo = desligada.</summary>
+    public DateTimeOffset? TwoFactorEnabledAt { get; private set; }
+
+    /// <summary>
+    /// O último passo do TOTP aceito (D3). Quem aceita um código grava o passo por
+    /// <c>UPDATE</c> condicional, e não por esta entidade (<c>TwoFactorVerifier</c>).
+    /// </summary>
+    public long? TwoFactorLastStep { get; private set; }
+
+    /// <summary>O segredo cifrado de um cadastro em curso, até a confirmação (D8).</summary>
+    public byte[]? TwoFactorPendingSecret { get; private set; }
+
+    public DateTimeOffset? TwoFactorPendingAt { get; private set; }
+
     public bool IsActive => Status == UserStatus.Active;
+
+    public bool IsTwoFactorEnabled => TwoFactorEnabledAt is not null;
 
     public static User Create(string email, string name, string? passwordHash, DateTimeOffset now) => new()
     {
@@ -90,6 +109,47 @@ public sealed class User
     {
         Status = UserStatus.Deactivated;
         DeactivatedAt = now;
+        SecurityStamp = NewSecurityStamp();
+    }
+
+    /// <summary>Um cadastro novo substitui o anterior, se houver (D8).</summary>
+    public void StartTwoFactorEnrollment(byte[] protectedSecret, DateTimeOffset now)
+    {
+        TwoFactorPendingSecret = protectedSecret;
+        TwoFactorPendingAt = now;
+    }
+
+    /// <summary>
+    /// Liga a verificação com o segredo pendente, confirmado pelo código do passo
+    /// <paramref name="confirmedStep"/>, que fica gravado: o mesmo código não serve para entrar.
+    /// Não troca o stamp: as outras sessões já eram da pessoa.
+    /// </summary>
+    public void EnableTwoFactor(DateTimeOffset now, long confirmedStep)
+    {
+        TwoFactorSecret = TwoFactorPendingSecret ?? throw new InvalidOperationException("Sem cadastro pendente.");
+        TwoFactorEnabledAt = now;
+        TwoFactorLastStep = confirmedStep;
+        TwoFactorPendingSecret = null;
+        TwoFactorPendingAt = null;
+    }
+
+    /// <summary>A remoção pela própria pessoa, com um código (D8). Não troca o stamp.</summary>
+    public void RemoveTwoFactor()
+    {
+        TwoFactorSecret = null;
+        TwoFactorEnabledAt = null;
+        TwoFactorLastStep = null;
+        TwoFactorPendingSecret = null;
+        TwoFactorPendingAt = null;
+    }
+
+    /// <summary>
+    /// A redefinição pelo admin (D9): apaga como a remoção e troca o stamp, e o cookie em voo e
+    /// toda renovação de antes deixam de valer.
+    /// </summary>
+    public void ResetTwoFactor()
+    {
+        RemoveTwoFactor();
         SecurityStamp = NewSecurityStamp();
     }
 

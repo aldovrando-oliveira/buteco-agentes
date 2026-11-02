@@ -66,6 +66,36 @@ public class RouteAuthenticationTests(ApiFactoryFixture factory) : IClassFixture
     }
 
     [Fact]
+    public async Task SecondFactor_WithoutToken_StaysAnonymous()
+    {
+        // O segundo passo do login é anônimo, como o primeiro (change
+        // verificacao-2-etapas-totp, D2). Sem a sessão pendente, a rota responde o 401 dela,
+        // com o título, e não o 401 vazio de rota autenticada.
+        var request = new HttpRequestMessage(HttpMethod.Post, "/auth/session/second-factor")
+        {
+            Content = JsonContent.Create(new { codigo = "123456" }),
+        };
+        request.Headers.Add("Origin", LocalUserSeed.IssuerOrigin);
+
+        var response = await UnauthenticatedClient().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains("A entrada expirou", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("GET", "/account/two-factor")]
+    [InlineData("POST", "/account/two-factor/setup")]
+    [InlineData("POST", "/users/0199a000-0000-7000-8000-000000000000/two-factor/reset")]
+    public async Task TwoFactorRoutesOfAPerson_WithoutToken_ReturnUnauthorized(string method, string path)
+    {
+        var response = await UnauthenticatedClient().SendAsync(new HttpRequestMessage(new HttpMethod(method), path));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(0, response.Content.Headers.ContentLength ?? 0);
+    }
+
+    [Fact]
     public async Task PutAgentKnowledgeBases_WithoutToken_ReturnsUnauthorized()
     {
         var authenticated = factory.CreateClient();

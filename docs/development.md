@@ -481,6 +481,55 @@ O `redirect_uri` usa `Identity:PanelBaseUrl` (`http://localhost:5173`, o Vite).
 Cinco senhas erradas seguidas pausam o e-mail por 5 minutos, e isso vale também
 em desenvolvimento.
 
+### Verificação em 2 etapas em desenvolvimento
+
+Em desenvolvimento o cadastro do TOTP está **aberto**
+(`Identity:TwoFactor:EnrollmentEnabled` no `appsettings.Development.json`); em
+produção, fechado até a #183.
+
+> **Quem cadastrar o TOTP pela API não entra mais pelo painel até a #183.** O painel
+> de hoje não tem o passo do código: depois da senha certa, o `POST /auth/session`
+> responde `200 {"segundoPasso":"totp"}`, e o `/entrar` mostra "Não foi possível
+> entrar". A saída é **remover a verificação com um código**
+> (`POST /account/two-factor/remove`, com o token que ainda se tem, abaixo) ou **pedir
+> a outro usuário a redefinição** (`POST /users/{id}/two-factor/reset`). Sem outro
+> usuário e sem token, apague o segredo direto no banco local:
+> `UPDATE users SET two_factor_secret = NULL, two_factor_enabled_at = NULL, two_factor_last_step = NULL WHERE normalized_email = 'operador@buteco.local';`
+
+Com o `$TOKEN` do fluxo acima, o cadastro e o login em dois passos por `curl`. O
+código sai do segredo pelo relógio local, como num app autenticador:
+
+```bash
+# O código de 6 dígitos do passo atual (RFC 6238, HMAC-SHA1, 30 s)
+codigo() { python3 -c "import base64,hmac,hashlib,struct,time,sys; k=base64.b32decode(sys.argv[1]); h=hmac.new(k,struct.pack('>Q',int(time.time())//30),hashlib.sha1).digest(); o=h[-1]&15; print('%06d'%((struct.unpack('>I',h[o:o+4])[0]&0x7fffffff)%1000000))" "$1"; }
+
+# 1. Cadastro: a senha de novo, e o segredo volta uma vez (o QR sai do otpauthUri)
+SEGREDO=$(curl -s -X POST http://localhost:5017/account/two-factor/setup -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' --data '{"senha":"changeme"}' | jq -r .segredo)
+
+# 2. Confirmação com um código válido: liga a verificação e devolve os 10 códigos de recuperação, uma vez
+curl -s -X POST http://localhost:5017/account/two-factor/confirm -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' --data "{\"codigo\":\"$(codigo $SEGREDO)\"}" | jq .
+
+# 3. Login: a senha certa agora responde 200 {"segundoPasso":"totp"}, com o cookie pendente.
+#    O código da confirmação não serve: espere o próximo passo de 30 s.
+curl -s -c /tmp/buteco-cookie -X POST http://localhost:5017/auth/session \
+     -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' \
+     --data '{"email":"operador@buteco.local","senha":"changeme"}'
+curl -s -o /dev/null -w '%{http_code}\n' -b /tmp/buteco-cookie -c /tmp/buteco-cookie \
+     -X POST http://localhost:5017/auth/session/second-factor \
+     -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' \
+     --data "{\"codigo\":\"$(codigo $SEGREDO)\"}"                                   # 204
+# Daí em diante, os passos 2 e 3 do fluxo acima (authorize e troca do código), iguais.
+
+# Desfazer: remover com um código do app ou de recuperação
+curl -s -o /dev/null -w '%{http_code}\n' -X POST http://localhost:5017/account/two-factor/remove \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data "{\"codigo\":\"$(codigo $SEGREDO)\"}"   # 204
+```
+
+O mesmo código não serve duas vezes, e um código errado conta no mesmo bloqueio de
+5 falhas da senha.
+
 ---
 
 ## Checklists de round-trip manual
