@@ -1,5 +1,7 @@
 using System.Net;
 using Buteco.Api.Tests.Support;
+using Buteco.Api.Users.Sessions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Buteco.Api.Tests.Users.TwoFactor;
 
@@ -13,12 +15,24 @@ namespace Buteco.Api.Tests.Users.TwoFactor;
 /// stamp, <see cref="ResetAnotherUser_TurnsItOff_AndTheirRenewalIsRefused"/> reprova; sem a
 /// recusa de si mesmo, <see cref="ResetYourself_Is403"/> reprova.
 /// </para>
+///
+/// <para>
+/// A redefinição revoga as autorizações (design.md da change rotas-conta-usuarios, D2), e o
+/// registro está no tasks.md dela, 4.2: sem a revogação,
+/// <see cref="ResetAnotherUser_EndsTheirSessionsInTheList"/> reprova.
+/// </para>
 /// </summary>
 public class TwoFactorAdminResetTests(TwoFactorAdminResetTests.Fixture factory) : IClassFixture<TwoFactorAdminResetTests.Fixture>
 {
     public sealed class Fixture : LocalUsersFixture;
 
     private HttpClient Client() => TwoFactorAccount.Anonymous(factory);
+
+    private async Task<IReadOnlyList<UserSessions.Session>> LiveAsync(Guid userId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<UserSessions>().ListLiveAsync(userId, CancellationToken.None);
+    }
 
     [Fact]
     public async Task ResetAnotherUser_TurnsItOff_AndTheirRenewalIsRefused()
@@ -39,6 +53,22 @@ public class TwoFactorAdminResetTests(TwoFactorAdminResetTests.Fixture factory) 
         var renewal = await IdentityIssuerUserFlow.RefreshAsync(client, other.RefreshToken);
         Assert.Equal(HttpStatusCode.BadRequest, renewal.StatusCode);
         Assert.Contains("invalid_grant", await renewal.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResetAnotherUser_EndsTheirSessionsInTheList()
+    {
+        var admin = await TwoFactorAccount.CreateAsync(factory, "admin-lista");
+        var other = await TwoFactorAccount.CreateAsync(factory, "outro-lista");
+        await IdentityIssuerUserFlow.SignInAsync(Client(), factory.Services, other.User.Email, TwoFactorAccount.Password);
+        await TwoFactorTestClient.SeedEnabledAsync(factory.Services, other.User.Id);
+        Assert.Equal(2, (await LiveAsync(other.User.Id)).Count);
+
+        var response = await TwoFactorTestClient.SendAsync(Client(), HttpMethod.Post, $"/users/{other.User.Id}/two-factor/reset", admin.AccessToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(await LiveAsync(other.User.Id));
+        Assert.All(await UserSessionsSeed.AuthorizationStatusesAsync(factory.Services, other.User.Id), status => Assert.Equal("revoked", status));
     }
 
     [Fact]
@@ -64,6 +94,18 @@ public class TwoFactorAdminResetTests(TwoFactorAdminResetTests.Fixture factory) 
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal(before, (await TwoFactorTestClient.StateAsync(factory.Services, other.Id)).Stamp);
+    }
+
+    [Fact]
+    public async Task ResetSomeoneWithoutTheVerification_KeepsTheirSessions()
+    {
+        var admin = await TwoFactorAccount.CreateAsync(factory, "admin-409-sessoes");
+        var other = await TwoFactorAccount.CreateAsync(factory, "sem-sessoes");
+
+        var response = await TwoFactorTestClient.SendAsync(Client(), HttpMethod.Post, $"/users/{other.User.Id}/two-factor/reset", admin.AccessToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Single(await LiveAsync(other.User.Id));
     }
 
     [Fact]

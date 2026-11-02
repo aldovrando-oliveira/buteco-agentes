@@ -272,6 +272,20 @@ o versionamento pretende seguir
     troca o carimbo de segurança;
   - **o cadastro fica fechado em produção** até o painel ter a tela do código (#183),
     e a obrigatoriedade é da #220.
+- **Minha conta e Usuários** (#219), no `apps/api`, para o usuário real do token (o HMAC
+  de operador recebe `403`; na M1, sem papéis, todo usuário chama todas):
+  - `/account`: os próprios dados; a troca da senha, com a atual (contada no bloqueio por
+    e-mail) e a política de 12 a 128 caracteres para a nova; a lista das sessões vivas,
+    com a do token marcada; encerrar uma; encerrar as outras;
+  - `/users`: lista e detalhe (com a contagem de sessões e a última atividade); edição de
+    nome e e-mail, com `409` na colisão do e-mail normalizado, inclusive em corrida;
+    desativar e reativar; encerrar todas as sessões de outro;
+  - **toda troca do carimbo de segurança revoga as sessões da pessoa na mesma
+    transação**: trocar a senha encerra todas, inclusive a atual, e a redefinição das 2
+    etapas (#218) passa a encerrá-las também;
+  - ninguém desativa a si mesmo, e a desativação roda sob um lock de transação: duas
+    desativações cruzadas nunca deixam a instalação sem usuário ativo;
+  - a renovação leva ao id token o nome e o e-mail editados.
 
 **Contexto temporal e de canal**
 

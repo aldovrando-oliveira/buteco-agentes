@@ -713,12 +713,50 @@ a #103.)*
     e a senha certa não zera a contagem enquanto falta o código;
   - **rotas:** `/account/two-factor` (situação, cadastro com a senha, confirmação,
     regeneração e remoção com um código) e `POST /users/{id}/two-factor/reset` (o
-    admin apaga o segredo e os códigos e troca o stamp; a si mesmo, não). As duas
+    admin apaga o segredo e os códigos, troca o stamp e revoga as sessões; a si mesmo,
+    não). As duas
     atendem só o usuário real do `sub` do token do emissor (`CurrentUser`); o HMAC
     `operator` recebe `403`;
   - **o cadastro fica fechado em produção** (`Identity:TwoFactor:EnrollmentEnabled`)
     até o painel ter a tela do código (#183); a obrigatoriedade e a remoção da opção
     são da #220. Sem `amr` no token: ninguém o lê na M1.
+- **Minha conta e Usuários** (#219), para o usuário real do token (`CurrentUser`; o HMAC
+  `operator` recebe `403`). Na M1, sem papéis, todo usuário chama todas; a #184 restringe
+  `/users` ao Admin:
+  - **`/account`:** os próprios dados; a troca da senha, com a atual conferida como no
+    login e contada no bloqueio por e-mail (durante o bloqueio, `423` sem conferir); a
+    lista das sessões vivas, com a do token marcada; encerrar uma; encerrar as outras;
+  - **`/users`:** lista (por nome, desempate pelo id, sem filtro nem paginação) e detalhe
+    (com a contagem de sessões vivas e a última atividade); edição de nome e e-mail, com
+    `409` na colisão do e-mail normalizado, inclusive em corrida (o índice único e o
+    `23505`); desativar e reativar, idempotentes; encerrar todas as sessões de outro;
+  - **sessão = autorização ad hoc `valid` com um refresh `valid` e não vencido.** O
+    login abandonado e a sessão parada além do refresh não aparecem, mesmo antes da
+    limpeza. O último uso é a maior `creation_date` dos tokens da autorização, sem
+    coluna. A sessão do token é o `oi_au_id` do access token, que o principal do
+    `apps/api` guarda ao lado do `sub` e que não muda entre renovações;
+  - **toda troca do `security_stamp` revoga as autorizações da pessoa, na mesma
+    transação** (trocar a senha, desativar, redefinir as 2 etapas). Sem isso, a sessão
+    morta pelo stamp continuaria aparecendo viva por até 14 dias. A revogação é um
+    `UPDATE` próprio (`UserSessions`), o do `RevokeBySubjectAsync` do store mais
+    `"Status" = 'valid'` e, no "as outras", `"Id" <> @atual`; numa atualização do
+    OpenIddict, reler o store (7.7.2, `OpenIddictEntityFrameworkCoreAuthorizationStore.cs`
+    l. 840–853). Encerrar sessão não troca o stamp;
+  - **trocar a senha encerra todas as sessões, inclusive a atual**, e recusa o cookie
+    `buteco-sessao` em voo. A política vale só para a senha nova: 12 a 128 caracteres,
+    sem regra de composição (`PasswordPolicy`); a senha gravada mais curta continua
+    valendo no login;
+  - **editar nome e e-mail não troca o stamp nem pede senha**, porque na M1 nada é
+    enviado ao endereço cadastrado. O primeiro envio de e-mail (redefinição ou convite
+    por e-mail) passa a exigir a senha atual na troca do próprio e-mail (registrado na
+    #181). A renovação troca no principal o `name` e o `email` pelos gravados, e o id
+    token seguinte já sai com eles;
+  - **ninguém desativa a si mesmo**, e a desativação roda sob o
+    `pg_advisory_xact_lock` `BUTECOD1`, relendo quem chama dentro dele: dois usuários
+    desativando um ao outro nunca deixam a instalação sem ativo. Reativar não devolve
+    as sessões de antes. As chaves `bigint` de lock do `apps/api` são cinco, conferidas
+    distintas por teste: `BUTECOC1` (catálogo de clientes), `BUTECOD1` (desativação),
+    `BUTECOK1` (chaves do emissor), `BUTECOP1` (limpeza) e `BUTECOU1` (bootstrap).
 - **Sessão do emissor e fluxo do painel** (#180):
   - `POST /auth/session` (só JSON, `Origin` conferida contra a do issuer e a de
     `Identity:PanelBaseUrl`) grava o cookie `buteco-sessao`. Ele é `HttpOnly` e

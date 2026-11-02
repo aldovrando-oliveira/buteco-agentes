@@ -625,6 +625,41 @@ curl -s -H "Authorization: Bearer $TOKEN" $D/account/two-factor   # "cadastroDis
 efeito, e a variável sobra. Como o cadastro estava fechado, ninguém fica preso à
 verificação.
 
+### Minha conta e Usuários (#219)
+
+**Só o `api` muda.** Sem migration, sem variável nova, sem mudança no compose nem no
+`nginx.conf`: os prefixos `/account` e `/users` já vão ao `apps/api` desde a #218. O
+`frontend`, o `inbox`, o `connectors` e o `workers` não mudam.
+
+**O que muda para quem já está logado:**
+
+- a sessão aberta antes do deploy continua; nada é revogado no deploy;
+- a partir dele, trocar a senha, desativar alguém ou redefinir as 2 etapas de alguém
+  **encerra as sessões da pessoa na hora** (as autorizações saem revogadas), e não só na
+  próxima renovação;
+- na renovação seguinte ao deploy, o id token passa a trazer o nome e o e-mail gravados
+  (até aqui, os do login).
+
+**Sem tela ainda.** As rotas existem para a #183; até ela, só pela API. Na M1 todo usuário
+real chama todas, inclusive desativar e editar outro (a #184 restringe ao Admin). O HMAC
+de operador recebe `403`.
+
+**Conferência depois do deploy**, contra o domínio, como fetch da SPA:
+
+```
+D=https://agentes.exemplo.com
+# 1. Sem token: 401 do apps/api, sem corpo, e não 200 com o HTML do painel
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' $D/users
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' $D/account/sessions
+# 2. Com o token de um usuário (ver docs/development.md): a lista e a sessão atual marcada
+curl -s -H "Authorization: Bearer $TOKEN" $D/users
+curl -s -H "Authorization: Bearer $TOKEN" $D/account/sessions   # um item com "atual":true
+```
+
+**Rollback:** a imagem anterior do `api`. Não há schema a desfazer. As autorizações que
+esta versão revogou continuam revogadas, que é o efeito pedido; a versão anterior volta a
+trocar o stamp sem revogar, e a lista de sessões não existe nela.
+
 ### Limpeza das entradas de token do emissor (#209)
 
 **Nada a gerar:** sem variável nova, sem mudança no compose, sem migration. O
