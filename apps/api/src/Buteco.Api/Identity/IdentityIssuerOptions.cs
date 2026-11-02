@@ -17,6 +17,14 @@ public sealed class IdentityIssuerOptions
     public string? SigningKeyEncryptionKey { get; set; }
 
     /// <summary>
+    /// 32 bytes em base64 que cifram o segredo do TOTP de cada usuário (design.md da change
+    /// verificacao-2-etapas-totp, D5). Vem de configuração ou ambiente
+    /// (<c>Identity__TwoFactorEncryptionKey</c>), nunca do banco, e o boot exige que seja
+    /// distinta de <see cref="SigningKeyEncryptionKey"/> e de <c>Mcp:CredentialEncryptionKey</c>.
+    /// </summary>
+    public string? TwoFactorEncryptionKey { get; set; }
+
+    /// <summary>
     /// Base do painel, quando ele não fica na mesma origem do issuer (desenvolvimento:
     /// <c>http://localhost:5173</c>, design.md da change usuarios-locais-login-emissor,
     /// D3.4). Opcional: ausente, vale a url pública. Alimenta os endereços de retorno do

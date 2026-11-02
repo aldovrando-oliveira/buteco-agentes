@@ -1,3 +1,6 @@
+using System.Security.Claims;
+using Buteco.Api.Users;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace Buteco.Api.Identity.Flow;
@@ -13,8 +16,16 @@ namespace Buteco.Api.Identity.Flow;
 /// <item><c>Secure</c> sempre fora de <c>Development</c>: o TLS termina fora do stack e o
 /// <c>apps/api</c> vê HTTP, então <c>SameAsRequest</c> nunca marcaria em produção;</item>
 /// <item>5 minutos, sem renovação;</item>
-/// <item>carrega o id do usuário e o <c>security_stamp</c>, e nada mais.</item>
+/// <item>carrega o id do usuário, o <c>security_stamp</c> e, na sessão completa de quem tem a
+/// verificação em 2 etapas, o claim <see cref="TwoFactorClaim"/>.</item>
 /// </list>
+///
+/// <para>
+/// <b>Sessão pendente e sessão completa</b> (design.md da change verificacao-2-etapas-totp,
+/// D2): para quem tem a verificação ligada, a senha certa grava o cookie sem o claim, e o
+/// código certo o grava de novo com ele, com 5 minutos a partir dali. O authorize decide pelo
+/// estado atual do usuário (<c>AuthorizeEndpoint</c>).
+/// </para>
 /// </summary>
 public static class IssuerSession
 {
@@ -29,6 +40,31 @@ public static class IssuerSession
 
     /// <summary>Claim do carimbo de segurança, no cookie, no código e no refresh token.</summary>
     public const string SecurityStampClaim = "buteco_stamp";
+
+    /// <summary>Claim da sessão completa com a verificação em 2 etapas, com o valor <see cref="TwoFactorDone"/>.</summary>
+    public const string TwoFactorClaim = "buteco_2fa";
+
+    public const string TwoFactorDone = "ok";
+
+    /// <summary>Grava o cookie de sessão do usuário; com <paramref name="twoFactorDone"/>, a sessão completa das 2 etapas.</summary>
+    public static Task SignInAsync(HttpContext httpContext, User user, bool twoFactorDone)
+    {
+        var claims = new List<Claim>
+        {
+            new(UserIdClaim, user.Id.ToString()),
+            new(SecurityStampClaim, user.SecurityStamp),
+        };
+
+        if (twoFactorDone)
+        {
+            claims.Add(new(TwoFactorClaim, TwoFactorDone));
+        }
+
+        return httpContext.SignInAsync(
+            SchemeName,
+            new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName, UserIdClaim, roleType: null)),
+            new AuthenticationProperties { IsPersistent = true, AllowRefresh = false });
+    }
 
     public static IServiceCollection AddIssuerSessionCookie(this IServiceCollection services)
     {

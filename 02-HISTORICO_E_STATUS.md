@@ -17331,3 +17331,158 @@ Cada uma foi uma parada, com a decisão do dono no mesmo dia.
 - **Rollback:** a versão anterior do `api` e do `frontend`, com
   `AUTH_OPERATOR_USERNAME` e `AUTH_OPERATOR_PASSWORD_HASH` de volta. Quem entrou pelo
   emissor entra de novo pelo `/login`.
+
+## `verificacao-2-etapas-totp` — verificação em 2 etapas (TOTP): cadastro, verificação no login, códigos de recuperação e redefinição pelo admin (#218)
+
+**Change proposta e implementada em 01/11/2026**, na branch
+`feat/218-verificacao-2-etapas-totp`, num worktree próprio, a partir de `86abb5d`. Entrega
+M1 · 6 de 12 (acompanhamento #194). Vale para quem liga a verificação; a obrigatoriedade é
+da #220, depois da tela da #183.
+- **Capacidade nova:** `two-factor-totp`.
+- **Capacidades alteradas:** `issuer-user-login`, `local-users`, `route-authentication` e
+  `server-deployment`.
+
+**Decisões do dono antes do apply** (01/11/2026), P1 a P12 do design, todas como
+recomendadas:
+- o cadastro fica fechado em produção (`Identity:TwoFactor:EnrollmentEnabled`), a
+  verificação no login nunca é desligada, e a #220 remove a opção;
+- a senha certa responde `200 {"segundoPasso":"totp"}`, e o estado intermediário é o
+  próprio `buteco-sessao`, com o claim `buteco_2fa` só na sessão completa;
+- o `AesGcmEnvelope` extraído no terceiro consumidor de AES-GCM;
+- a redefinição pelo admin é desta change, e a #219 lê as colunas;
+- a senha no início do cadastro; issuer fixo "Buteco Agentes"; sem `amr`;
+- janela T−1..T+1 com o último passo gravado; chave nova obrigatória sempre; códigos de
+  recuperação de 16 caracteres de Crockford em SHA-256; prefixos `/account` e `/users`.
+
+E, na revisão das specs: a redefinição pelo `CurrentUser` (o HMAC recebe `403`); a
+extração provada também pelas suítes existentes sem alteração e pelo acordo com a cópia do
+`apps/workers`; NTP no `docs/deployment.md`; a saída de quem cadastrar em desenvolvimento
+no `docs/development.md`.
+
+### O que entrou
+
+- **`apps/api/src/Buteco.Api/Users/TwoFactor/`:** `Totp` (RFC 6238 sobre o BCL, sem
+  pacote), `Base32`, `OtpAuthUri`, `RecoveryCode`, `UserRecoveryCode`,
+  `TwoFactorSecretCipher` (AAD = id do usuário), `TwoFactorVerifier` (os dois `UPDATE`
+  condicionais e a decifração dentro do `try`, evento 1194), `TwoFactorOptions`,
+  `AccountTwoFactorEndpoints` (`/account/two-factor`: situação, `setup` com a senha,
+  `confirm`, `recovery-codes`, `remove`) e `UserTwoFactorResetEndpoint`
+  (`POST /users/{id}/two-factor/reset`).
+- **`Users/CurrentUser.cs`:** o usuário ativo do `sub` do token do emissor. É o primeiro
+  consumidor de "quem é a pessoa" no `apps/api`; a #219 é o segundo.
+- **O login** (`SessionEndpoints`, `IssuerSession`, `AuthorizeEndpoint`): o `200` com a
+  sessão pendente, sem zerar o bloqueio nem gravar último acesso; a rota
+  `POST /auth/session/second-factor`, anônima, com os guardas e o limite do login; a regra
+  do authorize pelo estado atual do usuário. O cookie do login sem a verificação não leva o
+  claim, e por isso o cookie de antes de ligar a verificação não vale depois.
+- **`Infrastructure/AesGcmEnvelope.cs`**, com o `AesGcmMcpCredentialCipher` e o
+  `IdentityKeyMaterialCipher` sobre ele, com as mesmas mensagens e o mesmo formato.
+- **A chave `Identity:TwoFactorEncryptionKey`** e a checagem de boot (ausente, malformada,
+  ou igual a uma das outras duas).
+- **Migration `AddTwoFactor`**, só aditiva.
+- **Deploy:** `Identity__TwoFactorEncryptionKey` com `:?` no `docker-compose.prod.yml` e no
+  `.env.prod.example`; `account|users` no `deploy/nginx.conf`.
+- **Docs:** `01` (Autenticação e convenção 3), `docs/configuration.md`,
+  `docs/deployment.md` (a chave, NTP, o cadastro fechado, a conferência), `docs/development.md`
+  (a saída de quem cadastrar em desenvolvimento e o `curl` do fluxo), `SECURITY.md` e o
+  `CHANGELOG`.
+
+### O que a implementação mediu
+
+Suítes por nome, no protocolo da baseline (1.1 e 1.2 do `tasks.md`), pelo
+`~/.cache/buteco-agents/bin/suite-218.sh`, com `CPU_Speed_Limit = 100` conferido antes de
+cada uma. Baseline no worktree limpo em `86abb5d`.
+
+| suíte | baseline | fechamento | diferença por nome |
+|---|---|---|---|
+| `apps/api` | 1007 + 1 ignorado | **1102 + 1 ignorado**, 2m59s | 0 ausentes, 95 novos, 0 com resultado mudado |
+| `apps/frontend` | 1978/1978 | **1978/1978**, 154 arquivos, 160 s (2ª rodada) | igual |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 12/12 | **12/12** | igual |
+| `tests/ApiConnectorsRoundTrip.Tests` | 8/8 | **8/8** | igual |
+| `tests/CrossAppTaskStoreCompatibility.Tests` | 4/4 | **4/4** | igual |
+
+- **A 1ª rodada do `apps/frontend` no fechamento deu 1948/1978**, em 10 arquivos e 399 s:
+  **21 casos com `Test timed out in 15000ms`**, 6 esperas assíncronas (`findBy`/`waitFor`)
+  vencidas sem o elemento aparecer, e **3 asserções com valor diferente**, todas de
+  digitação embaralhada pelo `userEvent` sob carga (`"name": "êniorFina"` no lugar de
+  `"Financeiro"`, `"credential": "Pn o(vroe-ntoomkeeando)"` no lugar de `"novo-token"`,
+  `"description": "m p á tico"` no lugar de `null`). O fechamento disse primeiro "todos
+  timeouts, nenhuma asserção por conteúdo", e a releitura do log na hora de comentar na
+  #226 corrigiu. A rodada largou logo depois do `apps/api`, com o load de 1 min em 5,49
+  (abaixo dos 6 do script) e o de 5 min em 12,21; o load chegou a 34. Nenhum código do
+  frontend mudou. A 2ª rodada, na mesma árvore, deu 1978/1978. É a forma da convenção 19 já registrada; a #226 cobre o
+  `KnowledgeBaseCreatePage.sync.test.tsx` (11 dos 30), e os outros 9 arquivos são novos nessa
+  forma. **O script só conferia o load de 1 min**; desde o comentário na #226, os
+  `suite-*.sh` esperam também o de 5 min abaixo do limite.
+- **A corrida do reuso** (2.3): o `UPDATE` condicional deu soma 1 em 20 de 20 rodadas com
+  duas conexões; "ler e depois escrever" aceitou duas vezes em 20 de 20. Pelo HTTP, o caso
+  simultâneo do `TwoFactorLoginTests` reprovou em 20 de 20 rodadas com esse defeito, então o
+  guarda da corrida ficou, além do sequencial.
+- **O cookie regravado** (2.2): um `Set-Cookie` só, a expiração refeita a partir da segunda
+  gravação, o claim lido.
+- **O formato da cifra** (2.1, 4.2): os vetores cifrados pelo código de antes da extração
+  abrem pelo envelope, o de MCP decifra também no `apps/workers`, e os 36 casos existentes dos
+  dois cifradores passam com o `git diff` dos arquivos de teste vazio.
+- **Build:** 18 avisos antes e depois, o mesmo conjunto.
+- **Stack local** (13.3, `docker-compose.prod.yml` descartável): `/account/two-factor` e
+  `/users/{id}/two-factor/reset` sem token dão `401` vazio do `apps/api`, e não o HTML do
+  painel; `/accountxyz` e a navegação real caem no shell. Com o cadastro fechado, o `setup`
+  dá `403` e o `GET` diz `cadastroDisponivel:false`. Com o cadastro aberto só nesse stack, o
+  fluxo inteiro passou: `setup`, `confirm` (10 códigos), `200 {segundoPasso}`, authorize com o
+  pendente → `/entrar`, código → `204`, authorize → código, token, `GET /agents` e
+  `GET /channels` em `200`; o mesmo código de novo → `401`; um código de recuperação → `204`;
+  a remoção → `204`, e o login volta ao `204`.
+- **Tamanho** (convenção 18, só código, sem migrations, `git diff --numstat 86abb5d`):
+  produção **+1.188 / −161** em 26 arquivos, testes **+1.473** em 18. A projeção do design era
+  ~1.070 / ~1.740: **+11 % na produção e −15 % nos testes**. A migration gerada tem 1.481
+  linhas, fora da conta. É a primeira projeção da série que errou para cima nos testes; os
+  testes de integração saíram mais curtos que a régua por cenário, porque o apoio
+  (`TwoFactorTestClient`, `TwoFactorAccountScenario`) concentrou o fluxo.
+
+### Guardas contra o defeito real (convenção 15)
+
+Cada defeito foi reintroduzido pelo `~/.cache/buteco-agents/bin/guarda-218.sh` (ou o
+`-multi`, para o de dois arquivos), o teste rodado e a árvore restaurada; os logs estão em
+`218-verificacao/guardas/`, com o `-defeito.diff`, o `-reprova.log` e o `-aprova.log` de cada
+um. São 24:
+- **TOTP:** contador em little-endian; truncagem sem `& 0x7f`; código sem zeros à esquerda;
+  janela de ±2; e-mail sem codificar no URI; normalização sem as trocas de Crockford;
+- **cifra:** tag lida antes do texto; segredo sem AAD; a checagem de boot fora do
+  `Program.cs`; a comparação de igualdade das chaves retirada;
+- **login:** authorize sem conferir o claim; a regra pelo cookie e não pelo usuário (só o caso
+  do cookie anterior reprova); uso do código de recuperação sem `used_at IS NULL`; conferência
+  sem o último passo; "ler e depois escrever" (20 de 20); a senha certa zerando a contagem;
+- **cadastro:** `confirm` sem conferir o código; pendente sem prazo; a opção ignorada no
+  `setup`; regeneração que acrescenta sem apagar;
+- **redefinição e quem chama:** sem a troca do stamp; sem a recusa de si mesmo; a redefinição
+  aceitando o HMAC;
+- **chave trocada:** a decifração fora do `try`.
+
+### Divergências do desenho aprovado (convenção 9)
+
+Nenhuma de comportamento, contrato ou escopo de teste. Achados só de documentação,
+resolvidos e registrados no `tasks.md` (critério do dono):
+- o `.env.example` não tem as chaves do emissor (o desenvolvimento usa o
+  `appsettings.Development.json`) e não mudou; a 12.1 o citava por engano;
+- o `CrossAppTaskStoreCompatibility.Tests` entrou na baseline e no fechamento, depois da
+  revisão do dono, quando a extração da cifra de MCP o pôs no escopo;
+- a 12.6 (este registro) foi escrita depois da 13.1–13.3, para registrar o que o fechamento
+  mediu, e antes do sync e do archive.
+
+### Registros (convenção 23)
+
+Comentários publicados em 01/11/2026, com o ok do dono: **#219** (a fronteira da
+redefinição, `CurrentUser`, os grupos `/account` e `/users`), **#220** (remover a opção do
+cadastro junto com a obrigatoriedade) e **#183** (o contrato do passo do código e do cadastro,
+e a divergência do protótipo: o estado `mfa` não tem lugar para o código de recuperação).
+
+### Deploy
+
+1. **Antes:** `IDENTITY_TWO_FACTOR_ENCRYPTION_KEY` no `.env.prod`
+   (`openssl rand -base64 32`, distinta das outras duas; sem ela o Compose nem processa o
+   arquivo, e igual a outra o `api` não sobe); conferir o NTP do host (`timedatectl`).
+2. **Ordem:** `migrator` (`AddTwoFactor`, só aditiva) → `api` → `frontend` (o `nginx.conf`
+   com `account|users`). O `inbox`, o `connectors` e o `workers` não mudam.
+3. **Conferir:** os `curl` de `docs/deployment.md`, "Verificação em 2 etapas (#218)".
+4. **O cadastro continua fechado** até a tela da #183; não abrir antes.
+5. **Rollback:** a imagem anterior do `api` e do `frontend`; ninguém tem a verificação.

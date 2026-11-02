@@ -838,6 +838,33 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.ToTable("identity_login_throttle", (string)null);
                 });
 
+            modelBuilder.Entity("Buteco.Api.Users.TwoFactor.UserRecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("CodeHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CodeHash")
+                        .IsUnique();
+
+                    b.ToTable("user_recovery_codes", (string)null);
+                });
+
             modelBuilder.Entity("Buteco.Api.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -888,6 +915,26 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("status");
+
+                    b.Property<DateTimeOffset?>("TwoFactorEnabledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("two_factor_enabled_at");
+
+                    b.Property<long?>("TwoFactorLastStep")
+                        .HasColumnType("bigint")
+                        .HasColumnName("two_factor_last_step");
+
+                    b.Property<DateTimeOffset?>("TwoFactorPendingAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("two_factor_pending_at");
+
+                    b.Property<byte[]>("TwoFactorPendingSecret")
+                        .HasColumnType("bytea")
+                        .HasColumnName("two_factor_pending_secret");
+
+                    b.Property<byte[]>("TwoFactorSecret")
+                        .HasColumnType("bytea")
+                        .HasColumnName("two_factor_secret");
 
                     b.HasKey("Id");
 
@@ -1223,6 +1270,15 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.HasOne("Buteco.Api.KnowledgeDocuments.Entities.KnowledgeDocument", null)
                         .WithMany()
                         .HasForeignKey("KnowledgeDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Api.Users.TwoFactor.UserRecoveryCode", b =>
+                {
+                    b.HasOne("Buteco.Api.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

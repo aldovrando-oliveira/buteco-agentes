@@ -21,7 +21,9 @@ namespace Buteco.Api.Identity.Flow;
 /// <item><b>sem sessão válida e com <c>prompt=none</c>:</b> <c>login_required</c> ao
 /// <c>redirect_uri</c>;</item>
 /// <item><b>com cookie de usuário ativo e stamp igual ao gravado:</b> <c>SignIn</c>, e o
-/// OpenIddict responde com o código.</item>
+/// OpenIddict responde com o código. Se o usuário tem a verificação em 2 etapas ligada, só o
+/// cookie da sessão completa vale: o pendente, e o gravado antes de ligar a verificação, são
+/// tratados como ausência de sessão (design.md da change verificacao-2-etapas-totp, D2).</item>
 /// </list>
 /// </summary>
 public static class AuthorizeEndpoint
@@ -76,7 +78,11 @@ public static class AuthorizeEndpoint
             authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
-    /// <summary>O usuário do cookie, se ativo e com o stamp do cookie igual ao gravado.</summary>
+    /// <summary>
+    /// O usuário do cookie, se ativo, com o stamp do cookie igual ao gravado e, quando ele tem a
+    /// verificação em 2 etapas ligada, com o cookie da sessão completa. A regra é pelo estado
+    /// atual do usuário, e não pelo cookie.
+    /// </summary>
     private static async Task<Users.User?> SessionUserAsync(HttpContext httpContext, AppDbContext dbContext, CancellationToken cancellationToken)
     {
         var session = await httpContext.AuthenticateAsync(IssuerSession.SchemeName);
@@ -88,6 +94,9 @@ public static class AuthorizeEndpoint
 
         var stamp = session.Principal.FindFirst(IssuerSession.SecurityStampClaim)?.Value;
         var user = await dbContext.Users.FindAsync([userId], cancellationToken);
-        return user is { IsActive: true } && user.SecurityStamp == stamp ? user : null;
+        var twoFactorDone = session.Principal.FindFirst(IssuerSession.TwoFactorClaim)?.Value == IssuerSession.TwoFactorDone;
+        return user is { IsActive: true } && user.SecurityStamp == stamp && (!user.IsTwoFactorEnabled || twoFactorDone)
+            ? user
+            : null;
     }
 }

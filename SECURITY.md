@@ -41,11 +41,12 @@ publicly.
 These are the parts of the system where a vulnerability would have the
 greatest impact. Reports touching them are prioritized.
 
-**Credential encryption.** MCP server credentials (`apps/api`) and channel
-credentials (`apps/inbox`) are encrypted with AES-GCM using per-domain keys
-supplied through environment variables. Credentials are write-only and are
-never returned in any API response. Anything that could expose a stored
-credential, or that weakens the encryption, is in scope.
+**Credential encryption.** MCP server credentials (`apps/api`), channel
+credentials (`apps/inbox`) and TOTP secrets (`apps/api`, below) are encrypted
+with AES-GCM using per-domain keys supplied through environment variables.
+Credentials are write-only and are never returned in any API response; the one
+exception is the TOTP secret, returned once when enrollment starts. Anything that
+could expose a stored credential, or that weakens the encryption, is in scope.
 
 **Authentication tokens.** Two mechanisms coexist. `apps/api` is an OpenID
 Connect issuer (OpenIddict): people sign in to the panel with an email and
@@ -70,6 +71,22 @@ validated by signature only; the next refresh is refused. Anything that lets
 script run in the panel's origin, bypasses the CSP, leaks a token or code
 through a URL or referrer, or keeps a session alive past sign-out beyond that
 window is in scope.
+
+**Two-step verification (TOTP).** People can turn on a second factor (RFC 6238,
+HMAC-SHA1, 6 digits, 30-second steps, one step of tolerance each way). The TOTP
+secret is stored encrypted with AES-256-GCM under its own key
+(`Identity:TwoFactorEncryptionKey`, distinct from the other keys, checked at
+startup), with the user id as associated data. It is returned once, when
+enrollment starts, and never again. A code is accepted only for a step later than
+the last accepted one, recorded atomically, so a code cannot be replayed. The ten
+recovery codes (80 bits each) are stored only as SHA-256 hashes and are single-use.
+Wrong codes count toward the same per-email lockout as wrong passwords, and a
+correct password does not reset that count while the code is pending. Enrollment
+requires the password; removal and recovery-code regeneration require a valid code.
+Any user can reset another user's verification, which also invalidates that
+user's sessions; this is accepted while there are no roles. Bypassing the second
+step, replaying a code, recovering a secret or a recovery code from storage or a
+response, or brute-forcing the code past the lockout are in scope.
 
 **Shared secrets across processes.** `Auth:TokenSigningKey` (shared between
 `apps/api`, `apps/inbox` and `apps/connectors`) and `Mcp:CredentialEncryptionKey` (shared

@@ -233,7 +233,8 @@ suficiente para detectar a omissão.
 - **WHEN** uma requisição sem `Sec-Fetch-Mode: navigate` (fetch/XHR
   disparado pela própria SPA já carregada) chega ao nginx do stack com
   path iniciando em `/agents`, `/providers`, `/mcp-servers`,
-  `/knowledge-bases`, `/knowledge-index`, `/insights` ou `/auth`
+  `/knowledge-bases`, `/knowledge-index`, `/insights`, `/auth`, `/account` ou
+  `/users`
 - **THEN** ela é encaminhada para o container de `apps/api`; requisições
   no mesmo formato com path iniciando em `/channels`, `/contacts`,
   `/sessions`, `/messages`, `/webhooks` ou `/internal` são encaminhadas para o
@@ -284,6 +285,15 @@ suficiente para detectar a omissão.
   prefixo, sem exigir entrada nova por rota; um path que apenas **começa** com o
   literal sem o separador, como `/insightsxyz`, **não** é encaminhado e cai no
   fallback de SPA
+
+#### Scenario: Rotas de 2 etapas alcançam apps/api pelo nginx
+- **WHEN** a SPA já carregada faz fetch (sem `Sec-Fetch-Mode: navigate`) em
+  `GET /account/two-factor` ou em `POST /users/{id}/two-factor/reset` contra o
+  domínio público do stack
+- **THEN** o nginx encaminha a requisição para `apps/api`, que responde pela
+  própria rota (`401` sem token). A requisição **não** cai no fallback de SPA nem
+  recebe `200` com `text/html`; e um path que apenas começa com o literal sem o
+  separador, como `/accountxyz` ou `/usersxyz`, **não** é encaminhado
 
 #### Scenario: Prefixo servido por um app e ausente do nginx é detectado
 - **WHEN** os prefixos de rota de primeiro nível servidos por `apps/api`,

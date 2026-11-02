@@ -15,6 +15,7 @@ using Buteco.Api.McpServers.Entities;
 using Buteco.Api.RejectionMetrics.Entities;
 using Buteco.Api.Users;
 using Buteco.Api.Users.Login;
+using Buteco.Api.Users.TwoFactor;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using OpenIddict.EntityFrameworkCore.Models;
@@ -62,6 +63,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<User> Users => Set<User>();
 
     public DbSet<LoginThrottle> LoginThrottles => Set<LoginThrottle>();
+
+    public DbSet<UserRecoveryCode> UserRecoveryCodes => Set<UserRecoveryCode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -704,7 +707,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(user => user.CreatedAt).HasColumnName("created_at");
             entity.Property(user => user.LastAccessAt).HasColumnName("last_access_at");
             entity.Property(user => user.DeactivatedAt).HasColumnName("deactivated_at");
+
+            // As 2 etapas (design.md da change verificacao-2-etapas-totp, D11): 1 para 1, nulas.
+            entity.Property(user => user.TwoFactorSecret).HasColumnName("two_factor_secret");
+            entity.Property(user => user.TwoFactorEnabledAt).HasColumnName("two_factor_enabled_at");
+            entity.Property(user => user.TwoFactorLastStep).HasColumnName("two_factor_last_step");
+            entity.Property(user => user.TwoFactorPendingSecret).HasColumnName("two_factor_pending_secret");
+            entity.Property(user => user.TwoFactorPendingAt).HasColumnName("two_factor_pending_at");
             entity.Ignore(user => user.IsActive);
+            entity.Ignore(user => user.IsTwoFactorEnabled);
 
             // O identificador de login; a unicidade é do banco, não de uma consulta antes.
             entity.HasIndex(user => user.NormalizedEmail).IsUnique();
@@ -723,6 +734,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             // A limpeza horária procura as linhas paradas.
             entity.HasIndex(throttle => throttle.LastFailureAt);
+        });
+
+        // Códigos de recuperação (verificacao-2-etapas-totp, D6 e D11): consulta por hash, uso
+        // único por UPDATE condicional em used_at.
+        modelBuilder.Entity<UserRecoveryCode>(entity =>
+        {
+            entity.ToTable("user_recovery_codes");
+            entity.HasKey(code => code.Id);
+            entity.Property(code => code.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(code => code.UserId).HasColumnName("user_id");
+            entity.Property(code => code.CodeHash).HasColumnName("code_hash").IsRequired();
+            entity.Property(code => code.UsedAt).HasColumnName("used_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(code => code.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(code => new { code.UserId, code.CodeHash }).IsUnique();
         });
     }
 }

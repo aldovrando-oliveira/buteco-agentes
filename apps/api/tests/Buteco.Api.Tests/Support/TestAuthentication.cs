@@ -44,6 +44,11 @@ public static class TestAuthentication
         // change emissor-oidc-api, D8). Só de teste, distinta da chave de desenvolvimento.
         ["Identity:SigningKeyEncryptionKey"] = IdentitySigningKeyEncryptionKey,
 
+        // A do TOTP, distinta das outras (verificacao-2-etapas-totp, D5), e o cadastro aberto:
+        // as fixtures exercitam o fluxo inteiro, e só os casos do cadastro fechado o fecham.
+        ["Identity:TwoFactorEncryptionKey"] = TwoFactorEncryptionKey,
+        ["Identity:TwoFactor:EnrollmentEnabled"] = "true",
+
         // Vazio por cima do http://localhost:5173 do appsettings.Development.json (o Vite):
         // nos testes, o painel fica na origem do issuer, como em produção, e o
         // redirect_uri do buteco-painel sai da url pública (usuarios-locais-login-emissor,
@@ -56,6 +61,8 @@ public static class TestAuthentication
     };
 
     public const string IdentitySigningKeyEncryptionKey = "dGVzdC1pZGVudGl0eS1rZXktMzItYnl0ZXMtLS0tLS0=";
+
+    public const string TwoFactorEncryptionKey = "fC4Q4CtcT4zz7ugTjf3Wv8do9bvI0i+10lkE3ftdfiE=";
 
     // Anexado por padrão em ConfigureClient de cada fixture — os testes
     // de negócio (anteriores a esta change) não deveriam precisar saber

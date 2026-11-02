@@ -1,6 +1,7 @@
 using Buteco.Api.Users.Bootstrap;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Passwords;
+using Buteco.Api.Users.TwoFactor;
 
 namespace Buteco.Api.Users;
 
@@ -15,6 +16,11 @@ public static class UserServiceCollectionExtensions
         services.AddScoped<IUserBootstrapper, UserBootstrapper>();
         services.AddSingleton<SessionRequestGuards>();
         services.AddLoginRateLimiting();
+
+        // As 2 etapas (design.md da change verificacao-2-etapas-totp).
+        services.Configure<TwoFactorOptions>(configuration.GetSection(TwoFactorOptions.SectionName));
+        services.AddSingleton<TwoFactorSecretCipher>();
+        services.AddScoped<TwoFactorVerifier>();
         return services;
     }
 }

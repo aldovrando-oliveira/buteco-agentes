@@ -28,6 +28,7 @@ using Buteco.Api.Providers.Endpoints;
 using Buteco.Api.RejectionMetrics;
 using Buteco.Api.Users;
 using Buteco.Api.Users.Login;
+using Buteco.Api.Users.TwoFactor;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 
@@ -207,6 +208,8 @@ app.MapHealthChecks("/health")
     .WithMetadata(new AnonymousRouteClassification(AnonymousRouteReason.HealthProbe));
 app.MapSessionEndpoints();
 app.MapAuthorizeEndpoint();
+app.MapAccountTwoFactorEndpoints();
+app.MapUserTwoFactorResetEndpoint();
 app.MapEndSessionEndpoint();
 app.MapAgentEndpoints();
 app.MapProviderEndpoints();

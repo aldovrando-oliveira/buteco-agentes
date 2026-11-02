@@ -690,6 +690,35 @@ a #103.)*
     de 20. Acima disso, `429`. O limite por IP é do proxy de fora.
   - **Sem enumeração.** E-mail sem conta e senha errada respondem igual, com o
     hash fictício. O "Acesso desativado" só aparece para quem acertou a senha.
+- **Verificação em 2 etapas** (#218), para quem a liga:
+  - **TOTP pelo RFC 6238, sobre o BCL**, sem pacote: HMAC-SHA1, 6 dígitos, passo de
+    30 s, um passo de tolerância para cada lado. O último passo aceito fica em
+    `users.two_factor_last_step`, e aceitar um código é um `UPDATE` condicional
+    (`… < @passo`): o mesmo código, ou um passo anterior, não passa de novo, nem em
+    duas submissões simultâneas. Os vetores do Apêndice B do RFC são o guarda;
+  - **o segredo** (20 bytes) é cifrado com AES-256-GCM e
+    `Identity:TwoFactorEncryptionKey`, distinta das outras chaves e conferida no boot,
+    com o id do usuário como dado associado. Sai uma vez, no início do cadastro, com o
+    URI `otpauth://` (issuer "Buteco Agentes", conta = e-mail); o QR é do painel. Com
+    a chave trocada, o código do app responde `500` com log de erro, e os códigos de
+    recuperação continuam valendo;
+  - **o login em dois passos**, no mesmo cookie `buteco-sessao`: a senha certa responde
+    `200 {"segundoPasso":"totp"}` com a sessão pendente, e
+    `POST /auth/session/second-factor` a completa com o claim `buteco_2fa`. O authorize
+    decide pelo estado atual do usuário: com a verificação ligada, só o cookie completo
+    emite código;
+  - **10 códigos de recuperação** de 16 caracteres de Crockford (80 bits), só em
+    SHA-256, de uso único, aceitos no mesmo campo do código;
+  - **força bruta:** as falhas de código contam no mesmo bloqueio por e-mail da senha,
+    e a senha certa não zera a contagem enquanto falta o código;
+  - **rotas:** `/account/two-factor` (situação, cadastro com a senha, confirmação,
+    regeneração e remoção com um código) e `POST /users/{id}/two-factor/reset` (o
+    admin apaga o segredo e os códigos e troca o stamp; a si mesmo, não). As duas
+    atendem só o usuário real do `sub` do token do emissor (`CurrentUser`); o HMAC
+    `operator` recebe `403`;
+  - **o cadastro fica fechado em produção** (`Identity:TwoFactor:EnrollmentEnabled`)
+    até o painel ter a tela do código (#183); a obrigatoriedade e a remoção da opção
+    são da #220. Sem `amr` no token: ninguém o lê na M1.
 - **Sessão do emissor e fluxo do painel** (#180):
   - `POST /auth/session` (só JSON, `Origin` conferida contra a do issuer e a de
     `Identity:PanelBaseUrl`) grava o cookie `buteco-sessao`. Ele é `HttpOnly` e
@@ -1054,6 +1083,14 @@ de propor algo nesta base:
    compartilhado entre apps (chave de assinatura de token) vai por
    configuração com o mesmo valor nos dois, nunca por chamada entre
    processos.
+   No `apps/api`, os três cifradores (credenciais de MCP, material das chaves do
+   emissor, segredo do TOTP) usam o `AesGcmEnvelope`, extraído no terceiro
+   consumidor pela convenção 2 (#218), cada um com a própria chave e as próprias
+   mensagens, e o formato `nonce || ciphertext || tag` intacto: a cópia do
+   cifrador de MCP no `apps/workers` lê o que o `apps/api` grava, e o
+   `McpServerCrossAppCompatibilityTests` é o acordo. O segredo do TOTP é a única
+   credencial devolvida numa resposta, uma vez, no início do cadastro, porque sem
+   ele não há cadastro.
 4. **Degradação graciosa**: falha de dependência externa (MCP, alvo de
    delegação, entrega de webhook, envio ao canal) nunca derruba a task
    principal — é logada, não propagada. Quando a falha precisa ser visível
