@@ -72,10 +72,59 @@ public class SecretLeakTests(ITestOutputHelper output)
             Assert.DoesNotContain(ContentMarker, line, StringComparison.Ordinal);
             Assert.DoesNotContain(FileName, line, StringComparison.Ordinal);
             Assert.DoesNotContain(TestAuthentication.TokenSigningKey, line, StringComparison.Ordinal);
+            Assert.DoesNotContain(TestAuthentication.ServiceClientSecret, line, StringComparison.Ordinal);
             Assert.All(sentTokens, token => Assert.DoesNotContain(token, line, StringComparison.Ordinal));
         }
 
         output.WriteLine($"{lines.Count} linhas de log, {sentTokens.Count} tokens procurados.");
+    }
+
+    // service-client-credentials, "Falha do emissor aparece como apps/api indisponível"
+    // (design.md da change servicos-token-emissor, D3): com o segredo recusado pelo emissor,
+    // nenhum log de nenhuma categoria contém o segredo, e nenhum log do próprio app contém o
+    // endereço interno do apps/api. As linhas do HttpClient do framework trazem a url do
+    // pedido em Information, e ficam fora daqui porque produção as corta em Warning
+    // (appsettings.Production.json, "System.Net.Http.HttpClient").
+    [Fact]
+    public async Task NenhumLogDoSegredoRecusadoContemOSegredoNemOEndereco()
+    {
+        const string ApiAddress = "http://api-interno-que-nao-vaza.test";
+        await using var factory = new ConnectorsFactory(
+            extraConfiguration: new Dictionary<string, string?> { ["Api:BaseUrl"] = ApiAddress },
+            configureServices: services =>
+            {
+                var scheduler = services.SingleOrDefault(descriptor => descriptor.ImplementationType == typeof(Buteco.Connectors.Sync.SyncSchedulerService));
+                if (scheduler is not null)
+                {
+                    services.Remove(scheduler);
+                }
+            });
+        var knowledgeBase = factory.SyncApi.AddBase();
+        factory.TokenEndpoint.RespondInvalidClient();
+
+        var response = await TestAuthentication.CreateClientAs(factory, "operator")
+            .PostAsync($"/connectors/knowledge-bases/{knowledgeBase.Id}/sync", null);
+        await Poll.UntilAsync(
+            () => factory.Logs.Lines.Any(line => line.Contains("invalid_client", StringComparison.Ordinal)),
+            "a recusa do segredo não foi logada");
+
+        // Precondição contra vacuidade: o pedido de token foi feito e recusado, e nada chegou
+        // ao apps/api falso. O "Sincronizar agora" responde 503, como responde com o apps/api
+        // fora do ar.
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(1, factory.TokenEndpoint.Requests);
+        Assert.Empty(factory.SyncApi.Requests);
+        var lines = factory.Logs.Lines.ToList();
+        foreach (var line in lines)
+        {
+            Assert.DoesNotContain(TestAuthentication.ServiceClientSecret, line, StringComparison.Ordinal);
+            if (!line.Contains(" System.Net.Http.HttpClient.", StringComparison.Ordinal))
+            {
+                Assert.DoesNotContain("api-interno-que-nao-vaza", line, StringComparison.Ordinal);
+            }
+        }
+
+        output.WriteLine($"{lines.Count} linhas de log procuradas.");
     }
 
     [Fact]

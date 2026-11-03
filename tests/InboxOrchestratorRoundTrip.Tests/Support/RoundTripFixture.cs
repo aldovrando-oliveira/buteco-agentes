@@ -22,6 +22,11 @@ using ApiProgram = ApiAssembly::Program;
 using InboxAppDbContext = InboxAssembly::Buteco.Inbox.Infrastructure.AppDbContext;
 using InboxA2AClientFactory = InboxAssembly::Buteco.Inbox.Orchestration.A2AClientFactory;
 using InboxIssuerKeysRetriever = InboxAssembly::Buteco.Inbox.Auth.IssuerKeysRetriever;
+using InboxAgentReferenceValidator = InboxAssembly::Buteco.Inbox.Agents.AgentReferenceValidator;
+using InboxServiceAccessTokenSource = InboxAssembly::Buteco.Inbox.Auth.ServiceAccessTokenSource;
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 using InboxProgram = InboxAssembly::Program;
 using System.Security.Cryptography;
 using System.Text;
@@ -118,6 +123,21 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
     public IssuerKeysGate ApiIssuerKeys { get; } = new();
 
+    // Os segredos dos clientes de serviço do apps/api, com "+" (servicos-token-emissor, D9):
+    // o achado da #234 é que o "+" mandado sem codificação chega como espaço. O do inbox é o
+    // ServiceClient:Secret do apps/inbox desta fixture.
+    public const string InboxServiceClientSecret = "f14iSytNZM8pkHkpeUKhBR8lVUmt+1IVX2bfd1aMqe8=";
+    public const string ConnectorsServiceClientSecret = "6+/qzvxHoNNZ/UWxyy/McnQUWfKYdC5yf3Er/M1utmk=";
+
+    /// <summary>
+    /// Cada chamada do <c>apps/inbox</c> desta fixture ao <c>apps/api</c> real, pelos três
+    /// clientes nomeados (A2A, validação de agente e token de serviço), com o status recebido
+    /// e o token enviado (servicos-token-emissor, D9).
+    /// </summary>
+    public ConcurrentQueue<ServiceCall> InboxToApi { get; } = new();
+
+    private readonly List<IAsyncDisposable> _extraInboxes = [];
+
     public async Task InitializeAsync()
     {
         await Task.WhenAll(_apiAndWorkersPostgres.StartAsync(), _inboxPostgres.StartAsync(), _rabbitMq.StartAsync());
@@ -130,7 +150,12 @@ public sealed class RoundTripFixture : IAsyncLifetime
             await dbContext.Database.MigrateAsync();
         }
 
-        _inboxFactory = BuildInboxFactory();
+        // O catálogo cadastra os clientes de serviço antes do primeiro pedido de token do
+        // apps/inbox: sem eles, o pedido recebe invalid_client e abre a espera de 10 s
+        // (servicos-token-emissor, D9).
+        await WarmUpIssuerAsync();
+
+        _inboxFactory = BuildInboxFactory(InboxServiceClientSecret, _inboxPostgres.GetConnectionString(), InboxToApi);
 
         using (var scope = _inboxFactory.Services.CreateScope())
         {
@@ -162,6 +187,11 @@ public sealed class RoundTripFixture : IAsyncLifetime
             await _inboxFactory.DisposeAsync();
         }
 
+        foreach (var inbox in _extraInboxes)
+        {
+            await inbox.DisposeAsync();
+        }
+
         await Task.WhenAll(_apiAndWorkersPostgres.DisposeAsync().AsTask(), _inboxPostgres.DisposeAsync().AsTask(), _rabbitMq.DisposeAsync().AsTask());
     }
 
@@ -182,8 +212,8 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     // Os segredos dos clientes de serviço, obrigatórios no boot do apps/api
                     // (clientes-servico-emissor, D2). Fixos aqui, e não herdados do
                     // appsettings.Development.json, como a chave acima.
-                    ["Identity:ServiceClients:Inbox:Secret"] = "GsNKorzccpBDBGABMxnsT1HZLFLBTXXLFS9oBeACsWQ=",
-                    ["Identity:ServiceClients:Connectors:Secret"] = "glpxZRZLnflQsJEyJYTT8ZbGMgsdmjfLx6G6OHGVT7A=",
+                    ["Identity:ServiceClients:Inbox:Secret"] = InboxServiceClientSecret,
+                    ["Identity:ServiceClients:Connectors:Secret"] = ConnectorsServiceClientSecret,
                     // Só precisa ser não-vazio — ProviderCatalogService.IsProviderConfigured("openai")
                     // olha só a presença da chave (libs/ProviderCatalog/LlmProviders.cs); a chamada
                     // real ao LLM nunca acontece, IChatClientResolver está mockado em apps/workers.
@@ -220,7 +250,32 @@ public sealed class RoundTripFixture : IAsyncLifetime
         });
     }
 
-    private WebApplicationFactory<InboxProgram> BuildInboxFactory()
+    /// <summary>
+    /// Um <c>apps/inbox</c> a mais, com outro <c>ServiceClient:Secret</c>, contra o mesmo
+    /// <c>apps/api</c> e num banco próprio do mesmo contêiner, para as varreduras dele não
+    /// disputarem as linhas do inbox principal. Os logs vão para <paramref name="logs"/>.
+    /// Descartado no fim da fixture.
+    /// </summary>
+    public async Task<WebApplicationFactory<InboxProgram>> BuildExtraInboxAsync(
+        string serviceClientSecret, ConcurrentQueue<ServiceCall> calls, ConcurrentQueue<(LogLevel Level, string Message)> logs)
+    {
+        var connectionString = new NpgsqlConnectionStringBuilder(_inboxPostgres.GetConnectionString())
+        {
+            Database = $"buteco_inbox_extra_{Guid.NewGuid():N}",
+        }.ConnectionString;
+        var inbox = BuildInboxFactory(serviceClientSecret, connectionString, calls, logs);
+        _extraInboxes.Add(inbox);
+
+        using var scope = inbox.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<InboxAppDbContext>().Database.MigrateAsync();
+        return inbox;
+    }
+
+    private WebApplicationFactory<InboxProgram> BuildInboxFactory(
+        string serviceClientSecret,
+        string connectionString,
+        ConcurrentQueue<ServiceCall> calls,
+        ConcurrentQueue<(LogLevel Level, string Message)>? logs = null)
     {
         var factory = new WebApplicationFactory<InboxProgram>();
 
@@ -254,7 +309,14 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     // (medido em 04/10/2026). O D7 tem guardas em apps/inbox.
                     ["DispatchReconciliation:UntrackedDispatchMaxAge"] = "3650.00:00:00",
                     ["Auth:TokenSigningKey"] = TokenSigningKey,
+                    // O segredo do cliente buteco-servico-inbox (servicos-token-emissor, D5).
+                    ["ServiceClient:Secret"] = serviceClientSecret,
                 }));
+
+            if (logs is not null)
+            {
+                builder.ConfigureLogging(logging => logging.AddProvider(new QueueLoggerProvider(logs)));
+            }
 
             builder.ConfigureServices(services =>
             {
@@ -264,13 +326,17 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     services.Remove(dbContextDescriptor);
                 }
 
-                services.AddDbContext<InboxAppDbContext>(options => options.UseNpgsql(_inboxPostgres.GetConnectionString()));
+                services.AddDbContext<InboxAppDbContext>(options => options.UseNpgsql(connectionString));
 
-                // Redireciona o cliente A2A de apps/inbox para o TestServer
-                // de apps/api, sem rede real — SendMessage chega no
-                // EnqueueingAgentHandler de verdade.
-                services.AddHttpClient(InboxA2AClientFactory.HttpClientName)
-                    .ConfigurePrimaryHttpMessageHandler(() => ApiFactory.Server.CreateHandler());
+                // Os três clientes do apps/inbox que chamam o apps/api vão ao TestServer
+                // dele, sem rede real, passando pelo gravador: o A2A (SendMessage chega no
+                // EnqueueingAgentHandler de verdade), a validação de agente do cadastro de
+                // canal e o pedido de token de serviço ao emissor (servicos-token-emissor, D9).
+                foreach (var name in new[] { InboxA2AClientFactory.HttpClientName, InboxAgentReferenceValidator.HttpClientName, InboxServiceAccessTokenSource.HttpClientName })
+                {
+                    services.AddHttpClient(name)
+                        .ConfigurePrimaryHttpMessageHandler(() => new RecordingHandler(name, calls) { InnerHandler = ApiFactory.Server.CreateHandler() });
+                }
 
                 // Chaves do emissor pelo TestServer do apps/api, o endereço interno do
                 // teste (D3), atrás do portão.
@@ -406,6 +472,16 @@ public sealed class RoundTripFixture : IAsyncLifetime
         return tokens.Issue(ApiAssembly::Buteco.Api.Auth.ServiceScopeAuthorizationHandler.OperatorSubject, TimeSpan.FromMinutes(5)).Token;
     }
 
+    // O access token de usuário do fluxo real com outro escopo, por exemplo o do
+    // apps/inbox ("openid buteco-inbox"), para as rotas de canal.
+    public Task<string> UserAccessTokenAsync(string scope) =>
+        IssuerUserFlow.AccessTokenAsync(
+            ApiFactory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
+            WarmUpIssuerAsync,
+            ApiPublicBaseUrl,
+            OperatorPassword,
+            scope);
+
     // O bootstrap e o catálogo pelos serviços do apps/api, idempotentes
     // (IssuerUserFlow.AccessTokenAsync, parâmetro warmUp).
     private async Task WarmUpIssuerAsync()
@@ -428,4 +504,36 @@ public sealed class RoundTripFixture : IAsyncLifetime
 
         return $"{iterations}.{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
     }
+
+    private sealed class RecordingHandler(string client, ConcurrentQueue<ServiceCall> calls) : DelegatingHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = await base.SendAsync(request, cancellationToken);
+            calls.Enqueue(new ServiceCall(client, request.Method.Method, request.RequestUri!.AbsolutePath, (int)response.StatusCode, request.Headers.Authorization?.Parameter));
+            return response;
+        }
+    }
+
+    private sealed class QueueLoggerProvider(ConcurrentQueue<(LogLevel Level, string Message)> logs) : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName) => new QueueLogger(logs);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class QueueLogger(ConcurrentQueue<(LogLevel Level, string Message)> logs) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                logs.Enqueue((logLevel, formatter(state, exception)));
+        }
+    }
 }
+
+/// <summary>Uma chamada de um app de teste a outro, pelo cliente nomeado.</summary>
+public sealed record ServiceCall(string Client, string Method, string Path, int Status, string? Token);

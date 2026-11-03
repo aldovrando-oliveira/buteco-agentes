@@ -75,6 +75,10 @@ app.ValidateConnectorsSubjectRoutes(ConnectorsSubjectAuthorizationHandler.Subjec
 // ausente sobe com aviso. O guarda da composição real está em ApiConfigurationValidationTests.
 app.ValidateApiConfiguration();
 
+// O segredo do apps/connectors no emissor (servicos-token-emissor, D5; convenção 8): com
+// Api:BaseUrl, presente, base64 e 32 bytes, sem ecoar o valor.
+app.ValidateServiceClientConfiguration();
+
 // Convenção 8 (validacao-jwks-inbox-connectors, D7): issuer do emissor válido e, com
 // ele, Api:BaseUrl presente; e a tabela de clientes apontando só para subjects de
 // SubjectRoutes. Sem Identity:Issuer, só avisa que a validação está desligada.

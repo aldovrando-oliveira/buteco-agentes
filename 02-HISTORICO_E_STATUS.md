@@ -17884,3 +17884,100 @@ Suítes pelo `~/.cache/buteco-agents/bin/suite-234.sh` (CPU amostrada na rodada,
 
 - **#235:** os serviços pedem o token com o segredo daqui. O `buteco-servico-api` já está na tabela do `apps/connectors`, à espera do emissor no processo.
 - **#214:** os cinco `SubjectXRota` continuam mudando de nome a cada rodada (comentado lá, com as duas rodadas).
+
+## `servicos-token-emissor` — os serviços obtêm o token de serviço no emissor (#235)
+
+**Change proposta e implementada em 03/11/2026**, na branch `feat/235-servicos-token-emissor`, num worktree próprio, a partir de `05aae2f` (merge do PR #237). Entrega M1 · 10 de 15. É o **passo B** da divisão da #182: receptores (#234), emissores (esta), fixtures (#236) e remoção (#182). O desenho completo da #182 está [preservado num comentário dela](https://github.com/aldovrando-oliveira/buteco-agentes/issues/182#issuecomment-6593073248).
+- **Capacidade nova:** `service-client-credentials`.
+- **Capacidades alteradas:**
+  - `inbox-service-authentication`;
+  - `knowledge-sync-cycle`;
+  - `knowledge-sync-folder-validation`;
+  - `server-deployment`.
+
+**Decisões do dono** (03/11/2026):
+- **Na revisão do design:**
+  - um PR só, sem divisão;
+  - o segredo do `apps/inbox` distinto da `Inbox:CredentialEncryptionKey` no boot;
+  - o token gerado no processo leva `scope` `buteco-connectors`, e o guarda compara todos os claims sem exceção;
+  - o caso S4 de chave divergente fica, com a mesma asserção.
+- **Na parada da 5.7:** a causa do S4 passa a ser as chaves de outro emissor com o mesmo issuer (abaixo).
+
+### O que entrou
+
+- **`apps/inbox` e `apps/connectors`, uma cópia em cada, sem `libs/`:** o `ServiceAccessTokenSource`.
+  - Pede o token em `{Api:BaseUrl}/connect/token`, pelo endereço interno, com `client_credentials`, o `client_id` constante, o `ServiceClient:Secret` e `scope=buteco-api`, num `FormUrlEncodedContent`.
+  - Cache até faltar 1 min para o `expires_in`, e um pedido só sob concorrência (semáforo com reconferência).
+  - Toda falha (`503`, `invalid_client`, timeout de 5 s, resposta incompleta) sai como `HttpRequestException`, e durante 10 s os pedidos falham sem rede.
+  - `Error` no `invalid_client` e `Warning` nos outros motivos, sem o segredo nem o `Api:BaseUrl`.
+  - `Information` no primeiro token e na primeira obtenção depois de uma falha.
+- **`apps/api`:** o `ServiceAccessTokenIssuer`.
+  - Gera no processo, pela `IOpenIddictServerFactory` e um `GenerateTokenContext`, só o token `buteco-servico-api`, com `aud` e `scope` `buteco-connectors` e 15 min.
+  - Superfície pública sem parâmetro além do `CancellationToken`.
+  - Cache com a mesma margem, sem pedido único.
+- **Os três `ServiceTokenDelegatingHandler`** anexam esses tokens, e no `401` do destino descartam o token em cache, se ainda for o anexado, sem repetir a chamada. Saíram as constantes de subject dos handlers.
+- **Boot:** `ServiceClient:Secret` obrigatório no `apps/inbox`, e no `apps/connectors` com `Api:BaseUrl`. Base64, 32 bytes, sem ecoar o valor. No inbox, também distinto da `Inbox:CredentialEncryptionKey`.
+- **Deploy:** `ServiceClient__Secret` com `:?` no `inbox` e no `connectors`, dos `SERVICE_CLIENT_SECRET_*` da #234. O `.env.prod.example` só mudou o comentário.
+- **Docs:**
+  - `docs/configuration.md`;
+  - `docs/development.md`;
+  - `docs/deployment.md`: a seção da #235, com conferência e sintomas;
+  - `01` (Autenticação) e `CHANGELOG`.
+- **O HMAC continua aceito nos três apps.** O `TokenService.Issue` dos três apps ficou sem chamador de produção. As fixtures ainda o usam até a #236, e ele sai na #182 (design, D7).
+
+### Caminho do H6
+
+**Entrou o principal, pela `IOpenIddictServerFactory`; o H6 vale.** A transação criada fora de requisição, com um `GenerateTokenContext` despachado, gera o token sem `HttpContext`, com a primeira credencial do anel e sem linha em `openiddict_tokens`. A alternativa com o `JsonWebTokenHandler` não foi necessária.
+
+O H9 se confirmou: o principal precisa trazer pronto o que o sign-in poria (`oi_iss`, `oi_aud`, `oi_scp`, `oi_crt_dt`, `oi_exp_dt`, `oi_prst`, `sub`, `client_id`).
+
+### Correções na implementação (convenção 9)
+
+- **1.2, o presenter:** o guarda do conjunto de claims reprovou na primeira rodada. O token do `/connect/token` traz `oi_prst` (o presenter, igual ao `client_id`), que o `AttachDefaultPresenters` põe no sign-in. O principal passou a levá-lo, e o design foi corrigido.
+- **2.1, `Invalidate` interno:** `internal void Invalidate(string token)`, e não `public Invalidate()`. O handler precisa comparar o token, e um método público com parâmetro violaria a superfície estreita.
+- **4.1, registro sempre no `apps/connectors`:** o source e o `IssuerToken` são registrados sempre, como o `SyncApiClient`; o `BaseAddress` e a checagem de boot só valem com `Api:BaseUrl`.
+- **5.4, `invalid_client` é `401`:** o emissor real responde `invalid_client` com `401`, e não `400`. O source decide pelo campo `error`, e só o duplo mudou.
+- **5.4, o cenário do despacho divergente:** dizia que a mensagem "não é encerrada como falha terminal". O caminho de transporte a devolve a pendente só até `Debounce:MaxDispatchAttempts`, e depois a encerra, como hoje com o `apps/api` fora. O cenário passou a dizer isso. O comportamento não mudou.
+- **5.7, parada:** com o `Identity:Issuer` divergente, o `apps/connectors` nunca obtém as chaves (o discovery anuncia outro issuer) e responde `503`, então o `apps/api` responde `502` com `detail` `"503"`. Por decisão do dono, a causa passou a ser as chaves de outro emissor com o mesmo issuer (o `TestIssuer` do projeto de teste, por link no `rt-connectors`), e o `401` decidido vale.
+- **7.2, o registro do `ServiceAccessTokenIssuer`:** estava dentro do `AddIdentityIssuer`, que sai cedo sem `PublicUrl:BaseUrl`. O handler, registrado sempre, ficava sem dependência, e a validação do DI falhava antes de o boot nomear a chave. Três casos de `IdentityIssuerStartupValidationTests` reprovaram na `r1` do fechamento. O registro foi para o `Program.cs`, ao lado do handler.
+
+### O que a implementação mediu
+
+Suítes pelo `~/.cache/buteco-agents/bin/suite-235.sh` (CPU amostrada na rodada, regra assimétrica), em `~/.cache/buteco-agents/235-baseline/` e `235-fechamento/`. Comparação por nome com o GUID normalizado (#214), como multiconjunto. A `r1` do fechamento achou o defeito do registro (correção 7.2: 3 casos, rodada inconclusiva pela CPU, defeito determinístico). A `r2` é a do código final.
+
+| suíte | baseline `05aae2f` | change (`r2`) | por nome | CPU mínima |
+|---|---|---|---|---|
+| `apps/api` | 1.271 + 1 ignorado | **1.277 + 1 ignorado** | 2 ausentes (os dois casos HMAC do `ServiceTokenDelegatingHandlerTests`, substituídos, declarado no D6); 8 novos | 58 (verde, conta) |
+| `apps/connectors` | 317 + 1 ignorado | **337 + 1 ignorado** | 1 ausente (`EveryRequest_CarriesAFreshServiceConnectorsToken`, substituído, D6); 21 novos | 100 |
+| `apps/inbox` | 302 | **322** | 0 ausentes; 20 novos | 100 |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 11 + 1 reprovado (`r1`), 12 (`r2`) | **15** | os 12 presentes; o `Source3_…` (#176), reprovado na `r1` da baseline, passou nas duas rodadas do fechamento; 3 novos | 100 |
+| `tests/ApiConnectorsRoundTrip.Tests` | 8 | **10** | 1 renomeado (S4, 5.7); 3 novos | 100 |
+| `tests/CrossAppTaskStoreCompatibility.Tests` | 4 | **4** | igual | 100 |
+
+**Convenção 18** (só código; projeção do design em "Tamanho"):
+
+| coluna | projetado | medido | desvio |
+|---|---|---|---|
+| produção | ~670 | +1.057 / −82, 21 arquivos | +58%. Os dois sources deram 264 e 271 linhas, contra ~150 cada na projeção: a leitura defensiva da resposta, os dois níveis de log e o registro no mesmo arquivo. As duas checagens de boot (60 e 79) não tinham item próprio. |
+| testes | ~1.650 | +1.525 / −126, 18 arquivos | −8% |
+| duplos e suporte | ~340 | +385 / −20, 9 arquivos | +13%: o `FakeTokenEndpoint` (97 em cada app) e as duas `RoundTripFixture` |
+
+**Guardas (convenção 15):** todos os guardas do `tasks.md` foram vistos reprovar contra o defeito nomeado, com o arquivo de volta e o sha igual. São 15 defeitos no source de cada app, 3 no handler de cada app, 2 do H6, 4 do gerador, 3 de boot no inbox e 2 no connectors, e os de `tests/`. Logs em `~/.cache/buteco-agents/235-verificacao/guardas/`. Scripts: `guarda-235.sh` e `guarda2-235.sh`.
+
+**Conferência no stack local** (`235-verificacao/manual/RESUMO.md`): Postgres e RabbitMQ descartáveis, e os quatro apps por `dotnet run`, com a configuração de desenvolvimento.
+- **Linha do primeiro token:**
+  - no `connectors`, na primeira rodada do ciclo;
+  - no `inbox`, na primeira validação de agente;
+  - no `api`, "gerado no processo", no cadastro da base.
+- **S1:** canal → `201`; agente inexistente → `400`.
+- **S2:** webhook → `200`; A2A → `200`; task criada no `apps/api` e executada pelo worker. O LLM do gateway local não tem o `gpt-5.6-sol`, e a task terminou `Failed` por isso.
+- **S4:** base sincronizada → `201`.
+- **S3:** "Sincronizar agora" → `202`, com 5 documentos e sem erro.
+- Nenhum `invalid_client`, e nenhum `401`/`403` nas chamadas de saída.
+
+### Para as próximas
+
+- **#236:** as fixtures dos três apps ainda anexam o HMAC `operator` (`TestAuthentication.AttachOperatorToken`, `CreateClientAs`, `RoundTripFixture.OperatorClient`, `OperatorHmacToken`). São os únicos chamadores do `TokenService.Issue`.
+- **#182:** saem o HMAC, o `TokenService` inteiro e a `Auth:TokenSigningKey`. O `apps/inbox` e o `apps/connectors` já não assinam nada.
+- **#176:** a baseline desta change teve a primeira reprovação válida do `Source3_…` com a CPU em 100 a rodada inteira (comentado lá).
+- **Desenvolvimento local:** o `PublicUrl:BaseUrl` do `appsettings.Development.json` do `apps/inbox` aponta para um túnel `trycloudflare` antigo, e o push do worker não volta ao inbox local. Isso já existia antes desta change, que só registra o achado (#238).

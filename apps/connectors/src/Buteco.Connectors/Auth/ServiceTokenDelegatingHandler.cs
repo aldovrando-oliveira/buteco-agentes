@@ -1,35 +1,37 @@
+using System.Net;
 using System.Net.Http.Headers;
 
 namespace Buteco.Connectors.Auth;
 
-// Assina um token de serviço novo a cada requisição de saída para apps/api, com sub
-// "service:connectors" (design.md da change ciclo-de-sincronizacao, D1). Não guarda nem
-// reaproveita token entre chamadas.
-//
-// TERCEIRA CÓPIA do molde, com o subject trocado, sem libs/ (a extração ficou como
-// alternativa da #117, que vai redesenhar a assinatura): as outras duas são
-// apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs (service:inbox) e
-// apps/api/src/Buteco.Api/Auth/ServiceTokenDelegatingHandler.cs (service:api). Quem aceita
-// este subject é a tabela de apps/api/src/Buteco.Api/Auth/ServiceScopeAuthorizationHandler.cs,
-// só nas cinco rotas de /sync/knowledge-bases. Mudar um dos três exige olhar os outros dois.
-//
-// ConnectorsSubject NÃO entra na tabela de ConnectorsSubjectAuthorizationHandler: aquela
-// tabela diz quem pode chamar este app, e um token service:connectors que chegue aqui
-// recebe 403, como qualquer subject desconhecido.
-public sealed class ServiceTokenDelegatingHandler(ITokenService tokenService) : DelegatingHandler
+// Duplicado deliberadamente de
+// apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs — sem libs/ (design.md
+// da change servicos-token-emissor, D4). O handler do apps/api faz o mesmo com o token
+// gerado no processo.
+
+/// <summary>
+/// Anexa a toda requisição de saída para o <c>apps/api</c> o token de serviço do emissor
+/// (design.md da change servicos-token-emissor, D4). O subject <c>service:connectors</c> sai
+/// do <c>client_id</c> <c>buteco-servico-connectors</c>, pela tabela de clientes do
+/// <c>apps/api</c>, e só abre as cinco rotas de <c>/sync/knowledge-bases</c>
+/// (apps/api/src/Buteco.Api/Auth/ServiceScopeAuthorizationHandler.cs).
+/// <para>
+/// <b><c>401</c> do destino:</b> descarta o token em cache e devolve a resposta, sem repetir.
+/// Repetir duplicaria um upsert que já tenha produzido efeito.
+/// </para>
+/// </summary>
+public sealed class ServiceTokenDelegatingHandler(ServiceAccessTokenSource tokens) : DelegatingHandler
 {
-    public const string ConnectorsSubject = "service:connectors";
-
-    // TTL fixo, não configurável, pelo mesmo motivo dos outros dois: o token nunca sai
-    // do processo nem é visto por um humano, só precisa sobreviver à rede e ao
-    // processamento até o apps/api validar a assinatura.
-    private static readonly TimeSpan ServiceTokenLifetime = TimeSpan.FromMinutes(5);
-
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var (token, _) = tokenService.Issue(ConnectorsSubject, ServiceTokenLifetime);
+        var token = await tokens.GetAsync(cancellationToken);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        return base.SendAsync(request, cancellationToken);
+        var response = await base.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            tokens.Invalidate(token);
+        }
+
+        return response;
     }
 }

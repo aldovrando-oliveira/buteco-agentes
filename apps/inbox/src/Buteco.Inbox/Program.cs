@@ -31,9 +31,9 @@ builder.Services.Configure<DebounceOptions>(builder.Configuration.GetSection(Deb
 builder.Services.Configure<DispatchReconciliationOptions>(builder.Configuration.GetSection(DispatchReconciliationOptions.SectionName));
 builder.Services.Configure<TokenSigningOptions>(builder.Configuration.GetSection(TokenSigningOptions.SectionName));
 builder.Services.AddSingleton<ITokenService, TokenService>();
-// Transient — AddHttpMessageHandler<T> não registra o handler
-// automaticamente no container, precisa ser feito à parte.
-builder.Services.AddTransient<ServiceTokenDelegatingHandler>();
+// O token de serviço do emissor do apps/api, com cache, e o handler que o anexa
+// (servicos-token-emissor, D3 e D4).
+builder.Services.AddServiceAccessToken(builder.Configuration);
 // Nome totalmente qualificado — colide com Microsoft.AspNetCore.Builder.SessionOptions
 // (middleware de sessão HTTP do ASP.NET Core, não usado aqui), trazido por
 // implicit usings do Sdk.Web.
@@ -81,8 +81,8 @@ var apiBaseUrl = builder.Configuration.GetSection(ApiOptions.SectionName).Get<Ap
 
 // Timeout curto e fixo (design.md, Decision 4) — mesmo padrão de
 // PushNotificationSender em apps/workers. ServiceTokenDelegatingHandler
-// (auth-login-e-servico, design.md, Decision 3) assina o token de
-// serviço em toda chamada a apps/api.
+// anexa o token de serviço do emissor em toda chamada a apps/api
+// (servicos-token-emissor, D4).
 builder.Services.AddHttpClient(AgentReferenceValidator.HttpClientName, client => client.BaseAddress = new Uri(apiBaseUrl))
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(5))
     .AddHttpMessageHandler<ServiceTokenDelegatingHandler>();
@@ -138,6 +138,10 @@ app.ValidateDebounceSessionSerializationMaxWait();
 // convenção 8). Sem Identity:Issuer, só avisa que a validação está desligada.
 app.ValidateIssuerTokenConfiguration();
 app.ValidateIssuerClientSubjects();
+
+// O segredo do apps/inbox no emissor (servicos-token-emissor, D5; convenção 8): presente,
+// base64, 32 bytes e distinto da Inbox:CredentialEncryptionKey, sem ecoar o valor.
+app.ValidateServiceClientConfiguration();
 
 app.UseCors();
 app.UseAuthentication();

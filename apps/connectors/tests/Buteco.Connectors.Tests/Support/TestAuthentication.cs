@@ -10,6 +10,11 @@ public static class TestAuthentication
 {
     public const string TokenSigningKey = "test-signing-key-shared-between-api-and-inbox-fixtures";
 
+    // O segredo do apps/connectors no emissor (servicos-token-emissor, D5), obrigatório no
+    // boot com Api:BaseUrl. Gerado com `openssl rand -base64 32`; distinto do de
+    // desenvolvimento.
+    public const string ServiceClientSecret = "0YQDdIaMNUNTwbz8s2jahrj6AX8Q5MksdcZudVwEa0g=";
+
     public static string IssueToken(IServiceProvider services, string subject, TimeSpan? lifetime = null)
     {
         var tokenService = services.GetRequiredService<ITokenService>();

@@ -40,6 +40,12 @@ public sealed class ConnectorsFactory(
     /// </summary>
     public FakeSyncApiHandler SyncApi { get; } = new();
 
+    /// <summary>
+    /// O <c>/connect/token</c> do emissor, que o handler de saída chama antes do
+    /// <see cref="SyncApi"/> (servicos-token-emissor, D6). Sempre responde um token.
+    /// </summary>
+    public FakeTokenEndpoint TokenEndpoint { get; } = new();
+
     public GoogleDriveFakeHandler Google { get; } = new();
 
     public FakeConnector Fake { get; } = new();
@@ -74,6 +80,8 @@ public sealed class ConnectorsFactory(
             // Mesmo motivo, para a validação do token do emissor
             // (validacao-jwks-inbox-connectors, D7): o appsettings.Development.json a liga.
             ["Identity:Issuer"] = string.Empty,
+            // Obrigatório no boot com Api:BaseUrl (servicos-token-emissor, D5).
+            ["ServiceClient:Secret"] = TestAuthentication.ServiceClientSecret,
         };
         if (issuer is not null)
         {
@@ -114,6 +122,7 @@ public sealed class ConnectorsFactory(
             services.AddHttpClient(GoogleDriveHttp.DriveClientName).ConfigurePrimaryHttpMessageHandler(() => Google);
             services.AddHttpClient(GoogleDriveHttp.OAuthClientName).ConfigurePrimaryHttpMessageHandler(() => Google);
             services.AddHttpClient(Buteco.Connectors.Sync.SyncApiClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => SyncApi);
+            services.AddHttpClient(ServiceAccessTokenSource.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => TokenEndpoint);
 
             if (issuer is not null)
             {

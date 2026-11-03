@@ -300,6 +300,18 @@ o versionamento pretende seguir
   - aceitar e concluir não abrem sessão: o painel faz o login normal com a senha nova;
   - a lista e o detalhe de Usuários mostram o convidado, a validade do convite e quem
     convidou; reativar e desativar recusam o convidado.
+- **Os serviços obtêm o token de serviço no emissor** (#235), segundo passo da troca do
+  token de serviço (#182):
+  - o `apps/inbox` e o `apps/connectors` pedem o token ao `/connect/token` do `apps/api`,
+    pelo endereço interno, com o segredo de cada um, e o guardam em cache até faltar 1 min
+    para vencer, com um pedido só sob concorrência;
+  - com o emissor fora do ar ou o segredo recusado, as chamadas falham como com o
+    `apps/api` fora do ar, e durante 10 s falham sem rede;
+  - o `apps/api` gera o seu, para o `apps/connectors`, no próprio processo, com a mesma
+    credencial e o mesmo formato do `/connect/token`;
+  - nenhum serviço assina mais HMAC, que continua aceito até a #182;
+  - `ServiceClient__Secret` no `inbox` e no `connectors`, dos `SERVICE_CLIENT_SECRET_*`
+    que a #234 criou; o do inbox precisa ser distinto da `Inbox__CredentialEncryptionKey`.
 - **Clientes de serviço no emissor** (#234), primeiro passo da troca do token de serviço
   (#182):
   - o `apps/api` cadastra e mantém os clientes confidenciais `buteco-servico-inbox` e

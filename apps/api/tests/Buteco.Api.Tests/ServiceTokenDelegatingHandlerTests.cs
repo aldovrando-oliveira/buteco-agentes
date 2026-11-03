@@ -1,93 +1,130 @@
 using System.Net;
 using Buteco.Api.Auth;
+using Buteco.Api.Identity.Clients;
+using Buteco.Api.Identity.ServiceTokens;
 using Buteco.Api.Tests.Support;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.JsonWebTokens;
+using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Buteco.Api.Tests;
 
 /// <summary>
-/// O token que o <c>apps/api</c> assina para chamar o <c>apps/connectors</c>
-/// (design.md da change criacao-base-sincronizada, D4): <c>sub</c> igual a
-/// <c>service:api</c>, 5 minutos de validade, um token novo por requisição. Sem
-/// contêiner.
+/// O token que o <c>apps/api</c> anexa às chamadas ao <c>apps/connectors</c> (spec
+/// <c>knowledge-sync-folder-validation</c>, "Token de serviço service:api nas chamadas ao
+/// apps/connectors"; design.md da change servicos-token-emissor, D2 e D4): o do
+/// <see cref="ServiceAccessTokenIssuer"/>, reaproveitado entre requisições, e descartado no
+/// <c>401</c> do destino sem repetir a chamada. Reescrito na servicos-token-emissor: antes,
+/// era um HMAC novo por requisição (mudança de asserção declarada no design, D6).
 /// </summary>
-public class ServiceTokenDelegatingHandlerTests
+public class ServiceTokenDelegatingHandlerTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>, IAsyncLifetime
 {
-    private static readonly TokenService Tokens = new(Microsoft.Extensions.Options.Options.Create(new TokenSigningOptions
-    {
-        TokenSigningKey = TestAuthentication.TokenSigningKey,
-    }));
+    public async Task InitializeAsync() =>
+        Assert.True((await factory.CreateClient().GetAsync("/.well-known/jwks")).IsSuccessStatusCode);
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public async Task Send_AttachesBearerTokenWithServiceApiSubjectAndFiveMinuteLifetime()
+    public async Task Send_AttachesTheInProcessToken_AndReusesItAcrossRequests()
     {
-        var inner = new CapturingHandler();
-        using var invoker = new HttpMessageInvoker(new ServiceTokenDelegatingHandler(Tokens) { InnerHandler = inner });
-
-        var before = DateTimeOffset.UtcNow;
-        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://connectors.test/x"), CancellationToken.None);
-        var after = DateTimeOffset.UtcNow;
-
-        var authorization = Assert.Single(inner.Authorizations);
-        Assert.NotNull(authorization);
-        Assert.Equal("Bearer", authorization!.Scheme);
-
-        var validation = Tokens.Validate(authorization.Parameter!);
-        Assert.True(validation.IsValid);
-        Assert.Equal("service:api", validation.Subject);
-        Assert.Equal("service:api", ServiceTokenDelegatingHandler.ApiSubject);
-
-        // O TokenService usa DateTimeOffset.UtcNow e grava exp em segundos: a
-        // expiração cai na janela [antes + 5 min, depois + 5 min], com o
-        // truncamento para segundo.
-        var exp = ReadExp(authorization.Parameter!);
-        Assert.InRange(exp, before.AddMinutes(5).ToUnixTimeSeconds() - 1, after.AddMinutes(5).ToUnixTimeSeconds());
-    }
-
-    [Fact]
-    public async Task Send_TwoRequests_EachGetsItsOwnIssuedToken()
-    {
-        var inner = new CapturingHandler();
-        var issuer = new CountingTokenService(Tokens);
-        using var invoker = new HttpMessageInvoker(new ServiceTokenDelegatingHandler(issuer) { InnerHandler = inner });
+        var destination = new ScriptedHandler();
+        using var invoker = Invoker(NewIssuer(), destination);
 
         await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://connectors.test/a"), CancellationToken.None);
         await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://connectors.test/b"), CancellationToken.None);
 
-        Assert.Equal(2, issuer.Issued);
-        Assert.Equal(2, inner.Authorizations.Count);
-        Assert.All(inner.Authorizations, header => Assert.Equal("service:api", Tokens.Validate(header!.Parameter!).Subject));
+        Assert.Equal(2, destination.Tokens.Count);
+        Assert.Equal(destination.Tokens[0], destination.Tokens[1]);
+        var token = new JsonWebToken(destination.Tokens[0]);
+        Assert.Equal("buteco-servico-api", token.GetPayloadValue<string>(Claims.ClientId));
+        Assert.Equal([IdentityClients.ConnectorsScope], token.Audiences);
     }
 
-    private static long ReadExp(string token)
+    [Fact]
+    public async Task Unauthorized_DiscardsTheToken_WithoutRetrying()
     {
-        var payload = token.Split('.')[0].Replace('-', '+').Replace('_', '/');
-        payload = payload.PadRight(payload.Length + ((4 - (payload.Length % 4)) % 4), '=');
-        using var json = System.Text.Json.JsonDocument.Parse(Convert.FromBase64String(payload));
-        return json.RootElement.GetProperty("Exp").GetInt64();
+        var destination = new ScriptedHandler();
+        destination.Next.Enqueue(HttpStatusCode.Unauthorized);
+        using var invoker = Invoker(NewIssuer(), destination);
+
+        var refused = await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://connectors.test/a"), CancellationToken.None);
+        Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+        Assert.Single(destination.Tokens);
+
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://connectors.test/b"), CancellationToken.None);
+        Assert.Equal(2, destination.Tokens.Count);
+        Assert.NotEqual(destination.Tokens[0], destination.Tokens[1]);
     }
 
-    private sealed class CapturingHandler : HttpMessageHandler
+    [Fact]
+    public async Task ALateUnauthorized_ForATokenAlreadyReplaced_KeepsTheNewOne()
     {
-        public List<System.Net.Http.Headers.AuthenticationHeaderValue?> Authorizations { get; } = [];
+        var issuer = NewIssuer();
+        var destination = new ScriptedHandler();
+        using var invoker = Invoker(issuer, destination);
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        // A sai com T1 e fica segurada; B sai com T1 e recebe 401, que troca o cache por T2.
+        var held = new TaskCompletionSource<HttpStatusCode>(TaskCreationOptions.RunContinuationsAsynchronously);
+        destination.Held.Enqueue(held.Task);
+        var late = invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://connectors.test/a"), CancellationToken.None);
+        await destination.WaitForAsync(1);
+
+        destination.Next.Enqueue(HttpStatusCode.Unauthorized);
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://connectors.test/b"), CancellationToken.None);
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://connectors.test/c"), CancellationToken.None);
+        var replacement = destination.Tokens[2];
+        Assert.NotEqual(destination.Tokens[0], replacement);
+
+        // O 401 de A chega depois, para o T1 já trocado.
+        held.SetResult(HttpStatusCode.Unauthorized);
+        await late;
+
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "http://connectors.test/d"), CancellationToken.None);
+        Assert.Equal(replacement, destination.Tokens[3]);
+    }
+
+    private ServiceAccessTokenIssuer NewIssuer() =>
+        ActivatorUtilities.CreateInstance<ServiceAccessTokenIssuer>(factory.Services);
+
+    private static HttpMessageInvoker Invoker(ServiceAccessTokenIssuer issuer, HttpMessageHandler destination) =>
+        new(new ServiceTokenDelegatingHandler(issuer) { InnerHandler = destination });
+
+    /// <summary>
+    /// O destino: grava o token de cada chamada, responde o próximo status da fila (ou
+    /// <c>200</c>) e, se houver, segura a resposta até o teste soltar.
+    /// </summary>
+    private sealed class ScriptedHandler : HttpMessageHandler
+    {
+        private readonly SemaphoreSlim _arrived = new(0);
+
+        public List<string> Tokens { get; } = [];
+
+        public Queue<HttpStatusCode> Next { get; } = new();
+
+        public Queue<Task<HttpStatusCode>> Held { get; } = new();
+
+        public async Task WaitForAsync(int calls)
         {
-            Authorizations.Add(request.Headers.Authorization);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            for (var i = 0; i < calls; i++)
+            {
+                Assert.True(await _arrived.WaitAsync(TimeSpan.FromSeconds(10)));
+            }
         }
-    }
 
-    private sealed class CountingTokenService(ITokenService inner) : ITokenService
-    {
-        public int Issued { get; private set; }
-
-        public (string Token, DateTimeOffset ExpiresAt) Issue(string subject, TimeSpan lifetime)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            Issued++;
-            return inner.Issue(subject, lifetime);
-        }
+            Task<HttpStatusCode>? held;
+            HttpStatusCode? next;
+            lock (Tokens)
+            {
+                Tokens.Add(request.Headers.Authorization!.Parameter!);
+                held = Held.Count > 0 ? Held.Dequeue() : null;
+                next = held is null && Next.Count > 0 ? Next.Dequeue() : null;
+            }
 
-        public TokenValidationResult Validate(string token) => inner.Validate(token);
+            _arrived.Release();
+            var status = held is not null ? await held : next ?? HttpStatusCode.OK;
+            return new HttpResponseMessage(status);
+        }
     }
 }

@@ -542,14 +542,11 @@ terceiro, é exatamente o caso em que biblioteca mantida vence implementação
 própria: rotação, JWKS, discovery e validação de `aud`/`iss`/`exp` são o tipo
 de código em que defeito vira falha de segurança. O HMAC continua sem
 biblioteca até sair, na #182. Nenhuma rota emite o HMAC de operador desde a #217;
-ele continua aceito até a #184 recusar o subject `operator` no HMAC. Cada serviço
-assina o **próprio** token de serviço com a mesma chave (o `apps/inbox` com
-`service:inbox` em `apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs`,
-e, desde a #104, o `apps/api` com `service:api` em
-`apps/api/src/Buteco.Api/Auth/ServiceTokenDelegatingHandler.cs`, só para chamar o
-`apps/connectors`; os dois são cópias com o subject trocado, sem `libs/`).
-A frase anterior dizia que o `apps/api` emitia os dois, e não é o que o
-código faz; corrigida em `catalogo-base-sincronizada`.
+ele continua aceito até a #184 recusar o subject `operator` no HMAC. **Desde a #235,
+nenhum serviço assina token HMAC**: o token de serviço vem do emissor
+("Tokens de serviço", abaixo), e o HMAC de serviço só continua aceito, até a #182.
+*(Até a #235, cada serviço assinava o próprio token de serviço com a chave
+compartilhada, num `ServiceTokenDelegatingHandler` por app.)*
 
 **Nenhuma requisição espera o `apps/api` para ser autenticada.** O token HMAC
 é validado localmente pela chave compartilhada, no `apps/api`, no `apps/inbox`
@@ -574,9 +571,22 @@ a #103.)*
   ("Usuários locais", abaixo). Os usuários locais ainda não têm papel (RBAC é da
   M2), e todo usuário tem o acesso do operador, pela tabela de clientes
   (`buteco-painel` → `operator`).
-- **Tokens de serviço**: mesmo mecanismo de assinatura, `sub` distinto,
-  assinados pelo próprio serviço a cada requisição de saída com TTL fixo
-  curto, **escopados** no `apps/api` por uma tabela de subjects
+- **Tokens de serviço** (#235): access tokens do emissor do `apps/api`, anexados por
+  um `ServiceTokenDelegatingHandler` em cada app.
+  - **O `apps/inbox` e o `apps/connectors`** pedem o seu em `{Api:BaseUrl}/connect/token`,
+    pelo endereço interno, com `client_credentials`, o `client_id` constante
+    (`buteco-servico-inbox`, `buteco-servico-connectors`), o `ServiceClient:Secret` e
+    `scope=buteco-api`. O `ServiceAccessTokenSource` de cada um, uma cópia em cada app
+    sem `libs/`, guarda o token até faltar 1 min para vencer e faz um pedido só sob
+    concorrência. Com o emissor fora, `503`, `invalid_client` ou timeout, a falha sai como
+    `HttpRequestException`, que cada chamador já trata como "`apps/api` indisponível", e
+    durante 10 s os pedidos falham sem rede.
+  - **O `apps/api`** gera o seu no processo, pela API de geração do OpenIddict, com a
+    mesma credencial do `/connect/token` (`ServiceAccessTokenIssuer`, estreito: só
+    `buteco-servico-api`, `aud` `buteco-connectors`, 15 min, sem parâmetro).
+  - **`401` do destino** descarta o token em cache, sem repetir a chamada.
+  - O subject sai do `client_id`, pela tabela de clientes do destino, e as rotas de cada
+    subject são **escopadas** no `apps/api` por uma tabela de subjects
   (`ServiceScopeAuthorizationHandler`): `operator` em tudo;
   `service:inbox` só nas duas rotas que `apps/inbox` consome;
   `service:connectors` só nas cinco de `/sync/knowledge-bases`; **qualquer

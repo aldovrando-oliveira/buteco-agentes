@@ -33,7 +33,7 @@ public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : 
     [Fact]
     public async Task CreateSynced_ThroughTheRealConnectors_StoresTheFakeConnectorFolder()
     {
-        var (api, _) = fixture.Build(RoundTripFixture.TokenSigningKey);
+        var (api, _) = fixture.Build();
         var folderId = NewFolderId();
         fixture.Fake.Describe = id => new FolderDescription(id, "Pasta do conector falso", $"https://falso.test/{id}");
 
@@ -49,7 +49,7 @@ public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : 
     [Fact]
     public async Task CreateSynced_ConnectorAccessDenied_CodeAndEmailCrossBothApps()
     {
-        var (api, _) = fixture.Build(RoundTripFixture.TokenSigningKey);
+        var (api, _) = fixture.Build();
         var folderId = NewFolderId();
         fixture.Fake.Describe = _ => throw new ConnectorFailure("access-denied", FakeConnector.AccountEmail);
 
@@ -66,7 +66,7 @@ public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : 
     [Fact]
     public async Task CreateSynced_GoogleDriveNotConfiguredInTheRealConnectors_Is422ProviderNotConfigured()
     {
-        var (api, _) = fixture.Build(RoundTripFixture.TokenSigningKey);
+        var (api, _) = fixture.Build();
         var folderId = NewFolderId();
 
         var response = await RoundTripFixture.OperatorClient(api)
@@ -78,10 +78,17 @@ public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : 
         Assert.Empty(await RoundTripFixture.StoredFolderAsync(api, folderId));
     }
 
+    // Chaves divergentes no apps/connectors (decisão do dono, 03/11/2026, na parada da 5.7):
+    // ele obtém as chaves de outro emissor, que anuncia o mesmo issuer do apps/api, e o kid
+    // do token que o apps/api gera no processo não está entre elas. Até a
+    // servicos-token-emissor, a causa era a chave HMAC divergente; com o token do emissor, a
+    // chave HMAC deixou de entrar neste fluxo (troca de premissa registrada no design). A
+    // resposta do apps/api ao 401 não muda.
     [Fact]
-    public async Task CreateSynced_ConnectorsWithADifferentSigningKey_Is502ConnectorsError401()
+    public async Task CreateSynced_ConnectorsWithKeysFromAnotherIssuer_Is502ConnectorsError401()
     {
-        var (api, _) = fixture.Build("chave-de-assinatura-diferente-da-do-apps-api");
+        var otherIssuer = new TestIssuer { AnnouncedIssuer = RoundTripFixture.ApiPublicBaseUrl + "/" };
+        var (api, _) = fixture.Build(connectorsKeysFrom: otherIssuer);
         var folderId = NewFolderId();
 
         var response = await RoundTripFixture.OperatorClient(api)

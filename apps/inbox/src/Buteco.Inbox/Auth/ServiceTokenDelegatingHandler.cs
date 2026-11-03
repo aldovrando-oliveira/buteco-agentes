@@ -1,28 +1,35 @@
+using System.Net;
 using System.Net.Http.Headers;
 
 namespace Buteco.Inbox.Auth;
 
-// Assina um token de serviço novo a cada requisição de saída para
-// apps/api — não guarda nem reaproveita nenhum token entre chamadas
-// (design.md, Decision 3). Custo de assinar é uma HMACSHA256 em
-// memória, desprezível; não há cache para invalidar nem refresh para
-// acertar.
-public sealed class ServiceTokenDelegatingHandler(ITokenService tokenService) : DelegatingHandler
+// Duplicado deliberadamente de
+// apps/connectors/src/Buteco.Connectors/Auth/ServiceTokenDelegatingHandler.cs — sem libs/
+// (design.md da change servicos-token-emissor, D4). O handler do apps/api faz o mesmo com o
+// token gerado no processo.
+
+/// <summary>
+/// Anexa a toda requisição de saída para o <c>apps/api</c> o token de serviço do emissor
+/// (design.md da change servicos-token-emissor, D4). O subject <c>service:inbox</c> sai do
+/// <c>client_id</c> <c>buteco-servico-inbox</c>, pela tabela de clientes do <c>apps/api</c>.
+/// <para>
+/// <b><c>401</c> do destino:</b> descarta o token em cache e devolve a resposta, sem repetir.
+/// Repetir duplicaria um <c>POST /agents/{id}/a2a</c> que já tenha produzido efeito.
+/// </para>
+/// </summary>
+public sealed class ServiceTokenDelegatingHandler(ServiceAccessTokenSource tokens) : DelegatingHandler
 {
-    public const string ServiceSubject = "service:inbox";
-
-    // TTL fixo, não configurável (design.md, Decision 3) — o token
-    // nunca sai do processo nem é observado por um humano: só precisa
-    // sobreviver ao tempo de rede + processamento até apps/api validar
-    // a assinatura. Não há decisão de produto por trás deste valor que
-    // justifique torná-lo configurável por ambiente.
-    private static readonly TimeSpan ServiceTokenLifetime = TimeSpan.FromMinutes(5);
-
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var (token, _) = tokenService.Issue(ServiceSubject, ServiceTokenLifetime);
+        var token = await tokens.GetAsync(cancellationToken);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        return base.SendAsync(request, cancellationToken);
+        var response = await base.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            tokens.Invalidate(token);
+        }
+
+        return response;
     }
 }

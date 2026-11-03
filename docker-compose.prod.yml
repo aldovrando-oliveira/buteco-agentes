@@ -160,6 +160,11 @@ services:
       # (validacao-jwks-inbox-connectors, D3). As chaves vêm pelo Api__BaseUrl
       # acima, nunca pelo domínio público. Vazia, só o token HMAC é aceito.
       Identity__Issuer: ${PUBLIC_DOMAIN}
+      # O segredo do cliente buteco-servico-inbox, o mesmo que o api recebe em
+      # Identity__ServiceClients__Inbox__Secret: é com ele que o inbox obtém no
+      # emissor o token que manda ao api (servicos-token-emissor, D8).
+      ServiceClient__Secret: ${SERVICE_CLIENT_SECRET_INBOX:?defina SERVICE_CLIENT_SECRET_INBOX (o mesmo do serviço api) — use --env-file .env.prod}
+      # Só valida o HMAC que ainda chega (#182 remove); o inbox não assina mais nada.
       Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY}
     # Sem porta publicada — idem apps/api.
 
@@ -225,8 +230,8 @@ services:
       api:
         condition: service_healthy
     environment:
-      # Mesma variável de api e inbox (fonte única). Terceiro processo com a
-      # chave: risco aceito na #119, ver docs/deployment.md e a #117.
+      # Mesma variável de api e inbox (fonte única). Desde a #235 o connectors só
+      # valida o HMAC que ainda chega, e não assina mais nada; a chave sai na #182.
       Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY}
       # OPCIONAL: vazia, o provedor google-drive não existe e
       # GET /connectors/providers responde []. Presente e inválida, o processo
@@ -239,6 +244,11 @@ services:
       # Issuer do emissor OIDC do apps/api, mesma variável e mesmo motivo do
       # inbox (validacao-jwks-inbox-connectors, D3).
       Identity__Issuer: ${PUBLIC_DOMAIN}
+      # O segredo do cliente buteco-servico-connectors, o mesmo que o api recebe em
+      # Identity__ServiceClients__Connectors__Secret: é com ele que o ciclo obtém no
+      # emissor o token que manda ao api (servicos-token-emissor, D8). Obrigatório
+      # porque o Api__BaseUrl acima é fixo.
+      ServiceClient__Secret: ${SERVICE_CLIENT_SECRET_CONNECTORS:?defina SERVICE_CLIENT_SECRET_CONNECTORS (o mesmo do serviço api) — use --env-file .env.prod}
     # Sem porta publicada — o nginx do stack alcança pelo nome de serviço.
 
   frontend:
