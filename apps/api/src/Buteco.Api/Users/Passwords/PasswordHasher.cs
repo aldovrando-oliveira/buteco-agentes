@@ -22,7 +22,7 @@ namespace Buteco.Api.Users.Passwords;
 /// (<see cref="BootstrapLegacyPasswordVerifier"/>).</item>
 /// </list>
 /// </summary>
-public sealed class PasswordHasher
+public class PasswordHasher
 {
     private const string Prefix = "$argon2id$";
     private const int Version = 0x13;
@@ -44,8 +44,11 @@ public sealed class PasswordHasher
 
     public PasswordVerificationResult Verify(string password, string? storedHash, bool isBootstrapLegacy)
     {
+        // Sem senha gravada (o convidado, design.md da change convites-redefinicao-senha, D2):
+        // o mesmo custo do e-mail sem conta, senão o tempo de resposta revela o convite pendente.
         if (string.IsNullOrEmpty(storedHash))
         {
+            VerifyAgainstDummy(password);
             return PasswordVerificationResult.Failed;
         }
 
@@ -82,8 +85,11 @@ public sealed class PasswordHasher
             : PasswordVerificationResult.SucceededNeedsRehash;
     }
 
-    /// <summary>A verificação do e-mail sem conta: mesmo custo, resultado descartado.</summary>
-    public void VerifyAgainstDummy(string password) => Verify(password, DummyHash, isBootstrapLegacy: false);
+    /// <summary>
+    /// A verificação do e-mail sem conta e do usuário sem senha: mesmo custo, resultado descartado.
+    /// Virtual para o teste observar que ela é chamada (o guarda confere o caminho, não o tempo).
+    /// </summary>
+    public virtual void VerifyAgainstDummy(string password) => Verify(password, DummyHash, isBootstrapLegacy: false);
 
     private static string HashCore(string password)
     {

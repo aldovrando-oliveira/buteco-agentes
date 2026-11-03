@@ -123,8 +123,5 @@ public sealed class IdentityClientCatalog(
             !stored.PostLogoutRedirectUris.SetEquals(wanted.PostLogoutRedirectUris);
     }
 
-    private Uri PanelBase() =>
-        Uri.TryCreate(options.Value.PanelBaseUrl, UriKind.Absolute, out var panel)
-            ? panel
-            : issuer.Issuer ?? throw new InvalidOperationException("Emissor sem url pública: o catálogo de clientes não tem base.");
+    private Uri PanelBase() => PanelBaseUrl.Resolve(options.Value, issuer);
 }

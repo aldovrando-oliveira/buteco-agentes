@@ -17611,3 +17611,177 @@ do e-mail), **#221** (o IP da sessão) e **#218** (a redefinição que não revo
    e Usuários (#219)".
 2. **Conferir:** os `curl` da mesma seção.
 3. **Rollback:** a imagem anterior do `api`.
+
+## `convites-redefinicao-senha` — convite e redefinição de senha por link de uso único (#181)
+
+**Change proposta e implementada em 02/11/2026**, na branch `feat/181-convites-redefinicao-senha`,
+num worktree próprio, a partir de `a4d3495`. Entrega M1 · 8 de 12 (acompanhamento #194). Só o
+`apps/api` tem código; as telas são da #183.
+- **Capacidade nova:** `user-access-links`.
+- **Capacidades alteradas:** `local-users` (o estado `convidado`, o login do convidado com a
+  verificação fictícia) e `user-management` (lista e detalhe com o convite; `activate` e
+  `deactivate` recusam o convidado).
+
+**Decisões do dono antes do apply** (02/11/2026), P1 a P9 como recomendadas:
+- o convite é uma linha de `users` no estado `invited`, e cancelar apaga a linha;
+- o token vai no fragmento (`/convite#token`), com as consultas por `POST`: a divergência do
+  protótipo foi registrada na #183;
+- o convite vencido continua na lista, com `vencido: true`;
+- aceitar e concluir respondem `204` sem abrir sessão, e zeram o bloqueio do e-mail;
+- trocar a própria senha invalida o link pendente;
+- o admin não gera link para si (`403`);
+- link inválido recebe uma resposta só (`404`, um texto).
+
+E a **P10, mudada pelo dono:**
+- criar o convite, gerar novo link e gerar a redefinição pedem a senha de quem chama;
+- a senha errada responde `401` e conta no bloqueio do e-mail de quem chama;
+- cancelar não pede a senha.
+
+Na revisão das specs, o guarda do hash fictício passou a conferir o caminho (um dublê que
+conta as chamadas), e não o tempo. A comparação de tempo virou conferência manual no
+fechamento (#226).
+
+### O que entrou
+
+- **`Users/AccessLinks/`:**
+  - `InvitationEndpoints` (`POST /users/invitations`, `…/{id}/invitation/renew`,
+    `…/{id}/invitation/cancel`) e `PasswordResetEndpoints` (`POST /users/{id}/password-reset`);
+  - `AccessLinkPublicEndpoints`: `POST /auth/invitation`, `…/accept`, `/auth/password-reset`,
+    `…/complete`, anônimas, com as barreiras do login, e o aceite e a conclusão no limite global;
+  - `AccessLinkToken`: 32 bytes, base64url, só o SHA-256 guardado, 72 h / 24 h;
+  - `AccessLinkUrls`, `AccessLinkPurpose`, `CallerPassword`.
+- **Uso único:** um `UPDATE` condicional ao hash, ao propósito, ao vencimento e ao estado. O
+  cancelamento é um `DELETE` condicional ao estado `invited`. Renovar e gerar a redefinição
+  também são `UPDATE` condicionais. Concluir a redefinição troca o stamp e encerra as sessões
+  na mesma transação.
+- **`User`:** `CreateInvitation`, `IssueAccessLink`; o link é apagado em `ChangePassword` e
+  `Deactivate`. **`UserStatusText`:** a leitura lança para estado desconhecido (achado 3).
+- **`PasswordHasher.Verify`:** hash nulo ou vazio passa pela verificação fictícia (achado 1).
+- **`UserEndpoints`:** `activate` e `deactivate` → `409` no convidado (achado 2).
+  `UserFields` foi extraído dele, porque a criação do convite é o segundo consumidor.
+- **`Identity/PanelBaseUrl`:** extraída do `IdentityClientCatalog`; a base do link nunca sai
+  do `Host`.
+- **Migration `AddUserAccessLinks`:** colunas anuláveis em `users` e índice único no hash.
+- **Docs:** `01` (Autenticação), `docs/architecture.md`, `docs/deployment.md` (a seção da
+  #181, com a conferência e o rollback) e o `CHANGELOG`.
+
+### O que a implementação mediu
+
+Suítes por nome contra as duas rodadas da baseline, pelo
+`~/.cache/buteco-agents/bin/suite-181.sh`. As saídas estão em
+`~/.cache/buteco-agents/181-verificacao/`.
+
+| suíte | baseline | fechamento | por nome |
+|---|---|---|---|
+| `apps/api` | 1.172 + 1 ignorado + 1 falha (#231 numa rodada, #232 na outra) | **1.244 + 1 ignorado, 0 falha** (rodada 2) | 0 de antes com resultado mudado; 73 novos aprovados; `Verify_NullHash_Fails` absorvido numa teoria. **A #231 e a #232 não reapareceram** |
+| `tests/ApiConnectorsRoundTrip.Tests` | 8/8 | **8/8** | igual |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 12/12 | **12/12** (rodada final) | igual; nas rodadas da manhã o `Source3` reprovou também na baseline (#176) |
+| `apps/frontend` | 1.978/1.978 em 101 s | **1.978/1.978** nas 4 rodadas finais | 0 ausentes, 0 novos, 0 com resultado mudado, nas 8 rodadas finais |
+
+- **A máquina não sustentou o protocolo no fechamento:**
+  - o `CPU_Speed_Limit` caía de 100 para 23 durante as rodadas, e o load chegava a 22–38;
+  - a espera do script só confere o início da rodada;
+  - a rodada 1 do `apps/api` (37 min) teve 2 falhas fora da área da change, e a rodada 2
+    (16 min) passou inteira;
+  - o frontend e o rt-inbox não fecharam verdes nem com o código de `main`. Nenhum dos dois
+    é tocado pela change (`git diff` vazio em `apps/frontend/` e em `tests/`).
+- **Rodadas finais (02/11, à tarde, na tomada), alternando baseline e change**, com o
+  `suite-181.sh` amostrando o `CPU_Speed_Limit` a cada 5 s durante a rodada. A regra de
+  validade ficou **assimétrica** (do dono): CPU estrangulada causa reprovação falsa, não
+  aprovação falsa, então rodada verde conta mesmo com queda, e reprovação só conta com a CPU
+  em 100 do início ao fim. As saídas estão em `181-verificacao/validas/`.
+
+  | rodada | worktree | início | resultado | duração | CPU mínima |
+  |---|---|---|---|---|---|
+  | frontend 1 | baseline | 11:55 | 1.978/1.978 | 108 s | 60 |
+  | frontend 2 | baseline | 12:01 | 1.978/1.978 | 100 s | 72 |
+  | frontend 3 | baseline | 12:08 | 1.978/1.978 | 108 s | 62 |
+  | frontend 4 | baseline | 12:15 | 1.978/1.978 | 109 s | 62 |
+  | frontend 1 | change | 12:22 | 1.978/1.978 | 107 s | 62 |
+  | frontend 2 | change | 12:27 | 1.978/1.978 | 104 s | 62 |
+  | frontend 3 | change | 12:34 | 1.978/1.978 | 105 s | 62 |
+  | frontend 4 | change | 12:42 | 1.978/1.978 | 111 s | 62 |
+  | rt-inbox | baseline | 12:47 | 12/12 | 48 s | 100 |
+  | rt-inbox | change | 12:48 | 12/12 | 55 s | 100 |
+
+  - Todas começaram com a CPU em 100 e o load abaixo de 3. **A própria suíte do frontend
+    derruba o limite** para 60–72 em 55 a 90 s, com o load em 22–29: sugestão de testar com
+    menos workers registrada na #226.
+  - Por nome, as 8 do frontend são iguais entre si: 0 ausentes, 0 novos, 0 mudados.
+- **Build `--no-incremental`:** o mesmo conjunto de avisos da baseline, por código, contagem,
+  arquivo e mensagem.
+- **As corridas:**
+  - dois aceites e duas conclusões concorrentes nunca tiveram sucesso juntos (0 de 20
+    rodadas, em todas as execuções);
+  - com o consumo em dois passos, as duas classes reprovaram em três de três execuções;
+  - dois convites para o mesmo e-mail: o `409` veio do índice em 20 de 20.
+- **Tamanho** (convenção 18, só código, sem `openspec/`, `.md` nem migrations):
+  - produção **+971 / −66, 18 arquivos**; testes **+1.748 / −2, 19 arquivos**;
+  - contra a projeção (~710 / ~1.350): **+37 % / +29 %**;
+  - na produção, dentro do pior da série que o design calculou (~1.110); nos testes, um pouco
+    acima (~1.670);
+  - a maior parte do excesso de produção está nas rotas públicas (266 contra ~200);
+  - nos testes, o excesso está nos casos que entraram como divergência.
+- **Tempo do login, conferido à mão no stack local** (o vazamento do achado 1 era de 0,0006 ms
+  contra ~27 ms, medido no 2.6):
+  - `POST /auth/session` com 20 tentativas por grupo, intercaladas;
+  - medianas de **145,0 / 145,8 / 145,4 ms** para convidado / sem conta / senha errada;
+  - os três grupos responderam `401`.
+
+### Divergências do design (convenção 9)
+
+- **O guarda do stamp estava no lugar errado, de novo.** Com a troca do stamp retirada da
+  conclusão, os 11 casos passaram: a revogação já derruba a renovação sozinha. É o mesmo erro
+  que a #219 tinha registrado. O efeito próprio do stamp é o cookie do emissor em voo. Entrou o
+  caso `Completing_RefusesASessionCookieInFlight`, e com o defeito só ele reprova.
+- **O estado mascara o propósito:** o aceite apaga o link, então um link de redefinição nunca
+  está num convidado. Sem um cenário próprio, o guarda do propósito passaria. Entrou um link de
+  convite regravado à mão num ativo, usado na rota da redefinição.
+- **O ciclo de log usa `POST`:** uma rota `GET` com o token a mais não aparece no log do ciclo.
+  Entrou `NoRoute_TakesTheTokenInThePathOrQuery`.
+- **A redefinição vencida não tinha caso;** entrou no da resposta única, com guarda próprio.
+- **Nas duas corridas, a parte comportamental reprovou primeiro** em todas as execuções com o
+  defeito. Por isso a asserção do SQL foi rodada isolada (um pedido só, sem corrida e sem a
+  parte comportamental, num caso temporário retirado depois): aprovou sem o defeito e reprovou
+  com ele, nas duas, com o `WHERE id = @p5` do `SaveChanges` sem `access_link_hash`
+  (`guardas/6.{4,7}-sql-isolada-{aprova,reprova}.log`). Os testes ficaram como estavam.
+- **O `401` em vez do `200` no guarda da recusa de si mesmo (5.4):** o caso manda a senha
+  errada, então sem a recusa a conferência da senha responde primeiro. O guarda reprova do
+  mesmo jeito.
+- **Renovar e gerar a redefinição viraram `UPDATE` condicionais** ao estado, contra a corrida
+  com o aceite e a desativação.
+
+### Stack local (8.3 do `tasks.md`)
+
+`docker-compose.prod.yml` em `http://localhost:18181`, com segredos descartáveis e o resolver do
+nginx trocado no contêiner (a #212). Os passos:
+- o login do bootstrap pelo painel;
+- convite sem a senha → `401`; com a senha → `201`, com o link em `/convite#…`;
+- o link aberto no Chrome: a linha do nginx é `GET /convite HTTP/1.1`, sem o token;
+- consulta → `200`; outra origem → `403`; senha curta → `400`; aceite → `204` sem cookie; o
+  mesmo link → `404`; o login do convidado emite tokens;
+- redefinição: gerar → `200`; concluir → `204`; a sessão de antes → `invalid_grant`; a senha
+  antiga → `401`, a nova → `204`;
+- **o `grep` dos dois tokens nos logs do `frontend` e do `api`: 0 linhas.**
+
+A saída está no 8.3 do `tasks.md` e em `181-verificacao/stack/`.
+
+### Registros (convenção 23)
+
+Publicados em 02/11/2026, com o ok do dono: **#183** (o contrato, o fragmento e o
+`replaceState`, o campo de senha de quem chama), **#184** (as ações só para Admin) e **#181**
+(as decisões). As falhas da baseline viraram **#231** e **#232**.
+
+O `Source3` do rt-inbox, que reprovou de manhã também no código de `main`, **não era achado
+novo**: é a #176, anterior à change. As 4 reprovações de hoje foram comentadas nela; nas
+rodadas finais passou nos dois worktrees.
+
+### Pós-merge
+
+1. **Deploy:** o `api` com a migration `AddUserAccessLinks` (colunas anuláveis e um índice;
+   `users` tem dezenas de linhas). Sem variável nova. Ver `docs/deployment.md`, "Convite e
+   redefinição de senha por link (#181)".
+2. **Conferir:** os `curl` da mesma seção.
+3. **Rollback:** antes de voltar a imagem do `api`, cancelar os convites pendentes. O código
+   anterior lê todo estado desconhecido como desativado, e reativar o convidado o poria ativo
+   sem senha. Só então voltar a imagem anterior; as colunas ficam.

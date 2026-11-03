@@ -1,3 +1,5 @@
+using Buteco.Api.Users.AccessLinks;
+
 namespace Buteco.Api.Users;
 
 /// <summary>
@@ -67,9 +69,28 @@ public sealed class User
 
     public DateTimeOffset? TwoFactorPendingAt { get; private set; }
 
+    /// <summary>
+    /// Quem criou o convite (design.md da change convites-redefinicao-senha, D5); nulo para quem
+    /// não entrou por convite, como o primeiro Admin. Fica depois do aceite: é o "Convidado por".
+    /// </summary>
+    public Guid? InvitedBy { get; private set; }
+
+    /// <summary>
+    /// O SHA-256 do token do link pendente (D4); nunca o token. Um link por usuário: gerar outro
+    /// sobrescreve, e usar, cancelar, desativar ou trocar a senha apaga. O consumo é um
+    /// <c>UPDATE</c> condicional fora desta entidade, para ser de uso único.
+    /// </summary>
+    public byte[]? AccessLinkHash { get; private set; }
+
+    public AccessLinkPurpose? AccessLinkPurpose { get; private set; }
+
+    public DateTimeOffset? AccessLinkExpiresAt { get; private set; }
+
     public bool IsActive => Status == UserStatus.Active;
 
     public bool IsTwoFactorEnabled => TwoFactorEnabledAt is not null;
+
+    public bool IsInvited => Status == UserStatus.Invited;
 
     public static User Create(string email, string name, string? passwordHash, DateTimeOffset now) => new()
     {
@@ -82,6 +103,19 @@ public sealed class User
         SecurityStamp = NewSecurityStamp(),
         CreatedAt = now,
     };
+
+    /// <summary>
+    /// O convidado (design.md da change convites-redefinicao-senha, D2): sem senha, no estado
+    /// <see cref="UserStatus.Invited"/>, com quem convidou. O link entra por
+    /// <see cref="IssueAccessLink"/>; o <see cref="CreatedAt"/> é a data do convite.
+    /// </summary>
+    public static User CreateInvitation(string email, string name, Guid invitedBy, DateTimeOffset now)
+    {
+        var user = Create(email, name.Trim(), passwordHash: null, now);
+        user.Status = UserStatus.Invited;
+        user.InvitedBy = invitedBy;
+        return user;
+    }
 
     /// <summary>O primeiro Admin, com o hash PBKDF2 da configuração marcado como legado (D2).</summary>
     public static User CreateBootstrap(string email, string legacyPasswordHash, DateTimeOffset now)
@@ -110,6 +144,27 @@ public sealed class User
     {
         ReplacePasswordHash(passwordHash);
         SecurityStamp = NewSecurityStamp();
+
+        // O link de redefinição pendente deixaria quem o tem passar por cima da senha que a
+        // pessoa acabou de escolher (design.md da change convites-redefinicao-senha, D4, P6).
+        ClearAccessLink();
+    }
+
+    /// <summary>
+    /// Grava o link pendente, sobrescrevendo o anterior, que deixa de achar a linha (D4).
+    /// </summary>
+    public void IssueAccessLink(AccessLinkPurpose purpose, byte[] tokenHash, DateTimeOffset expiresAt)
+    {
+        AccessLinkPurpose = purpose;
+        AccessLinkHash = tokenHash;
+        AccessLinkExpiresAt = expiresAt;
+    }
+
+    private void ClearAccessLink()
+    {
+        AccessLinkPurpose = null;
+        AccessLinkHash = null;
+        AccessLinkExpiresAt = null;
     }
 
     /// <summary>
@@ -126,14 +181,18 @@ public sealed class User
     public void RecordAccess(DateTimeOffset now) => LastAccessAt = now;
 
     /// <summary>
-    /// Desativa e troca o stamp: o cookie em voo e todo código ou refresh emitido antes
-    /// deixam de valer, e a reativação (<see cref="Activate"/>) não os traz de volta.
+    /// Desativa, troca o stamp e apaga o link pendente: o cookie em voo, todo código ou refresh
+    /// emitido antes e o link deixam de valer, e a reativação (<see cref="Activate"/>) não os
+    /// traz de volta.
     /// </summary>
     public void Deactivate(DateTimeOffset now)
     {
         Status = UserStatus.Deactivated;
         DeactivatedAt = now;
         SecurityStamp = NewSecurityStamp();
+
+        // A reativação não o devolve (design.md da change convites-redefinicao-senha, D4).
+        ClearAccessLink();
     }
 
     /// <summary>
@@ -194,6 +253,7 @@ public sealed class User
         return at > 0 ? trimmed[..at] : trimmed;
     }
 
-    private static string NewSecurityStamp() =>
+    /// <summary>Um stamp novo; o consumo do link de redefinição grava por <c>UPDATE</c> condicional, fora da entidade.</summary>
+    internal static string NewSecurityStamp() =>
         Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
 }

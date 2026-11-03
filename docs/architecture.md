@@ -1054,8 +1054,9 @@ painel                     nginx                apps/api
 ```
 
 - **`users`**: id imutável, que é o `sub`, e e-mail normalizado como
-  identificador de login, com índice único. O estado é ativo ou desativado, e não
-  se exclui usuário. O `security_stamp` muda ao desativar, ao trocar a senha e ao
+  identificador de login, com índice único. O estado é ativo, desativado ou
+  convidado (#181); não se exclui usuário que já foi ativo, e o convite cancelado é
+  apagado. O `security_stamp` muda ao desativar, ao trocar a senha e ao
   redefinir as 2 etapas, e cada troca revoga as sessões da pessoa na mesma
   transação (#219).
 - **Senha em Argon2id**, pelo `NSec.Cryptography` sobre a libsodium, com m =
@@ -1117,6 +1118,41 @@ painel                                      apps/api                      tabela
   dentro dele: duas desativações cruzadas nunca deixam a instalação sem ativo.
   Reativar não devolve as sessões de antes.
 - **Política de senha** (só a nova): 12 a 128 caracteres, sem composição.
+
+### Convite e redefinição de senha por link (`apps/api`, #181)
+
+```
+admin (painel)                    apps/api                            convidado (navegador)
+  │ POST /users/invitations {nome, email, senha de quem chama}
+  │ ───────────────────────────▶ users: status invited, sem senha,
+  │                              access_link_hash = SHA-256(token), +72 h
+  │ ◀── 201 { link: <painel>/convite#<token> }   (mostrado uma vez)
+  │ ─── o admin entrega o link pelo canal que quiser ───────────────────▶ abre /convite#<token>
+  │                                                     GET /convite (o nginx não vê o token)
+  │                              ◀──── POST /auth/invitation {token}         lê location.hash
+  │                              ────▶ 200 {nome, email, convidadoPor, expiraEm}
+  │                              ◀──── POST /auth/invitation/accept {token, senha}
+  │                              UPDATE users SET senha, active, link = NULL
+  │                              WHERE hash AND propósito AND não vencido AND invited
+  │                              ────▶ 204 (sem sessão)
+  │                              ◀──── POST /auth/session {email, senha}  (o login de sempre)
+```
+
+- **Administrativas**, para o usuário real do token (`CurrentUser`; HMAC → `403`):
+  `POST /users/invitations`, `POST /users/{id}/invitation/renew`,
+  `POST /users/{id}/invitation/cancel`, `POST /users/{id}/password-reset`. As três que
+  geram link pedem a senha de quem chama; cancelar não. A #184 as restringe ao Admin.
+- **Públicas**, anônimas, com as barreiras do login: `POST /auth/invitation`,
+  `POST /auth/invitation/accept`, `POST /auth/password-reset`,
+  `POST /auth/password-reset/complete`. Link inválido → o mesmo `404`.
+- **O link** é de uso único (o `UPDATE` condicional), vale 72 h (convite) ou 24 h
+  (redefinição), e é invalidado por um link novo, pelo uso, pelo cancelamento, pela
+  desativação e pela troca da própria senha. O token vai no fragmento, e a base é a do
+  painel configurada, nunca o `Host`.
+- **Concluir a redefinição** troca a senha e o stamp e revoga as sessões, na mesma
+  transação; as 2 etapas continuam. Nem o aceite nem a conclusão abrem sessão.
+- **O convidado no login** responde como e-mail sem conta, com a mesma verificação de
+  hash fictícia.
 
 ### Validação do token do emissor (`apps/inbox` e `apps/connectors`, #208)
 

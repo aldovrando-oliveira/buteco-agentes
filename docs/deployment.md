@@ -625,6 +625,58 @@ curl -s -H "Authorization: Bearer $TOKEN" $D/account/two-factor   # "cadastroDis
 efeito, e a variável sobra. Como o cadastro estava fechado, ninguém fica preso à
 verificação.
 
+### Convite e redefinição de senha por link (#181)
+
+**Só o `api` muda**, com a migration `AddUserAccessLinks`, aplicada pelo `migrator`, só
+aditiva: quatro colunas nulas em `users` (`invited_by`, `access_link_hash`,
+`access_link_purpose`, `access_link_expires_at`), o índice único do hash e a FK de
+`invited_by`. Sem variável nova, sem mudança no compose nem no `nginx.conf`: `/auth` e
+`/users` já vão ao `apps/api`, e `/convite` e `/redefinir-senha` são páginas do painel,
+que caem no fallback do SPA. O `frontend`, o `inbox`, o `connectors` e o `workers` não
+mudam.
+
+**O link usa a url pública.** A base é `Identity__PanelBaseUrl` quando configurada (só em
+desenvolvimento) e, sem ela, `PUBLIC_DOMAIN` (`PublicUrl__BaseUrl`): nunca o `Host` da
+requisição. Se `PUBLIC_DOMAIN` estiver errado, os links saem com o domínio errado.
+
+**O token vai no fragmento** (`https://agentes.exemplo.com/convite#<token>`), que o
+navegador não envia ao servidor: os logs de acesso do nginx do stack e do proxy de fora
+registram só `GET /convite`, e o painel manda o token no corpo de um `POST`. **Não troque o
+`#` por `/`** ao colar o link em algum lugar que o reescreva.
+
+**Orientação ao admin, a passar a quem gere usuários:**
+
+- o Buteco **não envia e-mail**. O admin copia o link (mostrado uma vez) e o entrega pelo
+  canal que quiser. Quem tem o link cria a senha da conta: **confira o destinatário por
+  outro canal** antes de mandar, principalmente se mandar para o e-mail cadastrado, que
+  qualquer usuário da M1 pode trocar;
+- convidar, gerar novo link e gerar o link de redefinição **pedem a senha de quem faz**.
+  Errar conta no bloqueio do e-mail de quem faz, como no login;
+- o convite vale **72 h**, e a redefinição **24 h**; os dois, uma vez. Gerar outro invalida
+  o anterior. Concluir a redefinição **encerra todas as sessões** da pessoa e **mantém as 2
+  etapas**: quem perdeu a senha e o celular precisa das duas redefinições.
+
+**Sem tela ainda.** As rotas existem para a #183; até ela, só pela API.
+
+**Conferência depois do deploy**, contra o domínio:
+
+```
+D=https://agentes.exemplo.com
+# 1. Sem token: 401 do apps/api, sem corpo
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -X POST $D/users/invitations
+# 2. A consulta pública com um token qualquer: o 404 do link inválido, e não 200 com HTML
+curl -s -X POST $D/auth/invitation -H 'Content-Type: application/json' -H "Origin: $D" -d '{"token":"x"}'
+# 3. A página do link: o HTML do painel
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -H 'Sec-Fetch-Mode: navigate' $D/convite
+```
+
+**Rollback:** antes, **cancelar os convites pendentes** (`POST /users/{id}/invitation/cancel`)
+e esperar os links de redefinição vencerem ou serem usados. Depois, a imagem anterior do
+`api`; as colunas ficam e são ignoradas, sem migration a desfazer. Com um convite pendente
+no banco, a versão anterior o leria como **desativado** (a leitura antiga trata todo estado
+desconhecido assim), e reativá-lo o poria ativo sem senha: sem entrada possível, mas no
+lugar errado da lista.
+
 ### Minha conta e Usuários (#219)
 
 **Só o `api` muda.** Sem migration, sem variável nova, sem mudança no compose nem no

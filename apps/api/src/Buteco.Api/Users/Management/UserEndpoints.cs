@@ -1,8 +1,6 @@
-using System.Net.Mail;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Users.Sessions;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace Buteco.Api.Users.Management;
 
@@ -19,18 +17,15 @@ namespace Buteco.Api.Users.Management;
 /// <item><b>desativar</b> troca o stamp e revoga as sessões, sob o lock
 /// <see cref="UserAdministration.AdvisoryLockKey"/>, relendo quem chama dentro dele (D7);</item>
 /// <item><b>desativar e reativar são idempotentes</b>, como em <c>McpServers</c>: o estado já
-/// pedido responde <c>200</c> sem gravar nada.</item>
+/// pedido responde <c>200</c> sem gravar nada;</item>
+/// <item><b>o convidado</b> não é desativado nem reativado (<c>409</c>): ele sai pelo
+/// cancelamento do convite e fica ativo pelo aceite (design.md da change
+/// convites-redefinicao-senha, D2).</item>
 /// </list>
 /// </summary>
 public static class UserEndpoints
 {
     public const string GroupPath = "/users";
-
-    public const int MaxNameLength = 200;
-
-    public const int MaxEmailLength = 254;
-
-    private const string NormalizedEmailIndexName = "IX_users_normalized_email";
 
     public static IEndpointRouteBuilder MapUserEndpoints(this IEndpointRouteBuilder app)
     {
@@ -44,7 +39,8 @@ public static class UserEndpoints
         return app;
     }
 
-    private static async Task<IResult> ListAsync(HttpContext httpContext, AppDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task<IResult> ListAsync(
+        HttpContext httpContext, AppDbContext dbContext, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
@@ -56,11 +52,12 @@ public static class UserEndpoints
             .ThenBy(user => user.Id)
             .ToListAsync(cancellationToken);
 
-        return TypedResults.Ok(users.Select(UserSummary.From).ToList());
+        var now = timeProvider.GetUtcNow();
+        return TypedResults.Ok(users.Select(user => UserSummary.From(user, now)).ToList());
     }
 
     private static async Task<IResult> GetAsync(
-        Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, CancellationToken cancellationToken)
+        Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
@@ -68,7 +65,7 @@ public static class UserEndpoints
         }
 
         return await dbContext.Users.FindAsync([id], cancellationToken) is { } user
-            ? await DetailAsync(user, sessions, cancellationToken)
+            ? await DetailAsync(user, dbContext, sessions, timeProvider, cancellationToken)
             : NotFound();
     }
 
@@ -78,6 +75,7 @@ public static class UserEndpoints
         HttpContext httpContext,
         AppDbContext dbContext,
         UserSessions sessions,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
@@ -85,20 +83,7 @@ public static class UserEndpoints
             return CurrentUser.Forbidden();
         }
 
-        var name = request.Nome?.Trim() ?? "";
-        var email = request.Email?.Trim() ?? "";
-        var errors = new Dictionary<string, string[]>();
-        if (name.Length is 0 or > MaxNameLength)
-        {
-            errors["nome"] = [$"O nome precisa ter de 1 a {MaxNameLength} caracteres."];
-        }
-
-        if (email.Length > MaxEmailLength || !MailAddress.TryCreate(email, out var parsed) || parsed.Address != email)
-        {
-            errors["email"] = ["Informe um e-mail válido."];
-        }
-
-        if (errors.Count > 0)
+        if (UserFields.Validate(request.Nome, request.Email, out var name, out var email) is { } errors)
         {
             return TypedResults.ValidationProblem(errors);
         }
@@ -119,13 +104,13 @@ public static class UserEndpoints
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception) when (IsNormalizedEmailUniqueViolation(exception))
+        catch (DbUpdateException exception) when (UserFields.IsNormalizedEmailUniqueViolation(exception))
         {
             // Outra edição gravou o mesmo e-mail entre a conferência e esta escrita.
             return EmailInUse();
         }
 
-        return await DetailAsync(user, sessions, cancellationToken);
+        return await DetailAsync(user, dbContext, sessions, timeProvider, cancellationToken);
     }
 
     private static async Task<IResult> DeactivateAsync(
@@ -161,6 +146,13 @@ public static class UserEndpoints
             return NotFound();
         }
 
+        // O convite sai pelo cancelamento, que invalida o link (design.md da change
+        // convites-redefinicao-senha, D2): desativar o deixaria fora da lista de pendentes.
+        if (target.IsInvited)
+        {
+            return NotYetAccepted();
+        }
+
         if (target.IsActive)
         {
             target.Deactivate(timeProvider.GetUtcNow());
@@ -169,11 +161,11 @@ public static class UserEndpoints
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return await DetailAsync(target, sessions, cancellationToken);
+        return await DetailAsync(target, dbContext, sessions, timeProvider, cancellationToken);
     }
 
     private static async Task<IResult> ActivateAsync(
-        Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, CancellationToken cancellationToken)
+        Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
@@ -185,13 +177,20 @@ public static class UserEndpoints
             return NotFound();
         }
 
+        // O convidado só fica ativo pelo aceite, que grava a senha (design.md da change
+        // convites-redefinicao-senha, D2): reativá-lo o deixaria ativo e sem senha.
+        if (user.IsInvited)
+        {
+            return NotYetAccepted();
+        }
+
         if (!user.IsActive)
         {
             user.Activate();
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        return await DetailAsync(user, sessions, cancellationToken);
+        return await DetailAsync(user, dbContext, sessions, timeProvider, cancellationToken);
     }
 
     private static async Task<IResult> RevokeSessionsAsync(
@@ -210,16 +209,25 @@ public static class UserEndpoints
         return TypedResults.Ok(new EndedSessionsResponse(await sessions.EndAllAsync(id, cancellationToken)));
     }
 
-    private static async Task<IResult> DetailAsync(User user, UserSessions sessions, CancellationToken cancellationToken) =>
-        TypedResults.Ok(UserDetail.From(user, await sessions.SummarizeAsync(user.Id, cancellationToken)));
+    private static async Task<IResult> DetailAsync(
+        User user, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, CancellationToken cancellationToken)
+    {
+        var invitedBy = user.InvitedBy is { } inviterId
+            ? await dbContext.Users.AsNoTracking()
+                .Where(inviter => inviter.Id == inviterId)
+                .Select(inviter => new UserReference(inviter.Id, inviter.Name))
+                .SingleOrDefaultAsync(cancellationToken)
+            : null;
 
-    private static IResult NotFound() =>
-        TypedResults.Problem(title: "Usuário não encontrado.", statusCode: StatusCodes.Status404NotFound);
+        return TypedResults.Ok(UserDetail.From(user, invitedBy, await sessions.SummarizeAsync(user.Id, cancellationToken), timeProvider.GetUtcNow()));
+    }
 
-    private static IResult EmailInUse() =>
-        TypedResults.Problem(title: "Já existe um usuário com este e-mail.", statusCode: StatusCodes.Status409Conflict);
+    public const string NotYetAcceptedMessage = "Este usuário ainda não aceitou o convite.";
 
-    private static bool IsNormalizedEmailUniqueViolation(DbUpdateException exception) =>
-        exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } postgres &&
-        postgres.ConstraintName == NormalizedEmailIndexName;
+    private static IResult NotYetAccepted() =>
+        TypedResults.Problem(title: NotYetAcceptedMessage, statusCode: StatusCodes.Status409Conflict);
+
+    private static IResult NotFound() => UserFields.NotFound();
+
+    private static IResult EmailInUse() => UserFields.EmailInUse();
 }

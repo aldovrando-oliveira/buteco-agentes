@@ -871,6 +871,18 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTimeOffset?>("AccessLinkExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("access_link_expires_at");
+
+                    b.Property<byte[]>("AccessLinkHash")
+                        .HasColumnType("bytea")
+                        .HasColumnName("access_link_hash");
+
+                    b.Property<string>("AccessLinkPurpose")
+                        .HasColumnType("text")
+                        .HasColumnName("access_link_purpose");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -883,6 +895,10 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("email");
+
+                    b.Property<Guid?>("InvitedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invited_by");
 
                     b.Property<DateTimeOffset?>("LastAccessAt")
                         .HasColumnType("timestamp with time zone")
@@ -937,6 +953,11 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .HasColumnName("two_factor_secret");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AccessLinkHash")
+                        .IsUnique();
+
+                    b.HasIndex("InvitedBy");
 
                     b.HasIndex("NormalizedEmail")
                         .IsUnique();
@@ -1281,6 +1302,14 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Api.Users.User", b =>
+                {
+                    b.HasOne("Buteco.Api.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("InvitedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreAuthorization", b =>

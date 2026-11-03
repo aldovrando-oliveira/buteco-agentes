@@ -749,7 +749,7 @@ a #103.)*
   - **editar nome e e-mail não troca o stamp nem pede senha**, porque na M1 nada é
     enviado ao endereço cadastrado. O primeiro envio de e-mail (redefinição ou convite
     por e-mail) passa a exigir a senha atual na troca do próprio e-mail (registrado na
-    #181). A renovação troca no principal o `name` e o `email` pelos gravados, e o id
+    #181; a #181 não envia e-mail, e o gatilho não disparou). A renovação troca no principal o `name` e o `email` pelos gravados, e o id
     token seguinte já sai com eles;
   - **ninguém desativa a si mesmo**, e a desativação roda sob o
     `pg_advisory_xact_lock` `BUTECOD1`, relendo quem chama dentro dele: dois usuários
@@ -757,6 +757,37 @@ a #103.)*
     as sessões de antes. As chaves `bigint` de lock do `apps/api` são cinco, conferidas
     distintas por teste: `BUTECOC1` (catálogo de clientes), `BUTECOD1` (desativação),
     `BUTECOK1` (chaves do emissor), `BUTECOP1` (limpeza) e `BUTECOU1` (bootstrap).
+- **Convite e redefinição de senha por link** (#181), sem envio de e-mail: o admin gera o
+  link, o vê uma vez e o entrega pelo canal que quiser:
+  - **o convidado é uma linha de `users`** no estado `invited`, sem senha, com quem
+    convidou (`invited_by`). A unicidade do e-mail com convites pendentes é a do índice
+    que já existe. Aceitar grava a senha e põe `active` na mesma linha; cancelar a apaga
+    (o convidado nunca foi usuário), e o e-mail volta a valer. O login do convidado
+    responde como e-mail sem conta, e **com o mesmo custo**: o `PasswordHasher` sem
+    senha gravada verifica contra o hash fictício. `activate` e `deactivate` recusam o
+    convidado (`409`). Estado gravado fora dos três textos lança na leitura, em vez de
+    virar desativado;
+  - **o link** é um token de 256 bits (base64url, 43 caracteres), guardado só como
+    SHA-256, um por usuário, em colunas da própria linha (`access_link_*`): convite 72 h,
+    redefinição 24 h. Gerar outro sobrescreve; usar, cancelar, desativar e trocar a
+    própria senha apagam; reativar não devolve. **Uso único por um `UPDATE` só**,
+    condicionado ao hash, ao propósito, ao vencimento e ao estado: dois usos do mesmo link
+    nunca têm sucesso os dois;
+  - **o token vai no fragmento** (`<painel>/convite#<token>`, `/redefinir-senha#<token>`),
+    que o navegador não envia: o `$request` do log do nginx, o proxy de fora e os robôs
+    de pré-visualização veem só o caminho. Toda rota que recebe token é `POST` com corpo.
+    A base é `Identity:PanelBaseUrl` ou `PublicUrl:BaseUrl` (`PanelBaseUrl.Resolve`, a
+    mesma dos endereços de retorno do painel), nunca o `Host`;
+  - **criar convite, gerar novo link e gerar redefinição pedem a senha de quem chama**
+    (`CallerPassword`), contada no bloqueio do e-mail de quem chama, como o `setup` das
+    2 etapas: um access token roubado não vira, sozinho, um usuário novo nem a senha de
+    outra pessoa. Cancelar não pede. Gerar redefinição para si → `403`;
+  - **as rotas públicas** (`POST /auth/invitation[/accept]`,
+    `POST /auth/password-reset[/complete]`) têm as barreiras do login (JSON e `Origin`);
+    aceite e conclusão entram no limite global (Argon2), as consultas não. Link inválido,
+    por qualquer motivo, recebe o mesmo `404`. **Nenhuma abre sessão**: o painel faz o
+    login normal com a senha recém-criada. As duas zeram o bloqueio do e-mail. Concluir a
+    redefinição troca o stamp e revoga as sessões na mesma transação, e mantém as 2 etapas.
 - **Sessão do emissor e fluxo do painel** (#180):
   - `POST /auth/session` (só JSON, `Origin` conferida contra a do issuer e a de
     `Identity:PanelBaseUrl`) grava o cookie `buteco-sessao`. Ele é `HttpOnly` e
