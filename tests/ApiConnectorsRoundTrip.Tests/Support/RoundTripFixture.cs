@@ -19,6 +19,7 @@ using ApiIndexingPublisher = ApiAssembly::Buteco.Api.Knowledge.Indexing.IKnowled
 using ApiTokenService = ApiAssembly::Buteco.Api.Auth.ITokenService;
 using ConnectorsProgram = ConnectorsAssembly::Program;
 using ConnectorsIssuerKeysRetriever = ConnectorsAssembly::Buteco.Connectors.Auth.IssuerKeysRetriever;
+using ConnectorsServiceAccessTokenSource = ConnectorsAssembly::Buteco.Connectors.Auth.ServiceAccessTokenSource;
 using ConnectorsSyncApiClient = ConnectorsAssembly::Buteco.Connectors.Sync.SyncApiClient;
 using ConnectorsSyncScheduler = ConnectorsAssembly::Buteco.Connectors.Sync.SyncSchedulerService;
 
@@ -59,6 +60,12 @@ public sealed class RoundTripFixture : IAsyncLifetime
     /// <summary>A senha do primeiro Admin do bootstrap.</summary>
     public const string AdminPassword = "senha-do-admin-do-acordo";
 
+    // Os segredos dos clientes de serviço do apps/api, com "+" (servicos-token-emissor, D9):
+    // o achado da #234 é que o "+" mandado sem codificação chega como espaço. O do connectors
+    // é o ServiceClient:Secret do apps/connectors desta fixture, salvo no caso divergente.
+    public const string InboxServiceClientSecret = "f14iSytNZM8pkHkpeUKhBR8lVUmt+1IVX2bfd1aMqe8=";
+    public const string ConnectorsServiceClientSecret = "6+/qzvxHoNNZ/UWxyy/McnQUWfKYdC5yf3Er/M1utmk=";
+
     public IssuerKeysGate ApiIssuerKeys { get; } = new();
 
     private readonly PostgreSqlContainer _apiPostgres = new PostgreSqlBuilder("pgvector/pgvector:pg18")
@@ -79,6 +86,13 @@ public sealed class RoundTripFixture : IAsyncLifetime
     /// </summary>
     public System.Collections.Concurrent.ConcurrentQueue<(string Method, string Path, int Status, string? Token)> ConnectorsToApi { get; } = new();
 
+    /// <summary>
+    /// Os pedidos de token de serviço do <c>apps/connectors</c> ao emissor do <c>apps/api</c>,
+    /// à parte das chamadas do ciclo, para as contagens de upsert não mudarem
+    /// (servicos-token-emissor, D9).
+    /// </summary>
+    public System.Collections.Concurrent.ConcurrentQueue<(string Method, string Path, int Status, string? Token)> ConnectorsTokenRequests { get; } = new();
+
     /// <summary>O que o <c>apps/api</c> publicou para indexação (1.2, #138).</summary>
     public InMemoryIndexingPublisher Indexing { get; } = new();
 
@@ -86,9 +100,14 @@ public sealed class RoundTripFixture : IAsyncLifetime
     {
         await _apiPostgres.StartAsync();
 
-        var (api, _) = Build(TokenSigningKey);
-        using var scope = api.Services.CreateScope();
+        var (api, _) = Build();
+        await using var scope = api.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<ApiAppDbContext>().Database.MigrateAsync();
+
+        // O catálogo cadastra os clientes de serviço antes do primeiro pedido de token do
+        // apps/connectors: sem eles, o pedido recebe invalid_client e abre a espera de 10 s
+        // (servicos-token-emissor, D9). Os hosts seguintes usam o mesmo banco.
+        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Identity.Clients.IIdentityClientCatalog>().SyncAsync(CancellationToken.None);
     }
 
     public async Task DisposeAsync()
@@ -102,10 +121,16 @@ public sealed class RoundTripFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Os dois hosts ligados. <paramref name="connectorsSigningKey"/> diferente da chave
-    /// do <c>apps/api</c> é o caso da chave divergente.
+    /// Os dois hosts ligados. <paramref name="connectorsServiceClientSecret"/> diferente do
+    /// segredo do catálogo é o caso do segredo divergente (S3). Com
+    /// <paramref name="connectorsKeysFrom"/>, o <c>apps/connectors</c> obtém as chaves desse
+    /// emissor de teste, que anuncia o mesmo issuer do <c>apps/api</c> com outras chaves: é o
+    /// caso das chaves divergentes (S4) (servicos-token-emissor, D9; decisão do dono,
+    /// 03/11/2026, na parada da 5.7).
     /// </summary>
-    public (WebApplicationFactory<ApiProgram> Api, WebApplicationFactory<ConnectorsProgram> Connectors) Build(string connectorsSigningKey)
+    public (WebApplicationFactory<ApiProgram> Api, WebApplicationFactory<ConnectorsProgram> Connectors) Build(
+        string connectorsServiceClientSecret = ConnectorsServiceClientSecret,
+        TestIssuer? connectorsKeysFrom = null)
     {
         // Os dois sentidos: o apps/api chama o apps/connectors (validação de pasta, #104) e
         // o apps/connectors chama o apps/api (ciclo de sincronização, #105). Cada handler
@@ -117,12 +142,14 @@ public sealed class RoundTripFixture : IAsyncLifetime
             // lê a chave e a credencial do Google ANTES do Build() (medido na #103,
             // ConnectorsFactory). Credencial do Google vazia: o provedor google-drive não
             // existe neste host.
-            builder.UseSetting("Auth:TokenSigningKey", connectorsSigningKey);
+            builder.UseSetting("Auth:TokenSigningKey", TokenSigningKey);
             builder.UseSetting("GoogleDrive:ServiceAccountKeyBase64", string.Empty);
             // O apps/api desta fixture, e não o localhost:5017 do appsettings.Development.json
             // do apps/connectors (design.md da change ciclo-de-sincronizacao, D2).
             builder.UseSetting("Api:BaseUrl", ApiBaseUrl);
             builder.UseSetting("Identity:Issuer", ApiPublicBaseUrl);
+            // O segredo do cliente buteco-servico-connectors (servicos-token-emissor, D5).
+            builder.UseSetting("ServiceClient:Secret", connectorsServiceClientSecret);
             builder.ConfigureServices(services =>
             {
                 services.AddConnector(FakeConnector.Key, FakeConnector.AccountEmail, _ => Fake, _ => Fake);
@@ -137,8 +164,12 @@ public sealed class RoundTripFixture : IAsyncLifetime
                 services.AddHttpClient(ConnectorsSyncApiClient.HttpClientName)
                     .ConfigurePrimaryHttpMessageHandler(() => new RecordingHandler(ConnectorsToApi) { InnerHandler = api!.Server.CreateHandler() });
 
+                // O pedido de token de serviço vai ao emissor do apps/api real.
+                services.AddHttpClient(ConnectorsServiceAccessTokenSource.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => new RecordingHandler(ConnectorsTokenRequests) { InnerHandler = api!.Server.CreateHandler() });
+
                 services.AddHttpClient(ConnectorsIssuerKeysRetriever.HttpClientName)
-                    .ConfigurePrimaryHttpMessageHandler(() => api!.Server.CreateHandler())
+                    .ConfigurePrimaryHttpMessageHandler(() => connectorsKeysFrom?.CreateHandler() ?? api!.Server.CreateHandler())
                     .AddHttpMessageHandler(() => new IssuerKeysGateHandler(ApiIssuerKeys));
             });
         });
@@ -156,8 +187,8 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     // Os segredos dos clientes de serviço, obrigatórios no boot do apps/api
                     // (clientes-servico-emissor, D2). Fixos aqui, e não herdados do
                     // appsettings.Development.json, como a chave acima.
-                    ["Identity:ServiceClients:Inbox:Secret"] = "GsNKorzccpBDBGABMxnsT1HZLFLBTXXLFS9oBeACsWQ=",
-                    ["Identity:ServiceClients:Connectors:Secret"] = "glpxZRZLnflQsJEyJYTT8ZbGMgsdmjfLx6G6OHGVT7A=",
+                    ["Identity:ServiceClients:Inbox:Secret"] = InboxServiceClientSecret,
+                    ["Identity:ServiceClients:Connectors:Secret"] = ConnectorsServiceClientSecret,
                     ["Auth:TokenSigningKey"] = TokenSigningKey,
                     // O primeiro Admin do bootstrap (usuarios-locais-login-emissor, D2): é
                     // quem faz o fluxo real do IssuerTokenRoundTripTests.

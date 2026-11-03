@@ -16,8 +16,9 @@ public static class SyncRegistrationExtensions
     {
         services.Configure<ApiOptions>(configuration.GetSection(ApiOptions.SectionName));
 
-        // Transient: AddHttpMessageHandler<T> não registra o handler no contêiner.
-        services.AddTransient<ServiceTokenDelegatingHandler>();
+        // O token de serviço do emissor do apps/api, com cache, e o handler que o anexa
+        // (servicos-token-emissor, D3 e D4).
+        services.AddServiceAccessToken(configuration);
         services.AddHttpClient(SyncApiClient.HttpClientName, (provider, client) =>
             {
                 var api = provider.GetRequiredService<IOptions<ApiOptions>>().Value;

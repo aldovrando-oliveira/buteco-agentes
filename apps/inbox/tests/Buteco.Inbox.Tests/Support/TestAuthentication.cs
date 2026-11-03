@@ -16,9 +16,15 @@ public static class TestAuthentication
     // de tests/InboxOrchestratorRoundTrip.Tests (design.md, Risco 1).
     public const string TokenSigningKey = "test-signing-key-shared-between-api-and-inbox-fixtures";
 
+    // O segredo do apps/inbox no emissor (servicos-token-emissor, D5), obrigatório no boot.
+    // Gerado com `openssl rand -base64 32`; distinto do de desenvolvimento e da
+    // Inbox:CredentialEncryptionKey das fixtures.
+    public const string ServiceClientSecret = "43q+QRk0EcuewX/YFkpiAk65NfH62UGABTP0uZkGZok=";
+
     public static Dictionary<string, string?> ConfigOverrides { get; } = new()
     {
         ["Auth:TokenSigningKey"] = TokenSigningKey,
+        ["ServiceClient:Secret"] = ServiceClientSecret,
     };
 
     // Identity:Issuer das fixtures (validacao-jwks-inbox-connectors, D7). Vazio desliga a

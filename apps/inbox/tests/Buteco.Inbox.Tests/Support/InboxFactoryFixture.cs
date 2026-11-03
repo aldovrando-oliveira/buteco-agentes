@@ -1,4 +1,5 @@
 using Buteco.Inbox.Agents;
+using Buteco.Inbox.Auth;
 using Buteco.Inbox.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -18,6 +19,12 @@ public sealed class InboxFactoryFixture : WebApplicationFactory<Program>, IAsync
         .Build();
 
     public FakeAgentApiHttpMessageHandler AgentApiHandler { get; } = new();
+
+    /// <summary>
+    /// O <c>/connect/token</c> do emissor, que o handler de saída chama antes do
+    /// <see cref="AgentApiHandler"/> (servicos-token-emissor, D6). Sempre responde um token.
+    /// </summary>
+    public FakeTokenEndpoint TokenEndpoint { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -51,6 +58,8 @@ public sealed class InboxFactoryFixture : WebApplicationFactory<Program>, IAsync
             // mecanismo de FakeMcpServerHttpMessageHandler, apps/api).
             services.AddHttpClient(AgentReferenceValidator.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => AgentApiHandler);
+            services.AddHttpClient(ServiceAccessTokenSource.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => TokenEndpoint);
         });
     }
 

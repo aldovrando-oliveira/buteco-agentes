@@ -175,20 +175,20 @@ public class ServiceScopeAuthorizationTests(ApiFactoryFixture factory) : IClassF
     }
 
     /// <summary>
-    /// O subject que o próprio <c>apps/api</c> assina para chamar o
+    /// O subject do token que o próprio <c>apps/api</c> manda ao
     /// <c>apps/connectors</c> não abre nada aqui (design.md da change
     /// criacao-base-sincronizada, D4): ele fica fora da tabela, e recebe 403 como
-    /// qualquer subject desconhecido.
+    /// qualquer subject desconhecido. Desde a servicos-token-emissor o token de saída é
+    /// do emissor; o subject continua o mesmo.
     /// </summary>
     [Fact]
     public async Task ApiOutgoingSubject_OnKnowledgeBaseRoutes_ReturnsForbidden()
     {
-        var client = Knowledge.KnowledgeSyncTestSeed.CreateClientAs(factory, Buteco.Api.Auth.ServiceTokenDelegatingHandler.ApiSubject);
+        var client = Knowledge.KnowledgeSyncTestSeed.CreateClientAs(factory, "service:api");
 
         var list = await client.GetAsync("/knowledge-bases");
         var create = await client.PostAsJsonAsync("/knowledge-bases", new { name = "Base de service:api", description = "Descrição." });
 
-        Assert.Equal("service:api", Buteco.Api.Auth.ServiceTokenDelegatingHandler.ApiSubject);
         Assert.Equal(HttpStatusCode.Forbidden, list.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
     }

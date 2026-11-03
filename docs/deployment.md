@@ -312,8 +312,8 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` | api (cifra), workers (decifra) | sim | **sim, byte-idêntica** |
 | `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` | `Identity__SigningKeyEncryptionKey` | api (cifra das chaves do emissor OIDC) | sim, fail-fast (o emissor está ligado, porque `PUBLIC_DOMAIN` é obrigatória) | N/A — só um processo. **Distinta** das outras chaves |
 | `IDENTITY_TWO_FACTOR_ENCRYPTION_KEY` | `Identity__TwoFactorEncryptionKey` | api (cifra do segredo do TOTP de cada usuário, #218) | sim, fail-fast, mesmo com o cadastro das 2 etapas fechado | N/A — só um processo. **Distinta** das outras chaves: o boot recusa a igual a `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` ou a `MCP_CREDENTIAL_ENCRYPTION_KEY` |
-| `SERVICE_CLIENT_SECRET_INBOX` | `Identity__ServiceClients__Inbox__Secret` | api (segredo do cliente `buteco-servico-inbox` do emissor, #234); o inbox passa a lê-lo na #235 | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api: o boot recusa o igual, nomeando as duas chaves |
-| `SERVICE_CLIENT_SECRET_CONNECTORS` | `Identity__ServiceClients__Connectors__Secret` | api (segredo do cliente `buteco-servico-connectors`, #234); o connectors passa a lê-lo na #235 | sim, fail-fast | idem |
+| `SERVICE_CLIENT_SECRET_INBOX` | `Identity__ServiceClients__Inbox__Secret` e `ServiceClient__Secret` | api (segredo do cliente `buteco-servico-inbox` do emissor, #234) e inbox (que pede com ele o token de serviço, #235) | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api, e de `INBOX_CREDENTIAL_ENCRYPTION_KEY`: o boot recusa o igual, nomeando as duas chaves |
+| `SERVICE_CLIENT_SECRET_CONNECTORS` | `Identity__ServiceClients__Connectors__Secret` e `ServiceClient__Secret` | api (segredo do cliente `buteco-servico-connectors`, #234) e connectors (#235) | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` | api, inbox, connectors | sim, fail-fast | **sim, byte-idêntica** (risco aceito abaixo, #117) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` | connectors | não — vazia, o provedor `google-drive` não aparece; **inválida, o `apps/connectors` não sobe** | N/A |
@@ -713,6 +713,46 @@ curl -s -H "Authorization: Bearer $TOKEN" $D/account/sessions   # um item com "a
 **Rollback:** a imagem anterior do `api`. Não há schema a desfazer. As autorizações que
 esta versão revogou continuam revogadas, que é o efeito pedido; a versão anterior volta a
 trocar o stamp sem revogar, e a lista de sessões não existe nela.
+
+### Serviços obtêm o token no emissor (#235)
+
+Segundo passo da troca do token de serviço (#182). Os três serviços deixam de assinar o token HMAC de serviço:
+
+- o `inbox` e o `connectors` pedem o token ao emissor do `api`, pelo endereço interno (`http://api:8080/connect/token`), com o segredo de cada um;
+- o `api` gera o seu no próprio processo, para o `connectors`.
+
+O token vale 15 min e fica em cache até faltar 1 min. **O HMAC continua aceito** nos três apps, e a `AUTH_TOKEN_SIGNING_KEY` continua no `.env.prod` (sai na #182).
+
+**Nada a gerar:** os dois segredos estão no `.env.prod` desde a #234. O compose passa a entregar `SERVICE_CLIENT_SECRET_INBOX` também ao `inbox` e `SERVICE_CLIENT_SECRET_CONNECTORS` também ao `connectors`, os dois como `ServiceClient__Secret` e com `:?`. Sem migration.
+
+**Ordem do deploy:** qualquer uma entre `api`, `inbox` e `connectors`. Os receptores aceitam os dois formatos desde a #234. O `inbox` não depende do `api` para subir: com o `api` fora, as chamadas falham no pedido de token como falhavam por conexão recusada, e durante 10 s depois de cada falha falham na hora.
+
+**Conferência depois do deploy:**
+
+```
+# 1. A linha do primeiro token, no inbox e no connectors (o inbox pede no primeiro
+#    despacho ou cadastro de canal; o connectors, na primeira rodada do ciclo)
+docker compose logs inbox | grep 'Token de serviço buteco-servico-inbox obtido'
+docker compose logs connectors | grep 'Token de serviço buteco-servico-connectors obtido'
+#    → "… obtido no emissor pelo Api:BaseUrl (/connect/token), válido até …"
+# 2. Nenhum segredo divergente
+docker compose logs inbox connectors | grep 'invalid_client'   # → nada
+# 3. O token que o api gera para o connectors (no primeiro cadastro de base sincronizada)
+docker compose logs api | grep 'Token de serviço buteco-servico-api gerado no processo'
+```
+
+- Uma mensagem de canal chega ao agente (o cadastro do canal valida o agente; o despacho chama o A2A).
+- "Sincronizar agora" numa base sincronizada.
+- Cadastrar uma base sincronizada.
+
+**Sintomas:**
+
+| no log | leitura |
+|---|---|
+| `Error` "recusado pelo emissor (/connect/token): invalid_client" | o `SERVICE_CLIENT_SECRET_*` do serviço difere do que o `api` carregou. Conferir o `.env.prod` e subir os dois. O cadastro de canal responde `502`, o despacho tenta de novo até o limite, e o "Sincronizar agora" responde `503` |
+| `Warning` "não obtido no emissor (/connect/token): 503" ou "timeout" | o `api` está subindo ou fora do ar; passa sozinho |
+
+**Rollback:** a imagem anterior de qualquer um dos três. A versão anterior volta a assinar HMAC, que continua aceito, e ignora `ServiceClient__Secret`. Os segredos ficam no `.env.prod`.
 
 ### Clientes de serviço do emissor (#234)
 

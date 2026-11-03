@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Buteco.Api.Auth;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.KnowledgeBases.Commands.CreateKnowledgeBase;
 using Buteco.Api.KnowledgeBases.Entities;
@@ -28,7 +27,8 @@ namespace Buteco.Api.Tests.Knowledge;
 /// <see cref="WebApplicationFactory{TEntryPoint}.WithWebHostBuilder"/>: mesmo Postgres,
 /// mais o endereço e o <see cref="FakeConnectorsHttpMessageHandler"/> como handler
 /// primário do <c>HttpClient</c> nomeado. O token <c>service:api</c> continua sendo
-/// assinado pelo handler real, que fica por cima do falso.
+/// anexado pelo handler real, que fica por cima do falso: desde a servicos-token-emissor, o
+/// token que o <c>apps/api</c> gera no processo pelo emissor.
 /// </para>
 /// </summary>
 public partial class KnowledgeBaseCatalogTests
@@ -511,9 +511,12 @@ public partial class KnowledgeBaseCatalogTests
         Assert.Equal("/connectors/providers/google-drive/folder", uri.AbsolutePath);
         Assert.NotNull(authorization);
         Assert.Equal("Bearer", authorization!.Scheme);
-        var validation = host.Factory.Services.GetRequiredService<ITokenService>().Validate(authorization.Parameter!);
-        Assert.True(validation.IsValid);
-        Assert.Equal("service:api", validation.Subject);
+        // O token do emissor gerado no processo (servicos-token-emissor, D2; mudança de asserção
+        // declarada no D6: antes, o ITokenService validava um HMAC service:api).
+        var token = new Microsoft.IdentityModel.JsonWebTokens.JsonWebToken(authorization.Parameter!);
+        Assert.Equal("at+jwt", token.Typ);
+        Assert.Equal("buteco-servico-api", token.GetPayloadValue<string>("client_id"));
+        Assert.Equal(["buteco-connectors"], token.Audiences);
     }
 
     [Fact]

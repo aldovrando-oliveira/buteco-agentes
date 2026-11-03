@@ -284,17 +284,24 @@ dotnet run --project src/Buteco.Inbox
 Escuta em `http://localhost:5027` em desenvolvimento.
 
 Lê `ConnectionStrings:Postgres`, `Inbox:CredentialEncryptionKey`,
-`Api:BaseUrl`, `PublicUrl:BaseUrl`, `Debounce:*` e `Auth:TokenSigningKey` via
-`appsettings.Development.json` ou variáveis de ambiente. Dois valores
-merecem atenção:
+`Api:BaseUrl`, `PublicUrl:BaseUrl`, `Debounce:*`, `ServiceClient:Secret` e
+`Auth:TokenSigningKey` via `appsettings.Development.json` ou variáveis de
+ambiente. Três valores merecem atenção:
 
 - **`Api:BaseUrl`** deve apontar para onde `apps/api` está escutando
   (`http://localhost:5017` em dev). É usado para validar o `AgentId` de um
   canal (`GET /agents/{id}`) e para o cliente A2A (`POST /agents/{id}/a2a`),
-  ambos autenticados com um token de serviço que `apps/inbox` assina
-  sozinho. Por isso `Auth:TokenSigningKey` **precisa ter o mesmo valor** nos
-  dois processos — senão nenhum token, de operador ou de serviço, é aceito
-  entre eles.
+  ambos autenticados com o token de serviço que o `apps/inbox` obtém no
+  emissor do `apps/api`, em `{Api:BaseUrl}/connect/token`.
+- **`ServiceClient:Secret`** **precisa ser igual** ao
+  `Identity:ServiceClients:Inbox:Secret` do `apps/api` (os dois
+  `appsettings.Development.json` já trazem o mesmo valor). Divergente, o
+  emissor responde `invalid_client`, e o inbox loga `Error`. **Com o `apps/api`
+  parado**, o inbox sobe; as chamadas ao `apps/api` falham já no pedido de
+  token, e durante 10 s depois de cada falha falham na hora, sem rede.
+- **`Auth:TokenSigningKey`** precisa ter o mesmo valor nos três processos
+  enquanto o HMAC for aceito (até a #182): ele só valida o token HMAC que ainda
+  chega.
 - **`PublicUrl:BaseUrl`** deve ser a URL pela qual este processo é alcançável
   a partir de `apps/api` e `apps/workers` (`http://localhost:5027` em dev).
   É usada no `pushNotificationConfig.url` enviado em cada `SendMessage`.
@@ -345,8 +352,10 @@ dotnet run --project src/Buteco.Connectors
 ```
 
 Escuta em `http://localhost:5037` em desenvolvimento. Lê `Auth:TokenSigningKey`
-(mesmo valor de `apps/api`, já no `appsettings.Development.json`), `Cors:*` e, se
-houver, `GoogleDrive:ServiceAccountKeyBase64`.
+(mesmo valor de `apps/api`, já no `appsettings.Development.json`), `Cors:*`,
+`ServiceClient:Secret` (igual ao `Identity:ServiceClients:Connectors:Secret` do
+`apps/api`, também já no arquivo; é com ele que o ciclo obtém o token de serviço) e,
+se houver, `GoogleDrive:ServiceAccountKeyBase64`.
 
 **Sem a chave do Google o app sobe sem provedor**, e `GET /connectors/providers`
 responde `[]`. Para ligar o Google Drive, passe o arquivo JSON da chave de uma service

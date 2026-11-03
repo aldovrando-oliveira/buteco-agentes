@@ -41,10 +41,13 @@
 
   <!--
     O conector falso do apps/connectors, por LINK e não por cópia (D8): uma cópia
-    divergiria sem sintoma. Nada muda no apps/connectors por causa do link.
+    divergiria sem sintoma. Nada muda no apps/connectors por causa do link. O emissor de
+    teste entra pelo mesmo motivo, para o caso das chaves divergentes do S4
+    (servicos-token-emissor, D9).
   -->
   <ItemGroup>
     <Compile Include="..\..\apps\connectors\tests\Buteco.Connectors.Tests\Support\FakeConnector.cs" Link="Support\FakeConnector.cs" />
+    <Compile Include="..\..\apps\connectors\tests\Buteco.Connectors.Tests\Support\TestIssuer.cs" Link="Support\TestIssuer.cs" />
   </ItemGroup>
 
 </Project>

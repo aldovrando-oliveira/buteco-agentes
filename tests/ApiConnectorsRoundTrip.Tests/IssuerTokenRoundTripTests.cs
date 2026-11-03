@@ -35,7 +35,7 @@ public class IssuerTokenRoundTripTests(RoundTripFixture fixture) : IClassFixture
     [Fact]
     public async Task RealUserToken_IsAcceptedByTheConnectors_AndTheInboxOnlyTokenIsRefused()
     {
-        var (api, connectors) = fixture.Build(RoundTripFixture.TokenSigningKey);
+        var (api, connectors) = fixture.Build();
         var connectorsToken = await IssuerUserFlow.AccessTokenAsync(
             api.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
             () => WarmUpAsync(api),

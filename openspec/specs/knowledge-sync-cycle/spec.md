@@ -8,9 +8,7 @@ que nunca exclui, onde cada falha cai (arquivo, base ou rodada), a memória de r
 determinísticas, a chamada ao `apps/api` como `service:connectors` e a configuração
 opcional `Api:BaseUrl`. O `apps/api` continua sendo o único dono da escrita de
 documentos.
-
 ## Requirements
-
 ### Requirement: Ciclo periódico sobre toda base sincronizada
 Quando `Api:BaseUrl` estiver configurada, o `apps/connectors` SHALL rodar uma rodada
 de sincronização logo depois do boot e a cada 5 minutos, sobre toda base devolvida
@@ -231,19 +229,28 @@ chamada, sem pôr o arquivo nos ignorados, e o resultado da base SHALL continuar
   resultado gravado é `Succeeded`
 
 ### Requirement: Chamada ao apps/api como service:connectors
-Toda requisição do `apps/connectors` ao `apps/api` SHALL levar um token novo assinado
-com `Auth:TokenSigningKey`, `sub` igual a `service:connectors` e validade fixa de 5
-minutos. `service:connectors` NÃO SHALL entrar na tabela de subjects do
-`apps/connectors`.
+Toda requisição do `apps/connectors` ao `apps/api` SHALL levar o access token de
+serviço obtido no emissor do `apps/api` pelo cliente `buteco-servico-connectors`,
+que a tabela de clientes do `apps/api` mapeia para `service:connectors`. O
+`apps/connectors` SHALL NOT assinar token de serviço próprio. `service:connectors`
+NÃO SHALL entrar na tabela de subjects do `apps/connectors`. Com o emissor
+indisponível ou o segredo recusado, a chamada SHALL falhar como o `apps/api` fora do
+ar, e a rodada SHALL encerrar como na falta de resposta.
 
-#### Scenario: O token enviado é service:connectors
+#### Scenario: O token enviado é o do cliente de serviço do connectors
 - **WHEN** o ciclo faz qualquer chamada ao `apps/api`
-- **THEN** o cabeçalho `Authorization` traz um token que o `TokenService` valida com
-  `sub` igual a `service:connectors`
+- **THEN** o cabeçalho `Authorization` traz um access token do emissor com
+  `client_id` `buteco-servico-connectors` e `aud` `buteco-api`
 
 #### Scenario: O apps/api real aceita o token
 - **WHEN** o ciclo roda contra o `apps/api` real
 - **THEN** nenhuma das chamadas responde `401` nem `403`
+
+#### Scenario: Segredo divergente
+- **WHEN** o `apps/connectors` tem um `ServiceClient:Secret` diferente do cadastrado
+  no `apps/api` e o ciclo roda contra o `apps/api` real
+- **THEN** o emissor responde `invalid_client`, nenhum upsert chega ao `apps/api`, e
+  nada é excluído
 
 ### Requirement: Endereço do apps/api opcional
 `Api:BaseUrl` SHALL ser opcional. Ausente ou vazia, o processo SHALL subir com um
@@ -311,3 +318,4 @@ arquivo.
   resultado
 - **THEN** nenhuma mensagem de log capturada contém o marcador de texto, o token
   enviado, a chave de assinatura nem o nome do arquivo
+

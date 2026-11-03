@@ -7,6 +7,7 @@ using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Auth;
 using Buteco.Api.Identity;
 using Buteco.Api.Identity.Flow;
+using Buteco.Api.Identity.ServiceTokens;
 using Buteco.Api.Identity.Validation;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Insights;
@@ -105,7 +106,11 @@ builder.Services.AddHttpClient(McpConnectionTester.HttpClientName);
 // antes de criar o HttpClient, e nada mais muda. O endereço é lido das options na
 // criação do cliente, e não aqui, para valer o que a configuração final do host diz.
 builder.Services.Configure<ConnectorsOptions>(builder.Configuration.GetSection(ConnectorsOptions.SectionName));
-// Transient: AddHttpMessageHandler<T> não registra o handler no contêiner.
+// Transient: AddHttpMessageHandler<T> não registra o handler no contêiner. O token que ele
+// anexa é gerado no processo pelo emissor (servicos-token-emissor, D2). Registrado aqui, e
+// não no AddIdentityIssuer: sem PublicUrl:BaseUrl aquele registro sai cedo, e o handler
+// ficaria sem dependência na validação do DI, antes de o boot nomear a chave que falta.
+builder.Services.AddSingleton<ServiceAccessTokenIssuer>();
 builder.Services.AddTransient<ServiceTokenDelegatingHandler>();
 builder.Services.AddHttpClient(ConnectorsFolderClient.HttpClientName, (services, client) =>
     {

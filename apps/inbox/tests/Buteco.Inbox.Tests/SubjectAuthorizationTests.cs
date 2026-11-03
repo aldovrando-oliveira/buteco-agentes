@@ -25,7 +25,7 @@ public partial class SubjectAuthorizationTests(InboxFactoryFixture factory, ITes
 
     [Theory]
     [InlineData(ConnectorsSubject)]
-    [InlineData(ServiceTokenDelegatingHandler.ServiceSubject)]
+    [InlineData("service:inbox")]
     [InlineData("service:desconhecido")]
     [InlineData("Operator")]
     public async Task GetChannels_WithSubjectOtherThanOperator_ReturnsForbidden(string subject)
@@ -104,7 +104,7 @@ public partial class SubjectAuthorizationTests(InboxFactoryFixture factory, ITes
     [Fact]
     public async Task Health_WithServiceSubject_StaysAnonymous()
     {
-        var response = await ClientAs(ServiceTokenDelegatingHandler.ServiceSubject).GetAsync("/health");
+        var response = await ClientAs("service:inbox").GetAsync("/health");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }

@@ -33,13 +33,15 @@ Nenhum valor é fixado em código.
 
 ## Restrições entre processos
 
-Três segredos precisam ter o **mesmo valor** em mais de um processo. Esta é a
+Estes segredos precisam ter o **mesmo valor** em mais de um processo. Esta é a
 fonte mais comum de falha de configuração no sistema, porque o sintoma
 aparece longe da causa.
 
 | Segredo | Processos | O que quebra se divergir |
 |---|---|---|
-| `Auth:TokenSigningKey` | `apps/api` + `apps/inbox` + `apps/connectors` | Um token emitido no login por `apps/api` é rejeitado por `apps/inbox` ou `apps/connectors`, e vice-versa. Também quebra os tokens de serviço: o que `apps/inbox` assina para chamar `apps/api`, e o que `apps/api` assina para chamar `apps/connectors` (o cadastro de base sincronizada responde `502` com o código `connectors-error`) |
+| `Auth:TokenSigningKey` | `apps/api` + `apps/inbox` + `apps/connectors` | O token HMAC de um app é rejeitado pelos outros. Desde a #235 nenhum serviço assina HMAC: a chave só valida o que ainda chega, e sai na #182 |
+| `ServiceClient:Secret` do `apps/inbox` e `Identity:ServiceClients:Inbox:Secret` do `apps/api` | `apps/inbox` + `apps/api` | O `/connect/token` responde `invalid_client`, e o inbox loga `Error` com o `client_id`. A validação de agente no cadastro de canal responde `502`, e o despacho de mensagens falha como com o `apps/api` fora do ar, tentativa a tentativa (#235) |
+| `ServiceClient:Secret` do `apps/connectors` e `Identity:ServiceClients:Connectors:Secret` do `apps/api` | `apps/connectors` + `apps/api` | O mesmo `invalid_client`, e o ciclo de sincronização e o "Sincronizar agora" falham como com o `apps/api` fora do ar (`503`) (#235) |
 | `Mcp:CredentialEncryptionKey` | `apps/api` + `apps/workers` | `apps/api` cifra a credencial do servidor MCP ao salvar; `apps/workers` não consegue decifrá-la para conectar durante uma execução |
 | Chaves de provedor de LLM | `apps/api` + `apps/workers` | `apps/api` anuncia o provedor como disponível em `GET /providers`, mas a task termina `failed` no worker |
 
@@ -240,7 +242,8 @@ runtime.
 | `Inbox__CredentialEncryptionKey` | sim | AES-256 (32 bytes) em base64, para credenciais de canal. **Nunca** a mesma de `Mcp__CredentialEncryptionKey` |
 | `Api__BaseUrl` | **fail-fast** | Onde `apps/api` escuta. Usada para validar `AgentId` (`GET /agents/{id}`) e como cliente A2A (`POST /agents/{id}/a2a`) |
 | `PublicUrl__BaseUrl` | sim | URL pela qual este processo é alcançável a partir de `apps/api` e `apps/workers`. Vai no `pushNotificationConfig.url` de cada `SendMessage` — sem o valor correto, o round-trip nunca completa |
-| `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api`. Também usada para auto-assinar o token de serviço |
+| `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api`. Só valida o token HMAC que ainda chega; desde a #235 o inbox não assina nada |
+| `ServiceClient__Secret` | **fail-fast** | Segredo do cliente `buteco-servico-inbox` no emissor do `apps/api`: o mesmo valor de `Identity__ServiceClients__Inbox__Secret` lá. Com ele o inbox pede o token de serviço em `{Api__BaseUrl}/connect/token`, com cache até 1 min antes de vencer. Base64 com pelo menos 32 bytes, e **distinto** de `Inbox__CredentialEncryptionKey`: igual, o boot falha nomeando as duas chaves, sem o valor (#235). O `appsettings.Development.json` traz o valor de desenvolvimento |
 | `Identity__Issuer` | não | Issuer do emissor OIDC do `apps/api`: o mesmo valor do `PublicUrl__BaseUrl` de lá. Liga a validação do access token do emissor (audience `buteco-inbox`), ao lado do HMAC. Ver "Validação do token do emissor", abaixo |
 | `Debounce__Window` | não | Janela de agrupamento de mensagens da mesma sessão. Default `00:00:10` |
 | `Debounce__SweepInterval` | não | Cadência de varredura do `BackgroundService` que dispara buffers vencidos. Default `00:00:02` |
@@ -261,7 +264,8 @@ servidor ainda não existe (#119).
 
 | Variável | Obrigatória | Descrição |
 |---|---|---|
-| `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api` e `apps/inbox`. Ausente ou vazia, o boot falha |
+| `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api` e `apps/inbox`. Ausente ou vazia, o boot falha. Só valida o token HMAC que ainda chega; desde a #235 o connectors não assina nada |
+| `ServiceClient__Secret` | com `Api__BaseUrl` | Segredo do cliente `buteco-servico-connectors` no emissor do `apps/api`: o mesmo valor de `Identity__ServiceClients__Connectors__Secret` lá. Com `Api__BaseUrl`, é obrigatório (base64, pelo menos 32 bytes, sem ecoar o valor); sem `Api__BaseUrl`, não é lido (#235). O `appsettings.Development.json` traz o valor de desenvolvimento |
 | `GoogleDrive__ServiceAccountKeyBase64` | não | O arquivo JSON da chave da service account do Google, em base64 numa linha (`base64 -i chave.json \| tr -d '\n'`). **Ausente ou vazia, o provedor `google-drive` não existe** para o processo: o app sobe e `GET /connectors/providers` não o lista. **Presente e inválida, o boot falha**, com a verificação que falhou e sem trecho do valor. Só o `client_email` sai do processo, na rota de provedores |
 | `Cors__AllowedOrigins` | não | Origens do painel autorizadas por CORS, no mesmo formato dos outros apps |
 | `Api__BaseUrl` | não | Endereço do `apps/api`, usado pelo ciclo de sincronização e, com `Identity__Issuer`, para obter as chaves do emissor. Em desenvolvimento, `http://localhost:5017`. Ver abaixo |
@@ -275,8 +279,9 @@ servidor ainda não existe (#119).
 | URI absoluta `http` ou `https` | sobe | roda a cada 5 minutos | `202` |
 | outro valor | **falha**, nomeando a chave e sem ecoar o valor | — | — |
 
-A navegação e a descrição de pasta não dependem dele. O ciclo assina
-`service:connectors` com a mesma `Auth__TokenSigningKey`.
+A navegação e a descrição de pasta não dependem dele. O ciclo chama o `apps/api` como
+`service:connectors` com o token do cliente `buteco-servico-connectors`, obtido no emissor
+pelo `Api__BaseUrl` com o `ServiceClient__Secret` (#235).
 
 A service account usa só o escopo `drive.readonly`. A Drive API precisa estar
 **ativada no projeto do Google Cloud dono da service account**; sem isso, toda
@@ -362,8 +367,8 @@ de configuração que o processo enxerga.
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` — byte-idêntica entre `apps/api` e `apps/workers` |
 | `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` | `Identity__SigningKeyEncryptionKey` — só `apps/api`, distinta das outras chaves |
 | `IDENTITY_TWO_FACTOR_ENCRYPTION_KEY` | `Identity__TwoFactorEncryptionKey` — só `apps/api`, distinta das outras chaves; o boot recusa a igual |
-| `SERVICE_CLIENT_SECRET_INBOX` | `Identity__ServiceClients__Inbox__Secret` — só `apps/api` até a #235; distinto do outro segredo de serviço e das chaves de cifra |
-| `SERVICE_CLIENT_SECRET_CONNECTORS` | `Identity__ServiceClients__Connectors__Secret` — idem |
+| `SERVICE_CLIENT_SECRET_INBOX` | `Identity__ServiceClients__Inbox__Secret` no `apps/api` e `ServiceClient__Secret` no `apps/inbox`; distinto do outro segredo de serviço, das chaves de cifra do api e de `INBOX_CREDENTIAL_ENCRYPTION_KEY` |
+| `SERVICE_CLIENT_SECRET_CONNECTORS` | `Identity__ServiceClients__Connectors__Secret` no `apps/api` e `ServiceClient__Secret` no `apps/connectors`; distinto do outro segredo de serviço e das chaves de cifra |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` — só `apps/inbox` |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` — byte-idêntica entre `apps/api`, `apps/inbox` e `apps/connectors` (risco aceito, ver [deployment.md](deployment.md)) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` de `apps/connectors`. **Opcional**: vazia, o provedor `google-drive` não aparece. Inválida, só o `apps/connectors` não sobe; o painel continua no ar |

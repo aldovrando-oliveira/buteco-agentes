@@ -11,7 +11,7 @@ using Buteco.Connectors.Tests.Support;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using ApiProgram = ApiAssembly::Program;
-using ApiTokenService = ApiAssembly::Buteco.Api.Auth.ITokenService;
+using Microsoft.IdentityModel.JsonWebTokens;
 using ConnectorsProgram = ConnectorsAssembly::Program;
 using ConnectorsSyncInProgress = ConnectorsAssembly::Buteco.Connectors.Sync.SyncInProgress;
 using ConnectorsTokenService = ConnectorsAssembly::Buteco.Connectors.Auth.ITokenService;
@@ -77,7 +77,7 @@ public partial class FolderValidationRoundTripTests
     [Fact]
     public async Task SyncCycle_CreatesUpdatesKeepsUnchangedAndDeletes_AgainstTheRealApi()
     {
-        var (api, connectors) = fixture.Build(RoundTripFixture.TokenSigningKey);
+        var (api, connectors) = fixture.Build();
         var knowledgeBaseId = await CreateSyncedBaseAsync(api);
         var content = new Dictionary<string, string>
         {
@@ -131,11 +131,13 @@ public partial class FolderValidationRoundTripTests
         Assert.Equal("Pasta sincronizada", (await GetAsync(api, $"/knowledge-bases/{knowledgeBaseId}")).GetProperty("syncSource").GetProperty("folderName").GetString());
     }
 
-    // 9.3: o token que o apps/connectors assina é aceito pela tabela real do apps/api.
+    // 9.3: o token que o apps/connectors obtém no emissor é aceito pela tabela real do
+    // apps/api. Desde a servicos-token-emissor (D9), é o token do buteco-servico-connectors,
+    // e não mais um HMAC assinado aqui (mudança de asserção declarada no D6).
     [Fact]
     public async Task SyncCycle_TokenOfTheConnectors_IsAcceptedByTheRealApi()
     {
-        var (api, connectors) = fixture.Build(RoundTripFixture.TokenSigningKey);
+        var (api, connectors) = fixture.Build();
         var knowledgeBaseId = await CreateSyncedBaseAsync(api);
         fixture.Fake.ListRoot = _ => new RootListing([new("ref-token", "Token.md", "v1", DocMime)], []);
         fixture.Fake.Markdown = _ => "# Token\n";
@@ -148,16 +150,42 @@ public partial class FolderValidationRoundTripTests
         Assert.Contains(calls, call => call.Method == "POST" && call.Path.EndsWith("/sync-results", StringComparison.Ordinal));
         Assert.DoesNotContain(calls, call => call.Status is 401 or 403);
 
-        // O apps/api deixa o operador passar em tudo (D6 da #102): sem isto, um token
-        // assinado como operator passaria nas asserções acima. O subject é lido pelo
-        // TokenService do PRÓPRIO apps/api, sobre o token que chegou nele.
-        var apiTokens = api.Services.GetRequiredService<ApiTokenService>();
+        // O apps/api deixa o operador passar em tudo (D6 da #102): sem isto, um token de
+        // operador passaria nas asserções acima. O cliente do token é o que a tabela de
+        // clientes do apps/api mapeia para service:connectors.
         Assert.All(calls, call =>
         {
-            var validation = apiTokens.Validate(call.Token!);
-            Assert.True(validation.IsValid);
-            Assert.Equal("service:connectors", validation.Subject);
+            var token = new JsonWebToken(call.Token!);
+            Assert.Equal("at+jwt", token.Typ);
+            Assert.Equal("buteco-servico-connectors", token.GetPayloadValue<string>("client_id"));
+            Assert.Equal(["buteco-api"], token.Audiences);
         });
+    }
+
+    // service-client-credentials e knowledge-sync-cycle, "Segredo divergente"
+    // (servicos-token-emissor, D9): o emissor real recusa o segredo com invalid_client, o
+    // "Sincronizar agora" responde como com o apps/api fora do ar, e nenhum upsert chega.
+    [Fact]
+    public async Task SyncCycle_WithADivergentSecret_IsInvalidClient_AndNothingReachesTheApi()
+    {
+        var (api, _) = fixture.Build();
+        var knowledgeBaseId = await CreateSyncedBaseAsync(api);
+        var (_, connectors) = fixture.Build(connectorsServiceClientSecret: "Ls4HQCkzM8pbxzO1QXuZ+0H7r066hkSzPWv7KtfHuzM=");
+        fixture.Fake.ListRoot = _ => new RootListing([new("ref-divergente", "Divergente.md", "v1", DocMime)], []);
+        fixture.Fake.Markdown = _ => "# Divergente\n";
+        var callsBefore = fixture.ConnectorsToApi.Count;
+        var tokenRequestsBefore = fixture.ConnectorsTokenRequests.Count;
+
+        var client = connectors.CreateClient();
+        var (operatorToken, _) = connectors.Services.GetRequiredService<ConnectorsTokenService>().Issue("operator", TimeSpan.FromMinutes(5));
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", operatorToken);
+        var response = await client.PostAsync($"/connectors/knowledge-bases/{knowledgeBaseId}/sync", null);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var tokenRequest = Assert.Single(fixture.ConnectorsTokenRequests.Skip(tokenRequestsBefore));
+        Assert.Equal(401, tokenRequest.Status);
+        Assert.Empty(fixture.ConnectorsToApi.Skip(callsBefore));
+        Assert.Empty(await DocumentsAsync(api, knowledgeBaseId));
     }
 
     // 9.4: a recusa real too-large chega aos ignorados com o código e o tamanho, o
@@ -166,7 +194,7 @@ public partial class FolderValidationRoundTripTests
     [Fact]
     public async Task SyncCycle_TooLargeFromTheRealApi_IsIgnoredKeepsTheDocumentAndIsNotResent()
     {
-        var (api, connectors) = fixture.Build(RoundTripFixture.TokenSigningKey);
+        var (api, connectors) = fixture.Build();
         var knowledgeBaseId = await CreateSyncedBaseAsync(api);
         var large = new string('a', 1024 * 1024 + 1);
         fixture.Fake.ListRoot = _ => new RootListing([new("ref-grande", "Grande.md", "v1", DocMime)], []);
