@@ -148,6 +148,36 @@ public sealed class IssuerTokenValidationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, hmac.StatusCode);
     }
 
+    // O cliente de serviço do apps/api (design.md da change clientes-servico-emissor, D3).
+    // Verificado contra o defeito (convenção 15): com a entrada buteco-servico-api retirada da
+    // tabela, o caso de "descrever pasta" reprova com 403 (registro no tasks.md, 4.5).
+    [Fact]
+    public async Task ApiServiceClient_OpensDescribeFolder_AndIsForbiddenOnTheOperatorRoutes()
+    {
+        var client = _factory.CreateClientWithToken(_issuer.Issue(
+            clientId: IssuerClientSubjects.ApiServiceClientId,
+            subject: IssuerClientSubjects.ApiServiceClientId));
+
+        var describe = await client.GetAsync("/connectors/providers/fake/folder?id=pasta-1");
+        Assert.NotEqual(HttpStatusCode.Unauthorized, describe.StatusCode);
+        Assert.NotEqual(HttpStatusCode.Forbidden, describe.StatusCode);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/connectors/providers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/connectors/providers/fake/folders")).StatusCode);
+    }
+
+    [Fact]
+    public async Task ApiServiceClient_WithoutTheConnectorsAudience_IsUnauthorized()
+    {
+        var response = await _factory.CreateClientWithToken(_issuer.Issue(
+                audiences: ["buteco-api"],
+                clientId: IssuerClientSubjects.ApiServiceClientId,
+                subject: IssuerClientSubjects.ApiServiceClientId))
+            .GetAsync("/connectors/providers/fake/folder?id=pasta-1");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     private async Task<HttpStatusCode> GetAsync(string token) =>
         (await _factory.CreateClientWithToken(token).GetAsync(OperatorRoute)).StatusCode;
 }

@@ -15,6 +15,11 @@ namespace Buteco.Api.Tests.Identity;
 /// Verificado contra o defeito (convenção 15), registro no tasks.md, 3.2: com a cópia do
 /// <c>oi_au_id</c> retirada, <see cref="KeepsTheAuthorizationId_NextToTheSub"/> reprova.
 /// </para>
+/// <para>
+/// Os clientes de serviço (design.md da change clientes-servico-emissor, D3), verificados
+/// contra o defeito (registro no tasks.md daquela change, 4.2): com a entrada do inbox
+/// retirada da tabela, <see cref="AServiceClient_MapsToItsServiceSubject"/> reprova.
+/// </para>
 /// </summary>
 public class IssuerPrincipalMappingTests
 {
@@ -39,6 +44,17 @@ public class IssuerPrincipalMappingTests
             ("client_id", IdentityClients.PanelClientId), ("sub", "operator-forjado"), ("oi_au_id", "autorizacao-1")));
 
         Assert.Equal(ServiceScopeAuthorizationHandler.OperatorSubject, principal.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+    }
+
+    [Theory]
+    [InlineData(IdentityClients.InboxServiceClientId, ServiceScopeAuthorizationHandler.InboxSubject)]
+    [InlineData(IdentityClients.ConnectorsServiceClientId, ServiceScopeAuthorizationHandler.ConnectorsSubject)]
+    public void AServiceClient_MapsToItsServiceSubject(string clientId, string subject)
+    {
+        // No client_credentials, o sub é o próprio client_id; quem decide é a tabela.
+        var principal = IssuerTokenAuthentication.MapPrincipal(Validated(("client_id", clientId), ("sub", clientId)));
+
+        Assert.Equal(subject, principal.FindFirst(ClaimTypes.NameIdentifier)?.Value);
     }
 
     [Fact]

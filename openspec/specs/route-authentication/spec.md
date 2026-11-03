@@ -292,7 +292,13 @@ O esquema do emissor SHALL aceitar o access token que satisfaça todas as condi�
 - `aud` contendo `buteco-api`;
 - `exp` não vencido, com tolerância de no máximo 30 segundos.
 
-O subject usado pela autorização SHALL vir de uma tabela fechada `client_id` → subject, com a entrada `buteco-painel` → `operator`. O `sub` do token SHALL NOT ser usado como subject. Token válido com `client_id` ausente ou fora da tabela SHALL receber `403`. O boot SHALL falhar se um subject de destino da tabela não existir na tabela de subjects do `apps/api`.
+O subject usado pela autorização SHALL vir de uma tabela fechada `client_id` → subject, com as entradas:
+
+- `buteco-painel` → `operator`;
+- `buteco-servico-inbox` → `service:inbox`;
+- `buteco-servico-connectors` → `service:connectors`.
+
+O `sub` do token SHALL NOT ser usado como subject. Token válido com `client_id` ausente ou fora da tabela SHALL receber `403`. O subject mapeado de um cliente de serviço SHALL seguir a mesma lista de rotas que o subject tem com o token HMAC. O boot SHALL falhar se um subject de destino da tabela não existir na tabela de subjects do `apps/api`.
 
 #### Scenario: Token do painel aceito no apps/api
 - **WHEN** um access token do fluxo do `buteco-painel`, com `aud` contendo `buteco-api`, chama `GET /agents`
@@ -317,4 +323,12 @@ O subject usado pela autorização SHALL vir de uma tabela fechada `client_id` �
 #### Scenario: Cliente apontando para subject inexistente derruba a checagem
 - **WHEN** a checagem da tabela de clientes roda com uma entrada cujo subject não está na tabela de subjects do `apps/api`
 - **THEN** ela falha nomeando o `client_id` e o subject
+
+#### Scenario: Token do cliente de serviço do inbox só nas rotas do service:inbox
+- **WHEN** um access token `client_credentials` do `buteco-servico-inbox` chama `GET /agents/{id}` de um agente existente, `GET /agents` e `GET /sync/knowledge-bases/`
+- **THEN** as respostas são `200 OK`, `403 Forbidden` e `403 Forbidden`
+
+#### Scenario: Token do cliente de serviço do connectors só nas rotas do service:connectors
+- **WHEN** um access token `client_credentials` do `buteco-servico-connectors` chama `GET /sync/knowledge-bases/` e `GET /agents`
+- **THEN** as respostas são `200 OK` e `403 Forbidden`
 

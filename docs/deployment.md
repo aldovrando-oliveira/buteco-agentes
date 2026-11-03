@@ -312,6 +312,8 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` | api (cifra), workers (decifra) | sim | **sim, byte-idêntica** |
 | `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` | `Identity__SigningKeyEncryptionKey` | api (cifra das chaves do emissor OIDC) | sim, fail-fast (o emissor está ligado, porque `PUBLIC_DOMAIN` é obrigatória) | N/A — só um processo. **Distinta** das outras chaves |
 | `IDENTITY_TWO_FACTOR_ENCRYPTION_KEY` | `Identity__TwoFactorEncryptionKey` | api (cifra do segredo do TOTP de cada usuário, #218) | sim, fail-fast, mesmo com o cadastro das 2 etapas fechado | N/A — só um processo. **Distinta** das outras chaves: o boot recusa a igual a `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` ou a `MCP_CREDENTIAL_ENCRYPTION_KEY` |
+| `SERVICE_CLIENT_SECRET_INBOX` | `Identity__ServiceClients__Inbox__Secret` | api (segredo do cliente `buteco-servico-inbox` do emissor, #234); o inbox passa a lê-lo na #235 | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api: o boot recusa o igual, nomeando as duas chaves |
+| `SERVICE_CLIENT_SECRET_CONNECTORS` | `Identity__ServiceClients__Connectors__Secret` | api (segredo do cliente `buteco-servico-connectors`, #234); o connectors passa a lê-lo na #235 | sim, fail-fast | idem |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
 | `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` | api, inbox, connectors | sim, fail-fast | **sim, byte-idêntica** (risco aceito abaixo, #117) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` | connectors | não — vazia, o provedor `google-drive` não aparece; **inválida, o `apps/connectors` não sobe** | N/A |
@@ -711,6 +713,44 @@ curl -s -H "Authorization: Bearer $TOKEN" $D/account/sessions   # um item com "a
 **Rollback:** a imagem anterior do `api`. Não há schema a desfazer. As autorizações que
 esta versão revogou continuam revogadas, que é o efeito pedido; a versão anterior volta a
 trocar o stamp sem revogar, e a lista de sessões não existe nela.
+
+### Clientes de serviço do emissor (#234)
+
+Primeiro passo da troca do token de serviço (#182, dividida em #234, #235, #236 e #182). O emissor do `apps/api` passa a manter dois clientes confidenciais, `buteco-servico-inbox` e `buteco-servico-connectors`, só com `client_credentials` e o escopo `buteco-api`. O `apps/api` aceita o token deles nas rotas de `service:inbox` e `service:connectors`, e o `apps/connectors` aceita o do `buteco-servico-api` na rota de descrever pasta. **Ninguém manda o token novo ainda**: os três serviços continuam com o HMAC, que continua aceito.
+
+**Antes do deploy, gerar os dois segredos**, um por serviço:
+
+```
+openssl rand -base64 32   # → SERVICE_CLIENT_SECRET_INBOX no .env.prod
+openssl rand -base64 32   # → SERVICE_CLIENT_SECRET_CONNECTORS no .env.prod
+```
+
+- Dois valores novos, diferentes entre si e de `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY`, de `IDENTITY_TWO_FACTOR_ENCRYPTION_KEY` e de `MCP_CREDENTIAL_ENCRYPTION_KEY`. Com um igual, o `api` não sobe, e a mensagem nomeia as duas chaves iguais, sem o valor. Sem eles, o Compose nem processa o arquivo.
+- O banco guarda só o hash (PBKDF2 do OpenIddict). O valor fica no `.env.prod`, e a #235 o entrega também ao `inbox` e ao `connectors`.
+- **Trocar um segredo:** mudar o valor no `.env.prod` e subir o `api`. O catálogo confere o segredo a cada sincronização (no aquecimento e a cada hora) e regrava o hash quando o configurado não valida, com o log "segredo do cliente … trocado". Nesta fase ninguém usa o cliente, então a troca não alcança nada.
+
+**Ordem do deploy:** qualquer uma entre `api` e `connectors`. Não há migration: os clientes são dados que o aquecimento sincroniza. O `inbox`, o `workers` e o `frontend` não mudam.
+
+**Conferência depois do deploy:**
+
+```
+# 1. O catálogo criou os dois clientes (uma vez, no primeiro aquecimento)
+docker compose logs api | grep 'Catálogo de clientes do emissor sincronizado'
+#    → "… cliente buteco-servico-inbox criado, cliente buteco-servico-connectors criado"
+# 2. De dentro da rede do compose, cada segredo emite token. --data-urlencode, e não -d:
+#    o base64 tem + e /, e o + sem codificar chega como espaço (invalid_client)
+docker compose exec api curl -s -X POST http://localhost:8080/connect/token \
+  --data-urlencode grant_type=client_credentials --data-urlencode client_id=buteco-servico-inbox \
+  --data-urlencode client_secret="$SERVICE_CLIENT_SECRET_INBOX" --data-urlencode scope=buteco-api
+#    → access_token; o payload tem client_id buteco-servico-inbox e aud buteco-api
+# 3. O token de cada cliente só passa nas rotas do subject dele
+#    inbox: GET /agents → 403; connectors: GET /agents → 403, GET /sync/knowledge-bases/ → 200
+```
+
+- O painel e os três fluxos de serviço funcionam como antes: uma mensagem de canal chega ao agente, o "Sincronizar agora" funciona, e uma base sincronizada se cadastra.
+- Um item do catálogo que falhe gera `IdentityClientCatalogItemFailed` (evento 1195) com o cliente ou o escopo, sem o segredo. Os outros itens seguem, e o que falhou tenta de novo no próximo ciclo.
+
+**Rollback:** a imagem anterior do `api` e do `connectors`. Os dois clientes ficam no banco sem efeito, e a versão anterior os loga como `buteco-*` não declarado (`IdentityClientUndeclared`, `Error`) a cada sincronização, **o que é esperado**, sem mexer neles. Os segredos podem ficar no `.env.prod`, porque a #235 os usa.
 
 ### Limpeza das entradas de token do emissor (#209)
 

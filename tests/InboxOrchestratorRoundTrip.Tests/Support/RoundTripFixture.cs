@@ -179,6 +179,11 @@ public sealed class RoundTripFixture : IAsyncLifetime
                 {
                     ["PublicUrl:BaseUrl"] = ApiPublicBaseUrl,
                     ["Identity:SigningKeyEncryptionKey"] = "dGVzdC1pZGVudGl0eS1rZXktMzItYnl0ZXMtLS0tLS0=",
+                    // Os segredos dos clientes de serviço, obrigatórios no boot do apps/api
+                    // (clientes-servico-emissor, D2). Fixos aqui, e não herdados do
+                    // appsettings.Development.json, como a chave acima.
+                    ["Identity:ServiceClients:Inbox:Secret"] = "GsNKorzccpBDBGABMxnsT1HZLFLBTXXLFS9oBeACsWQ=",
+                    ["Identity:ServiceClients:Connectors:Secret"] = "glpxZRZLnflQsJEyJYTT8ZbGMgsdmjfLx6G6OHGVT7A=",
                     // Só precisa ser não-vazio — ProviderCatalogService.IsProviderConfigured("openai")
                     // olha só a presença da chave (libs/ProviderCatalog/LlmProviders.cs); a chamada
                     // real ao LLM nunca acontece, IChatClientResolver está mockado em apps/workers.

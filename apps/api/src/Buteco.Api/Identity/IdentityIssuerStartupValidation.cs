@@ -1,4 +1,5 @@
 using Buteco.Api.Auth;
+using Buteco.Api.Identity.Clients;
 using Buteco.Api.Identity.Keys;
 using Buteco.Api.Identity.Storage;
 using Buteco.Api.McpServers.Security;
@@ -19,7 +20,8 @@ public static class IdentityIssuerStartupValidation
 {
     /// <summary>
     /// Reprova url pública ausente ou inválida, chave de
-    /// cifra ausente ou malformada, retenção menor que a maior duração (access ou refresh) mais o
+    /// cifra ausente ou malformada, segredo de cliente de serviço ausente, curto ou igual a
+    /// outro segredo ou chave (change clientes-servico-emissor, D2), retenção menor que a maior duração (access ou refresh) mais o
     /// intervalo da verificação de rotação, e idade mínima da limpeza menor que a duração
     /// do refresh token (change limpeza-tokens-openiddict, D3).
     /// </summary>
@@ -50,11 +52,13 @@ public static class IdentityIssuerStartupValidation
             throw new InvalidOperationException(DistinctKeysMessage("Identity:SigningKeyEncryptionKey"));
         }
 
-        if (TryDecodeBase64(host.Services.GetRequiredService<IOptions<McpCryptoOptions>>().Value.CredentialEncryptionKey) is { } mcpKey &&
-            twoFactorKey.AsSpan().SequenceEqual(mcpKey))
+        var mcpKey = TryDecodeBase64(host.Services.GetRequiredService<IOptions<McpCryptoOptions>>().Value.CredentialEncryptionKey);
+        if (mcpKey is not null && twoFactorKey.AsSpan().SequenceEqual(mcpKey))
         {
             throw new InvalidOperationException(DistinctKeysMessage("Mcp:CredentialEncryptionKey"));
         }
+
+        ValidateServiceClientSecrets(identityOptions.ServiceClients, signingKey, twoFactorKey, mcpKey);
 
         // A retenção cobre o token mais longo que o emissor valida com as próprias chaves: o
         // refresh também é validado por elas (usuarios-locais-login-emissor, D3.7). Só as
@@ -206,6 +210,58 @@ public static class IdentityIssuerStartupValidation
 
     private static string PathOf(Uri uri) =>
         uri.IsAbsoluteUri ? uri.AbsolutePath : "/" + uri.OriginalString.TrimStart('/');
+
+    /// <summary>
+    /// Os segredos dos clientes de serviço (design.md da change clientes-servico-emissor, D2):
+    /// presentes, em base64, com pelo menos 32 bytes, distintos entre si e das três chaves de
+    /// cifra do <c>apps/api</c>, por bytes decodificados, no molde da chave das 2 etapas. A do
+    /// MCP só entra quando está configurada e decodifica. Dois valores iguais desfariam a
+    /// separação sem erro: um segredo, que vive também no contêiner do serviço, não pode ser
+    /// a chave que decifra as chaves do emissor, os segredos do TOTP ou as credenciais de MCP.
+    /// Obrigatórios mesmo sem <c>Connectors:BaseUrl</c>.
+    /// </summary>
+    private static void ValidateServiceClientSecrets(
+        ServiceClientsOptions configured,
+        byte[] signingKey,
+        byte[] twoFactorKey,
+        byte[]? mcpKey)
+    {
+        var secrets = new[]
+        {
+            (Name: ServiceClientSecret.InboxConfigurationName, Bytes: ServiceClientSecret.Decode(ServiceClientSecret.InboxConfigurationName, configured.Inbox.Secret)),
+            (Name: ServiceClientSecret.ConnectorsConfigurationName, Bytes: ServiceClientSecret.Decode(ServiceClientSecret.ConnectorsConfigurationName, configured.Connectors.Secret)),
+        };
+
+        if (secrets[0].Bytes.AsSpan().SequenceEqual(secrets[1].Bytes))
+        {
+            throw new InvalidOperationException(SameValueMessage(secrets[0].Name, secrets[1].Name));
+        }
+
+        var keys = new List<(string Name, byte[] Bytes)>
+        {
+            ("Identity:SigningKeyEncryptionKey", signingKey),
+            (TwoFactorSecretCipher.ConfigurationName, twoFactorKey),
+        };
+        if (mcpKey is not null)
+        {
+            keys.Add(("Mcp:CredentialEncryptionKey", mcpKey));
+        }
+
+        foreach (var secret in secrets)
+        {
+            foreach (var key in keys)
+            {
+                if (secret.Bytes.AsSpan().SequenceEqual(key.Bytes))
+                {
+                    throw new InvalidOperationException(SameValueMessage(secret.Name, key.Name));
+                }
+            }
+        }
+    }
+
+    private static string SameValueMessage(string name, string other) =>
+        $"{name} é igual a {other}: cada segredo de serviço precisa ser distinto do outro e das chaves de cifra. " +
+        "Gere outro com `openssl rand -base64 32`.";
 
     private static string DistinctKeysMessage(string other) =>
         $"{TwoFactorSecretCipher.ConfigurationName} é igual a {other}: as chaves precisam ser distintas, uma por domínio. " +

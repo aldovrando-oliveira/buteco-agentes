@@ -610,10 +610,23 @@ a #103.)*
 
   Fluxos: `client_credentials`, `authorization_code` com PKCE obrigatório e
   `refresh_token`.
-  - **Clientes e escopos.** O único cliente que o `apps/api` mantém é o público
-    `buteco-painel`, sincronizado com os escopos `buteco-api`, `buteco-inbox` e
-    `buteco-connectors` no aquecimento e a cada hora. Divergência é corrigida; um
-    cliente `buteco-*` que o código não declara só é logado.
+  - **Clientes e escopos.** O `apps/api` mantém três clientes, sincronizados com os
+    escopos `buteco-api`, `buteco-inbox` e `buteco-connectors` no aquecimento e a cada
+    hora:
+    - o público `buteco-painel`;
+    - desde a #234, os confidenciais `buteco-servico-inbox` e `buteco-servico-connectors`,
+      só com `client_credentials`, o endpoint de token e o escopo `buteco-api`. O segredo de
+      cada um vem de `Identity:ServiceClients:{Inbox,Connectors}:Secret`. O boot o exige em
+      base64, com 32 bytes, distinto do outro e das três chaves de cifra do `apps/api`. O
+      OpenIddict guarda só o hash, e a sincronização regrava o segredo quando o configurado
+      deixa de validar.
+
+    Divergência é corrigida, e um cliente `buteco-*` que o código não declara só é logado.
+    **Cada cliente e cada escopo é sincronizado à parte** (savepoint, `try/catch` próprio e
+    log `IdentityClientCatalogItemFailed`). Um descritor que o OpenIddict recusa não impede
+    os outros no mesmo ciclo, e o ciclo termina com falha para o aquecimento repetir. O
+    escopo de outro app pedido por um cliente de serviço é recusado com `invalid_request`
+    (ID2051), e não `invalid_scope`, porque o escopo existe.
   - **Durações.** Access token de 15 min para todo fluxo. Refresh de 14 dias,
     rotativo e deslizante.
   - **Issuer.** É a `PublicUrl:BaseUrl`, **obrigatória desde a #180**: sem ela o
@@ -810,8 +823,10 @@ a #103.)*
 - **O `apps/api` aceita o próprio token** (#180), com o mesmo desenho da #208:
   - esquema de política pela forma do token;
   - `aud` `buteco-api`;
-  - principal pela tabela de clientes (`buteco-painel` → `operator`), nunca pelo
-    `sub`.
+  - principal pela tabela de clientes, nunca pelo `sub`: `buteco-painel` → `operator` e,
+    desde a #234, `buteco-servico-inbox` → `service:inbox` e `buteco-servico-connectors` →
+    `service:connectors`, cada um só nas rotas da lista do subject dele. Até a #235, nenhum
+    serviço manda esse token: eles continuam com o HMAC.
 
   A diferença é que **as chaves vêm do anel do próprio processo**, sem HTTP. O
   boot confere que todo subject de destino da tabela existe. **`libs/` continua
@@ -831,8 +846,9 @@ a #103.)*
   nunca do `jwks_uri` público, e o `issuer` do discovery lido pelo endereço
   interno é conferido contra `Identity:Issuer`. Sem `Identity:Issuer`, a
   validação fica desligada, com aviso no boot. **O subject vem do
-  `client_id`**, por uma tabela fechada por app (`buteco-painel` → `operator`),
-  e nunca do `sub`: cliente fora da tabela recebe `403`. As tabelas de subjects
+  `client_id`**, por uma tabela fechada por app (`buteco-painel` → `operator`; no
+  `apps/connectors`, desde a #234, também `buteco-servico-api` → `service:api`, só em
+  descrever pasta), e nunca do `sub`: cliente fora da tabela recebe `403`. As tabelas de subjects
   de cada app não mudam. Código copiado entre os dois apps, sem `libs/`; a
   pergunta voltou na #180, com o terceiro consumidor, e a resposta continua
   "não" (ver "O `apps/api` aceita o próprio token", acima).

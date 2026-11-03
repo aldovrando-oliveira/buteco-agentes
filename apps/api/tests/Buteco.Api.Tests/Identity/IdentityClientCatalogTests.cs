@@ -44,6 +44,43 @@ public class IdentityClientCatalogTests
         Assert.Equal([new Uri("https://painel.exemplo.test/entrar")], panel.PostLogoutRedirectUris);
     }
 
+    // Os dois clientes de serviço (design.md da change clientes-servico-emissor, D1). Verificado
+    // contra o defeito (convenção 15): com scp:buteco-connectors a mais no descritor, o
+    // conjunto de permissões não confere e o teste reprova (registro no tasks.md, 1.3).
+    [Theory]
+    [InlineData(IdentityClients.InboxServiceClientId)]
+    [InlineData(IdentityClients.ConnectorsServiceClientId)]
+    public void ServiceClient_IsConfidential_WithOnlyTokenClientCredentialsAndTheApiScope(string clientId)
+    {
+        var service = IdentityClients.Service(clientId, "Serviço", "segredo-de-teste");
+
+        Assert.Equal(clientId, service.ClientId);
+        Assert.Equal(ClientTypes.Confidential, service.ClientType);
+        Assert.Equal("segredo-de-teste", service.ClientSecret);
+        Assert.Equal(ConsentTypes.Implicit, service.ConsentType);
+        Assert.Equal(
+            new HashSet<string>
+            {
+                Permissions.Endpoints.Token,
+                Permissions.GrantTypes.ClientCredentials,
+                Permissions.Prefixes.Scope + IdentityClients.ApiScope,
+            },
+            service.Permissions);
+        Assert.Empty(service.RedirectUris);
+        Assert.Empty(service.PostLogoutRedirectUris);
+        Assert.Empty(service.Requirements);
+    }
+
+    [Fact]
+    public void ServiceClientIds_UseTheReservedPrefix_AndAreNotScopeNames()
+    {
+        foreach (var clientId in new[] { IdentityClients.InboxServiceClientId, IdentityClients.ConnectorsServiceClientId })
+        {
+            Assert.StartsWith(IdentityClients.ReservedPrefix, clientId, StringComparison.Ordinal);
+            Assert.DoesNotContain(clientId, IdentityClients.Scopes);
+        }
+    }
+
     [Fact]
     public void Scopes_AreTheThreeApps_EachWithTheResourceOfTheSameName()
     {

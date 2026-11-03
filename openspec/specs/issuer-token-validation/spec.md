@@ -7,9 +7,7 @@ Diz como o `apps/inbox` e o `apps/connectors` aceitam o access token do emissor 
 assinatura, `typ`, `iss`, `aud` e `exp`, origem e ciclo de vida das chaves pelo endereço
 interno, mapeamento do cliente para o subject e checagens de boot. Criada pela change
 `validacao-jwks-inbox-connectors` (#208).
-
 ## Requirements
-
 ### Requirement: apps/inbox e apps/connectors aceitam o access token do emissor com a própria aud
 Com `Identity:Issuer` configurado, o `apps/inbox` e o `apps/connectors` SHALL aceitar, nas rotas autenticadas, um access token JWT do emissor do `apps/api` que satisfaça todas as condições:
 
@@ -65,7 +63,12 @@ Cada requisição com `Authorization: Bearer` SHALL ser autenticada por exatamen
 - **THEN** a resposta é `401 Unauthorized` e o validador HMAC não foi chamado
 
 ### Requirement: O principal do emissor é mapeado pelo cliente, nunca pelo sub
-O subject usado pela autorização de um token do emissor SHALL vir de uma tabela fechada `client_id` → subject de cada app, com a entrada `buteco-painel` → `operator` no `apps/inbox` e no `apps/connectors`. O `sub` do token SHALL NOT ser usado como subject. Token do emissor válido cujo `client_id` esteja ausente ou fora da tabela SHALL receber `403 Forbidden` em toda rota autenticada. O subject mapeado SHALL seguir as mesmas regras de rota que o subject tem com o token HMAC.
+O subject usado pela autorização de um token do emissor SHALL vir de uma tabela fechada `client_id` → subject de cada app:
+
+- no `apps/inbox`, a entrada `buteco-painel` → `operator`;
+- no `apps/connectors`, as entradas `buteco-painel` → `operator` e `buteco-servico-api` → `service:api`.
+
+O `sub` do token SHALL NOT ser usado como subject. Token do emissor válido cujo `client_id` esteja ausente ou fora da tabela SHALL receber `403 Forbidden` em toda rota autenticada. O subject mapeado SHALL seguir as mesmas regras de rota que o subject tem com o token HMAC.
 
 #### Scenario: Cliente fora da tabela é recusado
 - **WHEN** um token do emissor válido, com a `aud` do app e `client_id` `cliente-desconhecido`, chama uma rota autenticada
@@ -82,6 +85,14 @@ O subject usado pela autorização de um token do emissor SHALL vir de uma tabel
 #### Scenario: Subject mapeado segue a tabela de rotas do apps/connectors
 - **WHEN** um token do emissor com `aud` `buteco-connectors` e `client_id` `buteco-painel` chama `GET /connectors/providers/google-drive/folder?id=x`
 - **THEN** a resposta é `403 Forbidden`, como para o token HMAC `operator`
+
+#### Scenario: Cliente de serviço do apps/api só na rota de descrever pasta
+- **WHEN** um token do emissor com `aud` `buteco-connectors` e `client_id` `buteco-servico-api` chama `GET /connectors/providers/google-drive/folder?id=x` e `GET /connectors/providers`
+- **THEN** a primeira não recebe `403` nem `401`, e a segunda recebe `403 Forbidden`
+
+#### Scenario: Cliente de serviço do apps/api sem a audience do connectors
+- **WHEN** um token do emissor com `aud` `buteco-api` e `client_id` `buteco-servico-api` chama `GET /connectors/providers/google-drive/folder?id=x`
+- **THEN** a resposta é `401 Unauthorized`
 
 ### Requirement: Chaves obtidas só pelo endereço interno, com o issuer conferido
 As chaves do emissor SHALL ser obtidas pelo endereço interno `Api:BaseUrl`, lendo `/.well-known/openid-configuration` e `/.well-known/jwks` sob ele, e SHALL NOT ser obtidas pelo `jwks_uri` anunciado no discovery. Quando o `issuer` do discovery for diferente de `Identity:Issuer`, a obtenção SHALL falhar e registrar no log um erro que contenha os dois valores.
@@ -163,3 +174,4 @@ O access token de usuário emitido pelo `apps/api` real, pelo fluxo authorizatio
 #### Scenario: Token de usuário do apps/api real aceito pelo apps/connectors, e recusado com a aud do outro
 - **WHEN** o access token de usuário do mesmo fluxo chama `GET /connectors/providers`, e um token emitido pelo `apps/api` real por `client_credentials` para um cliente de teste fora do prefixo `buteco-`, só com o recurso `buteco-inbox`, chama a mesma rota
 - **THEN** o primeiro recebe `200 OK` e o segundo `401 Unauthorized`
+
