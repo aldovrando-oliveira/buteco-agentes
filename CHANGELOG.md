@@ -286,6 +286,20 @@ o versionamento pretende seguir
   - ninguém desativa a si mesmo, e a desativação roda sob um lock de transação: duas
     desativações cruzadas nunca deixam a instalação sem usuário ativo;
   - a renovação leva ao id token o nome e o e-mail editados.
+- **Convite e redefinição de senha por link** (#181), no `apps/api`, sem envio de e-mail:
+  - convidar com nome e e-mail cria o usuário no estado convidado, sem senha, e devolve uma
+    vez o link de 72 h para o admin copiar; gerar novo link invalida o anterior; cancelar
+    apaga o convite e libera o e-mail. O convite pendente ocupa o e-mail (`409`);
+  - o admin gera o link de redefinição de 24 h; a senha atual vale até a nova ser criada;
+    concluir troca a senha, encerra todas as sessões e mantém as 2 etapas;
+  - criar convite, gerar novo link e gerar redefinição pedem a senha de quem faz, contada
+    no bloqueio por e-mail;
+  - o token, de 256 bits e guardado só em SHA-256, vai no fragmento do link
+    (`/convite#…`), fora dos logs de acesso; uso único atômico; link inválido por qualquer
+    motivo recebe a mesma resposta;
+  - aceitar e concluir não abrem sessão: o painel faz o login normal com a senha nova;
+  - a lista e o detalhe de Usuários mostram o convidado, a validade do convite e quem
+    convidou; reativar e desativar recusam o convidado.
 
 **Contexto temporal e de canal**
 
@@ -1129,6 +1143,9 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **Login do usuário sem senha gravada** (#181): passa pela verificação contra o hash
+  fictício, como o e-mail sem conta. Antes respondia sem derivar nada, e o tempo de
+  resposta revelaria um convite pendente.
 - **A segunda mensagem de uma conversa ocupada falhava no lock de contexto** (#162).
   Com o agente ainda respondendo a primeira mensagem, o inbox despachava a segunda,
   ela esperava a primeira terminar por no máximo 30 s e, se a primeira demorasse

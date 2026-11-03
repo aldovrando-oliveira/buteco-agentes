@@ -14,6 +14,7 @@ using Buteco.Api.KnowledgeFragments.Entities;
 using Buteco.Api.McpServers.Entities;
 using Buteco.Api.RejectionMetrics.Entities;
 using Buteco.Api.Users;
+using Buteco.Api.Users.AccessLinks;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.TwoFactor;
 using Microsoft.EntityFrameworkCore;
@@ -699,8 +700,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(user => user.Name).HasColumnName("name").IsRequired();
             entity.Property(user => user.Status).HasColumnName("status").IsRequired()
                 .HasConversion(
-                    status => status == UserStatus.Active ? "active" : "deactivated",
-                    value => value == "active" ? UserStatus.Active : UserStatus.Deactivated);
+                    status => UserStatusText.Write(status),
+                    value => UserStatusText.Read(value));
             entity.Property(user => user.PasswordHash).HasColumnName("password_hash").IsRequired(false);
             entity.Property(user => user.PasswordHashIsBootstrapLegacy).HasColumnName("password_hash_is_bootstrap_legacy");
             entity.Property(user => user.SecurityStamp).HasColumnName("security_stamp").IsRequired();
@@ -714,11 +715,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(user => user.TwoFactorLastStep).HasColumnName("two_factor_last_step");
             entity.Property(user => user.TwoFactorPendingSecret).HasColumnName("two_factor_pending_secret");
             entity.Property(user => user.TwoFactorPendingAt).HasColumnName("two_factor_pending_at");
+            // Convite e redefinição por link (design.md da change convites-redefinicao-senha, D4 e D5).
+            entity.Property(user => user.InvitedBy).HasColumnName("invited_by");
+            entity.Property(user => user.AccessLinkHash).HasColumnName("access_link_hash");
+            entity.Property(user => user.AccessLinkPurpose).HasColumnName("access_link_purpose")
+                .HasConversion(
+                    purpose => purpose == null ? null : AccessLinkPurposeText.Write(purpose.Value),
+                    value => value == null ? null : AccessLinkPurposeText.Read(value));
+            entity.Property(user => user.AccessLinkExpiresAt).HasColumnName("access_link_expires_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(user => user.InvitedBy).OnDelete(DeleteBehavior.Restrict);
             entity.Ignore(user => user.IsActive);
             entity.Ignore(user => user.IsTwoFactorEnabled);
+            entity.Ignore(user => user.IsInvited);
 
             // O identificador de login; a unicidade é do banco, não de uma consulta antes.
             entity.HasIndex(user => user.NormalizedEmail).IsUnique();
+
+            // A busca do link é pelo hash; o PostgreSQL aceita vários nulos num índice único.
+            entity.HasIndex(user => user.AccessLinkHash).IsUnique();
         });
 
         // Contagem de falhas de login por e-mail, exista ou não a conta (D4).

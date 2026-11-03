@@ -1,3 +1,4 @@
+using Buteco.Api.Tests.Support;
 using Buteco.Api.Users.Passwords;
 
 namespace Buteco.Api.Tests.Users;
@@ -61,10 +62,27 @@ public class PasswordHasherTests
         Assert.Equal(PasswordVerificationResult.Failed, _hasher.Verify(ReferencePassword, stored, isBootstrapLegacy: false));
     }
 
-    [Fact]
-    public void Verify_NullHash_Fails()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Verify_WithoutStoredHash_Fails_AfterTheDummyVerification(string? stored)
     {
-        Assert.Equal(PasswordVerificationResult.Failed, _hasher.Verify(ReferencePassword, null, isBootstrapLegacy: false));
+        // O convidado não tem senha (design.md da change convites-redefinicao-senha, D2): sem a
+        // verificação fictícia, o login dele responderia sem derivar nada, e o tempo diria que o
+        // e-mail tem convite pendente. Guarda verificado contra o retorno imediato (tasks.md, 3.4).
+        var hasher = new CountingPasswordHasher();
+
+        Assert.Equal(PasswordVerificationResult.Failed, hasher.Verify("qualquer senha", stored, isBootstrapLegacy: false));
+        Assert.Equal(1, hasher.DummyVerifications);
+    }
+
+    [Fact]
+    public void Verify_WithAStoredHash_DoesNotRunTheDummy()
+    {
+        var hasher = new CountingPasswordHasher();
+
+        Assert.Equal(PasswordVerificationResult.Failed, hasher.Verify("senha errada", ReferenceHash, isBootstrapLegacy: false));
+        Assert.Equal(0, hasher.DummyVerifications);
     }
 
     [Fact]

@@ -27,6 +27,7 @@ using Buteco.Api.Providers;
 using Buteco.Api.Providers.Endpoints;
 using Buteco.Api.RejectionMetrics;
 using Buteco.Api.Users;
+using Buteco.Api.Users.AccessLinks;
 using Buteco.Api.Users.Account;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Management;
@@ -215,6 +216,9 @@ app.MapUserTwoFactorResetEndpoint();
 app.MapAccountEndpoints();
 app.MapAccountSessionEndpoints();
 app.MapUserEndpoints();
+app.MapInvitationEndpoints();
+app.MapPasswordResetEndpoints();
+app.MapAccessLinkPublicEndpoints();
 app.MapEndSessionEndpoint();
 app.MapAgentEndpoints();
 app.MapProviderEndpoints();
@@ -237,6 +241,10 @@ app.MapAgentCardEndpoint();
 app.ValidateRouteAuthenticationClassification(
     "/health",
     "/auth/session",
+    "/auth/invitation",
+    "/auth/invitation/accept",
+    "/auth/password-reset",
+    "/auth/password-reset/complete",
     "/connect/authorize",
     "/connect/logout",
     "/agents/{id:guid}/.well-known/agent-card.json");
