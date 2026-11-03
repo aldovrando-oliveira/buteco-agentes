@@ -31,4 +31,24 @@ public sealed class IdentityIssuerOptions
     /// <c>buteco-painel</c> e a segunda origem aceita no <c>POST /auth/session</c>.
     /// </summary>
     public string? PanelBaseUrl { get; set; }
+
+    /// <summary>
+    /// Os segredos dos clientes de serviço (design.md da change clientes-servico-emissor, D2),
+    /// de configuração ou ambiente (<c>Identity__ServiceClients__Inbox__Secret</c>,
+    /// <c>Identity__ServiceClients__Connectors__Secret</c>). O catálogo os entrega ao
+    /// OpenIddict, que guarda só o hash. Obrigatórios no boot.
+    /// </summary>
+    public ServiceClientsOptions ServiceClients { get; set; } = new();
+}
+
+public sealed class ServiceClientsOptions
+{
+    public ServiceClientOptions Inbox { get; set; } = new();
+
+    public ServiceClientOptions Connectors { get; set; } = new();
+}
+
+public sealed class ServiceClientOptions
+{
+    public string? Secret { get; set; }
 }

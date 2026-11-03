@@ -8730,24 +8730,40 @@ M1 Autenticação com provedor próprio            acompanhamento #194
    6 #218  2 etapas (TOTP)                             ← #180
    7 #219  Minha conta e Usuários                      ← #180 #218
    8 #181  convites e redefinição por link             ← #180
-   9 #182  remove o HMAC e a chave compartilhada       ← #180 #217   (fecha #117 e #122)
-  10 #211  rota de leitura do emissor e das chaves     ← #179
-  11 #183  painel da M1                                ← #179 #208 #180 #181 #182 #211 #217 #218 #219   (absorve #170 se couber)
-  12 #220  2 etapas obrigatórias para todo usuário     ← #183
+   9 #234  clientes de serviço no emissor (receptores)
+  10 #235  serviços obtêm o token no emissor           ← #234
+  11 #236  fixtures pelo token do emissor, sem HMAC    ← #235
+  12 #182  remove o HMAC e a chave compartilhada       ← #180 #217 #236   (fecha #117 e #122)
+  13 #211  rota de leitura do emissor e das chaves     ← #179
+  14 #183  painel da M1                                ← #179 #208 #180 #181 #182 #211 #217 #218 #219   (absorve #170 se couber)
+  15 #220  2 etapas obrigatórias para todo usuário     ← #183
 M2 Diferentes acessos                            acompanhamento #195
-  13 #184  papéis Admin, Operador, Leitor              ← #180 #208 #217
-  14 #185  painel: papéis, menu, 403                   ← #183 #184
-  15 #186  aplicações externas com credencial          ← #179 #184
-  16 #187  agentes liberados por aplicação             ← #186
-  17 #188  painel de aplicações externas               ← #185 #186 #187
+  16 #184  papéis Admin, Operador, Leitor              ← #180 #208 #217
+  17 #185  painel: papéis, menu, 403                   ← #183 #184
+  18 #186  aplicações externas com credencial          ← #179 #184
+  19 #187  agentes liberados por aplicação             ← #186
+  20 #188  painel de aplicações externas               ← #185 #186 #187
 M3 Autenticação com Google                       acompanhamento #196
-  18 #189  provedores federados e Google               ← #181 #184
-  19 #190  painel: login com provedor e recusas        ← #185 #189
+  21 #189  provedores federados e Google               ← #181 #184
+  22 #190  painel: login com provedor e recusas        ← #185 #189
 M4 Autenticação corporativa                      acompanhamento #197
-  20 #191  provedor OIDC genérico                      ← #189
-  21 #192  aplicações federadas (troca de token)       ← #187 #191
-  22 #193  painel da M4                                ← #188 #190 #192
+  23 #191  provedor OIDC genérico                      ← #189
+  24 #192  aplicações federadas (troca de token)       ← #187 #191
+  25 #193  painel da M4                                ← #188 #190 #192
 ```
+
+*(Atualizada em 02/11/2026, pela `clientes-servico-emissor`: a M1 passou de 12 para 15 itens.
+A #182 foi dividida por decisão do dono, na revisão do design dela, em quatro passos, cada um
+com issue, change e PR próprios, e cada merge deixando o `main` implantável em qualquer ordem
+de deploy:*
+- *a **#234**, os receptores: o emissor cadastra os clientes de serviço, e o `apps/api` e o
+  `apps/connectors` aceitam o token deles;*
+- *a **#235**, os emissores: cada serviço passa a pedir o próprio token no emissor, e o
+  `apps/api` assina o dele no processo;*
+- *a **#236**, as fixtures, que deixam de se autenticar com o HMAC;*
+- *a **#182**, que fica com a remoção do HMAC e da chave e continua fechando a #117 e a #122.*
+
+*O design completo da #182 está [preservado num comentário dela](https://github.com/aldovrando-oliveira/buteco-agentes/issues/182#issuecomment-6593073248), e as changes da #234, da #235 e da #236 citam as seções dele. A #184 perdeu o critério (b), o HMAC `operator` recusado com `401`, porque não sobra HMAC depois da #182. A numeração das issues fechadas da M1 não foi mexida, como nas divisões anteriores.)*
 
 *(Atualizada em 31/10/2026, pela `usuarios-locais-login-emissor`: a M1 passou de 8 para
 12 itens. A #180 foi dividida por decisão do dono, em 28/10/2026, e ficou com o backend do
@@ -17785,3 +17801,86 @@ rodadas finais passou nos dois worktrees.
 3. **Rollback:** antes de voltar a imagem do `api`, cancelar os convites pendentes. O código
    anterior lê todo estado desconhecido como desativado, e reativar o convidado o poria ativo
    sem senha. Só então voltar a imagem anterior; as colunas ficam.
+
+## `clientes-servico-emissor` — clientes de serviço no emissor, aceitos pelo `apps/api` e pelo `apps/connectors` (#234)
+
+**Change proposta e implementada em 02/11/2026**, na branch `feat/234-clientes-servico-emissor`, num worktree próprio, a partir de `14d4ba9`. Entrega M1 · 9 de 15 (acompanhamento #194). É o **passo A** da divisão da #182 (receptores; depois vêm a #235, emissores, a #236, fixtures, e a #182, a remoção). O desenho completo da #182 está [preservado num comentário dela](https://github.com/aldovrando-oliveira/buteco-agentes/issues/182#issuecomment-6593073248).
+- **Capacidades alteradas:**
+  - `oidc-issuer`: o requisito do "único cliente" foi renomeado, e entraram os clientes de serviço e os segredos no boot;
+  - `route-authentication`: a tabela de clientes do `apps/api`;
+  - `issuer-token-validation`: a tabela do `apps/connectors`;
+  - `server-deployment`: os dois segredos.
+
+**Decisões do dono** (02/11/2026):
+- **Na revisão do design da #182**, Q1 a Q6:
+  - os nomes `buteco-servico-*`;
+  - o segredo do cliente, e não a asserção assinada;
+  - os quatro passos;
+  - os segredos obrigatórios.
+- **Na revisão do design da #234:** os segredos também precisam ser distintos das três chaves de cifra do `apps/api`, como a #218 fez.
+- **Na parada da 3.3:**
+  - o escopo de outro app sai `invalid_request`, como o OpenIddict faz;
+  - a sincronização do catálogo passa a isolar cada cliente e cada escopo.
+
+### O que entrou
+
+- **`Identity/Clients/`:**
+  - `IdentityClients.Service(...)`: os descritores confidenciais, só com `ept:token`, `gt:client_credentials` e `scp:buteco-api`;
+  - `ServiceClientSecret`: presença, base64 e piso de 32 bytes, sem ecoar o valor;
+  - **`IdentityClientCatalog`:**
+    - sincroniza os dois clientes e confere o segredo com `ValidateClientSecretAsync`;
+    - regrava o segredo quando ele não valida, sempre com o segredo no descritor;
+    - **isola cada item** com savepoint, `try/catch`, limpeza do change tracker e log `IdentityClientCatalogItemFailed` (1195);
+    - termina o ciclo com falha se algum item falhou.
+- **`IdentityIssuerOptions.ServiceClients`** e a checagem no `ValidateIdentityIssuerConfiguration`: os segredos distintos entre si e das chaves `Identity:SigningKeyEncryptionKey`, `Identity:TwoFactorEncryptionKey` e `Mcp:CredentialEncryptionKey`, por bytes decodificados.
+- **Tabelas de clientes:**
+  - no `apps/api`, `buteco-servico-inbox` → `service:inbox` e `buteco-servico-connectors` → `service:connectors`;
+  - no `apps/connectors`, `buteco-servico-api` → `service:api`.
+- **Deploy:** `SERVICE_CLIENT_SECRET_INBOX` e `SERVICE_CLIENT_SECRET_CONNECTORS`, no `.env.prod.example` e, com `:?`, no serviço `api` do compose.
+- **Docs:**
+  - `docs/configuration.md`;
+  - `docs/deployment.md`: a seção da #234, com conferência e rollback;
+  - `01` (Autenticação) e `CHANGELOG`.
+
+### Correções na implementação (convenção 9)
+
+- **H7, a consequência:** o descritor confidencial sem segredo não apaga a credencial. O OpenIddict recusa a atualização (`ID2113`), e a transação inteira voltava. A regra (o segredo sempre no descritor) e o guarda continuam. Isso levou à decisão do isolamento.
+- **3.3, `invalid_request` e não `invalid_scope`:** o escopo existe e o cliente não tem permissão dele (`OpenIddictServerHandlers.Exchange.cs` l. 1392–1394, ID2051). Parada e decisão do dono.
+- **3.4, isolamento:**
+  - **sem o fim com falha,** um ciclo com todos os itens falhando, como antes da migração nas fixtures, contaria como concluído no aquecimento;
+  - **sem limpar o change tracker,** o item seguinte gravaria o item recusado, sem segredo. A primeira versão do caso não pegava isso, e o caso foi reforçado até o guarda reprovar.
+- **5.1:** as fixtures de `tests/` não precisavam dos segredos para subir, porque herdariam o `appsettings.Development.json`. Eles ficaram fixos mesmo assim, no padrão da #208.
+- **Conferência local:** o segredo em base64 com `+`, mandado por `curl -d`, chega como espaço e recebe `invalid_client`. O runbook usa `--data-urlencode`. **Para a #235:** o `FormUrlEncodedContent` codifica certo, mas o achado vale para qualquer pedido montado à mão.
+
+### O que a implementação mediu
+
+Suítes pelo `~/.cache/buteco-agents/bin/suite-234.sh` (CPU amostrada na rodada, regra assimétrica), em `~/.cache/buteco-agents/234-baseline/r1/` e `234-verificacao/r1/`. Comparação por nome com o GUID dos cinco `SubjectXRota` normalizado (#214), como multiconjunto.
+
+| suíte | baseline `14d4ba9` | change | por nome | CPU mínima |
+|---|---|---|---|---|
+| `apps/api` | 1.244 + 1 ignorado | **1.271 + 1 ignorado** | 1 ausente (o `TheWarmupCreates_OnlyThePanelClient_*`, renomeado, como declarado no design), 28 novos, 0 com resultado mudado | 60 (verde, conta) |
+| `apps/connectors` | 315 + 1 ignorado | **317 + 1 ignorado** | 0 ausentes, 2 novos, 0 mudados | 100 |
+| `apps/inbox` | 302 | **302** | igual | 100 |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 12 | **12** | igual | 100 |
+| `tests/ApiConnectorsRoundTrip.Tests` | 8 | **8** | igual | 100 |
+| `tests/CrossAppTaskStoreCompatibility.Tests` | 4 | **4** | igual | 100 |
+
+**Convenção 18** (só código; projeção do design em "Tamanho"):
+
+| coluna | projetado | medido | desvio |
+|---|---|---|---|
+| produção | ~170 | +315 / −39, 7 arquivos | +85%: o isolamento do catálogo (decisão na parada da 3.3) e o fim com falha, que a projeção não tinha; o `IdentityClientCatalog` sozinho deu +136 |
+| testes | ~670 | +568 / −6, 8 arquivos | −15% |
+| duplos e suporte | 0 | +79, 4 arquivos | o `ServiceClientTokens` (60), que a projeção não contou como item próprio, e a configuração das fixtures |
+
+**Conferência no stack local** (`dotnet run` do `apps/api` contra um Postgres descartável migrado, com a configuração de desenvolvimento), em `234-verificacao/manual/`:
+- **o primeiro aquecimento logou:** "escopo buteco-api criado, escopo buteco-inbox criado, escopo buteco-connectors criado, cliente buteco-painel criado, cliente buteco-servico-inbox criado, cliente buteco-servico-connectors criado";
+- **tokens:** um `client_credentials` com cada segredo. Os dois saíram com `typ` `at+jwt`, RS256, `client_id` = `sub` do próprio cliente, `aud` `buteco-api` e 900 s de vida;
+- **token do inbox:** `GET /agents` → `403`; `GET /sync/knowledge-bases/` → `403`; `GET /agents/{id}` de id inexistente → `404`, com a autorização aceita;
+- **token do connectors:** `GET /agents` → `403`; `GET /agents/{id}` → `403`; `GET /sync/knowledge-bases/` → `200`;
+- **recusas no `/connect/token`:** inbox com `scope=buteco-connectors` → `invalid_request`, sem token; connectors com o segredo do inbox → `invalid_client`.
+
+### Para as próximas
+
+- **#235:** os serviços pedem o token com o segredo daqui. O `buteco-servico-api` já está na tabela do `apps/connectors`, à espera do emissor no processo.
+- **#214:** os cinco `SubjectXRota` continuam mudando de nome a cada rodada (comentado lá, com as duas rodadas).

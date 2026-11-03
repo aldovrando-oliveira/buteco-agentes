@@ -300,6 +300,17 @@ o versionamento pretende seguir
   - aceitar e concluir não abrem sessão: o painel faz o login normal com a senha nova;
   - a lista e o detalhe de Usuários mostram o convidado, a validade do convite e quem
     convidou; reativar e desativar recusam o convidado.
+- **Clientes de serviço no emissor** (#234), primeiro passo da troca do token de serviço
+  (#182):
+  - o `apps/api` cadastra e mantém os clientes confidenciais `buteco-servico-inbox` e
+    `buteco-servico-connectors`, só com `client_credentials` e o escopo `buteco-api`;
+  - o segredo de cada um vem da configuração; o boot o exige distinto do outro e das três
+    chaves de cifra, e o banco guarda só o hash;
+  - o `apps/api` aceita o token deles nas rotas de `service:inbox` e `service:connectors`, e
+    o `apps/connectors` aceita o do `buteco-servico-api` na rota de descrever pasta;
+  - os serviços ainda não pedem esse token: continuam com o HMAC, que continua aceito.
+  Segredos novos no `.env.prod`: `SERVICE_CLIENT_SECRET_INBOX` e
+  `SERVICE_CLIENT_SECRET_CONNECTORS` (ver `docs/deployment.md`).
 
 **Contexto temporal e de canal**
 
@@ -873,6 +884,12 @@ o versionamento pretende seguir
   `scripts/check-docs.py`.
 
 ### Changed
+
+- **A sincronização do catálogo do emissor isola cada cliente e cada escopo** (#234). Um
+  item que o OpenIddict recusa, ou que falha no banco, gera log de erro com o item, e os
+  outros seguem no mesmo ciclo. Antes, a falha de um voltava a transação inteira, e o
+  `buteco-painel` deixava de ser corrigido junto. O ciclo com algum item falho termina com
+  falha, para o aquecimento tentar de novo.
 
 - **O `401` renova a sessão uma vez antes de encerrá-la** (#217). O segundo `401`
   do `apps/api` ou do `apps/inbox`, ou o `invalid_grant` na renovação, apaga a

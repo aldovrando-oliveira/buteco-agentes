@@ -113,6 +113,87 @@ public class IdentityIssuerStartupValidationTests
         Assert.Contains("Identity:TwoFactorEncryptionKey é igual a Mcp:CredentialEncryptionKey", Flatten(exception), StringComparison.Ordinal);
     }
 
+    // Os segredos dos clientes de serviço (design.md da change clientes-servico-emissor, D2).
+    // Verificados contra três defeitos (convenção 15; registro no tasks.md, 2.4): sem a
+    // chamada de ValidateServiceClientSecrets, todos os casos abaixo reprovam; comparando só
+    // os dois segredos entre si, os três casos das chaves de cifra reprovam; sem a comparação
+    // com a Mcp:CredentialEncryptionKey, só o caso dela reprova.
+    [Theory]
+    [InlineData("Identity:ServiceClients:Inbox:Secret")]
+    [InlineData("Identity:ServiceClients:Connectors:Secret")]
+    public void RealComposition_WithoutAServiceClientSecret_FailsNamingTheSetting(string setting)
+    {
+        using var factory = new Factory(new()
+        {
+            ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl,
+            [setting] = "",
+        });
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.NotNull(exception);
+        Assert.Contains($"{setting} não configurado", Flatten(exception), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RealComposition_WithAShortServiceClientSecret_FailsNamingTheSetting_WithoutTheValue()
+    {
+        var shortSecret = Convert.ToBase64String(Enumerable.Repeat((byte)7, 16).ToArray());
+        using var factory = new Factory(new()
+        {
+            ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl,
+            ["Identity:ServiceClients:Connectors:Secret"] = shortSecret,
+        });
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.NotNull(exception);
+        var message = Flatten(exception);
+        Assert.Contains("Identity:ServiceClients:Connectors:Secret tem 16 bytes", message, StringComparison.Ordinal);
+        Assert.DoesNotContain(shortSecret, message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RealComposition_WithTheTwoServiceClientSecretsEqual_FailsNamingBoth_WithoutTheValue()
+    {
+        using var factory = new Factory(new()
+        {
+            ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl,
+            ["Identity:ServiceClients:Connectors:Secret"] = TestAuthentication.InboxServiceClientSecret,
+        });
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.NotNull(exception);
+        var message = Flatten(exception);
+        Assert.Contains(
+            "Identity:ServiceClients:Inbox:Secret é igual a Identity:ServiceClients:Connectors:Secret",
+            message,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(TestAuthentication.InboxServiceClientSecret, message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Identity:SigningKeyEncryptionKey")]
+    [InlineData("Identity:TwoFactorEncryptionKey")]
+    [InlineData("Mcp:CredentialEncryptionKey")]
+    public void RealComposition_WithAServiceClientSecretEqualToAnEncryptionKey_FailsNamingBoth_WithoutTheValue(string key)
+    {
+        // A chave recebe o valor do segredo do inbox, que continua o de teste.
+        using var factory = new Factory(new()
+        {
+            ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl,
+            [key] = TestAuthentication.InboxServiceClientSecret,
+        });
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.NotNull(exception);
+        var message = Flatten(exception);
+        Assert.Contains($"Identity:ServiceClients:Inbox:Secret é igual a {key}", message, StringComparison.Ordinal);
+        Assert.DoesNotContain(TestAuthentication.InboxServiceClientSecret, message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void RealComposition_WithIntrospectionEndpoint_FailsToStart()
     {

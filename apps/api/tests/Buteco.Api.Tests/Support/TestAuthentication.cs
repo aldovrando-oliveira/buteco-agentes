@@ -49,6 +49,11 @@ public static class TestAuthentication
         ["Identity:TwoFactorEncryptionKey"] = TwoFactorEncryptionKey,
         ["Identity:TwoFactor:EnrollmentEnabled"] = "true",
 
+        // Os segredos dos clientes de serviço, obrigatórios no boot (clientes-servico-emissor,
+        // D2): distintos entre si, das chaves acima e dos de desenvolvimento.
+        ["Identity:ServiceClients:Inbox:Secret"] = InboxServiceClientSecret,
+        ["Identity:ServiceClients:Connectors:Secret"] = ConnectorsServiceClientSecret,
+
         // Vazio por cima do http://localhost:5173 do appsettings.Development.json (o Vite):
         // nos testes, o painel fica na origem do issuer, como em produção, e o
         // redirect_uri do buteco-painel sai da url pública (usuarios-locais-login-emissor,
@@ -63,6 +68,10 @@ public static class TestAuthentication
     public const string IdentitySigningKeyEncryptionKey = "dGVzdC1pZGVudGl0eS1rZXktMzItYnl0ZXMtLS0tLS0=";
 
     public const string TwoFactorEncryptionKey = "fC4Q4CtcT4zz7ugTjf3Wv8do9bvI0i+10lkE3ftdfiE=";
+
+    public const string InboxServiceClientSecret = "OhG/FFy4ekRoCzwZPhsTklBVRgjluqK8cFBd/JuPPCM=";
+
+    public const string ConnectorsServiceClientSecret = "rWBd7qrFy+NbW+529/OJTC4KI+UMXehFvGeeHjFpWMM=";
 
     // Anexado por padrão em ConfigureClient de cada fixture — os testes
     // de negócio (anteriores a esta change) não deveriam precisar saber

@@ -117,6 +117,11 @@ services:
       # das duas acima: o boot recusa chave igual. Obrigatória mesmo com o cadastro das 2
       # etapas fechado. Trocá-la torna os segredos ilegíveis (docs/deployment.md).
       Identity__TwoFactorEncryptionKey: ${IDENTITY_TWO_FACTOR_ENCRYPTION_KEY:?defina IDENTITY_TWO_FACTOR_ENCRYPTION_KEY (openssl rand -base64 32, distinta das outras chaves) — use --env-file .env.prod}
+      # Segredos dos clientes de serviço do emissor (#234), um por serviço, distintos entre
+      # si e das três chaves de cifra acima: o boot recusa valor igual. O catálogo grava só
+      # o hash. O inbox e o connectors recebem o deles na #235.
+      Identity__ServiceClients__Inbox__Secret: ${SERVICE_CLIENT_SECRET_INBOX:?defina SERVICE_CLIENT_SECRET_INBOX (openssl rand -base64 32, distinto das outras chaves) — use --env-file .env.prod}
+      Identity__ServiceClients__Connectors__Secret: ${SERVICE_CLIENT_SECRET_CONNECTORS:?defina SERVICE_CLIENT_SECRET_CONNECTORS (openssl rand -base64 32, distinto das outras chaves) — use --env-file .env.prod}
       PublicUrl__BaseUrl: ${PUBLIC_DOMAIN:?defina PUBLIC_DOMAIN — use --env-file .env.prod}
       Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY:?defina AUTH_TOKEN_SIGNING_KEY — use --env-file .env.prod}
       # Hash e e-mail do primeiro Admin: o bootstrap cria o usuário com eles quando não
