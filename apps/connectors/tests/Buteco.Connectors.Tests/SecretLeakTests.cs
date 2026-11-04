@@ -53,7 +53,7 @@ public class SecretLeakTests(ITestOutputHelper output)
             [new("ref-atalho", FileName + ".atalho", "shortcut-not-followed", null)]);
         factory.Fake.Markdown = _ => $"# {ContentMarker}\n\nTexto {ContentMarker}.\n";
 
-        var response = await TestAuthentication.CreateClientAs(factory, "operator")
+        var response = await TestAuthentication.CreateIssuerClientAs(factory, "operator")
             .PostAsync($"/connectors/knowledge-bases/{knowledgeBase.Id}/sync", null);
         await recorded.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
@@ -102,7 +102,7 @@ public class SecretLeakTests(ITestOutputHelper output)
         var knowledgeBase = factory.SyncApi.AddBase();
         factory.TokenEndpoint.RespondInvalidClient();
 
-        var response = await TestAuthentication.CreateClientAs(factory, "operator")
+        var response = await TestAuthentication.CreateIssuerClientAs(factory, "operator")
             .PostAsync($"/connectors/knowledge-bases/{knowledgeBase.Id}/sync", null);
         await Poll.UntilAsync(
             () => factory.Logs.Lines.Any(line => line.Contains("invalid_client", StringComparison.Ordinal)),
@@ -147,8 +147,8 @@ public class SecretLeakTests(ITestOutputHelper output)
             factory.Google.OnPath("/drive/v3/files/cota", _ => GoogleDriveFakeHandler.GoogleError(
                 HttpStatusCode.TooManyRequests, "rateLimitExceeded", "Rate Limit Exceeded", "usageLimits"));
 
-            var operatorClient = TestAuthentication.CreateClientAs(factory, "operator");
-            var apiClient = TestAuthentication.CreateClientAs(factory, "service:api");
+            var operatorClient = TestAuthentication.CreateIssuerClientAs(factory, "operator");
+            var apiClient = TestAuthentication.CreateIssuerClientAs(factory, "service:api");
             foreach (var (client, route) in new[]
             {
                 (operatorClient, "/connectors/providers"),
@@ -176,7 +176,7 @@ public class SecretLeakTests(ITestOutputHelper output)
         {
             factory.Google.On(r => r.RequestUri!.AbsoluteUri == GoogleDriveFakeHandler.TokenUrl, _ =>
                 GoogleDriveFakeHandler.Json(HttpStatusCode.BadRequest, """{"error":"invalid_grant","error_description":"Invalid JWT Signature."}"""));
-            var client = TestAuthentication.CreateClientAs(factory, "operator");
+            var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
             var response = await client.GetAsync("/connectors/providers/google-drive/folders");
             Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);

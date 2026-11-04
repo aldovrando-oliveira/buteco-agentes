@@ -2,6 +2,7 @@ extern alias ApiAssembly;
 extern alias ConnectorsAssembly;
 
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using Buteco.Connectors.Connectors;
 using Buteco.Connectors.Tests.Support;
 using Microsoft.AspNetCore.Hosting;
@@ -16,9 +17,9 @@ using ApiAppDbContext = ApiAssembly::Buteco.Api.Infrastructure.AppDbContext;
 using ApiConnectorsFolderClient = ApiAssembly::Buteco.Api.KnowledgeSync.Connectors.ConnectorsFolderClient;
 using ApiProgram = ApiAssembly::Program;
 using ApiIndexingPublisher = ApiAssembly::Buteco.Api.Knowledge.Indexing.IKnowledgeIndexingJobPublisher;
-using ApiTokenService = ApiAssembly::Buteco.Api.Auth.ITokenService;
 using ConnectorsProgram = ConnectorsAssembly::Program;
 using ConnectorsIssuerKeysRetriever = ConnectorsAssembly::Buteco.Connectors.Auth.IssuerKeysRetriever;
+using ConnectorsIssuerKeysState = ConnectorsAssembly::Buteco.Connectors.Auth.IssuerKeysState;
 using ConnectorsServiceAccessTokenSource = ConnectorsAssembly::Buteco.Connectors.Auth.ServiceAccessTokenSource;
 using ConnectorsSyncApiClient = ConnectorsAssembly::Buteco.Connectors.Sync.SyncApiClient;
 using ConnectorsSyncScheduler = ConnectorsAssembly::Buteco.Connectors.Sync.SyncSchedulerService;
@@ -222,17 +223,71 @@ public sealed class RoundTripFixture : IAsyncLifetime
         });
 
         _disposables.Add(api);
+        ApiOf.AddOrUpdate(connectors, api);
         _disposables.Add(connectors);
         return (api, connectors);
     }
 
-    /// <summary>Cliente do <c>apps/api</c> com token de operador, sem login.</summary>
-    public static HttpClient OperatorClient(WebApplicationFactory<ApiProgram> api)
+    /// <summary>
+    /// Cliente do <c>apps/api</c> com o access token do primeiro Admin, pelo fluxo real
+    /// (sessão, authorize com PKCE e troca do código), como o painel chama o <c>apps/api</c>
+    /// (fixtures-token-emissor, D4). Um login por host: cada <see cref="Build"/> sobe um
+    /// <c>apps/api</c> novo.
+    /// </summary>
+    public static async Task<HttpClient> OperatorClientAsync(WebApplicationFactory<ApiProgram> api)
     {
+        var token = await OperatorTokens.GetValue(api, host => IssuerUserFlow.AccessTokenAsync(
+            host.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
+            () => WarmUpIssuerAsync(host),
+            ApiPublicBaseUrl,
+            AdminPassword,
+            "openid buteco-api"));
         var client = api.CreateClient();
-        var (token, _) = api.Services.GetRequiredService<ApiTokenService>().Issue("operator", TimeSpan.FromMinutes(30));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
+    }
+
+    private static readonly ConditionalWeakTable<WebApplicationFactory<ApiProgram>, Task<string>> OperatorTokens = new();
+
+    private static readonly ConditionalWeakTable<WebApplicationFactory<ApiProgram>, Task<string>> ConnectorsOperatorTokens = new();
+
+    private static readonly ConditionalWeakTable<WebApplicationFactory<ConnectorsProgram>, WebApplicationFactory<ApiProgram>> ApiOf = new();
+
+    /// <summary>
+    /// Cliente do <c>apps/connectors</c> com o access token do primeiro Admin para o escopo
+    /// <c>buteco-connectors</c>, emitido pelo <c>apps/api</c> do mesmo <see cref="Build"/>
+    /// (fixtures-token-emissor, D4). Espera o <c>apps/connectors</c> obter as chaves do emissor:
+    /// antes disso, ele responde <c>503</c> a toda rota autenticada.
+    /// </summary>
+    public static async Task<HttpClient> ConnectorsOperatorClientAsync(WebApplicationFactory<ConnectorsProgram> connectors)
+    {
+        Assert.True(ApiOf.TryGetValue(connectors, out var api), "o apps/connectors não saiu de um Build desta fixture");
+        var token = await ConnectorsOperatorTokens.GetValue(api, host => IssuerUserFlow.AccessTokenAsync(
+            host.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
+            () => WarmUpIssuerAsync(host),
+            ApiPublicBaseUrl,
+            AdminPassword,
+            "openid buteco-connectors"));
+
+        var keys = connectors.Services.GetRequiredService<ConnectorsIssuerKeysState>();
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (!keys.Obtained)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "o apps/connectors não obteve as chaves do emissor em 30 s");
+            await Task.Delay(25);
+        }
+
+        var client = connectors.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    /// <summary>O catálogo de clientes e o bootstrap do primeiro Admin, idempotentes.</summary>
+    public static async Task WarmUpIssuerAsync(WebApplicationFactory<ApiProgram> api)
+    {
+        await using var scope = api.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Identity.Clients.IIdentityClientCatalog>().SyncAsync(CancellationToken.None);
+        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Users.Bootstrap.IUserBootstrapper>().RunAsync(CancellationToken.None);
     }
 
     public static async Task<List<(string? Name, string? Url)>> StoredFolderAsync(

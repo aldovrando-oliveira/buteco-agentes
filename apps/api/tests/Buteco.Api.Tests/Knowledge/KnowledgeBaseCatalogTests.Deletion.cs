@@ -244,7 +244,7 @@ public partial class KnowledgeBaseCatalogTests
             logging.AddFilter(CommandAndTransactionLog.TransactionCategory, LogLevel.Debug);
         }));
         var client = logged.CreateClient();
-        TestAuthentication.AttachOperatorToken(client, logged.Services);
+        TestAuthentication.AttachPanelToken(client, logged.Services);
         var knowledgeBase = await SeedBaseWithContentAsync("Base do SQL da exclusão", deactivate: true);
 
         log.Clear();
@@ -345,7 +345,7 @@ public partial class KnowledgeBaseCatalogTests
         await using (var deadlocking = WithInterceptor(interceptor))
         {
             var client = deadlocking.CreateClient();
-            TestAuthentication.AttachOperatorToken(client, deadlocking.Services);
+            TestAuthentication.AttachPanelToken(client, deadlocking.Services);
             response = await client.DeleteAsync($"/knowledge-bases/{knowledgeBase.Id}");
         }
 
@@ -365,7 +365,7 @@ public partial class KnowledgeBaseCatalogTests
         await using (var deadlocking = WithInterceptor(interceptor))
         {
             var client = deadlocking.CreateClient();
-            TestAuthentication.AttachOperatorToken(client, deadlocking.Services);
+            TestAuthentication.AttachPanelToken(client, deadlocking.Services);
             response = await client.DeleteAsync($"/knowledge-bases/{knowledgeBase.Id}");
         }
 

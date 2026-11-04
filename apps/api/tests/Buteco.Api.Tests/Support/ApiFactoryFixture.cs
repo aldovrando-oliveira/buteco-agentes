@@ -1,3 +1,4 @@
+using Buteco.Api.Identity.Keys;
 using Buteco.Api.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -129,8 +130,16 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
     protected override void ConfigureClient(HttpClient client)
     {
         base.ConfigureClient(client);
-        TestAuthentication.AttachOperatorToken(client, Services);
+
+        // Antes de migrar o anel não carrega, e o gate responde 503 a toda rota com ou sem
+        // token: o cliente sai sem header (IdentityKeyRingGateTests).
+        if (_migrated)
+        {
+            TestAuthentication.AttachPanelToken(client, Services);
+        }
     }
+
+    private volatile bool _migrated;
 
     /// <summary>
     /// <c>false</c> deixa o banco sem migrar depois de subir o host: é o estado em que o
@@ -146,6 +155,11 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
         if (MigratesOnInitialize)
         {
             await MigrateAsync();
+
+            // O token padrão é assinado pelo anel (fixtures-token-emissor, D1). Carrega já, pelo
+            // mesmo caminho do primeiro pedido no gate, em vez de esperar o aquecimento, que
+            // repete a cada 5 s depois da falha de antes da migração.
+            await Services.GetRequiredService<IdentityKeyRing>().EnsureLoadedAsync(CancellationToken.None);
         }
         else
         {
@@ -158,6 +172,7 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
         using var scope = Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await dbContext.Database.MigrateAsync();
+        _migrated = true;
     }
 
     async Task IAsyncLifetime.DisposeAsync()

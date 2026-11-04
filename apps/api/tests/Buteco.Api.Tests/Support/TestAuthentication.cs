@@ -74,10 +74,16 @@ public static class TestAuthentication
     public const string ConnectorsServiceClientSecret = "rWBd7qrFy+NbW+529/OJTC4KI+UMXehFvGeeHjFpWMM=";
 
     // Anexado por padrão em ConfigureClient de cada fixture — os testes
-    // de negócio (anteriores a esta change) não deveriam precisar saber
-    // sobre token nenhum. Testes que precisam de um cenário sem token ou
-    // com token inválido sobrescrevem o header explicitamente antes da
-    // chamada específica.
+    // de negócio não deveriam precisar saber sobre token nenhum. Testes que
+    // precisam de um cenário sem token ou com token inválido sobrescrevem o
+    // header explicitamente antes da chamada específica. O token é o do
+    // painel, do emissor (fixtures-token-emissor, D1).
+    public static void AttachPanelToken(HttpClient client, IServiceProvider services) =>
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestIssuerTokens.Panel(services));
+
+    // HMAC operator. Só para os casos que provam o próprio HMAC e saem com ele
+    // na #182 (fixtures-token-emissor, D6): os OperatorHmac_ de
+    // AccessLinkCallerTests, UserRoutesCallerTests e TwoFactorCallerTests.
     public static void AttachOperatorToken(HttpClient client, IServiceProvider services)
     {
         var tokenService = services.GetRequiredService<ITokenService>();

@@ -54,12 +54,14 @@ internal static class KnowledgeSyncTestSeed
         return await dbContext.KnowledgeBases.AsNoTracking().SingleAsync(knowledgeBase => knowledgeBase.Id == id);
     }
 
-    /// <summary>Cliente com token assinado para <paramref name="subject"/>, sem login.</summary>
+    /// <summary>
+    /// Cliente com o token do emissor do cliente de <paramref name="subject"/>, sem login
+    /// (<see cref="TestIssuerTokens.ForSubject"/>).
+    /// </summary>
     public static HttpClient CreateClientAs(WebApplicationFactory<Program> factory, string subject)
     {
         var client = factory.CreateClient();
-        var tokenService = factory.Services.GetRequiredService<ITokenService>();
-        var (token, _) = tokenService.Issue(subject, TimeSpan.FromMinutes(5));
+        var token = TestIssuerTokens.ForSubject(factory.Services, subject);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }

@@ -17981,3 +17981,81 @@ Suítes pelo `~/.cache/buteco-agents/bin/suite-235.sh` (CPU amostrada na rodada,
 - **#182:** saem o HMAC, o `TokenService` inteiro e a `Auth:TokenSigningKey`. O `apps/inbox` e o `apps/connectors` já não assinam nada.
 - **#176:** a baseline desta change teve a primeira reprovação válida do `Source3_…` com a CPU em 100 a rodada inteira (comentado lá).
 - **Desenvolvimento local:** o `PublicUrl:BaseUrl` do `appsettings.Development.json` do `apps/inbox` aponta para um túnel `trycloudflare` antigo, e o push do worker não volta ao inbox local. Isso já existia antes desta change, que só registra o achado (#238).
+
+## `fixtures-token-emissor` — as suítes de integração autenticam pelo token do emissor (#236)
+
+**Change proposta e implementada em 03–04/11/2026**, na branch `feat/236-fixtures-token-emissor`, num worktree próprio, a partir de `7dc7753` (merge do PR #239). Entrega M1 · 11 de 15. É o **passo C** da divisão da #182: receptores (#234), emissores (#235), fixtures (esta) e remoção (#182). **Só testes**: o diff em `apps/*/src` é vazio.
+- **Capacidades alteradas** (decisão do dono, Q5): `api-scaffold`, `inbox-scaffold` e `connectors-scaffold`. Cada uma ganhou um requisito novo: a suíte de integração autentica pelo token do emissor. O `openspec validate --strict` exigiu delta, e nenhum requisito de produção mudou.
+
+**Decisões do dono** (04/11/2026), as cinco perguntas aceitas como recomendadas:
+- **Q1:** os 20 casos de subject sem cliente migram com um cliente desconhecido e o mesmo nome. O ramo "subject preenchido e fora da tabela" só é alcançável pelo HMAC e some com a #182 (convenção 25). O caso vizinho possível, cliente de serviço numa rota fora da lista dele, já está coberto pela #234.
+- **Q2:** os 4 "HMAC `operator` → `403` em `CurrentUser`" ficam para a #182. No fechamento, o dono os marcou como "reescrever" com o token do `buteco-servico-inbox`.
+- **Q3:** os 2 casos do connectors sem `Api:BaseUrl` ficam no HMAC, como "estado que a #182 elimina".
+- **Q4:** critério de aceite em três partes, e a lista da #182 publicada como comentário nela.
+- **Q5:** sem `specs/`, salvo se o validate exigir. Exigiu.
+- **Ajuste:** o desligamento do agendador do connectors é substituição no DI da fábrica, e não opção de produção (convenção 2).
+- **3.1:** o guarda da espera das chaves é determinístico.
+
+### A medição (antes de mexer em fixture)
+
+Num worktree descartável em `7dc7753`, o `TokenService.Validate` dos três apps passou a recusar tudo, e as seis suítes rodaram.
+- **729 casos reprovam:** 567 no `apps/api`, 88 no `apps/inbox`, 65 no `apps/connectors`, 8 no `rt-connectors` e 1 no `rt-inbox`. São todos de autenticação (`401`).
+- **O `apps/api` inteiro derruba a CPU sozinho em toda rodada** (de 100 para 39–60 por volta dos 65 s), inclusive na baseline limpa. Pela regra assimétrica, reprovação assim não vale. Por isso a medição válida dele é em cinco partes, por namespace, cada uma com a CPU em 100: os mesmos 567 nomes das duas rodadas inteiras inconclusivas (`fila-236-api-partes.sh`).
+- **Os dois grupos:** 707 provam uma regra por meio do HMAC e migraram (G1); 20 provam só o HMAC (G2); e 2 ficam na Q3.
+- **A recusa total não enxerga o HMAC provado pela recusa:** o seletor em unidade, a chave diferente, o boot sem chave. Esses 32 saíram por varredura estática.
+
+### O que entrou
+
+- **`apps/api`:** o `TestIssuerTokens`, helper de teste sobre a `IOpenIddictServerFactory`, separado do `ServiceAccessTokenIssuer` de produção, que continua estreito.
+  - O `Panel` é o `buteco-painel` com `sub` que não é usuário, 2 h, sem HTTP e sem Argon2: passa no catálogo e recebe `403` em `CurrentUser`, como o HMAC `operator`.
+  - O `ForSubject` acha o cliente pela `IssuerClientSubjects` de produção.
+  - As seis fixtures carregam o anel depois de migrar e anexam o token só a partir daí.
+- **`apps/inbox`:**
+  - as três fixtures sobem com um `TestIssuer` e esperam a primeira obtenção das chaves;
+  - o `TestIssuer` desta cópia segura as chaves sob comando, para o guarda determinístico;
+  - saiu o `AttachOperatorToken`, sem chamador.
+- **`apps/connectors`:** a `ConnectorsFactory` tem um `TestIssuer` próprio, ligado quando o teste pede o token do emissor antes de o host subir. Sem `Api:BaseUrl` pedido, o agendador do ciclo sai do DI da fábrica.
+- **`tests/`:** o `rt-connectors` chama o `apps/api` e o `apps/connectors` com o token do Admin do bootstrap, pelo fluxo real. O `rt-inbox` e o `rt-crossapp` não mudaram.
+
+### Correções na implementação (convenção 9)
+
+Oito, todas no desenho dos helpers de teste. Estão no design da change ([`openspec/changes/archive/2026-11-04-fixtures-token-emissor/design.md`](openspec/changes/archive/2026-11-04-fixtures-token-emissor/design.md), "Correções na implementação"). As que mudaram o desenho:
+- **C2, relógio:** o token era carimbado pelo `TimeProvider` do host, e o `JwtBearer` confere o `exp` pelo relógio de parede. As fixtures de Insights fixam o relógio em 23/09/2026, e 59 casos reprovaram com `401` na primeira rodada.
+- **C3, anel:** o helper espera o anel, em vez de devolver `null`, por causa dos hosts derivados.
+- **C4, emissor do connectors sob demanda:** ligar o emissor em toda fábrica mudaria o ambiente dos casos de boot que não dependem do HMAC.
+- **C8, um caso misto a mais:** o `SecretLeakTests.NenhumLogDoCiclo…` afirma que nenhum log contém a `TokenSigningKey`. A lista da #182 passa de 54 para 55.
+
+### O que a implementação mediu
+
+Suítes pelo `~/.cache/buteco-agents/bin/suite-236.sh`, com a regra assimétrica, em `~/.cache/buteco-agents/236-baseline/`, `236-trabalho/` e `236-verificacao/`. Todas as rodadas abaixo tiveram a CPU em 100 do início ao fim.
+
+| suíte | baseline `7dc7753` | change | por nome | tempo antes → depois |
+|---|---|---|---|---|
+| `apps/api` (5 partes) | 1.277 + 1 ignorado | **1.280 + 1 ignorado** | os 1.278 presentes; 3 novos | 298 s → 264 s |
+| `apps/inbox` | 322 | **325** | os 322 presentes; 3 novos (guarda da 3.1) | 52 s → 52 s |
+| `apps/connectors` | 337 + 1 ignorado | **339 + 1 ignorado** | os 338 presentes; 2 novos | 16 s → 16 s |
+| `rt-inbox` | 15 | 15 | os mesmos; o `Source3_…` (#176) reprova nos dois worktrees | 52–56 s → 51–53 s |
+| `rt-connectors` | 10 | 10 | os mesmos | 28 s → 29 s |
+| `rt-crossapp` | 4 | 4 | os mesmos | 19 s → 20 s |
+
+**Critério de aceite:**
+- **Rodada com o HMAC recusando tudo**, na árvore da change: reprovaram os 22 esperados (20 do G2 e 2 da Q3) e nenhum outro da lista ficou de fora. O único a mais foi o `TerminalTask_…`, irmão da #176, que passou nas duas repetições.
+- **Varredura estática:** `[]`.
+- **Tempo:** nenhuma suíte passou de 1,05×.
+
+**Convenção 18** (só código):
+
+| coluna | projetado (design, "Tamanho") | medido | desvio |
+|---|---|---|---|
+| produção | 0 | 0 | — |
+| testes, suporte e duplos | ~+330 / −80, mais ~+90 de duplos = **~+420** (faixa até +560 com a correção já medida) | **+711 / −100**, 34 arquivos: +258 / −71 em 18 arquivos de teste e +453 / −29 em 16 de suporte | **+69%** contra o ponto, +27% contra o topo da faixa |
+
+O excesso está no suporte: o `TestIssuerTokens` com a espera do anel (C3), o `ConnectorsFactory` com o emissor sob demanda (C4) e os dois clientes do `rt-connectors` (C5). São itens que a projeção não tinha. É a mesma forma de erro registrada na décima segunda medição: duplo e suporte custam mais que caso.
+
+**Guardas (convenção 15):** todos os do `tasks.md` foram vistos reprovar contra o defeito nomeado, com o arquivo de volta e o sha igual. Os do helper do `apps/api` foram refeitos contra o código final. Logs em `236-verificacao/guardas/` e `guardas-final/`. **Um incidente no guarda da varredura:** a restauração por `git checkout` levou um arquivo ao HEAD. Ele foi recuperado da cópia feita antes da mutação, com o sha de antes.
+
+### Para as próximas
+
+- **#182:** a lista de remoções está [no comentário da #182](https://github.com/aldovrando-oliveira/buteco-agentes/issues/182#issuecomment-6622921574). São 55 casos por nome: 46 saem e 9 se reescrevem (os 4 mistos, os 4 de `CurrentUser` com o token do `buteco-servico-inbox` e o do autor com o token do painel). O `TokenService.Issue` agora só tem chamadores do G2 e da Q3. O `TokenService.Issue` agora só tem chamadores do G2 e da Q3.
+- **#176:** um caso novo da família, `RoundTripTests.MessageReceived_…InRawPersistedJson`, reprovou uma vez só na change, com os insumos idênticos aos da baseline. O `TerminalTask_…` reprovou duas vezes na medição. Os dois estão comentados lá.
+- **`apps/api` inteiro:** a suíte derruba a CPU sozinha em toda rodada. Reprovação válida dela só sai em partes.

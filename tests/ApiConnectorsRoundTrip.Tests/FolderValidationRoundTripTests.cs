@@ -37,7 +37,7 @@ public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : 
         var folderId = NewFolderId();
         fixture.Fake.Describe = id => new FolderDescription(id, "Pasta do conector falso", $"https://falso.test/{id}");
 
-        var response = await RoundTripFixture.OperatorClient(api)
+        var response = await (await RoundTripFixture.OperatorClientAsync(api))
             .PostAsJsonAsync("/knowledge-bases", SyncedRequest(FakeConnector.Key, folderId));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -53,7 +53,7 @@ public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : 
         var folderId = NewFolderId();
         fixture.Fake.Describe = _ => throw new ConnectorFailure("access-denied", FakeConnector.AccountEmail);
 
-        var response = await RoundTripFixture.OperatorClient(api)
+        var response = await (await RoundTripFixture.OperatorClientAsync(api))
             .PostAsJsonAsync("/knowledge-bases", SyncedRequest(FakeConnector.Key, folderId));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -69,7 +69,7 @@ public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : 
         var (api, _) = fixture.Build();
         var folderId = NewFolderId();
 
-        var response = await RoundTripFixture.OperatorClient(api)
+        var response = await (await RoundTripFixture.OperatorClientAsync(api))
             .PostAsJsonAsync("/knowledge-bases", SyncedRequest("google-drive", folderId));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -91,7 +91,7 @@ public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : 
         var (api, _) = fixture.Build(connectorsKeysFrom: otherIssuer);
         var folderId = NewFolderId();
 
-        var response = await RoundTripFixture.OperatorClient(api)
+        var response = await (await RoundTripFixture.OperatorClientAsync(api))
             .PostAsJsonAsync("/knowledge-bases", SyncedRequest(FakeConnector.Key, folderId));
 
         Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);

@@ -26,9 +26,15 @@ public sealed class InboxFactoryFixture : WebApplicationFactory<Program>, IAsync
     /// </summary>
     public FakeTokenEndpoint TokenEndpoint { get; } = new();
 
+    /// <summary>O emissor de teste da fixture, com o token padrão dos clientes.</summary>
+    public TestIssuer Issuer { get; } = new();
+
+    /// <summary>Quanto a inicialização espera a primeira obtenção das chaves.</summary>
+    public TimeSpan IssuerKeysWait { get; set; } = TimeSpan.FromSeconds(15);
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseIssuer().ConfigureAppConfiguration((_, config) =>
+        builder.UseTestIssuer(Issuer).ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -66,7 +72,7 @@ public sealed class InboxFactoryFixture : WebApplicationFactory<Program>, IAsync
     protected override void ConfigureClient(HttpClient client)
     {
         base.ConfigureClient(client);
-        TestAuthentication.AttachOperatorToken(client, Services);
+        TestAuthentication.AttachPanelToken(client, Issuer);
     }
 
     async Task IAsyncLifetime.InitializeAsync()
@@ -76,6 +82,10 @@ public sealed class InboxFactoryFixture : WebApplicationFactory<Program>, IAsync
         using var scope = Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await dbContext.Database.MigrateAsync();
+
+        // O token padrão é do emissor de teste (fixtures-token-emissor, D2): o primeiro pedido
+        // só passa depois da primeira obtenção das chaves.
+        await TestAuthentication.WaitForIssuerKeysAsync(Services, IssuerKeysWait);
     }
 
     async Task IAsyncLifetime.DisposeAsync()

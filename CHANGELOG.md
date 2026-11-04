@@ -300,6 +300,16 @@ o versionamento pretende seguir
   - aceitar e concluir não abrem sessão: o painel faz o login normal com a senha nova;
   - a lista e o detalhe de Usuários mostram o convidado, a validade do convite e quem
     convidou; reativar e desativar recusam o convidado.
+- **As suítes de integração autenticam pelo token do emissor** (#236), terceiro passo da
+  troca do token de serviço (#182), só em testes:
+  - as fixtures do `apps/api` anexam um access token do `buteco-painel` gerado no processo
+    por um helper de teste, com o comportamento do HMAC `operator` de antes: passa no
+    catálogo e recebe `403` nas rotas de usuário;
+  - as do `apps/inbox` e do `apps/connectors` sobem com um emissor de teste em memória e
+    esperam a primeira obtenção das chaves antes do primeiro pedido;
+  - os testes de subject usam o token do cliente que produz aquele subject;
+  - só os casos que provam o próprio HMAC continuam com ele, numa lista por nome que a
+    #182 remove.
 - **Os serviços obtêm o token de serviço no emissor** (#235), segundo passo da troca do
   token de serviço (#182):
   - o `apps/inbox` e o `apps/connectors` pedem o token ao `/connect/token` do `apps/api`,

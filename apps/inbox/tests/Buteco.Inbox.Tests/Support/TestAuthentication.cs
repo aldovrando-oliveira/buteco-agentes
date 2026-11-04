@@ -37,10 +37,27 @@ public static class TestAuthentication
     public static IWebHostBuilder UseIssuer(this IWebHostBuilder builder, string issuer = "") =>
         builder.UseSetting("Identity:Issuer", issuer);
 
-    public static void AttachOperatorToken(HttpClient client, IServiceProvider services)
+    /// <summary>
+    /// Liga a validação do token do emissor contra <paramref name="issuer"/>, em memória: o
+    /// <c>Identity:Issuer</c> dele e o handler dele como primário do cliente <c>IssuerKeys</c>,
+    /// que lê o discovery e o JWKS pelo <c>Api:BaseUrl</c> do host (fixtures-token-emissor, D2).
+    /// </summary>
+    public static IWebHostBuilder UseTestIssuer(this IWebHostBuilder builder, TestIssuer issuer) =>
+        builder.UseIssuer(TestIssuer.Issuer).ConfigureServices(services =>
+            services.AddHttpClient(IssuerKeysRetriever.HttpClientName).ConfigurePrimaryHttpMessageHandler(issuer.CreateHandler));
+
+    /// <summary>
+    /// Espera a primeira obtenção das chaves. Sem isso, o primeiro pedido de um teste recebe o
+    /// <c>503</c> de "chaves ainda não obtidas" (validacao-jwks-inbox-connectors, D4).
+    /// </summary>
+    public static Task WaitForIssuerKeysAsync(IServiceProvider services, TimeSpan timeout)
     {
-        var tokenService = services.GetRequiredService<ITokenService>();
-        var (token, _) = tokenService.Issue("operator", TimeSpan.FromMinutes(30));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var state = services.GetRequiredService<IssuerKeysState>();
+        return Poll.UntilAsync(() => state.Obtained, "as chaves do emissor de teste não foram obtidas", timeout);
     }
+
+    // Anexado por padrão no ConfigureClient das fixtures: o token do painel, do emissor
+    // de teste da fixture (fixtures-token-emissor, D2).
+    public static void AttachPanelToken(HttpClient client, TestIssuer issuer) =>
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", issuer.Issue());
 }

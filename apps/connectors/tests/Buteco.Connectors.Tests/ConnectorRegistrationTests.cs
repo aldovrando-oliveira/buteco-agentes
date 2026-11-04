@@ -83,7 +83,7 @@ public class ConnectorRegistrationTests
     public async Task ComposicaoReal_SemCredencial_PassaESemChaves()
     {
         await using var factory = new ConnectorsFactory(withFakeConnector: false);
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         Assert.Null(Record.Exception(factory.CapturedServices!.ValidateConnectorRegistrations));
         Assert.Empty(factory.CapturedServices!.Where(d => d.ServiceType == typeof(ConnectorAccount)));
@@ -112,7 +112,7 @@ public class ConnectorRegistrationTests
     {
         var key = TestServiceAccountKey.Create();
         await using var factory = new ConnectorsFactory(withFakeConnector: false, googleKeyBase64: key.Base64);
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var keys = JsonDocument.Parse(await client.GetStringAsync("/connectors/providers")).RootElement
             .EnumerateArray().Select(provider => provider.GetProperty("key").GetString()).ToList();

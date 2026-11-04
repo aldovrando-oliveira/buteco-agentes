@@ -71,7 +71,7 @@ public partial class KnowledgeBaseCatalogTests
         });
 
         var client = derived.CreateClient();
-        TestAuthentication.AttachOperatorToken(client, derived.Services);
+        TestAuthentication.AttachPanelToken(client, derived.Services);
         return new ConnectorsHost(derived, client, connectors, raceCounter);
     }
 

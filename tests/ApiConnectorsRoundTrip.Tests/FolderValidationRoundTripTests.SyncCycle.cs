@@ -14,7 +14,6 @@ using ApiProgram = ApiAssembly::Program;
 using Microsoft.IdentityModel.JsonWebTokens;
 using ConnectorsProgram = ConnectorsAssembly::Program;
 using ConnectorsSyncInProgress = ConnectorsAssembly::Buteco.Connectors.Sync.SyncInProgress;
-using ConnectorsTokenService = ConnectorsAssembly::Buteco.Connectors.Auth.ITokenService;
 
 namespace ApiConnectorsRoundTrip.Tests;
 
@@ -35,7 +34,7 @@ public partial class FolderValidationRoundTripTests
     private async Task<Guid> CreateSyncedBaseAsync(WebApplicationFactory<ApiProgram> api)
     {
         fixture.Fake.Describe = id => new FolderDescription(id, "Pasta sincronizada", $"https://falso.test/{id}");
-        var response = await RoundTripFixture.OperatorClient(api)
+        var response = await (await RoundTripFixture.OperatorClientAsync(api))
             .PostAsJsonAsync("/knowledge-bases", SyncedRequest(FakeConnector.Key, NewFolderId()));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetGuid();
@@ -47,9 +46,7 @@ public partial class FolderValidationRoundTripTests
     /// </summary>
     private static async Task SyncNowAsync(WebApplicationFactory<ConnectorsProgram> connectors, Guid knowledgeBaseId)
     {
-        var client = connectors.CreateClient();
-        var (token, _) = connectors.Services.GetRequiredService<ConnectorsTokenService>().Issue("operator", TimeSpan.FromMinutes(5));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var client = await RoundTripFixture.ConnectorsOperatorClientAsync(connectors);
 
         var response = await client.PostAsync($"/connectors/knowledge-bases/{knowledgeBaseId}/sync", null);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -66,7 +63,7 @@ public partial class FolderValidationRoundTripTests
     }
 
     private static async Task<JsonElement> GetAsync(WebApplicationFactory<ApiProgram> api, string path) =>
-        JsonDocument.Parse(await RoundTripFixture.OperatorClient(api).GetStringAsync(path)).RootElement.Clone();
+        JsonDocument.Parse(await (await RoundTripFixture.OperatorClientAsync(api)).GetStringAsync(path)).RootElement.Clone();
 
     private static async Task<List<JsonElement>> DocumentsAsync(WebApplicationFactory<ApiProgram> api, Guid knowledgeBaseId) =>
         (await GetAsync(api, $"/knowledge-bases/{knowledgeBaseId}/documents")).EnumerateArray().ToList();
@@ -104,7 +101,7 @@ public partial class FolderValidationRoundTripTests
         Assert.Equal(eventsAfterCreate + 1, events.Count);
         Assert.Equal("A.md", events[0].GetProperty("documentTitle").GetString());
         Assert.Equal(3, fixture.Indexing.Published.Count(message => ids.Contains(message.KnowledgeDocumentId)));
-        var refs = await RoundTripFixture.OperatorClient(api).GetFromJsonAsync<JsonElement>($"/sync/knowledge-bases/{knowledgeBaseId}/documents");
+        var refs = await (await RoundTripFixture.OperatorClientAsync(api)).GetFromJsonAsync<JsonElement>($"/sync/knowledge-bases/{knowledgeBaseId}/documents");
         Assert.All(refs.EnumerateArray(), reference => Assert.Equal("v2", reference.GetProperty("externalVersion").GetString()));
 
         // 2b. B renomeado no Drive, mesmo texto: é mudança de título (D13; cenário
@@ -176,9 +173,7 @@ public partial class FolderValidationRoundTripTests
         var callsBefore = fixture.ConnectorsToApi.Count;
         var tokenRequestsBefore = fixture.ConnectorsTokenRequests.Count;
 
-        var client = connectors.CreateClient();
-        var (operatorToken, _) = connectors.Services.GetRequiredService<ConnectorsTokenService>().Issue("operator", TimeSpan.FromMinutes(5));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", operatorToken);
+        var client = await RoundTripFixture.ConnectorsOperatorClientAsync(connectors);
         var response = await client.PostAsync($"/connectors/knowledge-bases/{knowledgeBaseId}/sync", null);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
