@@ -35,7 +35,7 @@ public class SubjectAuthorizationTests : IAsyncLifetime
     [MemberData(nameof(Matrix))]
     public async Task SubjectXRota(string subject, string method, string route, bool allowed)
     {
-        var client = TestAuthentication.CreateClientAs(_factory, subject);
+        var client = TestAuthentication.CreateIssuerClientAs(_factory, subject);
 
         var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), route));
 
@@ -53,7 +53,7 @@ public class SubjectAuthorizationTests : IAsyncLifetime
     [Fact]
     public async Task OperadorNaRotaExclusivaDoApi_Recebe403()
     {
-        var client = TestAuthentication.CreateClientAs(_factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(_factory, "operator");
 
         var response = await client.GetAsync(Folder);
 
@@ -63,7 +63,7 @@ public class SubjectAuthorizationTests : IAsyncLifetime
     [Fact]
     public async Task ApiNasRotasDoOperador_Recebe403()
     {
-        var client = TestAuthentication.CreateClientAs(_factory, "service:api");
+        var client = TestAuthentication.CreateIssuerClientAs(_factory, "service:api");
 
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(Providers)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(Folders)).StatusCode);

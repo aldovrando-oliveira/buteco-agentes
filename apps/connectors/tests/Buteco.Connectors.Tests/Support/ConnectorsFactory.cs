@@ -2,10 +2,12 @@ using System.Net.Http.Headers;
 using Buteco.Connectors.Auth;
 using Buteco.Connectors.Connectors;
 using Buteco.Connectors.Connectors.GoogleDrive;
+using Buteco.Connectors.Sync;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -22,7 +24,16 @@ namespace Buteco.Connectors.Tests.Support;
 /// handler dele e o <paramref name="issuerKeysSchedule"/>. O <c>Api:BaseUrl</c> liga
 /// também o ciclo de sincronização, contra o <see cref="SyncApi"/>. O
 /// <see cref="ITokenService"/> é embrulhado num contador, para os testes afirmarem que um
-/// JWT nunca passa pelo HMAC. Sem ele, <c>Identity:Issuer</c> fica vazio.
+/// JWT nunca passa pelo HMAC.
+/// </para>
+/// <para>
+/// Sem <paramref name="issuer"/>, a fábrica tem um <see cref="TestIssuer"/> próprio
+/// (<see cref="Issuer"/>), ligado no host quando o teste pede um token do emissor antes de o
+/// host subir (<see cref="UseIssuer"/>, pelo <c>TestAuthentication.CreateIssuerClientAs</c>;
+/// fixtures-token-emissor, D3). Quem não pede fica como antes: <c>Identity:Issuer</c> vazio.
+/// O emissor exige o <c>Api:BaseUrl</c>, que liga o agendador do ciclo; quando o teste não o
+/// pediu, o agendador sai do DI da fábrica, para não somar pedidos aos duplos. É ajuste de
+/// teste, e não opção de produção (decisão do dono, 04/11/2026).
 /// </para>
 /// </summary>
 public sealed class ConnectorsFactory(
@@ -54,6 +65,32 @@ public sealed class ConnectorsFactory(
 
     public CountingTokenService TokenService => (CountingTokenService)Services.GetRequiredService<ITokenService>();
 
+    /// <summary>O emissor de teste do host: o recebido, ou um próprio.</summary>
+    public TestIssuer Issuer { get; } = issuer ?? new TestIssuer();
+
+    private bool _issuerEnabled = issuer is not null;
+    private bool _built;
+
+    /// <summary>
+    /// Liga a validação do token do emissor contra o <see cref="Issuer"/>. Só antes de o host
+    /// subir: a configuração do emissor é lida no boot.
+    /// </summary>
+    public void UseIssuer()
+    {
+        if (_issuerEnabled)
+        {
+            return;
+        }
+
+        if (_built)
+        {
+            throw new InvalidOperationException(
+                "O host da ConnectorsFactory já subiu sem o emissor: peça o token do emissor antes de usar Services, Server ou CreateClient.");
+        }
+
+        _issuerEnabled = true;
+    }
+
     /// <summary>
     /// A <see cref="IServiceCollection"/> real, capturada pelo ConfigureServices, que
     /// roda depois de todos os registros do Program.cs (convenção 8).
@@ -67,6 +104,7 @@ public sealed class ConnectorsFactory(
         // entra por UseSetting já está na configuração nesse ponto (medido: com
         // ConfigureAppConfiguration, o boot sem chave subia com a do
         // appsettings.Development.json).
+        _built = true;
         builder.UseEnvironment(environment);
         var values = new Dictionary<string, string?>
         {
@@ -83,11 +121,13 @@ public sealed class ConnectorsFactory(
             // Obrigatório no boot com Api:BaseUrl (servicos-token-emissor, D5).
             ["ServiceClient:Secret"] = TestAuthentication.ServiceClientSecret,
         };
-        if (issuer is not null)
+        if (_issuerEnabled)
         {
             values["Identity:Issuer"] = TestIssuer.Issuer;
             values["Api:BaseUrl"] = TestIssuer.InternalBaseUrl;
         }
+
+        var withoutScheduler = _issuerEnabled && issuer is null && extraConfiguration?.ContainsKey("Api:BaseUrl") != true;
 
         if (googleKeyBase64 is not null)
         {
@@ -124,12 +164,19 @@ public sealed class ConnectorsFactory(
             services.AddHttpClient(Buteco.Connectors.Sync.SyncApiClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => SyncApi);
             services.AddHttpClient(ServiceAccessTokenSource.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => TokenEndpoint);
 
-            if (issuer is not null)
+            if (_issuerEnabled)
             {
                 services.Replace(ServiceDescriptor.Singleton(issuerKeysSchedule ?? new IssuerKeysSchedule()));
-                services.AddHttpClient(IssuerKeysRetriever.HttpClientName).ConfigurePrimaryHttpMessageHandler(issuer.CreateHandler);
+                services.AddHttpClient(IssuerKeysRetriever.HttpClientName).ConfigurePrimaryHttpMessageHandler(Issuer.CreateHandler);
                 services.Replace(ServiceDescriptor.Singleton<ITokenService>(provider =>
                     new CountingTokenService(new TokenService(provider.GetRequiredService<IOptions<TokenSigningOptions>>()))));
+            }
+
+            if (withoutScheduler)
+            {
+                var scheduler = services.Single(descriptor =>
+                    descriptor.ServiceType == typeof(IHostedService) && descriptor.ImplementationType == typeof(SyncSchedulerService));
+                services.Remove(scheduler);
             }
 
             configureServices?.Invoke(services);

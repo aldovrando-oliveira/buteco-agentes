@@ -57,7 +57,7 @@ public class SyncEndpointsTests
         await using var factory = Factory();
         var knowledgeBase = factory.SyncApi.AddBase(isActive: isActive);
         var recorded = ResultRecorded(factory, knowledgeBase.Id);
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var response = await client.PostAsync(SyncNow(knowledgeBase.Id), null);
 
@@ -70,7 +70,7 @@ public class SyncEndpointsTests
     public async Task BaseNotInTheList_Is404KnowledgeBaseNotFound()
     {
         await using var factory = Factory();
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var response = await client.PostAsync(SyncNow(Guid.NewGuid()), null);
 
@@ -96,7 +96,7 @@ public class SyncEndpointsTests
     {
         await using var factory = Factory();
         factory.SyncApi.Override = (_, _) => throw new HttpRequestException("recusada");
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var response = await client.PostAsync(SyncNow(Guid.NewGuid()), null);
 
@@ -113,7 +113,7 @@ public class SyncEndpointsTests
     {
         await using var factory = Factory();
         factory.SyncApi.Override = (_, _) => new HttpResponseMessage(apiStatus);
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var response = await client.PostAsync(SyncNow(Guid.NewGuid()), null);
 
@@ -137,7 +137,7 @@ public class SyncEndpointsTests
             reached.TrySetResult();
             await release.Task;
         };
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var first = await client.PostAsync(SyncNow(knowledgeBase.Id), null);
         await reached.Task.WaitAsync(SafetyLimit);
@@ -158,7 +158,7 @@ public class SyncEndpointsTests
         await using var factory = Factory();
         var knowledgeBase = factory.SyncApi.AddBase();
         var recorded = ResultRecorded(factory, knowledgeBase.Id);
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
         await client.PostAsync(SyncNow(knowledgeBase.Id), null);
         await recorded.Task.WaitAsync(SafetyLimit);
 

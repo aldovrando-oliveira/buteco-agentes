@@ -7,9 +7,7 @@ outro app, imagem `buteco-connectors`, saúde anônima e classificada, CORS para
 painel e autenticação por token validado localmente com a chave compartilhada. Diz o
 que o app precisa para existir e subir; o que cada rota faz e quem pode chamá-la está
 em `connectors-api`, e o contrato dos conectores em `connector-plugin`.
-
 ## Requirements
-
 ### Requirement: Solução .NET própria para apps/connectors, sem banco
 O sistema SHALL prover `apps/connectors/Connectors.sln` com o projeto
 `src/Buteco.Connectors` (ASP.NET Core Minimal API, .NET 10) e o projeto de teste
@@ -87,3 +85,24 @@ non-root, porta 8080 e `HEALTHCHECK` contra `/health`.
   executado na raiz do monorepo
 - **THEN** o build completa, e o contêiner iniciado com
   `Auth__TokenSigningKey` responde `200` em `/health` na porta 8080
+
+### Requirement: A suíte de integração do apps/connectors autentica pelo token do emissor
+A fábrica de integração de `apps/connectors/tests` SHALL subir o `apps/connectors`
+com a validação do token do emissor ligada contra um emissor de teste em memória, e
+os casos SHALL autenticar com o access token do cliente que a tabela de clientes do
+`apps/connectors` mapeia para o subject que provam. Quando o caso não pede o
+`Api:BaseUrl`, a fábrica SHALL retirar do host de teste o agendamento do ciclo de
+sincronização, sem opção nova de configuração de produção. Nenhum caso SHALL
+depender do token HMAC, exceto os que provam o próprio HMAC e os que provam o app
+sem `Api:BaseUrl`, listados por nome na #182.
+
+#### Scenario: Suíte com o HMAC recusado
+- **WHEN** a validação do token HMAC do `apps/connectors` passa a recusar todo
+  token e a suíte de `apps/connectors/tests` roda
+- **THEN** reprovam só os casos das listas da #182, por nome
+
+#### Scenario: Fábrica padrão sem agendamento do ciclo
+- **WHEN** um caso usa a fábrica sem pedir `Api:BaseUrl`
+- **THEN** nenhum pedido chega ao `apps/api` falso nem ao `/connect/token` falso
+  depois do boot
+

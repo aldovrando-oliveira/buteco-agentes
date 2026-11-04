@@ -14,9 +14,9 @@ namespace Buteco.Api.Tests.Identity;
 /// emissor-oidc-api, D9): com o emissor ligado, a validação HMAC segue igual, e o token
 /// do emissor <b>não</b> é credencial das rotas do <c>apps/api</c>. O caso do login HMAC
 /// saiu com o <c>POST /auth/login</c> (change painel-entra-pelo-emissor, D8): o HMAC de
-/// operador aceito em <c>/agents</c> é provado por toda fixture, pelo
-/// <see cref="TestAuthentication.AttachOperatorToken"/>, e o 404 da rota pelo
-/// <see cref="GoneLoginTests"/>.
+/// operador aceito em <c>/agents</c> é provado pelo
+/// <see cref="IssuerTokenAcceptanceTests"/> (as fixtures anexam o token do emissor desde a
+/// change fixtures-token-emissor), e o 404 da rota pelo <see cref="GoneLoginTests"/>.
 /// </summary>
 public class IdentityIssuerCoexistenceTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>, IAsyncLifetime
 {

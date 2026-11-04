@@ -1,3 +1,4 @@
+using Buteco.Api.Identity.Keys;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.McpServers.Connectivity;
 using Microsoft.AspNetCore.Hosting;
@@ -50,7 +51,7 @@ public sealed class McpConnectionTestFixture : WebApplicationFactory<Program>, I
     protected override void ConfigureClient(HttpClient client)
     {
         base.ConfigureClient(client);
-        TestAuthentication.AttachOperatorToken(client, Services);
+        TestAuthentication.AttachPanelToken(client, Services);
     }
 
     async Task IAsyncLifetime.InitializeAsync()
@@ -60,6 +61,10 @@ public sealed class McpConnectionTestFixture : WebApplicationFactory<Program>, I
         using var scope = Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await dbContext.Database.MigrateAsync();
+
+        // O token padrão é assinado pelo anel (fixtures-token-emissor, D1): carrega já, pelo
+        // mesmo caminho do primeiro pedido no gate.
+        await Services.GetRequiredService<IdentityKeyRing>().EnsureLoadedAsync(CancellationToken.None);
     }
 
     async Task IAsyncLifetime.DisposeAsync()

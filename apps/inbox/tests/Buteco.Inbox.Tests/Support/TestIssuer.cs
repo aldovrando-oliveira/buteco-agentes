@@ -40,6 +40,32 @@ public sealed class TestIssuer
 
     public IssuerAvailability Availability { get; set; } = IssuerAvailability.Online;
 
+    // Segura toda resposta até ReleaseKeys (fixtures-token-emissor, guarda da 3.1): é o que
+    // torna determinístico "a fixture espera a primeira obtenção das chaves". Só nesta cópia:
+    // o guarda é das fixtures do apps/inbox.
+    private TaskCompletionSource? _held;
+    private readonly TaskCompletionSource _requestedWhileHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public void HoldKeys()
+    {
+        lock (_gate)
+        {
+            _held ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+    }
+
+    public void ReleaseKeys()
+    {
+        lock (_gate)
+        {
+            _held?.TrySetResult();
+            _held = null;
+        }
+    }
+
+    /// <summary>Completa quando chega o primeiro pedido com as chaves seguras.</summary>
+    public Task RequestedWhileHeld => _requestedWhileHeld.Task;
+
     /// <summary>Issuer que o discovery declara; por padrão, o <see cref="Issuer"/>.</summary>
     public string AnnouncedIssuer { get; set; } = Issuer;
 
@@ -168,13 +194,26 @@ public sealed class TestIssuer
 
     private sealed class Handler(TestIssuer issuer) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            Task? held;
             lock (issuer._gate)
             {
                 issuer._requests.Add(request.RequestUri!);
+                held = issuer._held?.Task;
             }
 
+            if (held is not null)
+            {
+                issuer._requestedWhileHeld.TrySetResult();
+                await held.WaitAsync(cancellationToken);
+            }
+
+            return await RespondAsync(request);
+        }
+
+        private Task<HttpResponseMessage> RespondAsync(HttpRequestMessage request)
+        {
             switch (issuer.Availability)
             {
                 case IssuerAvailability.Unreachable:

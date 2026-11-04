@@ -15,7 +15,7 @@ public class ConnectorEndpointsTests
     {
         var key = TestServiceAccountKey.Create();
         await using var factory = new ConnectorsFactory(googleKeyBase64: key.Base64);
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var json = await client.GetStringAsync("/connectors/providers");
 
@@ -28,7 +28,7 @@ public class ConnectorEndpointsTests
     public async Task SemCredencial_ProvedoresVazio()
     {
         await using var factory = new ConnectorsFactory(withFakeConnector: false);
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         Assert.Equal("[]", await client.GetStringAsync("/connectors/providers"));
     }
@@ -43,7 +43,7 @@ public class ConnectorEndpointsTests
             new FolderEntry("id-1", "beta", FolderEntryKind.Folder, "https://falso.test/1"),
             new FolderEntry("id-3", "Alfa", FolderEntryKind.SharedDrive, "https://falso.test/3"),
         ];
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var json = await client.GetStringAsync("/connectors/providers/fake/folders");
 
@@ -59,7 +59,7 @@ public class ConnectorEndpointsTests
         await using var factory = new ConnectorsFactory();
         string? received = "nao-chamado";
         factory.Fake.Browse = parentId => { received = parentId; return []; };
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         await client.GetStringAsync("/connectors/providers/fake/folders?parentId=pasta-x");
         Assert.Equal("pasta-x", received);
@@ -72,7 +72,7 @@ public class ConnectorEndpointsTests
     public async Task Descricao_FormatoDeFio()
     {
         await using var factory = new ConnectorsFactory();
-        var client = TestAuthentication.CreateClientAs(factory, "service:api");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "service:api");
 
         var json = await client.GetStringAsync("/connectors/providers/fake/folder?id=pasta-1");
 
@@ -86,7 +86,7 @@ public class ConnectorEndpointsTests
     public async Task DescricaoSemId_400(string query)
     {
         await using var factory = new ConnectorsFactory();
-        var client = TestAuthentication.CreateClientAs(factory, "service:api");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "service:api");
 
         var response = await client.GetAsync($"/connectors/providers/fake/folder{query}");
 
@@ -97,7 +97,7 @@ public class ConnectorEndpointsTests
     public async Task ProvedorNaoConfigurado_404ComCodigo()
     {
         await using var factory = new ConnectorsFactory();
-        var client = TestAuthentication.CreateClientAs(factory, "service:api");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "service:api");
 
         var response = await client.GetAsync("/connectors/providers/onedrive/folder?id=x");
 
@@ -123,7 +123,7 @@ public class ConnectorEndpointsTests
     {
         await using var factory = new ConnectorsFactory();
         factory.Fake.Browse = _ => throw new ConnectorFailure(code, detail);
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var response = await client.GetAsync("/connectors/providers/fake/folders?parentId=p");
         var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
@@ -150,7 +150,7 @@ public class ConnectorEndpointsTests
         await using var factory = new ConnectorsFactory(googleKeyBase64: key.Base64);
         factory.Google.OnPath("/drive/v3/files/pasta-x", _ => GoogleDriveTestKit.NotFound("pasta-x"));
         factory.Google.OnList("'pasta-x' in parents", _ => GoogleDriveFakeHandler.Json(HttpStatusCode.OK, """{"files":[]}"""));
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var response = await client.GetAsync("/connectors/providers/google-drive/folders?parentId=pasta-x");
         var text = await response.Content.ReadAsStringAsync();
@@ -168,7 +168,7 @@ public class ConnectorEndpointsTests
         await using var factory = new ConnectorsFactory(googleKeyBase64: key.Base64);
         factory.Google.OnPath("/drive/v3/files/pasta-x", _ => GoogleDriveFakeHandler.GoogleError(
             HttpStatusCode.Forbidden, "accessNotConfigured", "Google Drive API has not been used in project 000000000000 before or it is disabled.", "usageLimits"));
-        var client = TestAuthentication.CreateClientAs(factory, "service:api");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "service:api");
 
         var response = await client.GetAsync("/connectors/providers/google-drive/folder?id=pasta-x");
 
@@ -183,7 +183,7 @@ public class ConnectorEndpointsTests
         await using var factory = new ConnectorsFactory(googleKeyBase64: key.Base64);
         factory.Google.OnPath("/drive/v3/drives", _ => GoogleDriveFakeHandler.GoogleError(
             HttpStatusCode.Forbidden, "userRateLimitExceeded", "User Rate Limit Exceeded", "usageLimits"));
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
+        var client = TestAuthentication.CreateIssuerClientAs(factory, "operator");
 
         var response = await client.GetAsync("/connectors/providers/google-drive/folders");
 

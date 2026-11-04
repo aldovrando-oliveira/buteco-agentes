@@ -136,17 +136,15 @@ public class KnowledgeRouteAuthenticationTests(ApiFactoryFixture factory) : ICla
     /// <see cref="ServiceScopeAuthorizationHandler"/>. Está afirmado porque a #102
     /// vai mexer nesse escopo para acrescentar <c>service:connectors</c>, e é ali
     /// que uma liberação ampla demais escaparia sem teste (design.md da change
-    /// historico-documentos-base, D8). Token emitido pelo mesmo
-    /// <see cref="ITokenService"/> real, no molde de
-    /// <c>ServiceScopeAuthorizationTests</c>.
+    /// historico-documentos-base, D8). Token do cliente do service:inbox, do emissor
+    /// (fixtures-token-emissor, D1), no molde de <c>ServiceScopeAuthorizationTests</c>.
     /// </summary>
     [Fact]
     public async Task ListDocumentEvents_WithServiceToken_ReturnsForbidden()
     {
         var knowledgeBase = await factory.CreateClient().CreateBaseAsync("Base do histórico");
         var client = factory.CreateClient();
-        var tokenService = factory.Services.GetRequiredService<ITokenService>();
-        var (token, _) = tokenService.Issue(ServiceScopeAuthorizationHandler.InboxSubject, TimeSpan.FromMinutes(5));
+        var token = TestIssuerTokens.ForSubject(factory.Services, ServiceScopeAuthorizationHandler.InboxSubject);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.GetAsync(KnowledgeTestClient.DocumentEventsPath(knowledgeBase.Id));

@@ -222,8 +222,7 @@ public class ServiceScopeAuthorizationTests(ApiFactoryFixture factory) : IClassF
     private HttpClient ServiceScopedClient()
     {
         var client = factory.CreateClient();
-        var tokenService = factory.Services.GetRequiredService<ITokenService>();
-        var (token, _) = tokenService.Issue(ServiceScopeAuthorizationHandler.InboxSubject, TimeSpan.FromMinutes(5));
+        var token = TestIssuerTokens.ForSubject(factory.Services, ServiceScopeAuthorizationHandler.InboxSubject);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }

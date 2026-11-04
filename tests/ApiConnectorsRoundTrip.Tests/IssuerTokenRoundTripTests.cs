@@ -38,7 +38,7 @@ public class IssuerTokenRoundTripTests(RoundTripFixture fixture) : IClassFixture
         var (api, connectors) = fixture.Build();
         var connectorsToken = await IssuerUserFlow.AccessTokenAsync(
             api.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
-            () => WarmUpAsync(api),
+            () => RoundTripFixture.WarmUpIssuerAsync(api),
             RoundTripFixture.ApiPublicBaseUrl,
             RoundTripFixture.AdminPassword,
             "openid offline_access buteco-connectors");
@@ -74,13 +74,6 @@ public class IssuerTokenRoundTripTests(RoundTripFixture fixture) : IClassFixture
         {
             fixture.ApiIssuerKeys.Closed = false;
         }
-    }
-
-    private static async Task WarmUpAsync(WebApplicationFactory<ApiProgram> api)
-    {
-        await using var scope = api.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Identity.Clients.IIdentityClientCatalog>().SyncAsync(CancellationToken.None);
-        await scope.ServiceProvider.GetRequiredService<ApiAssembly::Buteco.Api.Users.Bootstrap.IUserBootstrapper>().RunAsync(CancellationToken.None);
     }
 
     /// <summary>Token de <c>client_credentials</c> do cliente de teste, só com <c>buteco-inbox</c>.</summary>

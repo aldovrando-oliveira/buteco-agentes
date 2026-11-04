@@ -17,8 +17,8 @@ namespace Buteco.Inbox.Tests;
 
 // Tabela de subjects do apps/inbox (change inbox-restricao-de-subject, D1/D6):
 // só "operator" é autorizado nas rotas autenticadas; qualquer outro subject,
-// com token validamente assinado pela mesma chave, recebe 403. As rotas
-// anônimas não mudam com um token de serviço presente.
+// com token válido do emissor, recebe 403. As rotas anônimas não mudam com um
+// token de serviço presente.
 public partial class SubjectAuthorizationTests(InboxFactoryFixture factory, ITestOutputHelper output) : IClassFixture<InboxFactoryFixture>
 {
     private const string ConnectorsSubject = "service:connectors";
@@ -121,12 +121,15 @@ public partial class SubjectAuthorizationTests(InboxFactoryFixture factory, ITes
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // Token do emissor de teste para o cliente que a tabela de clientes mapeia para o
+    // subject. Nenhum cliente do apps/inbox produz subject de serviço: o client_id vira o
+    // texto do subject, fora da tabela, e o token autentica sem subject e recebe 403 pelo
+    // mesmo handler (fixtures-token-emissor, Q1, decisão do dono).
     private HttpClient ClientAs(string subject)
     {
         var client = factory.CreateClient();
-        var tokenService = factory.Services.GetRequiredService<ITokenService>();
-        var (token, _) = tokenService.Issue(subject, TimeSpan.FromMinutes(5));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var clientId = IssuerClientSubjects.Table.FirstOrDefault(entry => entry.Value == subject).Key ?? subject;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", factory.Issuer.Issue(clientId: clientId, subject: clientId));
         return client;
     }
 
