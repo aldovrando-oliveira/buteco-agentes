@@ -6,7 +6,7 @@ Diz como vivem as chaves do emissor OIDC do `apps/api`: persistidas no banco, co
 parte privada cifrada em repouso, identificadas por `kid`, com rotação automática sem
 reinício, publicação antecipada no JWKS, retenção depois da troca e exclusão mútua entre
 instâncias. Uma chave gerada a cada boot nunca é aceita. A rota de leitura das chaves
-para a tela Identidade é da #211.
+para a tela Identidade (`GET /identity`, #211) está na `identity-issuer-overview`.
 
 ## Requirements
 

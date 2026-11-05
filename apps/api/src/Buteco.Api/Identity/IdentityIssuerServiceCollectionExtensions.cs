@@ -86,9 +86,13 @@ public static class IdentityIssuerServiceCollectionExtensions
 
                 // D3.7: 15 min para todo access token, inclusive o de client_credentials
                 // (#186), e 14 dias de refresh, a idade mínima da limpeza. A retenção das
-                // chaves cobre a maior das duas (6.9).
-                server.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));
-                server.SetRefreshTokenLifetime(TimeSpan.FromDays(14));
+                // chaves cobre a maior das duas (6.9). Todas as durações vêm de
+                // IdentityTokenLifetimes, inclusive o id token e o código, que são os padrões
+                // do OpenIddict ditos explicitamente (leitura-identidade-emissor, D6).
+                server.SetAccessTokenLifetime(IdentityTokenLifetimes.AccessToken);
+                server.SetRefreshTokenLifetime(IdentityTokenLifetimes.RefreshToken);
+                server.SetIdentityTokenLifetime(IdentityTokenLifetimes.IdentityToken);
+                server.SetAuthorizationCodeLifetime(IdentityTokenLifetimes.AuthorizationCode);
 
                 server.RegisterScopes([Scopes.OpenId, Scopes.OfflineAccess, .. IdentityClients.Scopes]);
 

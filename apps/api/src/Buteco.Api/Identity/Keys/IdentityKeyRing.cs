@@ -10,7 +10,8 @@ namespace Buteco.Api.Identity.Keys;
 /// <summary>
 /// As chaves vigentes do emissor, decifradas, em memória (design.md da change
 /// emissor-oidc-api, D5, D6 e D7). É a única peça que lê e escreve
-/// <c>identity_keys</c>; o configurer das opções do OpenIddict só lê o snapshot daqui.
+/// <c>identity_keys</c>, inclusive a leitura sem material do <c>GET /identity</c>
+/// (<see cref="ListSigningKeysAsync"/>); o configurer das opções do OpenIddict só lê o snapshot daqui.
 ///
 /// <para>
 /// <b>Por que não carregar no boot:</b> as fixtures de teste sobem o host antes de
@@ -95,6 +96,23 @@ public sealed class IdentityKeyRing(
         {
             _refreshLock.Release();
         }
+    }
+
+    /// <summary>
+    /// As chaves de assinatura gravadas, sem material, para o <c>GET /identity</c> (design.md da
+    /// change leitura-identidade-emissor, D4). A projeção vai ao SQL: a coluna do material nem
+    /// sai do banco. Sem lock, porque ler não cria chave, e sem cache, porque são poucas linhas
+    /// e a tela abre raramente. Quem decide o estado é a
+    /// <see cref="IdentityKeyRotationPolicy.Describe"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<IdentityKeyWindowsView>> ListSigningKeysAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await dbContext.IdentityKeys.AsNoTracking()
+            .Where(key => key.Usage == IdentityKeyUsage.Signing)
+            .Select(key => new IdentityKeyWindowsView(key.Kid, key.CreatedAt, key.SignsFrom, key.SignsUntil, key.ValidatesUntil))
+            .ToListAsync(cancellationToken);
     }
 
     private async Task LoadUnderLockAsync(CancellationToken cancellationToken)

@@ -18081,7 +18081,7 @@ Num worktree descartável em `8decb1e`, o emissor ficou obrigatório e a fábric
 
 ### Correções na implementação (convenção 9)
 
-Nenhuma mudou comportamento, contrato ou cobertura. Estão no `tasks.md` da change ([`openspec/changes/archive/2026-11-05-remover-hmac-token-servico/tasks.md`](openspec/changes/archive/2026-11-05-remover-hmac-token-servico/tasks.md); o CLI datou a pasta pelo dia UTC).
+Nenhuma mudou comportamento, contrato ou cobertura. Estão no `tasks.md` da change ([`openspec/changes/archive/2026-11-05-leitura-identidade-emissor/tasks.md`](openspec/changes/archive/2026-11-05-leitura-identidade-emissor/tasks.md)).([`openspec/changes/archive/2026-11-05-remover-hmac-token-servico/tasks.md`](openspec/changes/archive/2026-11-05-remover-hmac-token-servico/tasks.md); o CLI datou a pasta pelo dia UTC).
 - **O arquivo do seletor não saiu inteiro** no inbox e no connectors. O `AnonymousRoute_WithInvalidJwt_StillAnswersByTheRoute`, fora da lista, ficou na mesma classe.
 - **O guarda do "sem token antes das chaves"** usa o issuer `Unreachable` em vez de segurar as chaves no `TestIssuer`. O desenho previa segurar, e o caso não precisa.
 - **R8 e R9:** o defeito "primeiro usuário do banco" não fazia os casos reprovarem (banco vazio no R8; o próprio alvo no R9). O defeito usado foi o do guarda original da #218: sem a recusa, quem chama segue nulo.
@@ -18136,3 +18136,55 @@ A produção saiu 12% acima do projetado na remoção. O `+96` inclui os coment�
 - **#241:** os ramos "sem `Api:BaseUrl`" do connectors e o `sync-not-configured` do painel, inalcançáveis desde esta change.
 - **#55:** a `TokenSigningKey` sai da lista (comentário no PR).
 - **`apps/api` inteiro:** sem rodada com CPU 100 nesta change, porque a máquina ficou em `CPU_Speed_Limit` 23 por horas. O tempo foi aceito pelas partes, com a mesma limitação nos dois worktrees.
+
+## `leitura-identidade-emissor` — `GET /identity`, o emissor e as chaves para a tela Identidade (#211)
+
+**Change proposta e implementada em 04–05/11/2026**, na branch `feat/211-rota-leitura-identidade`, num worktree próprio, a partir de `914ca67` (merge do PR #242). Entrega M1 · 13 de 15. Depende da #179. A #183 consome a rota.
+
+- **O que entra:** `GET /identity` no `apps/api`, só de leitura. O contrato segue o quadro "Identidade" do protótipo, corrigido pelo dono em 04/11/2026 (`Provedores.dc.html`, nos dois valores de `momento`).
+  - **emissor:** issuer, discovery, JWKS e token, iguais aos do discovery; `validadeDoTokenSegundos`; `sessaoSemAtividadeSegundos` (refresh deslizante);
+  - **chaves de assinatura:** intervalo de troca, pré-publicação, retenção e verificação. Por chave do anel: `kid`, `estado` (`em-uso`, `proxima`, `aposentando`), `criadaEm`, `assinaDesde`, `assinaAte` e `saiDaPublicacaoEm`.
+
+  Nenhum material de chave: a leitura fica no `IdentityKeyRing` e a projeção vai ao SQL, sem a coluna do material. O estado sai da `IdentityKeyRotationPolicy.Describe`, no instante da requisição, com os mesmos predicados do anel.
+- **Acesso:** todo usuário real e ativo (`CurrentUser`) na M1. Serviço e token sem usuário recebem `403`. A #184 recebeu o comentário de que a rota passa a ser só de Admin.
+- **Durações de uma fonte só:** `IdentityTokenLifetimes` (access 15 min, refresh 14 d, id token 20 min, código 5 min). Ela é lida pelo registro do OpenIddict, pelo `ServiceAccessTokenIssuer`, que tinha um segundo literal de 15 min, e pela rota. O id token e o código valiam pelo padrão do OpenIddict 7.7.2 e passam a ser registrados explicitamente, com os mesmos valores. Nenhuma duração mudou.
+- **Capacidade nova:** `identity-issuer-overview`. Nenhuma alterada.
+
+**Decisões do dono** (04/11/2026; detalhe no design, "Decisões do dono"):
+- **Q1, ampliada:** durações em constantes únicas, com o guarda que compara a resposta da rota com as opções do OpenIddict;
+- **Q2:** `GET /identity`;
+- **Q3:** estado pela política, no instante da requisição;
+- **Q4:** leitura no anel, sem material;
+- **Q5:** `verificacaoSegundos` entra, do `CheckInterval`;
+- **o selo "Operando" é fixo:** sem campo na rota, porque o gate já responde `503` a toda rota antes de o anel carregar.
+
+### Premissas que caíram (convenção 9)
+
+Nenhuma mudou comportamento, contrato existente ou cobertura. O registro completo está no `tasks.md` da change ([`openspec/changes/archive/2026-11-05-leitura-identidade-emissor/tasks.md`](openspec/changes/archive/2026-11-05-leitura-identidade-emissor/tasks.md); o CLI datou a pasta pelo dia UTC).
+- **"Sem url pública, a rota responde desligado"** (corpo da #211): desde a #217 a url pública é obrigatória e o boot reprova sem ela. A rota não tem esse estado.
+- **"Só o `apps/api`"** (proposal): o `nginx.conf` do stack só manda ao `apps/api` os prefixos listados, e `/identity` cairia no fallback do SPA (`200` com HTML). `identity` entrou no bloco do `apps/api`, como a #179 e a #218 fizeram nas suas rotas, e a suíte `frontend` entrou na medição.
+- **Três guardas tinham o defeito mal escrito no `tasks.md`.** Foram trocados por um equivalente que reprova, e cada troca está registrada na tarefa:
+  - o id token "sem registro" não reprova, porque o padrão é igual à constante;
+  - o "900 literal" exigia dois arquivos;
+  - a borda do `SignsFrom` está no predicado compartilhado com o anel.
+
+  O caso do material foi dividido em dois, para a busca do material cifrado ser vista reprovar sozinha.
+
+### O que a implementação mediu
+
+Suítes pelo `~/.cache/buteco-agents/bin/suite-211.sh`, com a regra assimétrica, em `~/.cache/buteco-agents/211-baseline-914ca67/` e `211-fechamento/`.
+
+| suíte | baseline `914ca67` | change | por nome |
+|---|---|---|---|
+| `apps/api` | 1.269 + 1 ignorado | **1.296 + 1 ignorado** | os 1.270 da baseline com o mesmo resultado, e entram 27 |
+| `apps/frontend` | 1.978 | **1.978** | os mesmos, com o mesmo resultado |
+
+- **Guardas (convenção 15):** os 17 reprovaram contra o defeito nomeado, mais a repetição do g16 depois da divisão do caso do material. Cada arquivo voltou pela cópia, com o sha conferido, e o diff da árvore depois dos guardas é o mesmo de antes. Registro em `~/.cache/buteco-agents/211-guardas/`.
+- **CPU:** as quatro rodadas foram verdes com o `CPU_Speed_Limit` caindo, até 23 na baseline do api, 46 na change, e 34 e 62 no frontend. Verde conta mesmo assim.
+- **Conferência local:** `dotnet run` do worktree contra o Postgres do compose de desenvolvimento. O `GET /identity` com o token de `operador@buteco.local` respondeu `200`, com os endereços iguais aos do discovery e a chave `em-uso` com as datas da linha de `identity_keys`. Sem token, `401`.
+- **Tamanho:** produção +282 / −8 em 8 arquivos; testes +481; docs e deploy +46 / −2. O design não projetou tamanho.
+
+### Para as próximas
+
+- **#183:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6648947247) traz o contrato e a única divergência que resta, o selo "Operando".
+- **#184:** restringir a rota ao Admin, a partir dos casos de acesso do `IdentityOverviewEndpointTests`.

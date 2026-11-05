@@ -300,6 +300,20 @@ o versionamento pretende seguir
   - aceitar e concluir não abrem sessão: o painel faz o login normal com a senha nova;
   - a lista e o detalhe de Usuários mostram o convidado, a validade do convite e quem
     convidou; reativar e desativar recusam o convidado.
+- **`GET /identity`, a leitura do emissor e das chaves para a tela Identidade** (#211):
+  - devolve o issuer e os endereços de discovery, JWKS e token, iguais aos do discovery;
+    a validade do access token e a duração da sessão do painel; o intervalo de troca, a
+    pré-publicação, a retenção e a verificação da rotação; e, por chave de assinatura
+    ainda no anel, `kid`, estado (`em-uso`, `proxima`, `aposentando`), criada em,
+    assina desde, assina até e sai da publicação em;
+  - nunca traz material de chave: a consulta nem seleciona a coluna;
+  - na M1, aberta a todo usuário ativo; tokens de serviço e o token sem usuário recebem
+    `403`. A #184 a restringe ao Admin;
+  - as durações dos tokens (access, refresh, id token, código) passam a uma fonte só,
+    `IdentityTokenLifetimes`, lida pelo registro do OpenIddict, pelo token de serviço do
+    `apps/api` e pela rota. Nenhum valor muda; o id token e o código, que valiam pelo
+    padrão do OpenIddict, passam a ser registrados explicitamente com os mesmos 20 e 5 min;
+  - o nginx do stack passa a mandar `/identity` ao `apps/api`.
 - **O token antigo e a chave compartilhada saem** (#182), último passo da troca do token de
   serviço (#234, #235, #236). Fecha a #117 e a #122:
   - os três apps aceitam só o access token do emissor do `apps/api`, num esquema só, e o

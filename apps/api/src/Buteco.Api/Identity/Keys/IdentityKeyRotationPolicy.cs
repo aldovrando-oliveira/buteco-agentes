@@ -27,7 +27,7 @@ public static class IdentityKeyRotationPolicy
     /// chaves de <c>SigningCredentials</c> (<c>OpenIddictServerConfiguration.cs</c> l.
     /// 556–558, <c>OpenIddictServerHandlers.Protection.cs</c> l. 189 e 476). Com 24 h, quem
     /// ficasse um dia sem usar o painel na troca de chave perderia a sessão antes dos 14
-    /// dias. 15 dias cobrem 14 d + 1 h. A janela gravada nas chaves já existentes é
+    /// dias. 15 dias cobrem os 14 d de <see cref="IdentityTokenLifetimes.RefreshToken"/> + 1 h. A janela gravada nas chaves já existentes é
     /// estendida pela migration <c>ExtendIdentityKeyRetention</c>.
     /// </para>
     /// </summary>
@@ -64,9 +64,16 @@ public static class IdentityKeyRotationPolicy
     public static IdentityKeyWindows EncryptionKey(DateTimeOffset now) =>
         new(now, DateTimeOffset.MaxValue, DateTimeOffset.MaxValue);
 
-    public static bool IsInRing(IdentityKey key, DateTimeOffset now) => key.ValidatesUntil > now;
+    public static bool IsInRing(IdentityKey key, DateTimeOffset now) => InRing(key.ValidatesUntil, now);
 
-    public static bool SignsAt(IdentityKey key, DateTimeOffset now) => key.SignsFrom <= now && now < key.SignsUntil;
+    public static bool SignsAt(IdentityKey key, DateTimeOffset now) => Signs(key.SignsFrom, key.SignsUntil, now);
+
+    // Uma conta só para o anel e para o GET /identity (leitura-identidade-emissor, D3): as
+    // sobrecargas acima e a Describe abaixo passam por aqui.
+    private static bool InRing(DateTimeOffset validatesUntil, DateTimeOffset now) => validatesUntil > now;
+
+    private static bool Signs(DateTimeOffset signsFrom, DateTimeOffset signsUntil, DateTimeOffset now) =>
+        signsFrom <= now && now < signsUntil;
 
     /// <summary>
     /// O que falta criar para o conjunto de chaves gravadas, no instante dado:
@@ -100,6 +107,47 @@ public static class IdentityKeyRotationPolicy
         return new IdentityKeyPlan(newSigningKey, needsEncryptionKey);
     }
 
+    /// <summary>
+    /// O estado de cada chave de assinatura que ainda valida, para o <c>GET /identity</c>
+    /// (design.md da change leitura-identidade-emissor, D3), no instante dado:
+    /// <list type="bullet">
+    /// <item><see cref="IdentityKeyState.InUse"/>: assina agora e é a de maior
+    /// <c>SignsFrom</c> entre as que assinam, a mesma escolha do
+    /// <see cref="IdentityKeyRingSnapshot.Build"/>;</item>
+    /// <item><see cref="IdentityKeyState.Next"/>: começa a assinar depois de agora;</item>
+    /// <item><see cref="IdentityKeyState.Retiring"/>: não assina mais (ou assina sem ser a
+    /// escolhida) e ainda valida.</item>
+    /// </list>
+    /// A que não valida mais fica fora, como fica fora do anel. A ordem é a do quadro
+    /// Identidade: em uso, próxima, aposentando, e dentro do mesmo estado o
+    /// <c>SignsFrom</c> mais novo primeiro.
+    /// </summary>
+    public static IReadOnlyList<IdentityKeyDescription> Describe(IReadOnlyCollection<IdentityKeyWindowsView> keys, DateTimeOffset now)
+    {
+        var inRing = keys.Where(key => InRing(key.ValidatesUntil, now)).ToList();
+        var inUseKid = inRing
+            .Where(key => Signs(key.SignsFrom, key.SignsUntil, now))
+            .OrderByDescending(key => key.SignsFrom)
+            .Select(key => key.Kid)
+            .FirstOrDefault();
+
+        return inRing
+            .Select(key => new IdentityKeyDescription(key, StateOf(key, now, inUseKid)))
+            .OrderBy(description => description.State)
+            .ThenByDescending(description => description.Key.SignsFrom)
+            .ToList();
+    }
+
+    private static IdentityKeyState StateOf(IdentityKeyWindowsView key, DateTimeOffset now, string? inUseKid)
+    {
+        if (key.Kid == inUseKid)
+        {
+            return IdentityKeyState.InUse;
+        }
+
+        return key.SignsFrom > now ? IdentityKeyState.Next : IdentityKeyState.Retiring;
+    }
+
     private static IdentityKeyWindows SigningKeyStartingAt(DateTimeOffset signsFrom)
     {
         var signsUntil = signsFrom + RotationInterval;
@@ -113,3 +161,25 @@ public sealed record IdentityKeyPlan(IdentityKeyWindows? NewSigningKey, bool Nee
 {
     public bool IsEmpty => NewSigningKey is null && !NeedsEncryptionKey;
 }
+
+/// <summary>
+/// Uma chave de assinatura como o <c>GET /identity</c> a lê (design.md da change
+/// leitura-identidade-emissor, D4): identificador, criação e as três janelas. Não tem
+/// propriedade de material, de propósito: nada que a serialize pode vazar a chave.
+/// </summary>
+public sealed record IdentityKeyWindowsView(
+    string Kid,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset SignsFrom,
+    DateTimeOffset SignsUntil,
+    DateTimeOffset ValidatesUntil);
+
+/// <summary>Estado de uma chave de assinatura, na ordem em que o quadro Identidade as lista.</summary>
+public enum IdentityKeyState
+{
+    InUse,
+    Next,
+    Retiring,
+}
+
+public sealed record IdentityKeyDescription(IdentityKeyWindowsView Key, IdentityKeyState State);
