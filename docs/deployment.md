@@ -315,7 +315,6 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `SERVICE_CLIENT_SECRET_INBOX` | `Identity__ServiceClients__Inbox__Secret` e `ServiceClient__Secret` | api (segredo do cliente `buteco-servico-inbox` do emissor, #234) e inbox (que pede com ele o token de serviço, #235) | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api, e de `INBOX_CREDENTIAL_ENCRYPTION_KEY`: o boot recusa o igual, nomeando as duas chaves |
 | `SERVICE_CLIENT_SECRET_CONNECTORS` | `Identity__ServiceClients__Connectors__Secret` e `ServiceClient__Secret` | api (segredo do cliente `buteco-servico-connectors`, #234) e connectors (#235) | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
-| `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` | api, inbox, connectors | sim, fail-fast | **sim, byte-idêntica** (risco aceito abaixo, #117) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` | connectors | não — vazia, o provedor `google-drive` não aparece; **inválida, o `apps/connectors` não sobe** | N/A |
 | `AUTH_OPERATOR_PASSWORD_HASH` | `Auth__OperatorPasswordHash` | api | não (sem `:?` desde a #217); só o bootstrap a lê | N/A. Hash inicial do primeiro Admin. Ver "Primeiro Admin", abaixo. `AUTH_OPERATOR_USERNAME` não é mais lida desde a #217, e só volta num rollback para antes dela |
 | `AUTH_BOOTSTRAP_ADMIN_EMAIL` | `Auth__BootstrapAdminEmail` | api | não (sem `:?`) | N/A. Ver "Primeiro Admin", abaixo |
@@ -330,6 +329,64 @@ ambiente; ficam fixos no compose: `Connectors__BaseUrl=http://connectors:8080`
 no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
 (ciclo de sincronização) e o build arg `VITE_CONNECTORS_BASE_URL=""` do
 `frontend`, que só existe junto com o bloco `/connectors` do `nginx.conf`.
+
+### Remoção do token antigo e da chave compartilhada (#182)
+
+Último passo da troca do token de serviço (#234, #235, #236 e #182). Os três apps deixam de aceitar o token antigo, assinado com a chave que compartilhavam, e passam a aceitar só o access token do emissor. Desde a #235 nenhum serviço o manda, e desde a #217 nenhuma rota o emite.
+
+- O compose deixa de entregar `Auth__TokenSigningKey` aos três serviços.
+- O `inbox` e o `connectors` não sobem sem `Identity__Issuer`, e o `connectors` também não sobe sem `Api__BaseUrl`. Os dois chegam do compose: o primeiro de `PUBLIC_DOMAIN`, que o `api` já exige com `:?`, e o segundo fixo (`http://api:8080`).
+- A requisição sem token recebe `401` com `WWW-Authenticate: Bearer`, também antes de o `inbox` e o `connectors` obterem as chaves. Quem traz token antes das chaves continua recebendo `503` com `Retry-After`.
+
+**Nada a gerar, e sem migration.** **A `AUTH_TOKEN_SIGNING_KEY` fica no `.env.prod` por uma semana depois do deploy:** a imagem e o compose anteriores ainda a leem (o `api` com `:?`, e o `connectors` não sobe sem ela), e o rollback precisa dela.
+
+**Ordem do deploy:** qualquer uma entre `api`, `inbox` e `connectors`. Ninguém manda o token antigo desde a #235, então cada app novo só deixa de aceitar o que já não chega.
+
+```
+git pull
+$C build api inbox connectors
+$C up -d api inbox connectors
+```
+
+**Conferência depois do deploy:**
+
+```
+# 1. O inbox e o connectors subiram com o emissor e obtiveram as chaves
+$C logs inbox connectors | grep -E 'Validação do token do emissor ligada|Chaves do emissor obtidas'
+# 2. Nenhum segredo de serviço divergente
+$C logs inbox connectors | grep 'invalid_client'   # → nada
+# 3. Sem token, cada app responde 401 com o desafio Bearer (pelo nginx do stack; de
+#    fora, contra o domínio público, como fetch do painel)
+H=https://<domínio público>
+for p in /agents /channels /connectors/providers; do
+  curl -s -o /dev/null -D - -H 'Sec-Fetch-Mode: cors' "$H$p" | grep -iE '^HTTP|^www-authenticate'
+done
+#    → "HTTP/2 401" e "www-authenticate: Bearer" nas três
+```
+
+- **O critério de aceite da #182:** o painel entra e abre Agentes (`apps/api`), Canais (`apps/inbox`) e "Sincronizar agora" numa base sincronizada (`apps/connectors`).
+- **Os quatro fluxos entre serviços:** uma mensagem de canal chega ao agente (o cadastro do canal valida o agente, S1; o despacho chama o A2A, S2); a sincronização da base termina (S3); cadastrar uma base sincronizada valida a pasta (S4).
+
+**Sintomas:**
+
+| o que aparece | leitura |
+|---|---|
+| o `inbox` ou o `connectors` reinicia em laço, com `Identity:Issuer não configurado` | o `Identity__Issuer` não chegou ao contêiner (compose antigo, ou editado à mão). Conferir o `docker-compose.prod.yml` do checkout |
+| o `connectors` reinicia com `Identity:Issuer está configurado, e Api:BaseUrl está ausente` | o `Api__BaseUrl` do `connectors` foi tirado do compose |
+| `401` com `invalid_token` no log de algum app | alguém ainda manda o token antigo. Desde a #235 nenhum serviço o assina; procurar um cliente fora do stack |
+
+**Rollback:** voltar o checkout do servidor ao commit anterior ao merge da #182 e subir as imagens anteriores (`$C build` e `$C up -d` dos três). A versão anterior aceita o token do emissor e o antigo, e lê a `AUTH_TOKEN_SIGNING_KEY`, que por isso continua no `.env.prod`.
+
+**Uma semana depois do deploy, sem rollback**, tirar a chave do `.env.prod` e registrar a data no `02-HISTORICO_E_STATUS.md`:
+
+```
+cp .env.prod .env.prod.antes-da-retirada   # cópia local, fora do repo
+sed -i '/^AUTH_TOKEN_SIGNING_KEY=/d' .env.prod
+grep -c '^AUTH_TOKEN_SIGNING_KEY=' .env.prod   # → 0
+$C config >/dev/null && echo 'compose ok'      # o compose atual não a lê
+```
+
+Nenhum serviço precisa subir de novo: o compose atual não entrega a variável. Depois da retirada, um rollback para antes da #182 exige recolocar a chave, que está na cópia. A cópia sai junto com a janela de rollback.
 
 ### Emissor OIDC do `apps/api` (#179)
 
@@ -383,7 +440,7 @@ curl -s -X POST https://<PUBLIC_DOMAIN>/connect/token \
 Se algum devolver HTML, o `nginx.conf` do `frontend` está sem os blocos do
 emissor (imagem antiga do `frontend`).
 
-### Usuários locais e login pelo emissor (#180)
+### Usuários locais e login pelo emissor (#180) (histórico)
 
 **Duas migrations**, aplicadas pelo `migrator`:
 - `AddLocalUsers`: as tabelas `users` e `identity_login_throttle`;
@@ -481,7 +538,7 @@ antigo.
   ligado, como antes.
 - O painel nunca deixou de usar o HMAC.
 
-### O painel entra pelo emissor (#217)
+### O painel entra pelo emissor (#217) (histórico)
 
 **Ordem do deploy:** `migrator` (sem migration nesta mudança) → `api` e
 `frontend` juntos. O `inbox` e o `connectors` não mudam. Um `frontend` novo com o
@@ -679,7 +736,7 @@ no banco, a versão anterior o leria como **desativado** (a leitura antiga trata
 desconhecido assim), e reativá-lo o poria ativo sem senha: sem entrada possível, mas no
 lugar errado da lista.
 
-### Minha conta e Usuários (#219)
+### Minha conta e Usuários (#219) (histórico)
 
 **Só o `api` muda.** Sem migration, sem variável nova, sem mudança no compose nem no
 `nginx.conf`: os prefixos `/account` e `/users` já vão ao `apps/api` desde a #218. O
@@ -714,7 +771,7 @@ curl -s -H "Authorization: Bearer $TOKEN" $D/account/sessions   # um item com "a
 esta versão revogou continuam revogadas, que é o efeito pedido; a versão anterior volta a
 trocar o stamp sem revogar, e a lista de sessões não existe nela.
 
-### Serviços obtêm o token no emissor (#235)
+### Serviços obtêm o token no emissor (#235) (histórico)
 
 Segundo passo da troca do token de serviço (#182). Os três serviços deixam de assinar o token HMAC de serviço:
 
@@ -754,7 +811,7 @@ docker compose logs api | grep 'Token de serviço buteco-servico-api gerado no p
 
 **Rollback:** a imagem anterior de qualquer um dos três. A versão anterior volta a assinar HMAC, que continua aceito, e ignora `ServiceClient__Secret`. Os segredos ficam no `.env.prod`.
 
-### Clientes de serviço do emissor (#234)
+### Clientes de serviço do emissor (#234) (histórico)
 
 Primeiro passo da troca do token de serviço (#182, dividida em #234, #235, #236 e #182). O emissor do `apps/api` passa a manter dois clientes confidenciais, `buteco-servico-inbox` e `buteco-servico-connectors`, só com `client_credentials` e o escopo `buteco-api`. O `apps/api` aceita o token deles nas rotas de `service:inbox` e `service:connectors`, e o `apps/connectors` aceita o do `buteco-servico-api` na rota de descrever pasta. **Ninguém manda o token novo ainda**: os três serviços continuam com o HMAC, que continua aceito.
 
@@ -825,7 +882,7 @@ nenhuma migration.
 
 **Ordem de deploy:** qualquer uma. O `apps/api` não mudou naquela entrega, e
 nenhum token do emissor circulava antes da #180. Os dois sobem com o `apps/api`
-fora do ar e atendem o HMAC normalmente.
+fora do ar, e atendem com as chaves que obtiverem depois.
 
 **Conferência depois do deploy:**
 
@@ -837,15 +894,15 @@ $C logs connectors | grep -E 'token do emissor (ligada|desligada)|chaves do emis
 | O que aparece | O que significa |
 |---|---|
 | `Validação do token do emissor ligada: issuer https://<PUBLIC_DOMAIN>/, ...` seguido de `Chaves do emissor obtidas pelo Api:BaseUrl (/.well-known/jwks): kids ...` | certo: as chaves foram obtidas pelo endereço interno |
-| `Validação do token do emissor desligada: Identity:Issuer não configurado` | o `Identity__Issuer` não chegou ao contêiner (compose antigo). Só o HMAC funciona |
+| o app não sobe, com `Identity:Issuer não configurado` | o `Identity__Issuer` não chegou ao contêiner (compose antigo). Desde a #182 o app não sobe sem ele |
 | erro `O discovery do emissor lido pelo Api:BaseUrl declara o issuer '...', diferente de Identity:Issuer '...'` | o `PublicUrl__BaseUrl` do `api` e o `Identity__Issuer` do app divergem (as duas saem de `PUBLIC_DOMAIN`; ver se alguém as editou à mão no compose). Nenhuma chave é obtida |
 | aviso `Busca das chaves do emissor pelo Api:BaseUrl (...) falhou` repetido a cada 10 s | o `apps/api` não responde no endereço interno. Normal enquanto ele sobe |
 
 **`503` para o token do emissor antes da primeira obtenção.** Entre o start e a
 primeira busca bem-sucedida (até 10 s depois de o `apps/api` responder), um
 token do emissor recebe `503` com `Retry-After: 10`; com o issuer divergente, o
-`503` continua até a configuração ser corrigida. O token HMAC nunca recebe esse
-`503`. Depois de obtidas, as chaves continuam valendo com o `apps/api` fora do
+`503` continua até a configuração ser corrigida. A requisição sem token recebe
+`401`, e não esse `503` (#182). Depois de obtidas, as chaves continuam valendo com o `apps/api` fora do
 ar.
 
 ### Risco aceito: placeholder `changeme` não é rejeitado no boot
@@ -857,27 +914,18 @@ decisão não foi revista aqui; está registrada como candidata em
 
 Nenhuma das chaves acima rejeita especificamente o valor `changeme*` do
 `.env.prod.example` — a checagem de startup existente só cobre
-ausência/vazio (`Auth__TokenSigningKey`, `Auth__OperatorUsername`/
-`PasswordHash`), não o conteúdo. Se `.env.prod` for copiado sem editar,
+ausência/vazio, não o conteúdo. Se `.env.prod` for copiado sem editar,
 o stack sobe normalmente com segredos públicos e previsíveis (estão no
 repo). **Confira manualmente, antes de cada deploy, que nenhum valor em
 `.env.prod` começa com `changeme`** — decisão consciente de escopo desta
 change, não mitigada em código.
 
-### Risco aceito: chave de assinatura compartilhada por três processos (#117)
+### Risco encerrado: chave de assinatura compartilhada por três processos (#117)
 
-*(Decisão do mantenedor na #119, 05/10/2026, registrada também na
-[#117](https://github.com/aldovrando-oliveira/buteco-agentes/issues/117), que
-continua aberta com `aguardando gatilho`.)*
-
-O `apps/connectors` vai para produção com a mesma `Auth__TokenSigningKey` do
-`apps/api` e do `apps/inbox`. Quem obtiver a chave de **qualquer um** dos três
-processos consegue assinar um token de operador e tem o acesso inteiro. A
-restrição de subject (#102, #103, #116) protege contra defeito de código, não
-contra roubo da chave. O tipo de risco já existia: o `apps/inbox` guarda a chave
-e é exposto pelos webhooks. O `apps/connectors` soma a credencial do Google e
-fala com API externa. **Gatilho para rever:** a entrada do segundo cliente, ou
-dados mais sensíveis no piloto, o que vier primeiro.
+Encerrado pela #182: só o `apps/api` assina token, cada serviço tem a sua credencial
+no emissor, e nenhum processo guarda chave capaz de assinar um token de operador. O
+aceite original foi da #119 (05/10/2026), e o gatilho dele, a entrada do segundo
+cliente ou de dados mais sensíveis, era a M1.
 
 ### Item futuro: `PublicUrl__BaseUrl` de `apps/inbox` com semântica dupla
 

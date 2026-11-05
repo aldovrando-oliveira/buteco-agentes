@@ -187,34 +187,6 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
         Assert.Equal(externalId, rawContactExternalId);
     }
 
-    [Fact]
-    public async Task OperatorHmacToken_SignedWithTheSharedKey_IsAcceptedByInboxWithoutNetworkCallToApi()
-    {
-        // apps/inbox valida o HMAC de operador localmente, só pela chave de
-        // assinatura compartilhada com apps/api (Auth:TokenSigningKey), sem
-        // pedido nenhum a apps/api. O token é assinado pelo ITokenService do
-        // apps/api, e não vem de rota. Com o portão das chaves do emissor
-        // fechado (o único caminho do apps/inbox até o TestServer de apps/api
-        // na validação de token), a chamada continua aceita.
-        var token = fixture.OperatorHmacToken();
-
-        var inboxClient = fixture.InboxFactory.CreateClient();
-        inboxClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        fixture.ApiIssuerKeys.Closed = true;
-        try
-        {
-            var response = await inboxClient.GetAsync("/channels");
-
-            Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        }
-        finally
-        {
-            fixture.ApiIssuerKeys.Closed = false;
-        }
-    }
-
     private async Task<Guid> CreateAgentAsync()
     {
         var token = await fixture.UserAccessTokenAsync();

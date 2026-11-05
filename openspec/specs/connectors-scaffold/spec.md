@@ -4,7 +4,8 @@
 
 O app `apps/connectors`: projeto e solução próprios, sem banco e sem referência a
 outro app, imagem `buteco-connectors`, saúde anônima e classificada, CORS para o
-painel e autenticação por token validado localmente com a chave compartilhada. Diz o
+painel e autenticação pelo access token do emissor do `apps/api`, validado com as chaves
+públicas dele. Diz o
 que o app precisa para existir e subir; o que cada rota faz e quem pode chamá-la está
 em `connectors-api`, e o contrato dos conectores em `connector-plugin`.
 ## Requirements
@@ -42,25 +43,6 @@ allowlist citar rota que não existe.
   `AnonymousRouteClassification`
 - **THEN** a inicialização falha com mensagem que nomeia a rota
 
-### Requirement: Token validado localmente com a chave compartilhada
-`apps/connectors` SHALL validar o token `Bearer` de toda rota não anônima com a
-mesma assinatura HMAC de `apps/api` e `apps/inbox` (`Auth:TokenSigningKey`), sem
-chamada de rede. Token ausente, malformado, com assinatura inválida ou expirado
-SHALL receber `401`. `Auth:TokenSigningKey` ausente ou vazia SHALL derrubar o boot.
-
-#### Scenario: Sem token
-- **WHEN** um cliente faz `GET /connectors/providers` sem `Authorization`
-- **THEN** a resposta é `401`
-
-#### Scenario: Token emitido pelo login de apps/api é aceito
-- **WHEN** um token de operador assinado com a mesma `Auth:TokenSigningKey` é
-  enviado a `GET /connectors/providers`
-- **THEN** a autenticação passa e a rota responde `200`
-
-#### Scenario: Chave de assinatura ausente derruba o boot
-- **WHEN** o processo sobe sem `Auth__TokenSigningKey`
-- **THEN** a inicialização falha nomeando a configuração ausente
-
 ### Requirement: CORS para o frontend
 `apps/connectors` SHALL aceitar requisições de navegador apenas das origens em
 `Cors:AllowedOrigins`, no mesmo formato de `apps/api` e `apps/inbox`.
@@ -83,26 +65,48 @@ non-root, porta 8080 e `HEALTHCHECK` contra `/health`.
 #### Scenario: Build da imagem a partir da raiz
 - **WHEN** `docker build -f apps/connectors/Dockerfile -t buteco-connectors .` é
   executado na raiz do monorepo
-- **THEN** o build completa, e o contêiner iniciado com
-  `Auth__TokenSigningKey` responde `200` em `/health` na porta 8080
+- **THEN** o build completa, e o contêiner iniciado com `Identity__Issuer`,
+  `Api__BaseUrl` e `ServiceClient__Secret` responde `200` em `/health` na porta
+  8080
 
 ### Requirement: A suíte de integração do apps/connectors autentica pelo token do emissor
 A fábrica de integração de `apps/connectors/tests` SHALL subir o `apps/connectors`
-com a validação do token do emissor ligada contra um emissor de teste em memória, e
+sempre com a validação do token do emissor ligada contra um emissor de teste em
+memória, com `Identity:Issuer` e `Api:BaseUrl` do emissor de teste por padrão, e
 os casos SHALL autenticar com o access token do cliente que a tabela de clientes do
 `apps/connectors` mapeia para o subject que provam. Quando o caso não pede o
 `Api:BaseUrl`, a fábrica SHALL retirar do host de teste o agendamento do ciclo de
-sincronização, sem opção nova de configuração de produção. Nenhum caso SHALL
-depender do token HMAC, exceto os que provam o próprio HMAC e os que provam o app
-sem `Api:BaseUrl`, listados por nome na #182.
+sincronização, sem opção nova de configuração de produção. Nenhum helper de teste
+SHALL assinar token fora do emissor.
 
-#### Scenario: Suíte com o HMAC recusado
-- **WHEN** a validação do token HMAC do `apps/connectors` passa a recusar todo
-  token e a suíte de `apps/connectors/tests` roda
-- **THEN** reprovam só os casos das listas da #182, por nome
+#### Scenario: Fábrica padrão aponta para o emissor de teste
+- **WHEN** um caso usa a fábrica sem configuração própria
+- **THEN** o `Api:BaseUrl` resolvido é o endereço interno do emissor de teste, e não
+  o do `appsettings.Development.json`
 
 #### Scenario: Fábrica padrão sem agendamento do ciclo
 - **WHEN** um caso usa a fábrica sem pedir `Api:BaseUrl`
 - **THEN** nenhum pedido chega ao `apps/api` falso nem ao `/connect/token` falso
   depois do boot
+
+### Requirement: Token do emissor validado localmente
+`apps/connectors` SHALL validar o token `Bearer` de toda rota não anônima como
+access token do emissor do `apps/api` (capability `issuer-token-validation`), com
+as chaves obtidas em segundo plano pelo `Api:BaseUrl`, sem chamada de rede no
+caminho da requisição. Token ausente, malformado, com assinatura inválida ou
+expirado SHALL receber `401`, com `WWW-Authenticate: Bearer`. `Identity:Issuer` ou
+`Api:BaseUrl` ausentes ou vazios SHALL derrubar o boot.
+
+#### Scenario: Sem token
+- **WHEN** um cliente faz `GET /connectors/providers` sem `Authorization`
+- **THEN** a resposta é `401`, com `WWW-Authenticate: Bearer`
+
+#### Scenario: Token do painel é aceito
+- **WHEN** um access token do emissor do cliente `buteco-painel`, com `aud`
+  `buteco-connectors`, é enviado a `GET /connectors/providers`
+- **THEN** a autenticação passa e a rota responde `200`
+
+#### Scenario: Sem Identity:Issuer o boot falha
+- **WHEN** o processo sobe sem `Identity__Issuer`
+- **THEN** a inicialização falha nomeando a configuração ausente
 

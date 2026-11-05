@@ -18,22 +18,18 @@ namespace Buteco.Connectors.Tests.Support;
 /// handler primário trocado por <see cref="Google"/>. O conector falso entra só aqui
 /// (chave <see cref="FakeConnector.Key"/>), nunca no Program.cs.
 /// <para>
-/// Com <paramref name="issuer"/>, a validação do token do emissor fica ligada contra o
-/// <see cref="TestIssuer"/> (change validacao-jwks-inbox-connectors, D9):
-/// <c>Identity:Issuer</c> e <c>Api:BaseUrl</c> dele, o cliente <c>IssuerKeys</c> com o
-/// handler dele e o <paramref name="issuerKeysSchedule"/>. O <c>Api:BaseUrl</c> liga
-/// também o ciclo de sincronização, contra o <see cref="SyncApi"/>. O
-/// <see cref="ITokenService"/> é embrulhado num contador, para os testes afirmarem que um
-/// JWT nunca passa pelo HMAC.
+/// A validação do token do emissor fica sempre ligada, contra o <see cref="TestIssuer"/>
+/// recebido em <paramref name="issuer"/> ou um próprio (<see cref="Issuer"/>), porque o app
+/// não sobe sem <c>Identity:Issuer</c> (change remover-hmac-token-servico, D2 e D6):
+/// <c>Identity:Issuer</c> e <c>Api:BaseUrl</c> dele, o cliente <c>IssuerKeys</c> com o handler
+/// dele e o <paramref name="issuerKeysSchedule"/>. O <c>extraConfiguration</c> sobrescreve
+/// os dois.
 /// </para>
 /// <para>
-/// Sem <paramref name="issuer"/>, a fábrica tem um <see cref="TestIssuer"/> próprio
-/// (<see cref="Issuer"/>), ligado no host quando o teste pede um token do emissor antes de o
-/// host subir (<see cref="UseIssuer"/>, pelo <c>TestAuthentication.CreateIssuerClientAs</c>;
-/// fixtures-token-emissor, D3). Quem não pede fica como antes: <c>Identity:Issuer</c> vazio.
-/// O emissor exige o <c>Api:BaseUrl</c>, que liga o agendador do ciclo; quando o teste não o
-/// pediu, o agendador sai do DI da fábrica, para não somar pedidos aos duplos. É ajuste de
-/// teste, e não opção de produção (decisão do dono, 04/11/2026).
+/// O <c>Api:BaseUrl</c> liga também o ciclo de sincronização, contra o <see cref="SyncApi"/>.
+/// Quando o teste não passou <paramref name="issuer"/> nem pediu o <c>Api:BaseUrl</c>, o
+/// agendador sai do DI da fábrica, para não somar pedidos aos duplos. É ajuste de teste, e
+/// não opção de produção (fixtures-token-emissor, D3, decisão do dono de 04/11/2026).
 /// </para>
 /// </summary>
 public sealed class ConnectorsFactory(
@@ -63,33 +59,8 @@ public sealed class ConnectorsFactory(
 
     public CapturingLoggerProvider Logs { get; } = new();
 
-    public CountingTokenService TokenService => (CountingTokenService)Services.GetRequiredService<ITokenService>();
-
     /// <summary>O emissor de teste do host: o recebido, ou um próprio.</summary>
     public TestIssuer Issuer { get; } = issuer ?? new TestIssuer();
-
-    private bool _issuerEnabled = issuer is not null;
-    private bool _built;
-
-    /// <summary>
-    /// Liga a validação do token do emissor contra o <see cref="Issuer"/>. Só antes de o host
-    /// subir: a configuração do emissor é lida no boot.
-    /// </summary>
-    public void UseIssuer()
-    {
-        if (_issuerEnabled)
-        {
-            return;
-        }
-
-        if (_built)
-        {
-            throw new InvalidOperationException(
-                "O host da ConnectorsFactory já subiu sem o emissor: peça o token do emissor antes de usar Services, Server ou CreateClient.");
-        }
-
-        _issuerEnabled = true;
-    }
 
     /// <summary>
     /// A <see cref="IServiceCollection"/> real, capturada pelo ConfigureServices, que
@@ -99,35 +70,23 @@ public sealed class ConnectorsFactory(
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // UseSetting, e não ConfigureAppConfiguration: o Program.cs lê a chave de
-        // assinatura, o CORS e a credencial do Google ANTES do Build(), e só o que
-        // entra por UseSetting já está na configuração nesse ponto (medido: com
-        // ConfigureAppConfiguration, o boot sem chave subia com a do
-        // appsettings.Development.json).
-        _built = true;
+        // UseSetting, e não ConfigureAppConfiguration: o Program.cs lê o CORS e a credencial
+        // do Google ANTES do Build(), e só o que entra por UseSetting já está na
+        // configuração nesse ponto (medido: com ConfigureAppConfiguration, o boot subia com
+        // os valores do appsettings.Development.json).
         builder.UseEnvironment(environment);
         var values = new Dictionary<string, string?>
         {
-            ["Auth:TokenSigningKey"] = TestAuthentication.TokenSigningKey,
             ["Cors:AllowedOrigins:0"] = "http://painel.test",
-            // Vazio conta como ausente: o ciclo de sincronização não roda (design.md da
-            // change ciclo-de-sincronizacao, D2). Sem isto, o Api:BaseUrl do
-            // appsettings.Development.json valeria para a suíte inteira, e cada teste
-            // ligaria o ciclo contra localhost:5017. Só os testes do ciclo o configuram.
-            ["Api:BaseUrl"] = string.Empty,
-            // Mesmo motivo, para a validação do token do emissor
-            // (validacao-jwks-inbox-connectors, D7): o appsettings.Development.json a liga.
-            ["Identity:Issuer"] = string.Empty,
+            // O emissor de teste, e não o localhost:5017 do appsettings.Development.json:
+            // sem isto, cada teste buscaria as chaves e ligaria o ciclo contra ele.
+            ["Identity:Issuer"] = TestIssuer.Issuer,
+            ["Api:BaseUrl"] = TestIssuer.InternalBaseUrl,
             // Obrigatório no boot com Api:BaseUrl (servicos-token-emissor, D5).
             ["ServiceClient:Secret"] = TestAuthentication.ServiceClientSecret,
         };
-        if (_issuerEnabled)
-        {
-            values["Identity:Issuer"] = TestIssuer.Issuer;
-            values["Api:BaseUrl"] = TestIssuer.InternalBaseUrl;
-        }
 
-        var withoutScheduler = _issuerEnabled && issuer is null && extraConfiguration?.ContainsKey("Api:BaseUrl") != true;
+        var withoutScheduler = issuer is null && extraConfiguration?.ContainsKey("Api:BaseUrl") != true;
 
         if (googleKeyBase64 is not null)
         {
@@ -164,13 +123,8 @@ public sealed class ConnectorsFactory(
             services.AddHttpClient(Buteco.Connectors.Sync.SyncApiClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => SyncApi);
             services.AddHttpClient(ServiceAccessTokenSource.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => TokenEndpoint);
 
-            if (_issuerEnabled)
-            {
-                services.Replace(ServiceDescriptor.Singleton(issuerKeysSchedule ?? new IssuerKeysSchedule()));
-                services.AddHttpClient(IssuerKeysRetriever.HttpClientName).ConfigurePrimaryHttpMessageHandler(Issuer.CreateHandler);
-                services.Replace(ServiceDescriptor.Singleton<ITokenService>(provider =>
-                    new CountingTokenService(new TokenService(provider.GetRequiredService<IOptions<TokenSigningOptions>>()))));
-            }
+            services.Replace(ServiceDescriptor.Singleton(issuerKeysSchedule ?? new IssuerKeysSchedule()));
+            services.AddHttpClient(IssuerKeysRetriever.HttpClientName).ConfigurePrimaryHttpMessageHandler(Issuer.CreateHandler);
 
             if (withoutScheduler)
             {
@@ -196,21 +150,6 @@ public sealed class ConnectorsFactory(
         _ = Server;
         var state = Services.GetRequiredService<IssuerKeysState>();
         await Poll.UntilAsync(() => state.Obtained, "as chaves do emissor não foram obtidas");
-    }
-}
-
-public sealed class CountingTokenService(ITokenService inner) : ITokenService
-{
-    private int _validateCalls;
-
-    public int ValidateCalls => Volatile.Read(ref _validateCalls);
-
-    public (string Token, DateTimeOffset ExpiresAt) Issue(string subject, TimeSpan lifetime) => inner.Issue(subject, lifetime);
-
-    public TokenValidationResult Validate(string token)
-    {
-        Interlocked.Increment(ref _validateCalls);
-        return inner.Validate(token);
     }
 }
 

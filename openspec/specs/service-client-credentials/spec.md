@@ -70,7 +70,7 @@ O serviço SHALL logar em `Information` o primeiro token obtido e o primeiro tok
 - **THEN** há exatamente duas linhas `Information` de token obtido: a do primeiro e a da recuperação
 
 ### Requirement: Token anexado pelo handler de saída, e 401 do destino sem repetição
-O handler de saída de cada serviço SHALL anexar `Authorization: Bearer <token de serviço>` a toda chamada ao destino e SHALL NOT anexar token HMAC. Quando o destino responder `401`, o handler SHALL descartar o token do cache, se o anexado ainda for o do cache, e SHALL devolver a resposta sem repetir a chamada.
+O handler de saída de cada serviço SHALL anexar `Authorization: Bearer <token de serviço>`, o access token do emissor, a toda chamada ao destino. Quando o destino responder `401`, o handler SHALL descartar o token do cache, se o anexado ainda for o do cache, e SHALL devolver a resposta sem repetir a chamada.
 
 #### Scenario: 401 descarta o cache sem repetir
 - **WHEN** o destino responde `401` a uma chamada

@@ -8,7 +8,7 @@ namespace Buteco.Api.Tests.Identity;
 
 /// <summary>
 /// Os clientes de serviço nas rotas do <c>apps/api</c> (spec <c>route-authentication</c>,
-/// "apps/api aceita o access token do emissor ao lado do HMAC"; design.md da change
+/// "apps/api aceita só o access token do emissor"; design.md da change
 /// clientes-servico-emissor, D3), com tokens do <c>/connect/token</c> real: cada cliente passa
 /// só nas rotas do subject dele, e recebe <c>403</c> nas outras.
 ///

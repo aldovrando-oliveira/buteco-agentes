@@ -6,12 +6,14 @@ namespace Buteco.Api.Tests.Users.Management;
 /// <summary>
 /// "Rotas de Minha conta atendem só o usuário real do token" (spec <c>user-account</c>) e "Rotas
 /// de Usuários atendem só o usuário real do token" (spec <c>user-management</c>; design.md da
-/// change rotas-conta-usuarios, D8). O HMAC de operador não tem <c>sub</c>, e um usuário
-/// desativado com access token ainda válido não é atendido.
+/// change rotas-conta-usuarios, D8). O token de operador cujo <c>sub</c> não é usuário
+/// (<see cref="TestIssuerTokens.Panel"/>) e um usuário desativado com access token ainda válido
+/// não são atendidos.
 ///
 /// <para>
-/// Verificado contra o defeito (convenção 15), registro no tasks.md, 6.10: com o
-/// <c>CurrentUser</c> retirado de <c>PUT /users/{id}</c>, <see cref="OperatorHmac_Is403_OnEveryRoute_AndNothingChanges"/>
+/// Verificado contra o defeito (convenção 15), registro no tasks.md, 6.10, e de novo no 4.5 da
+/// change remover-hmac-token-servico: com o <c>CurrentUser</c> retirado de
+/// <c>PUT /users/{id}</c>, <see cref="OperatorWithoutUser_Is403_OnEveryRoute_AndNothingChanges"/>
 /// reprova.
 /// </para>
 /// </summary>
@@ -20,12 +22,12 @@ public class UserRoutesCallerTests(UserRoutesCallerTests.Fixture factory) : ICla
     public sealed class Fixture : LocalUsersFixture;
 
     [Fact]
-    public async Task OperatorHmac_Is403_OnEveryRoute_AndNothingChanges()
+    public async Task OperatorWithoutUser_Is403_OnEveryRoute_AndNothingChanges()
     {
-        var target = await SignedInUser.CreateAsync(factory, "alvo-hmac");
+        var target = await SignedInUser.CreateAsync(factory, "alvo-sem-usuario");
         var before = await SignedInUser.ReloadAsync(factory.Services, target.User.Id);
         var client = SignedInUser.Anonymous(factory);
-        TestAuthentication.AttachOperatorToken(client, factory.Services);
+        TestAuthentication.AttachPanelToken(client, factory.Services);
         var id = target.User.Id;
         var routes = new (HttpMethod Method, string Path, object? Body)[]
         {
@@ -36,7 +38,7 @@ public class UserRoutesCallerTests(UserRoutesCallerTests.Fixture factory) : ICla
             (HttpMethod.Post, "/account/sessions/revoke-others", null),
             (HttpMethod.Get, "/users", null),
             (HttpMethod.Get, $"/users/{id}", null),
-            (HttpMethod.Put, $"/users/{id}", new { nome = "Trocado pelo HMAC", email = LocalUserSeed.UniqueEmail("hmac") }),
+            (HttpMethod.Put, $"/users/{id}", new { nome = "Trocado sem usuário", email = LocalUserSeed.UniqueEmail("sem-usuario") }),
             (HttpMethod.Post, $"/users/{id}/deactivate", null),
             (HttpMethod.Post, $"/users/{id}/activate", null),
             (HttpMethod.Post, $"/users/{id}/sessions/revoke", null),

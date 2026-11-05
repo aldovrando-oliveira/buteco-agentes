@@ -10,24 +10,19 @@ namespace Buteco.Inbox.Tests;
 
 /// <summary>
 /// Checagens de boot da validação do token do emissor (spec <c>issuer-token-validation</c>;
-/// design.md da change validacao-jwks-inbox-connectors, D7; convenção 8).
+/// design.md da change validacao-jwks-inbox-connectors, D7; convenção 8). Sem
+/// <c>Identity:Issuer</c>, o boot falha (change remover-hmac-token-servico, D2).
 /// </summary>
 public class IssuerTokenStartupValidationTests(PostgresOnlyFixture postgres) : IClassFixture<PostgresOnlyFixture>
 {
     [Fact]
-    public async Task WithoutIssuer_ValidationIsOff_IssuerTokenIsUnauthorized_HmacWorks_AndBootWarns()
+    public void WithoutIssuer_FailsTheRealApplicationStartup_NamingTheKey()
     {
-        var issuer = new TestIssuer();
-        await using var factory = new IssuerTokenFactory(postgres, issuer, configuration: new() { ["Identity:Issuer"] = "" });
+        using var factory = RealApplication(new() { ["Identity:Issuer"] = "" });
 
-        var issued = await factory.CreateClientWithToken(issuer.Issue()).GetAsync("/channels");
-        var hmac = await factory.CreateClientWithToken(factory.OperatorHmacToken()).GetAsync("/channels");
+        var exception = Assert.ThrowsAny<Exception>(() => factory.Services);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, issued.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, hmac.StatusCode);
-        Assert.Contains(factory.Logs.ToList(), entry =>
-            entry.Level == LogLevel.Warning && entry.Message.Contains("Identity:Issuer", StringComparison.Ordinal));
-        Assert.Empty(issuer.Requests);
+        Assert.Contains("Identity:Issuer", Flatten(exception), StringComparison.Ordinal);
     }
 
     [Fact]

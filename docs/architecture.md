@@ -849,66 +849,57 @@ Change `ciclo-de-sincronizacao` (#105).
 
 ## Autenticação
 
-**Hoje convivem dois mecanismos.** O token HMAC, descrito logo abaixo, autentica
-todas as rotas até a #182. O emissor OIDC do `apps/api` (#179, "Emissor OIDC",
-no fim desta seção) emite access token, que o `apps/inbox` e o `apps/connectors`
-aceitam desde a #208 ("Validação do token do emissor", depois dele) e o próprio
-`apps/api` desde a #180. A #180 trouxe também os usuários locais e o login do
-painel pelo fluxo authorization code + PKCE ("Usuários locais e login", depois do
-emissor). O painel troca de login na #217; até lá, entra pelo HMAC.
+**Um mecanismo só: o access token do emissor OIDC do `apps/api`** (#179, "Emissor
+OIDC", no fim desta seção). O painel o obtém pelo fluxo authorization code + PKCE,
+com usuários locais ("Usuários locais e login", depois do emissor; #180, #217), e
+cada serviço obtém o seu por `client_credentials` (#234, #235). Os três apps o
+validam localmente, cada um com um esquema só, o `JwtBearer`, como padrão: o
+`apps/api` pelas chaves do próprio anel (#180), o `apps/inbox` e o
+`apps/connectors` pelo JWKS ("Validação do token do emissor", depois do emissor;
+#208). **Nenhuma requisição espera o `apps/api` para ser autenticada:** as chaves
+do JWKS são obtidas em segundo plano. Foi o que permitiu autenticar apps com
+bancos isolados sem introduzir um store compartilhado. *(Até a #182, convivia com
+ele um token stateless com assinatura simétrica, numa chave que os três apps
+compartilhavam, escolhido pela forma do token, com o qual cada serviço assinava o
+próprio token de serviço até a #235. A convenção "sem biblioteca JWT"
+foi revogada em 24/10/2026 pela `emissor-oidc-api`; ver o `01`.)*
 
-**Token stateless assinado com HMAC**, sem sessão em banco. A convenção "sem
-biblioteca JWT" foi revogada em 24/10/2026 pela `emissor-oidc-api` (ver o
-`01`); o HMAC segue sem biblioteca até sair. `apps/api` emite o token do operador, no login; cada serviço assina
-o **próprio** token de serviço com a mesma chave, a cada requisição de saída —
-o `apps/inbox` com `service:inbox` em
-`apps/inbox/src/Buteco.Inbox/Auth/ServiceTokenDelegatingHandler.cs`, e o
-`apps/api` com `service:api` em
-`apps/api/src/Buteco.Api/Auth/ServiceTokenDelegatingHandler.cs`, só para chamar o
-`apps/connectors`, e o `apps/connectors` com `service:connectors` em
-`apps/connectors/src/Buteco.Connectors/Auth/ServiceTokenDelegatingHandler.cs`, só para
-o ciclo de sincronização chamar o `apps/api`. Os três handlers são cópias com o subject
-trocado, sem `libs/`. **Nenhuma requisição espera o `apps/api` para ser
-autenticada:** o HMAC é validado localmente nos três apps, pela chave
-compartilhada; o token do emissor é validado localmente pelas chaves do JWKS,
-obtidas em segundo plano (ver abaixo). Foi o que permitiu autenticar apps com
-bancos isolados sem introduzir um store compartilhado. *(Até 25/10/2026 este
-parágrafo dizia "Não há chamada de rede entre os processos para validar token";
-a obtenção das chaves do emissor é a única, fora do caminho da requisição.)*
-
-- **Operador único**, com credencial via variável de ambiente (usuário mais
-  hash PBKDF2), por `POST /auth/login` em `apps/api`. Sem tabela de usuários
-  e sem RBAC. TTL de 30 minutos por padrão, configurável — o default vive no
-  tipo de Options, não no `appsettings.json`.
-- **Tokens de serviço**, assinados pelo próprio serviço a cada requisição de
-  saída, com `sub` distinto e TTL fixo curto (5 min), e **escopados** no
-  `apps/api` por uma tabela de subjects (`ServiceScopeAuthorizationHandler`):
+- **Usuários locais**, com login por e-mail e senha no emissor; o primeiro Admin
+  vem do bootstrap. Sem RBAC na M1: todo usuário tem o acesso do operador, pela
+  tabela de clientes (`buteco-painel` → `operator`).
+- **Tokens de serviço**, access tokens do emissor, um cliente por serviço:
+  - o `apps/inbox` e o `apps/connectors` pedem o seu em `{Api:BaseUrl}/connect/token`
+    (`buteco-servico-inbox`, `buteco-servico-connectors`), com o segredo de cada um,
+    e o guardam até faltar 1 min para vencer (`ServiceAccessTokenSource`, uma cópia
+    em cada app, sem `libs/`);
+  - o `apps/api` gera o seu no processo para chamar o `apps/connectors`
+    (`ServiceAccessTokenIssuer`, `buteco-servico-api`, `aud` `buteco-connectors`);
+  - o `ServiceTokenDelegatingHandler` de cada app anexa o token, e um `401` do
+    destino descarta o cache sem repetir a chamada.
+- **O subject sai do `client_id`**, por uma tabela fechada por app, e nunca do
+  `sub`. No `apps/api`, as rotas de cada subject são **escopadas** por uma tabela
+  de subjects (`ServiceScopeAuthorizationHandler`):
   - `operator` passa em todas as rotas;
   - `service:inbox` (`apps/inbox` → `apps/api`) só nas duas rotas que consome;
   - `service:connectors` só nas cinco rotas de `/sync/knowledge-bases`
     (listagem das bases sincronizadas e das referências dos documentos, upsert e
-    exclusão por `ExternalRef`, gravação do resultado de um ciclo). O app que
-    sincroniza vai obter o token como o `apps/inbox`: recebe a mesma
-    `Auth__TokenSigningKey` e assina com um `DelegatingHandler` próprio, sem
-    `libs/`;
-  - **qualquer outro subject recebe `403`**, mesmo com assinatura válida. Até a
-    linha de bases sincronizadas a regra era o inverso, e um subject novo assinado
-    com a chave tinha o acesso do operador.
+    exclusão por `ExternalRef`, gravação do resultado de um ciclo);
+  - **qualquer outro subject recebe `403`**. Até a linha de bases sincronizadas a
+    regra era o inverso, e um subject novo tinha o acesso do operador.
 
   A lista de rotas de cada serviço é conferida no boot contra os endpoints
-  mapeados (casa por método e padrão de rota). Quem guarda a chave assina qualquer
-  subject, inclusive `operator`: a tabela protege contra defeito de código, não
-  contra o comprometimento de um app que guarda a chave (issue #117).
+  mapeados (casa por método e padrão de rota). A tabela protege contra defeito de
+  código; contra roubo de credencial, cada serviço tem a sua, e só o `apps/api`
+  assina token (#182, que fechou a #117).
 
   O `apps/inbox` aceita **só o subject `operator`** nas rotas autenticadas;
-  qualquer outro subject válido recebe `403`, inclusive o `service:inbox` que ele
-  mesmo assina para chamar o `apps/api` (#116). Nenhum serviço chama rota
-  autenticada dele, então ainda não há lista de rotas por subject de serviço.
-  **Um serviço que precise de rota do `apps/inbox` traz a lista de rotas do seu
-  subject e a checagem de boot dessa lista, no molde do `apps/api`.** A regra é
-  duplicada, sem `libs/`: `Auth/SubjectAuthorization.cs` no `apps/inbox`, com o
-  par em `Auth/ServiceScopeAuthorizationHandler.cs` e
-  `Auth/ServiceScopeRouteValidation.cs` no `apps/api`.
+  qualquer outro recebe `403` (#116). Nenhum serviço chama rota autenticada dele,
+  então ainda não há lista de rotas por subject de serviço. **Um serviço que
+  precise de rota do `apps/inbox` traz a lista de rotas do seu subject e a
+  checagem de boot dessa lista, no molde do `apps/api`.** A regra é duplicada, sem
+  `libs/`: `Auth/SubjectAuthorization.cs` no `apps/inbox`, com o par em
+  `Auth/ServiceScopeAuthorizationHandler.cs` e `Auth/ServiceScopeRouteValidation.cs`
+  no `apps/api`.
 - **Enforcement por padrão**: toda rota HTTP de `apps/api` e `apps/inbox`
   exige token. Uma rota só fica anônima com `.AllowAnonymous()` **e** um
   `AnonymousRouteClassification` (motivo documentado) anexados explicitamente
@@ -917,25 +908,24 @@ a obtenção das chaves do emissor é a única, fora do caminho da requisição.
   chamada no fim de cada `Program.cs`, derruba o boot se alguma rota ficar
   sem essa dupla marcação — ou se a allowlist citar uma rota que não existe
   mais. O `apps/connectors` segue a mesma regra.
-- **`apps/connectors`** valida o token localmente com a mesma
-  `Auth:TokenSigningKey`, e o boot falha se ela estiver vazia. A autorização é uma
-  tabela explícita de subjects, e aqui **o operador não passa em tudo**:
+- **`apps/connectors`** valida o token do emissor localmente, e o boot falha sem
+  `Identity:Issuer` ou sem `Api:BaseUrl` (#182). A autorização é uma tabela
+  explícita de subjects, e aqui **o operador não passa em tudo**:
   - `operator` só na listagem de provedores, na navegação de pastas e no
     "Sincronizar agora" (`/connectors/providers`,
     `/connectors/providers/{providerKey}/folders` e
     `POST /connectors/knowledge-bases/{knowledgeBaseId}/sync`);
   - `service:api` só na descrição de pasta
     (`/connectors/providers/{providerKey}/folder`), que o `apps/api` chama para
-    validar a pasta de uma base sincronizada, assinando o próprio token. Esse
-    subject **não** está na tabela do `apps/api`: um token `service:api` que chegue
-    lá recebe `403`;
+    validar a pasta de uma base sincronizada, com o token do `buteco-servico-api`.
+    Esse subject **não** está na tabela do `apps/api`: nenhum cliente o produz lá;
   - qualquer outro subject recebe `403`.
 
   A tabela é conferida no boot nos dois sentidos: entrada sem rota mapeada, e rota
   autenticada que não está na lista de nenhum subject.
-- **Frontend**: módulo fino de token sobre `sessionStorage` (ler, anexar,
-  limpar em `401`), importado por cada `request<T>` de feature — sem cliente
-  HTTP compartilhado.
+- **Frontend**: o módulo de sessão `src/auth/` (o `sessionFetch`), importado por
+  cada `request<T>` de feature, sem cliente HTTP compartilhado; ver "O painel e a
+  sessão do emissor" no `01` (#217).
 
 Rotas anônimas são decisão de segurança, não detalhe de implementação:
 adicionar uma passa por revisão.
@@ -1022,7 +1012,7 @@ quem valida (os três apps) ◀── verifica a assinatura pelas chaves do emis
   rota mapeada de mesmo caminho, anônima e com o mesmo motivo; para os outros,
   continua proibido coincidir com rota.
 - **É credencial das rotas do `apps/api`** desde a #180, com o mesmo desenho da
-  #208 ("Validação do token do emissor", abaixo): esquema de política pela forma,
+  #208 ("Validação do token do emissor", abaixo): um esquema só (#182),
   `aud` `buteco-api`, principal pela tabela de clientes. A diferença é que as
   chaves vêm do anel do próprio processo, sem HTTP, e sem o `503` de "sem chaves",
   porque o gate já cobre isso.
@@ -1098,8 +1088,8 @@ painel                                      apps/api                      tabela
   │ ◀──────── {encerradas: 1}               (o refresh de A1 passa a receber invalid_grant)
 ```
 
-- **Rotas**, todas para o usuário real do token (`CurrentUser`); o HMAC `operator`
-  recebe `403`. Na M1 todo usuário chama todas; a #184 restringe `/users` ao Admin:
+- **Rotas**, todas para o usuário real do token (`CurrentUser`); o token de operador
+  cujo `sub` não é usuário recebe `403`. Na M1 todo usuário chama todas; a #184 restringe `/users` ao Admin:
   - `GET /account`, `POST /account/password`, `GET /account/sessions`,
     `POST /account/sessions/{id}/revoke`, `POST /account/sessions/revoke-others`;
   - `GET /users`, `GET /users/{id}`, `PUT /users/{id}`, `POST /users/{id}/deactivate`,
@@ -1138,7 +1128,8 @@ admin (painel)                    apps/api                            convidado 
   │                              ◀──── POST /auth/session {email, senha}  (o login de sempre)
 ```
 
-- **Administrativas**, para o usuário real do token (`CurrentUser`; HMAC → `403`):
+- **Administrativas**, para o usuário real do token (`CurrentUser`; operador sem
+  usuário → `403`):
   `POST /users/invitations`, `POST /users/{id}/invitation/renew`,
   `POST /users/{id}/invitation/cancel`, `POST /users/{id}/password-reset`. As três que
   geram link pedem a senha de quem chama; cancelar não. A #184 as restringe ao Admin.
@@ -1159,14 +1150,10 @@ admin (painel)                    apps/api                            convidado 
 ```
                        Authorization: Bearer <token>
                                    │
-                    esquema de política "Bearer" (pela forma)
-                  ┌────────────────┴─────────────────┐
-         dois pontos (JWS)                   qualquer outra coisa
-                  │                                  │
-        IssuerToken (JwtBearer)            OperatorToken (HMAC, sem mudança)
-        RS256, typ at+jwt, iss,
-        aud do app, exp (±30 s)
-                  │
+                    IssuerToken (JwtBearer), o esquema padrão
+                    RS256, typ at+jwt, iss, aud do app, exp (±30 s)
+                    sem token: 401 com WWW-Authenticate: Bearer
+                                   │
         ConfigurationManager ◄── IssuerKeysRetriever ── IssuerKeysRefreshService
         (cache, kid desconhecido:       │                (10 s até obter,
          1 busca/min)                   │                 tique de 10 min)
@@ -1176,15 +1163,15 @@ admin (painel)                    apps/api                            convidado 
                   nunca o jwks_uri público
 ```
 
-- **Um esquema por token.** O seletor decide antes de validar, pela contagem de
-  pontos (o HMAC tem um por construção). Um JWT inválido nunca é tentado no
-  HMAC, e um HMAC nunca toca nas chaves.
+- **Um esquema só** (#182). Até a #182 a forma do token escolhia o esquema, e o
+  token de um ponto só ia ao esquema da chave simétrica; esse token agora recebe
+  `401`.
 - **Chaves pelo endereço interno**, pelo cliente nomeado `IssuerKeys` (timeout
   5 s). O `issuer` do discovery é conferido contra `Identity:Issuer`;
   divergente, nenhuma chave é obtida e o erro traz os dois valores.
 - **O app sobe sem o `apps/api`.** Nenhuma I/O no boot; antes da primeira
-  obtenção, o token do emissor recebe `503` com `Retry-After`, para o painel
-  não deslogar por uma queda passageira. Depois, as chaves obtidas continuam
+  obtenção, quem traz token recebe `503` com `Retry-After`, para o painel não
+  deslogar por uma queda passageira, e quem não traz recebe `401` (#182). Depois, as chaves obtidas continuam
   valendo com o `apps/api` fora. Entre buscas que falharam há pelo menos 10 s,
   inclusive as disparadas por requisição. A configuração "last known good" da
   biblioteca fica desligada, para uma chave retirada do JWKS deixar de valer
@@ -1193,10 +1180,9 @@ admin (painel)                    apps/api                            convidado 
   (`IssuerClientSubjects`: `buteco-painel` → `operator`), e nunca do `sub`. As
   tabelas de subjects (`SubjectAuthorization`,
   `ConnectorsSubjectAuthorizationHandler`) não mudam.
-- **Checagens de boot:** `Identity:Issuer` absoluto, sem query nem fragmento;
-  com ele, `Api:BaseUrl` obrigatório; e a tabela de clientes apontando só para
-  subjects existentes. Sem `Identity:Issuer`, a validação fica desligada, com
-  aviso.
+- **Checagens de boot:** `Identity:Issuer` presente e absoluto, sem query nem
+  fragmento (sem ele o app não sobe, desde a #182); `Api:BaseUrl` presente; e a
+  tabela de clientes apontando só para subjects existentes.
 - **Código copiado entre os dois apps**, sem `libs/`; cada cópia nomeia a outra.
   O `apps/api`, terceiro consumidor desde a #180, tem uma versão menor, com as
   chaves do anel. A pergunta do `libs/` foi respondida "não" na #180 (ver o

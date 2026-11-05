@@ -81,8 +81,8 @@ public partial class FolderValidationRoundTripTests(RoundTripFixture fixture) : 
     // Chaves divergentes no apps/connectors (decisão do dono, 03/11/2026, na parada da 5.7):
     // ele obtém as chaves de outro emissor, que anuncia o mesmo issuer do apps/api, e o kid
     // do token que o apps/api gera no processo não está entre elas. Até a
-    // servicos-token-emissor, a causa era a chave HMAC divergente; com o token do emissor, a
-    // chave HMAC deixou de entrar neste fluxo (troca de premissa registrada no design). A
+    // servicos-token-emissor, a causa era a chave compartilhada divergente; com o token do
+    // emissor, ela deixou de entrar neste fluxo (troca de premissa registrada no design). A
     // resposta do apps/api ao 401 não muda.
     [Fact]
     public async Task CreateSynced_ConnectorsWithKeysFromAnotherIssuer_Is502ConnectorsError401()

@@ -8,13 +8,15 @@ namespace Buteco.Api.Tests.Users.AccessLinks;
 
 /// <summary>
 /// "Rotas administrativas do link atendem só o usuário real do token" (spec
-/// <c>user-access-links</c>; design.md da change convites-redefinicao-senha, D1). O HMAC de
-/// operador não tem <c>sub</c>, e um usuário desativado com access token ainda válido não é
-/// atendido.
+/// <c>user-access-links</c>; design.md da change convites-redefinicao-senha, D1). O token de
+/// operador cujo <c>sub</c> não é usuário (<see cref="TestIssuerTokens.Panel"/>) e um usuário
+/// desativado com access token ainda válido não são atendidos.
 ///
 /// <para>
-/// Verificado contra o defeito (tasks.md, 5.6): com o <c>CurrentUser</c> retirado de criar convite,
-/// <see cref="OperatorHmac_Is403_OnTheFourRoutes_AndNothingIsWritten"/> reprova.
+/// Verificado contra o defeito (tasks.md, 5.6; de novo no 4.5 da change
+/// remover-hmac-token-servico, com o token de operador sem usuário no lugar do antigo): com o
+/// <c>CurrentUser</c> retirado de criar convite,
+/// <see cref="OperatorWithoutUser_Is403_OnTheFourRoutes_AndNothingIsWritten"/> reprova.
 /// </para>
 /// </summary>
 public class AccessLinkCallerTests(AccessLinkCallerTests.Fixture factory) : IClassFixture<AccessLinkCallerTests.Fixture>
@@ -22,17 +24,17 @@ public class AccessLinkCallerTests(AccessLinkCallerTests.Fixture factory) : ICla
     public sealed class Fixture : LocalUsersFixture;
 
     [Fact]
-    public async Task OperatorHmac_Is403_OnTheFourRoutes_AndNothingIsWritten()
+    public async Task OperatorWithoutUser_Is403_OnTheFourRoutes_AndNothingIsWritten()
     {
         var inviter = await SignedInUser.CreateAsync(factory, "convidou");
         var invited = await InvitationSeed.InvitedAsync(factory.Services, inviter.User.Id);
-        var target = await LocalUserSeed.CreateUserAsync(factory.Services, LocalUserSeed.UniqueEmail("alvo-hmac"), SignedInUser.DefaultPassword);
-        var name = $"Pelo HMAC {Guid.NewGuid():N}";
+        var target = await LocalUserSeed.CreateUserAsync(factory.Services, LocalUserSeed.UniqueEmail("alvo-sem-usuario"), SignedInUser.DefaultPassword);
+        var name = $"Pelo operador sem usuário {Guid.NewGuid():N}";
         var client = SignedInUser.Anonymous(factory);
-        TestAuthentication.AttachOperatorToken(client, factory.Services);
+        TestAuthentication.AttachPanelToken(client, factory.Services);
         var routes = new (string Path, object? Body)[]
         {
-            ("/users/invitations", new { nome = name, email = LocalUserSeed.UniqueEmail("hmac"), senha = TestAuthentication.KnownOperatorPassword }),
+            ("/users/invitations", new { nome = name, email = LocalUserSeed.UniqueEmail("sem-usuario"), senha = TestAuthentication.KnownOperatorPassword }),
             ($"/users/{invited.User.Id}/invitation/renew", new { senha = TestAuthentication.KnownOperatorPassword }),
             ($"/users/{invited.User.Id}/invitation/cancel", null),
             ($"/users/{target.Id}/password-reset", new { senha = TestAuthentication.KnownOperatorPassword }),

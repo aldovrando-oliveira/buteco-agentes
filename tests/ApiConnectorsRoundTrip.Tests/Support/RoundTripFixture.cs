@@ -43,10 +43,6 @@ namespace ApiConnectorsRoundTrip.Tests.Support;
 /// </summary>
 public sealed class RoundTripFixture : IAsyncLifetime
 {
-    // Mesmo valor literal das fixtures de apps/api, apps/inbox e apps/connectors; sem
-    // código compartilhado entre os projetos de teste.
-    public const string TokenSigningKey = "test-signing-key-shared-between-api-and-inbox-fixtures";
-
     private const string ConnectorsBaseUrl = "http://connectors.roundtrip.test";
 
     private const string ApiBaseUrl = "http://api.roundtrip.test";
@@ -140,10 +136,8 @@ public sealed class RoundTripFixture : IAsyncLifetime
         var connectors = new WebApplicationFactory<ConnectorsProgram>().WithWebHostBuilder(builder =>
         {
             // UseSetting, e não ConfigureAppConfiguration: o Program.cs do apps/connectors
-            // lê a chave e a credencial do Google ANTES do Build() (medido na #103,
-            // ConnectorsFactory). Credencial do Google vazia: o provedor google-drive não
-            // existe neste host.
-            builder.UseSetting("Auth:TokenSigningKey", TokenSigningKey);
+            // lê a credencial do Google ANTES do Build() (medido na #103, ConnectorsFactory).
+            // Credencial do Google vazia: o provedor google-drive não existe neste host.
             builder.UseSetting("GoogleDrive:ServiceAccountKeyBase64", string.Empty);
             // O apps/api desta fixture, e não o localhost:5017 do appsettings.Development.json
             // do apps/connectors (design.md da change ciclo-de-sincronizacao, D2).
@@ -187,10 +181,9 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     ["Identity:SigningKeyEncryptionKey"] = "dGVzdC1pZGVudGl0eS1rZXktMzItYnl0ZXMtLS0tLS0=",
                     // Os segredos dos clientes de serviço, obrigatórios no boot do apps/api
                     // (clientes-servico-emissor, D2). Fixos aqui, e não herdados do
-                    // appsettings.Development.json, como a chave acima.
+                    // appsettings.Development.json.
                     ["Identity:ServiceClients:Inbox:Secret"] = InboxServiceClientSecret,
                     ["Identity:ServiceClients:Connectors:Secret"] = ConnectorsServiceClientSecret,
-                    ["Auth:TokenSigningKey"] = TokenSigningKey,
                     // O primeiro Admin do bootstrap (usuarios-locais-login-emissor, D2): é
                     // quem faz o fluxo real do IssuerTokenRoundTripTests.
                     ["Auth:BootstrapAdminEmail"] = IssuerUserFlow.BootstrapAdminEmail,
@@ -236,7 +229,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
     /// </summary>
     public static async Task<HttpClient> OperatorClientAsync(WebApplicationFactory<ApiProgram> api)
     {
-        var token = await OperatorTokens.GetValue(api, host => IssuerUserFlow.AccessTokenAsync(
+        var token = await UserAccessTokens.GetValue(api, host => IssuerUserFlow.AccessTokenAsync(
             host.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
             () => WarmUpIssuerAsync(host),
             ApiPublicBaseUrl,
@@ -247,9 +240,9 @@ public sealed class RoundTripFixture : IAsyncLifetime
         return client;
     }
 
-    private static readonly ConditionalWeakTable<WebApplicationFactory<ApiProgram>, Task<string>> OperatorTokens = new();
+    private static readonly ConditionalWeakTable<WebApplicationFactory<ApiProgram>, Task<string>> UserAccessTokens = new();
 
-    private static readonly ConditionalWeakTable<WebApplicationFactory<ApiProgram>, Task<string>> ConnectorsOperatorTokens = new();
+    private static readonly ConditionalWeakTable<WebApplicationFactory<ApiProgram>, Task<string>> ConnectorsUserAccessTokens = new();
 
     private static readonly ConditionalWeakTable<WebApplicationFactory<ConnectorsProgram>, WebApplicationFactory<ApiProgram>> ApiOf = new();
 
@@ -262,7 +255,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
     public static async Task<HttpClient> ConnectorsOperatorClientAsync(WebApplicationFactory<ConnectorsProgram> connectors)
     {
         Assert.True(ApiOf.TryGetValue(connectors, out var api), "o apps/connectors não saiu de um Build desta fixture");
-        var token = await ConnectorsOperatorTokens.GetValue(api, host => IssuerUserFlow.AccessTokenAsync(
+        var token = await ConnectorsUserAccessTokens.GetValue(api, host => IssuerUserFlow.AccessTokenAsync(
             host.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
             () => WarmUpIssuerAsync(host),
             ApiPublicBaseUrl,

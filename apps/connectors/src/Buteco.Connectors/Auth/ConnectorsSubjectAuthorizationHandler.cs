@@ -27,8 +27,9 @@ public sealed class ConnectorsSubjectAuthorizationHandler : AuthorizationHandler
     public const string OperatorSubject = "operator";
 
     /// <summary>
-    /// Reservado para o <c>apps/api</c>, que vai assiná-lo na #104 com a mesma
-    /// <c>Auth:TokenSigningKey</c>, num <c>DelegatingHandler</c> próprio.
+    /// O <c>apps/api</c>, pelo token que ele gera no processo para o cliente
+    /// <c>buteco-servico-api</c> (servicos-token-emissor, D4), mapeado pela tabela de
+    /// clientes.
     /// </summary>
     public const string ApiSubject = "service:api";
 

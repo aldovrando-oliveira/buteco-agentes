@@ -10,13 +10,12 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace Buteco.Api.Tests.Identity;
 
 /// <summary>
-/// A fronteira entre esta change e a #180 (spec <c>oidc-issuer</c>; design.md da change
-/// emissor-oidc-api, D9): com o emissor ligado, a validação HMAC segue igual, e o token
-/// do emissor <b>não</b> é credencial das rotas do <c>apps/api</c>. O caso do login HMAC
-/// saiu com o <c>POST /auth/login</c> (change painel-entra-pelo-emissor, D8): o HMAC de
-/// operador aceito em <c>/agents</c> é provado pelo
-/// <see cref="IssuerTokenAcceptanceTests"/> (as fixtures anexam o token do emissor desde a
-/// change fixtures-token-emissor), e o 404 da rota pelo <see cref="GoneLoginTests"/>.
+/// O token do emissor de um cliente sem a audience do <c>apps/api</c> <b>não</b> é credencial
+/// das rotas dele (spec <c>oidc-issuer</c>; design.md da change emissor-oidc-api, D9). O token
+/// do painel aceito em <c>/agents</c> é provado pelo <see cref="IssuerTokenAcceptanceTests"/>,
+/// e o 404 da rota de login pelo <see cref="GoneLoginTests"/>. O caso do token de serviço
+/// antigo saiu com ele (change remover-hmac-token-servico); o par do emissor é o
+/// <see cref="ServiceClientRouteTests"/>.
 /// </summary>
 public class IdentityIssuerCoexistenceTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>, IAsyncLifetime
 {
@@ -37,22 +36,5 @@ public class IdentityIssuerCoexistenceTests(ApiFactoryFixture factory) : IClassF
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/agents")).StatusCode);
-    }
-
-    [Fact]
-    public async Task InboxServiceToken_StillReachesItsRoute()
-    {
-        var created = await factory.CreateClient().PostAsJsonAsync(
-            "/agents",
-            new { name = "Agente", instructions = "Instrução.", provider = "openai", model = "gpt-5.6-sol" });
-        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        var agentId = JsonDocument.Parse(await created.Content.ReadAsStringAsync()).RootElement.GetProperty("id").GetString();
-
-        var client = factory.CreateClient();
-        var (serviceToken, _) = factory.Services.GetRequiredService<ITokenService>()
-            .Issue(ServiceScopeAuthorizationHandler.InboxSubject, TimeSpan.FromMinutes(5));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
-
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/agents/{agentId}")).StatusCode);
     }
 }

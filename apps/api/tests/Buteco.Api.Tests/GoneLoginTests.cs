@@ -6,13 +6,13 @@ using Buteco.Api.Tests.Support;
 namespace Buteco.Api.Tests;
 
 /// <summary>
-/// O <c>POST /auth/login</c> não existe mais (spec <c>operator-authentication</c>, "Token
-/// HMAC de operador só é validado, e nenhum é emitido por rota"; design.md da change
+/// O <c>POST /auth/login</c> não existe mais (spec <c>operator-authentication</c>, "Nenhuma
+/// rota emite token de operador fora do emissor"; design.md da change
 /// painel-entra-pelo-emissor, D8). Sem token, rota inexistente responde <c>401</c>, como
 /// qualquer outra: o <c>FallbackPolicy</c> (<c>Program.cs</c>) vale também para o que não
 /// casa com rota, e não revela quais existem. A ausência se prova com o token de usuário
-/// do emissor, e não com o HMAC de operador, que a #184 vai recusar: com ele, a rota antiga
-/// responderia <c>200</c>, e a ausente responde exatamente <c>404</c>.
+/// do emissor: com ele, a rota antiga responderia <c>200</c>, e a ausente responde
+/// exatamente <c>404</c>.
 /// </summary>
 public class GoneLoginTests(LocalUsersFixture factory) : IClassFixture<LocalUsersFixture>
 {

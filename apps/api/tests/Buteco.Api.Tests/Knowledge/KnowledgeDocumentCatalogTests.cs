@@ -393,19 +393,14 @@ public partial class KnowledgeDocumentCatalogTests(ApiFactoryFixture factory) : 
         Assert.Equal(0, await KnowledgeTestClient.CountDocumentEventsInDatabaseAsync(factory.Services, missingBaseId));
     }
 
-    // O token é um HMAC de operador emitido pelo ITokenService, num cliente sem o
-    // cabeçalho que a fixture anexa: o que se afirma é que o subject que o esquema de
-    // autenticação valida é o que o endpoint lê (D6). Com a leitura errada as três
-    // escritas responderiam 500. Até a change painel-entra-pelo-emissor o token vinha
-    // do POST /auth/login, que saiu (D8); quem emite o HMAC de operador agora é só o
-    // ITokenService, e o esquema que o valida não mudou.
+    // O token é o do painel que a fixture anexa (TestIssuerTokens.Panel): o que se afirma é
+    // que o subject que a autenticação tira da tabela de clientes é o que o endpoint grava
+    // como autor nas três escritas (D6), e não o client_id nem o sub. Até a change
+    // remover-hmac-token-servico, o caso usava o token antigo de operador.
     [Fact]
-    public async Task DocumentWrites_WithOperatorHmacToken_RecordOperatorAsAuthor()
+    public async Task DocumentWrites_WithThePanelToken_RecordOperatorAsAuthor()
     {
         var client = factory.CreateClient();
-        var (token, _) = factory.Services.GetRequiredService<Buteco.Api.Auth.ITokenService>()
-            .Issue(Buteco.Api.Auth.ServiceScopeAuthorizationHandler.OperatorSubject, TimeSpan.FromMinutes(30));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var knowledgeBase = await client.CreateBaseAsync("Base Histórico Autor");
         var document = await client.CreateDocumentAsync(knowledgeBase.Id, "Original");

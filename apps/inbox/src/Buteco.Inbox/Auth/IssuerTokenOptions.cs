@@ -7,7 +7,7 @@ namespace Buteco.Inbox.Auth;
 // audience e a tabela de clientes.
 
 // Issuer público do emissor do apps/api (change validacao-jwks-inbox-connectors, D3).
-// Vazio desliga a validação do token do emissor (D7). No compose de produção vem da
+// Vazio derruba o boot (remover-hmac-token-servico, D2). No compose de produção vem da
 // mesma variável que vira PublicUrl__BaseUrl do apps/api (PUBLIC_DOMAIN).
 public sealed class IssuerTokenOptions
 {

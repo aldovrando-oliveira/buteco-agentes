@@ -15,7 +15,8 @@ namespace Buteco.Api.Tests;
 /// apps/connectors"; design.md da change servicos-token-emissor, D2 e D4): o do
 /// <see cref="ServiceAccessTokenIssuer"/>, reaproveitado entre requisições, e descartado no
 /// <c>401</c> do destino sem repetir a chamada. Reescrito na servicos-token-emissor: antes,
-/// era um HMAC novo por requisição (mudança de asserção declarada no design, D6).
+/// era um token novo por requisição, assinado com a chave compartilhada (mudança de asserção
+/// declarada no design, D6).
 /// </summary>
 public class ServiceTokenDelegatingHandlerTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>, IAsyncLifetime
 {

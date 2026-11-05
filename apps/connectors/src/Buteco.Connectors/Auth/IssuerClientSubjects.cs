@@ -11,7 +11,7 @@ namespace Buteco.Connectors.Auth;
 // token: o sub é o id do cliente ou do usuário, e um cliente ou usuário com id
 // "operator" não pode virar o operador. Cliente fora da tabela autentica sem
 // NameIdentifier e recebe 403 do ConnectorsSubjectAuthorizationHandler; o subject
-// mapeado segue as mesmas rotas que tem com o token HMAC.
+// mapeado segue as rotas dele na tabela de subjects.
 //
 // Todo subject de destino precisa ser chave de
 // ConnectorsSubjectAuthorizationHandler.SubjectRoutes; quem confere é

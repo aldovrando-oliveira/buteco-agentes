@@ -34,7 +34,7 @@ public sealed class IssuerTokenValidationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task PanelToken_CanSyncNow_LikeTheHmacOperator()
+    public async Task PanelToken_CanSyncNow()
     {
         var response = await _factory.CreateClientWithToken(_issuer.Issue())
             .PostAsync($"/connectors/knowledge-bases/{Guid.NewGuid()}/sync", content: null);
@@ -86,14 +86,6 @@ public sealed class IssuerTokenValidationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Hs256SignedWithTheHmacKey_IsUnauthorized()
-    {
-        var hmacKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestAuthentication.TokenSigningKey));
-
-        Assert.Equal(HttpStatusCode.Unauthorized, await GetAsync(_issuer.Issue(key: hmacKey, algorithm: SecurityAlgorithms.HmacSha256)));
-    }
-
-    [Fact]
     public async Task UnsignedToken_IsUnauthorized()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, await GetAsync(TestIssuer.IssueUnsigned()));
@@ -135,17 +127,24 @@ public sealed class IssuerTokenValidationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, await GetAsync(_issuer.Issue(clientId: null, subject: "operator")));
     }
 
-    // O subject mapeado segue a tabela de rotas, como o HMAC operator: "descrever pasta"
-    // é só do service:api.
+    // O subject mapeado segue a tabela de rotas: "descrever pasta" é só do service:api.
     [Fact]
-    public async Task PanelToken_OnDescribeFolder_IsForbidden_LikeTheHmacOperator()
+    public async Task PanelToken_OnDescribeFolder_IsForbidden()
     {
         var issued = await _factory.CreateClientWithToken(_issuer.Issue()).GetAsync("/connectors/providers/google-drive/folder?id=x");
-        var hmac = await _factory.CreateClientWithToken(TestAuthentication.IssueToken(_factory.Services, "operator"))
-            .GetAsync("/connectors/providers/google-drive/folder?id=x");
 
         Assert.Equal(HttpStatusCode.Forbidden, issued.StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, hmac.StatusCode);
+    }
+
+    // O token que os apps aceitavam até a #182 (change remover-hmac-token-servico, D1): um
+    // ponto só, assinatura simétrica com a chave das fixtures antigas.
+    [Fact]
+    public async Task HmacShapedToken_SignedWithTheOldKey_Is401()
+    {
+        var response = await _factory.CreateClientWithToken(OldSharedKeyToken.Sign()).GetAsync(OperatorRoute);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("Bearer", Assert.Single(response.Headers.WwwAuthenticate).Scheme);
     }
 
     // O cliente de serviço do apps/api (design.md da change clientes-servico-emissor, D3).

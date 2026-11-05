@@ -160,9 +160,11 @@ Escuta em `http://localhost:5017` em desenvolvimento.
 Lê `ConnectionStrings:Postgres`, `RabbitMq:*` e `Auth:*` via
 `appsettings.Development.json` (defaults de dev, os mesmos do `.env.example`)
 ou por variáveis de ambiente (`ConnectionStrings__Postgres`,
-`RabbitMq__Host`, `Auth__TokenSigningKey`, etc.) — nunca fixados em código.
+`RabbitMq__Host`, `Auth__BootstrapAdminEmail`, etc.) — nunca fixados em código.
 
-`Auth:TokenSigningKey` é **obrigatória**: o processo falha ao subir sem ela.
+Os segredos dos clientes de serviço (`Identity:ServiceClients:Inbox:Secret` e
+`Identity:ServiceClients:Connectors:Secret`) são **obrigatórios**: o processo falha ao
+subir sem eles, e o `appsettings.Development.json` já traz os de desenvolvimento.
 `Auth:BootstrapAdminEmail` e `Auth:OperatorPasswordHash` só servem para criar o
 primeiro Admin ([Autenticação em desenvolvimento](#autenticação-em-desenvolvimento)).
 
@@ -285,8 +287,8 @@ Escuta em `http://localhost:5027` em desenvolvimento.
 
 Lê `ConnectionStrings:Postgres`, `Inbox:CredentialEncryptionKey`,
 `Api:BaseUrl`, `PublicUrl:BaseUrl`, `Debounce:*`, `ServiceClient:Secret` e
-`Auth:TokenSigningKey` via `appsettings.Development.json` ou variáveis de
-ambiente. Três valores merecem atenção:
+`Identity:Issuer` via `appsettings.Development.json` ou variáveis de
+ambiente. Quatro valores merecem atenção:
 
 - **`Api:BaseUrl`** deve apontar para onde `apps/api` está escutando
   (`http://localhost:5017` em dev). É usado para validar o `AgentId` de um
@@ -299,9 +301,11 @@ ambiente. Três valores merecem atenção:
   emissor responde `invalid_client`, e o inbox loga `Error`. **Com o `apps/api`
   parado**, o inbox sobe; as chamadas ao `apps/api` falham já no pedido de
   token, e durante 10 s depois de cada falha falham na hora, sem rede.
-- **`Auth:TokenSigningKey`** precisa ter o mesmo valor nos três processos
-  enquanto o HMAC for aceito (até a #182): ele só valida o token HMAC que ainda
-  chega.
+- **`Identity:Issuer`** é obrigatório desde a #182: sem ele o inbox não sobe. É o
+  `PublicUrl:BaseUrl` do `apps/api` (`http://localhost:5017/` em dev, já no
+  arquivo), e as chaves do emissor vêm pelo `Api:BaseUrl`. Com o `apps/api`
+  parado, o inbox sobe; o token do painel recebe `503` até a primeira obtenção das
+  chaves, e quem chega sem token recebe `401`.
 - **`PublicUrl:BaseUrl`** deve ser a URL pela qual este processo é alcançável
   a partir de `apps/api` e `apps/workers` (`http://localhost:5027` em dev).
   É usada no `pushNotificationConfig.url` enviado em cada `SendMessage`.
@@ -351,8 +355,9 @@ cd apps/connectors
 dotnet run --project src/Buteco.Connectors
 ```
 
-Escuta em `http://localhost:5037` em desenvolvimento. Lê `Auth:TokenSigningKey`
-(mesmo valor de `apps/api`, já no `appsettings.Development.json`), `Cors:*`,
+Escuta em `http://localhost:5037` em desenvolvimento. Lê `Identity:Issuer` e
+`Api:BaseUrl` (os dois obrigatórios desde a #182, e já no
+`appsettings.Development.json`, como no `apps/inbox`), `Cors:*`,
 `ServiceClient:Secret` (igual ao `Identity:ServiceClients:Connectors:Secret` do
 `apps/api`, também já no arquivo; é com ele que o ciclo obtém o token de serviço) e,
 se houver, `GoogleDrive:ServiceAccountKeyBase64`.
@@ -422,9 +427,9 @@ funciona igual.
 
 O painel e os exemplos de `curl` entram pelo emissor do `apps/api`, com os
 usuários locais (tabela `users`). O primeiro usuário vem do bootstrap
-(abaixo). `apps/api`, `apps/inbox` e `apps/connectors` ainda compartilham a
-`Auth:TokenSigningKey`, mas ela assina só os tokens de serviço: nenhuma rota emite
-HMAC de operador.
+(abaixo). Os três apps aceitam só o access token do emissor (#182). O segredo de
+cada serviço precisa ser igual no serviço e no `apps/api`; os
+`appsettings.Development.json` já trazem os mesmos valores.
 
 Default de desenvolvimento (`appsettings.Development.json`): e-mail
 `operador@buteco.local`, senha `changeme`, que valem para o primeiro Admin.

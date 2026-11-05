@@ -6,25 +6,23 @@ namespace Buteco.Connectors.Tests;
 
 /// <summary>
 /// Checagens de boot da validação do token do emissor (spec <c>issuer-token-validation</c>;
-/// design.md da change validacao-jwks-inbox-connectors, D7; convenção 8). Aqui o
-/// <c>Api:BaseUrl</c> é opcional, então o issuer ligado sem ele também derruba o boot.
+/// design.md da change validacao-jwks-inbox-connectors, D7; convenção 8). Sem
+/// <c>Identity:Issuer</c>, ou com ele e sem <c>Api:BaseUrl</c>, o boot falha (change
+/// remover-hmac-token-servico, D2).
 /// </summary>
 public class IssuerTokenStartupValidationTests
 {
     [Fact]
-    public async Task WithoutIssuer_ValidationIsOff_IssuerTokenIsUnauthorized_HmacWorks_AndBootWarns()
+    public void WithoutIssuer_FailsTheRealApplicationStartup_NamingTheKey()
     {
-        var issuer = new TestIssuer();
-        await using var factory = new ConnectorsFactory();
+        using var factory = new ConnectorsFactory(extraConfiguration: new Dictionary<string, string?>
+        {
+            ["Identity:Issuer"] = "",
+        });
 
-        var issued = await factory.CreateClientWithToken(issuer.Issue()).GetAsync("/connectors/providers");
-        var hmac = await factory.CreateClientWithToken(TestAuthentication.IssueToken(factory.Services, "operator")).GetAsync("/connectors/providers");
+        var exception = Assert.ThrowsAny<Exception>(() => factory.Services);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, issued.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, hmac.StatusCode);
-        Assert.Contains(factory.Logs.Lines, line =>
-            line.StartsWith("Warning", StringComparison.Ordinal) && line.Contains("Identity:Issuer", StringComparison.Ordinal));
-        Assert.Empty(issuer.Requests);
+        Assert.Contains("Identity:Issuer", Flatten(exception), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -67,6 +65,7 @@ public class IssuerTokenStartupValidationTests
         using var factory = new ConnectorsFactory(extraConfiguration: new Dictionary<string, string?>
         {
             ["Identity:Issuer"] = TestIssuer.Issuer,
+            ["Api:BaseUrl"] = "",
         });
 
         var exception = Assert.ThrowsAny<Exception>(() => factory.Services);

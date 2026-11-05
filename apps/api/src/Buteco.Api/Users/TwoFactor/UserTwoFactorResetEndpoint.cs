@@ -14,8 +14,8 @@ namespace Buteco.Api.Users.TwoFactor;
 /// rotas-conta-usuarios, D2: toda troca do stamp revoga as autorizações).
 ///
 /// <list type="bullet">
-/// <item><b>Quem chama é o usuário real do token</b> (<see cref="CurrentUser"/>): o HMAC de
-/// operador não diz quem é a pessoa, e sem isso a recusa de si mesmo não teria como ser
+/// <item><b>Quem chama é o usuário real do token</b> (<see cref="CurrentUser"/>): um token de
+/// operador sem usuário não diz quem é a pessoa, e sem isso a recusa de si mesmo não teria como ser
 /// conferida;</item>
 /// <item><b>a si mesmo, <c>403</c>:</b> a própria pessoa remove a dela com um código. Sem a
 /// recusa, um access token roubado tiraria a verificação sem código;</item>

@@ -40,12 +40,13 @@ automatizados capaz de validar ao menos o endpoint de health check.
 As fixtures de integração de `apps/inbox/tests` SHALL subir o `apps/inbox` com a
 validação do token do emissor ligada contra um emissor de teste em memória, SHALL
 esperar a obtenção das chaves antes do primeiro cliente, e SHALL anexar por padrão
-um access token do cliente `buteco-painel`. Nenhum caso SHALL depender do token
-HMAC, exceto os que provam o próprio HMAC, listados por nome na #182 para remoção
-com ele.
+um access token do cliente `buteco-painel`. Todo host de teste do `apps/inbox`
+SHALL subir com `Identity:Issuer` configurado, porque o app não sobe sem ele.
+Nenhum helper de teste SHALL assinar token fora do emissor.
 
-#### Scenario: Suíte com o HMAC recusado
-- **WHEN** a validação do token HMAC do `apps/inbox` passa a recusar todo token e a
-  suíte de `apps/inbox/tests` roda
-- **THEN** reprovam só os casos da lista "só prova o HMAC" da #182, por nome
+#### Scenario: Fixture padrão autentica pelo emissor
+- **WHEN** um caso usa o cliente padrão de uma fixture de integração e chama
+  `GET /channels`
+- **THEN** a resposta é `200 OK`, sem esperar a primeira obtenção de chaves no
+  próprio caso
 

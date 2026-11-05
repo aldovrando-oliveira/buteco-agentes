@@ -130,7 +130,8 @@ public partial class FolderValidationRoundTripTests
 
     // 9.3: o token que o apps/connectors obtém no emissor é aceito pela tabela real do
     // apps/api. Desde a servicos-token-emissor (D9), é o token do buteco-servico-connectors,
-    // e não mais um HMAC assinado aqui (mudança de asserção declarada no D6).
+    // e não mais o token antigo, assinado aqui com a chave compartilhada (mudança de asserção
+    // declarada no D6).
     [Fact]
     public async Task SyncCycle_TokenOfTheConnectors_IsAcceptedByTheRealApi()
     {

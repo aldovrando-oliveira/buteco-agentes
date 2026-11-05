@@ -29,8 +29,6 @@ builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptio
 builder.Services.Configure<PublicUrlOptions>(builder.Configuration.GetSection(PublicUrlOptions.SectionName));
 builder.Services.Configure<DebounceOptions>(builder.Configuration.GetSection(DebounceOptions.SectionName));
 builder.Services.Configure<DispatchReconciliationOptions>(builder.Configuration.GetSection(DispatchReconciliationOptions.SectionName));
-builder.Services.Configure<TokenSigningOptions>(builder.Configuration.GetSection(TokenSigningOptions.SectionName));
-builder.Services.AddSingleton<ITokenService, TokenService>();
 // O token de serviço do emissor do apps/api, com cache, e o handler que o anexa
 // (servicos-token-emissor, D3 e D4).
 builder.Services.AddServiceAccessToken(builder.Configuration);
@@ -101,10 +99,9 @@ builder.Services.AddHttpClient(A2AClientFactory.HttpClientName)
     .AddHttpMessageHandler<ServiceTokenDelegatingHandler>();
 builder.Services.AddSingleton<IA2AClientFactory, A2AClientFactory>();
 
-// Token HMAC de operador emitido por apps/api (mesma chave de assinatura) e, com
-// Identity:Issuer, o access token do emissor do apps/api validado pelo JWKS, um
-// esquema por forma de token (validacao-jwks-inbox-connectors, D2). Nenhuma
-// requisição espera o apps/api: as chaves vêm em segundo plano (D4).
+// O access token do emissor do apps/api, validado pelo JWKS, num esquema só
+// (remover-hmac-token-servico, D1). Nenhuma requisição espera o apps/api: as chaves vêm
+// em segundo plano (validacao-jwks-inbox-connectors, D4).
 builder.Services.AddIssuerTokenAuthentication(builder.Configuration);
 // Só o subject "operator" passa; qualquer outro recebe 403
 // (inbox-restricao-de-subject, D1/D2). FallbackPolicy porque nenhuma rota
@@ -135,7 +132,7 @@ var app = builder.Build();
 app.ValidateDebounceSessionSerializationMaxWait();
 
 // Issuer do emissor e tabela de clientes (validacao-jwks-inbox-connectors, D7;
-// convenção 8). Sem Identity:Issuer, só avisa que a validação está desligada.
+// convenção 8). Sem Identity:Issuer, o boot falha (remover-hmac-token-servico, D2).
 app.ValidateIssuerTokenConfiguration();
 app.ValidateIssuerClientSubjects();
 

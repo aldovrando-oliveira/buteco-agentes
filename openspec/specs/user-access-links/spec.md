@@ -2,7 +2,6 @@
 
 ## Purpose
 O link de acesso de uso único do `apps/api` (#181): o convite que cria o usuário no estado `convidado` e a redefinição de senha gerada pelo admin. O token vai no fragmento da URL e só o hash fica no banco. As rotas administrativas pedem a senha de quem chama, e as públicas, sob `/auth`, dão uma resposta só para todo link inválido. Sem envio de e-mail: o admin entrega o link.
-
 ## Requirements
 ### Requirement: Link de acesso de uso único, guardado só em hash
 O `apps/api` SHALL gerar o token de cada link de acesso (convite ou redefinição de senha) com 32 bytes de um gerador criptográfico, codificados em base64url sem preenchimento (43 caracteres), e SHALL guardar só o SHA-256 do token, nunca o token. Cada usuário SHALL ter no máximo um link pendente, com o propósito (`invitation` ou `password_reset`) e o instante de vencimento. O vencimento SHALL ser de 72 horas para o convite e de 24 horas para a redefinição, contadas do momento em que o link é gerado. Gerar um link novo para o mesmo usuário SHALL invalidar o anterior.
@@ -101,10 +100,10 @@ O link devolvido SHALL ser `<base do painel>/convite#<token>` para o convite e `
 - **THEN** a resposta é `204`
 
 ### Requirement: Rotas administrativas do link atendem só o usuário real do token
-As quatro rotas administrativas (`POST /users/invitations`, `POST /users/{id}/invitation/renew`, `POST /users/{id}/invitation/cancel` e `POST /users/{id}/password-reset`) SHALL atender todo usuário real do `sub` do access token do emissor, existente e ativo, sem papéis (M1). Token HMAC de operador, `sub` sem usuário e usuário desativado com access token ainda válido SHALL receber `403`, antes de qualquer outra conferência e sem gravar nada.
+As quatro rotas administrativas (`POST /users/invitations`, `POST /users/{id}/invitation/renew`, `POST /users/{id}/invitation/cancel` e `POST /users/{id}/password-reset`) SHALL atender todo usuário real do `sub` do access token do emissor, existente e ativo, sem papéis (M1). Token de operador cujo `sub` não é usuário (cliente `buteco-painel`, subject `operator`, `sub` que não é id de usuário) e usuário desativado com access token ainda válido SHALL receber `403`, antes de qualquer outra conferência e sem gravar nada.
 
-#### Scenario: HMAC de operador nas rotas do link
-- **WHEN** um token HMAC `operator` válido chama cada uma das quatro rotas
+#### Scenario: Operador sem usuário nas rotas do link
+- **WHEN** um access token do `buteco-painel` cujo `sub` não é id de usuário chama cada uma das quatro rotas
 - **THEN** todas respondem `403`, e nenhum usuário, link ou bloqueio é gravado
 
 ### Requirement: Consultar e aceitar o convite

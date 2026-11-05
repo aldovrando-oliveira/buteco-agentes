@@ -56,7 +56,7 @@ public class ServiceClientConfigurationTests
 
     private static WebApplicationFactory<Program> RealApplication(string secret) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.UseIssuer().ConfigureAppConfiguration((_, config) => config
+            builder.UseIssuer(TestIssuer.Issuer).ConfigureAppConfiguration((_, config) => config
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Inbox:CredentialEncryptionKey"] = CredentialEncryptionKey,

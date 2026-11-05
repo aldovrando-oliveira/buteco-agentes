@@ -16,18 +16,21 @@ public class IssuerKeysLifecycleTests
 {
     private const string OperatorRoute = "/connectors/providers";
 
+    // Sem chaves obtidas, quem traz token recebe 503, e quem não traz recebe o 401 padrão,
+    // com o desafio Bearer (change remover-hmac-token-servico, D3).
     [Fact]
-    public async Task BootsWithTheIssuerUnreachable_HmacWorks_AndIssuerTokenIsUnavailable()
+    public async Task WithoutToken_BeforeTheKeys_Is401_WithTheBearerChallenge()
     {
         var issuer = new TestIssuer { Availability = IssuerAvailability.Unreachable };
         await using var factory = new ConnectorsFactory(issuer: issuer);
 
         var health = await factory.CreateClientWithToken(null).GetAsync("/health");
-        var hmac = await factory.CreateClientWithToken(TestAuthentication.IssueToken(factory.Services, "operator")).GetAsync(OperatorRoute);
+        var withoutToken = await factory.CreateClientWithToken(null).GetAsync(OperatorRoute);
         var issued = await factory.CreateClientWithToken(issuer.Issue()).GetAsync(OperatorRoute);
 
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, hmac.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, withoutToken.StatusCode);
+        Assert.Equal("Bearer", Assert.Single(withoutToken.Headers.WwwAuthenticate).Scheme);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, issued.StatusCode);
         Assert.Equal("10", issued.Headers.GetValues("Retry-After").Single());
     }

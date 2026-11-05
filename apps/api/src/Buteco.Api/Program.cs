@@ -48,7 +48,6 @@ builder.Services.AddMediator(options => options.ServiceLifetime = ServiceLifetim
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
 builder.Services.Configure<McpCryptoOptions>(builder.Configuration.GetSection(McpCryptoOptions.SectionName));
 builder.Services.Configure<PublicUrlOptions>(builder.Configuration.GetSection(PublicUrlOptions.SectionName));
-builder.Services.Configure<TokenSigningOptions>(builder.Configuration.GetSection(TokenSigningOptions.SectionName));
 
 // Configuração da agregação de métricas. O fuso NÃO vem da seção: vem de TZ, a
 // mesma variável entregue a apps/workers com :? no compose (design.md, D1). É o
@@ -71,7 +70,6 @@ builder.Services.Configure<MetricsOptions>(options =>
 // NÃO converte o DateTimeOffset.UtcNow que já existe nas entidades: é trabalho
 // de outra change, e misturá-lo aqui tornaria este diff ilegível.
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ITaskJobPublisher, RabbitMqTaskJobPublisher>();
 builder.Services.AddSingleton<IKnowledgeIndexingJobPublisher, RabbitMqKnowledgeIndexingJobPublisher>();
@@ -129,11 +127,9 @@ builder.Services.AddSingleton<AgentA2AServerRegistry>();
 builder.Services.AddSingleton<IAgentA2AServerRegistry>(sp => sp.GetRequiredService<AgentA2AServerRegistry>());
 builder.Services.AddSingleton<RoutingA2ARequestHandler>();
 
-// Autenticação das rotas: o token HMAC de operador e de serviço, validado pela mesma
-// assinatura via ITokenService, e o access token do próprio emissor, validado pelas
-// chaves do anel. Um esquema de política escolhe pela forma do token, e um token recusado
-// por um esquema não é tentado no outro (design.md da change usuarios-locais-login-emissor,
-// D3.3).
+// Autenticação das rotas: o access token do próprio emissor, validado pelas chaves do anel
+// (design.md da change usuarios-locais-login-emissor, D3.3), num esquema só
+// (remover-hmac-token-servico, D1).
 builder.Services.AddIssuerTokenAuthentication();
 builder.Services.AddSingleton<IAuthorizationHandler, ServiceScopeAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>

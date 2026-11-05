@@ -3,13 +3,13 @@
 ## Purpose
 
 Diz como o `apps/inbox` e o `apps/connectors` aceitam o access token do emissor OIDC do
-`apps/api`, ao lado do token HMAC: escolha do esquema pela forma do token, validação de
+`apps/api`, o único token que eles aceitam desde a #182: validação de
 assinatura, `typ`, `iss`, `aud` e `exp`, origem e ciclo de vida das chaves pelo endereço
 interno, mapeamento do cliente para o subject e checagens de boot. Criada pela change
 `validacao-jwks-inbox-connectors` (#208).
 ## Requirements
 ### Requirement: apps/inbox e apps/connectors aceitam o access token do emissor com a própria aud
-Com `Identity:Issuer` configurado, o `apps/inbox` e o `apps/connectors` SHALL aceitar, nas rotas autenticadas, um access token JWT do emissor do `apps/api` que satisfaça todas as condições:
+O `apps/inbox` e o `apps/connectors` SHALL aceitar, nas rotas autenticadas, só o access token JWT do emissor do `apps/api`, e só o que satisfaça todas as condições:
 
 - assinatura RS256 verificável por uma chave do JWKS do emissor, escolhida pelo `kid` do cabeçalho;
 - cabeçalho com `typ` `at+jwt`;
@@ -17,7 +17,7 @@ Com `Identity:Issuer` configurado, o `apps/inbox` e o `apps/connectors` SHALL ac
 - `aud` contendo a audience do app: `buteco-inbox` no `apps/inbox`, `buteco-connectors` no `apps/connectors`;
 - `exp` presente e não vencido, com tolerância de relógio de no máximo 30 segundos.
 
-Token que falhe qualquer condição SHALL receber `401 Unauthorized`, inclusive o que traga só a audience de outro app.
+Token que falhe qualquer condição SHALL receber `401 Unauthorized`, inclusive o que traga só a audience de outro app e o que não seja um JWS compacto. O `401` SHALL trazer o cabeçalho `WWW-Authenticate: Bearer`.
 
 #### Scenario: Token do painel aceito no apps/inbox
 - **WHEN** um token do emissor com `aud` `buteco-inbox` e `client_id` `buteco-painel` chama `GET /channels` no `apps/inbox`
@@ -43,24 +43,17 @@ Token que falhe qualquer condição SHALL receber `401 Unauthorized`, inclusive 
 - **WHEN** um token do emissor com `exp` mais de 30 segundos no passado chama uma rota autenticada
 - **THEN** a resposta é `401 Unauthorized`
 
-#### Scenario: Algoritmo ou tipo diferentes são recusados
-- **WHEN** um token com `alg` diferente de `RS256`, inclusive `HS256` assinado com a `Auth:TokenSigningKey` e `none`, ou com `typ` diferente de `at+jwt`, chama uma rota autenticada
+#### Scenario: Algoritmo diferente de RS256 é recusado, mesmo com a chave publicada
+- **WHEN** um token assinado com `RS512` pela chave RSA publicada no JWKS, com todas as outras condições satisfeitas, chama uma rota autenticada
 - **THEN** a resposta é `401 Unauthorized`
 
-### Requirement: O esquema é escolhido pela forma do token, e um formato nunca cai no outro
-Cada requisição com `Authorization: Bearer` SHALL ser autenticada por exatamente um esquema, escolhido antes de qualquer validação: token com exatamente três segmentos separados por ponto pelo esquema do emissor; qualquer outro, e a requisição sem token, pelo esquema HMAC. O esquema HMAC SHALL continuar aceitando e recusando tokens exatamente como antes desta capability. Um token recusado por um esquema SHALL NOT ser tentado no outro.
+#### Scenario: Token sem assinatura ou de outro tipo é recusado
+- **WHEN** um token com `alg` `none`, ou com `typ` diferente de `at+jwt`, chama uma rota autenticada
+- **THEN** a resposta é `401 Unauthorized`
 
-#### Scenario: Token HMAC do operador continua aceito
-- **WHEN** o operador faz login no `apps/api` e chama `GET /channels` no `apps/inbox` e `GET /connectors/providers` no `apps/connectors` com o token HMAC
-- **THEN** as duas respostas são `200 OK`
-
-#### Scenario: Token HMAC não toca nas chaves do emissor
-- **WHEN** tokens HMAC, válidos e inválidos, chamam rotas autenticadas de um app cujo emissor nunca respondeu
-- **THEN** as respostas são as de antes (`200` ou `401`) e nenhuma requisição foi feita ao discovery nem ao JWKS
-
-#### Scenario: JWT inválido não passa pelo HMAC
-- **WHEN** um token de três segmentos com assinatura inválida chama uma rota autenticada
-- **THEN** a resposta é `401 Unauthorized` e o validador HMAC não foi chamado
+#### Scenario: Token no formato de dois segmentos é recusado
+- **WHEN** um token `payload.assinatura`, com um ponto só, assinado com a chave simétrica que os apps usavam antes, chama `GET /channels` no `apps/inbox` e `GET /connectors/providers` no `apps/connectors`
+- **THEN** as duas respostas são `401 Unauthorized`, com `WWW-Authenticate: Bearer`
 
 ### Requirement: O principal do emissor é mapeado pelo cliente, nunca pelo sub
 O subject usado pela autorização de um token do emissor SHALL vir de uma tabela fechada `client_id` → subject de cada app:
@@ -68,7 +61,7 @@ O subject usado pela autorização de um token do emissor SHALL vir de uma tabel
 - no `apps/inbox`, a entrada `buteco-painel` → `operator`;
 - no `apps/connectors`, as entradas `buteco-painel` → `operator` e `buteco-servico-api` → `service:api`.
 
-O `sub` do token SHALL NOT ser usado como subject. Token do emissor válido cujo `client_id` esteja ausente ou fora da tabela SHALL receber `403 Forbidden` em toda rota autenticada. O subject mapeado SHALL seguir as mesmas regras de rota que o subject tem com o token HMAC.
+O `sub` do token SHALL NOT ser usado como subject. Token do emissor válido cujo `client_id` esteja ausente ou fora da tabela SHALL receber `403 Forbidden` em toda rota autenticada. O subject mapeado SHALL seguir as regras de rota da tabela de subjects do app.
 
 #### Scenario: Cliente fora da tabela é recusado
 - **WHEN** um token do emissor válido, com a `aud` do app e `client_id` `cliente-desconhecido`, chama uma rota autenticada
@@ -84,7 +77,7 @@ O `sub` do token SHALL NOT ser usado como subject. Token do emissor válido cujo
 
 #### Scenario: Subject mapeado segue a tabela de rotas do apps/connectors
 - **WHEN** um token do emissor com `aud` `buteco-connectors` e `client_id` `buteco-painel` chama `GET /connectors/providers/google-drive/folder?id=x`
-- **THEN** a resposta é `403 Forbidden`, como para o token HMAC `operator`
+- **THEN** a resposta é `403 Forbidden`, porque o `operator` não tem a rota de descrever pasta
 
 #### Scenario: Cliente de serviço do apps/api só na rota de descrever pasta
 - **WHEN** um token do emissor com `aud` `buteco-connectors` e `client_id` `buteco-servico-api` chama `GET /connectors/providers/google-drive/folder?id=x` e `GET /connectors/providers`
@@ -108,13 +101,17 @@ As chaves do emissor SHALL ser obtidas pelo endereço interno `Api:BaseUrl`, len
 ### Requirement: O app sobe e atende sem o apps/api, e as chaves têm ciclo de vida definido
 O `apps/inbox` e o `apps/connectors` SHALL subir sem nenhuma chamada ao `apps/api` no boot. Depois do start, SHALL tentar obter as chaves em segundo plano, repetindo a cada 10 segundos até obter, e depois SHALL renová-las de modo que, com o `apps/api` respondendo, as chaves usadas nunca tenham mais de cerca de 1h15 de idade. Entre duas buscas que falharam SHALL haver pelo menos 10 segundos, inclusive as disparadas por requisição.
 
-Enquanto nenhuma chave tiver sido obtida, um token do emissor SHALL receber `503 Service Unavailable` com `Retry-After`. Depois de obtidas, uma falha de renovação SHALL manter as chaves anteriores em uso.
+Enquanto nenhuma chave tiver sido obtida, uma requisição que traga o cabeçalho `Authorization` numa rota autenticada SHALL receber `503 Service Unavailable` com `Retry-After`. A requisição sem o cabeçalho `Authorization` SHALL receber `401 Unauthorized` com `WWW-Authenticate: Bearer`, com ou sem chaves obtidas. Depois de obtidas, uma falha de renovação SHALL manter as chaves anteriores em uso.
 
 Um token cujo `kid` não esteja nas chaves em cache SHALL receber `401` e SHALL disparar uma nova busca, limitada a no máximo uma por minuto por instância; se a busca trouxer a chave, os tokens seguintes com aquele `kid` SHALL ser aceitos sem reinício.
 
 #### Scenario: Sobe com o apps/api fora do ar
 - **WHEN** o app sobe com o discovery e o JWKS inalcançáveis
-- **THEN** `GET /health` responde `200 OK`, o token HMAC do operador recebe `200 OK` numa rota autenticada, e um token do emissor recebe `503` com `Retry-After`
+- **THEN** `GET /health` responde `200 OK`, e um token do emissor numa rota autenticada recebe `503` com `Retry-After`
+
+#### Scenario: Sem token antes das chaves
+- **WHEN** o app sobe com o discovery e o JWKS inalcançáveis, e uma requisição sem `Authorization` chama uma rota autenticada
+- **THEN** a resposta é `401 Unauthorized` com `WWW-Authenticate: Bearer`, e não `503`
 
 #### Scenario: Recupera sem reiniciar quando o apps/api volta
 - **WHEN** o emissor passa a responder depois do start, no mesmo processo
@@ -141,16 +138,17 @@ Um token cujo `kid` não esteja nas chaves em cache SHALL receber `401` e SHALL 
 - **THEN** os tokens das duas chaves são aceitos enquanto as duas estão publicadas, e o token da anterior recebe `401` depois de ela sair
 
 ### Requirement: Configuração do emissor conferida no boot
-Com `Identity:Issuer` ausente ou vazio, o app SHALL subir com a validação do token do emissor desligada, todo token SHALL ser autenticado pelo esquema HMAC, e o boot SHALL registrar um aviso que cite `Identity:Issuer`. Com `Identity:Issuer` presente, o boot SHALL falhar com mensagem que cite a configuração quando:
+O boot do `apps/inbox` e do `apps/connectors` SHALL falhar, com mensagem que cite a configuração, quando:
 
+- `Identity:Issuer` estiver ausente ou vazio;
 - `Identity:Issuer` não for uma url absoluta `http` ou `https` sem query nem fragmento;
 - `Api:BaseUrl` estiver ausente ou vazio.
 
-O boot SHALL falhar também quando um subject de destino da tabela de clientes não existir na tabela de subjects do app. As checagens SHALL rodar sobre o host construído, sem chamada de rede.
+O boot SHALL falhar também quando um subject de destino da tabela de clientes não existir na tabela de subjects do app. As checagens SHALL rodar sobre o host construído, sem chamada de rede, e SHALL NOT ecoar o valor do `Api:BaseUrl`.
 
-#### Scenario: Sem Identity:Issuer a validação fica desligada
-- **WHEN** o app sobe sem `Identity:Issuer` e recebe um token do emissor válido e um token HMAC do operador
-- **THEN** o token do emissor recebe `401`, o HMAC recebe `200 OK`, e o log de boot contém o aviso citando `Identity:Issuer`
+#### Scenario: Sem Identity:Issuer o boot falha
+- **WHEN** o app sobe sem `Identity:Issuer`
+- **THEN** o boot falha com uma mensagem que cita `Identity:Issuer`
 
 #### Scenario: Issuer sem esquema derruba o boot
 - **WHEN** o app sobe com `Identity:Issuer` igual a `issuer.exemplo.test`

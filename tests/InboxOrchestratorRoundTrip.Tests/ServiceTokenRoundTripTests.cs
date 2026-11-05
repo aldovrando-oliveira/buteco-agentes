@@ -110,8 +110,7 @@ public class ServiceTokenRoundTripTests(RoundTripFixture fixture) : IClassFixtur
         Assert.Contains(logs, entry => entry.Level == LogLevel.Error && entry.Message.Contains("invalid_client", StringComparison.Ordinal));
         Assert.DoesNotContain(logs, entry => entry.Message.Contains("rejeitado no nível de protocolo", StringComparison.Ordinal));
 
-        // Nenhuma chamada passou do pedido de token: nada chegou às rotas do apps/api, e
-        // nenhuma levou HMAC.
+        // Nenhuma chamada passou do pedido de token: nada chegou às rotas do apps/api.
         var all = calls.ToList();
         Assert.NotEmpty(all);
         Assert.All(all, call =>

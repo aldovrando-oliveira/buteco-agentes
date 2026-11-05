@@ -6,8 +6,8 @@ namespace Buteco.Api.Users.Management;
 
 /// <summary>
 /// Usuários, sob <c>/users</c> (design.md da change rotas-conta-usuarios, D1 e D5 a D8). Na M1,
-/// sem papéis, todo usuário real chama todas (<see cref="CurrentUser"/>), e o HMAC de operador
-/// recebe <c>403</c>. A #184 as restringe ao Admin. A redefinição das 2 etapas, no mesmo
+/// sem papéis, todo usuário real chama todas (<see cref="CurrentUser"/>), e o token de operador
+/// cujo <c>sub</c> não é usuário recebe <c>403</c>. A #184 as restringe ao Admin. A redefinição das 2 etapas, no mesmo
 /// prefixo, é da <c>UserTwoFactorResetEndpoint</c>.
 ///
 /// <list type="bullet">

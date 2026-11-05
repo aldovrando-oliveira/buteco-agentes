@@ -13,8 +13,10 @@ namespace Buteco.Connectors.Auth;
 /// Checagens de boot da validação do token do emissor (change
 /// validacao-jwks-inbox-connectors, D7; convenção 8). Chamadas do <c>Program.cs</c>
 /// sobre o host construído, sem chamada de rede, ao lado de
-/// <c>ValidateApiConfiguration</c>. Aqui o <c>Api:BaseUrl</c> é opcional (o ciclo de
-/// sincronização só liga com ele), então o issuer ligado sem ele derruba o boot.
+/// <c>ValidateApiConfiguration</c>. É esta checagem que torna o <c>Api:BaseUrl</c>
+/// obrigatório no <c>apps/connectors</c>: as chaves do emissor vêm por ele
+/// (remover-hmac-token-servico, D2). Os ramos do ciclo de sincronização que ainda tratam a
+/// ausência ficaram inalcançáveis, e saem na #241.
 /// <para>
 /// <b>O registro no <c>Program.cs</c> é provado por teste:</b>
 /// <c>IssuerTokenStartupValidationTests.InvalidIssuer_FailsTheRealApplicationStartup</c>
@@ -30,20 +32,20 @@ public static class IssuerTokenStartupValidation
             .GetRequiredService<ILoggerFactory>()
             .CreateLogger(typeof(IssuerTokenStartupValidation).FullName!);
 
+        // Sem o issuer o app não tem como autenticar requisição nenhuma
+        // (remover-hmac-token-servico, D2).
         if (!options.Enabled)
         {
-            logger.LogWarning(
-                "Validação do token do emissor desligada: Identity:Issuer não configurado. "
-              + "Só o token HMAC (Auth:TokenSigningKey) é aceito.");
-            return;
+            throw new InvalidOperationException(
+                "Identity:Issuer não configurado: é o issuer público do emissor do apps/api, o mesmo valor de PublicUrl:BaseUrl lá. "
+              + "Sem ele, este app não tem como autenticar requisição nenhuma.");
         }
 
         if (!IsAbsoluteHttpUrl(options.Issuer!.Trim()))
         {
             throw new InvalidOperationException(
                 $"Identity:Issuer está configurado como '{options.Issuer}', e precisa ser uma url absoluta http ou https, "
-              + "sem query nem fragmento: é o issuer público do emissor do apps/api, o mesmo valor de PublicUrl:BaseUrl lá. "
-              + "Para desligar a validação do token do emissor, deixe Identity:Issuer vazio.");
+              + "sem query nem fragmento: é o issuer público do emissor do apps/api, o mesmo valor de PublicUrl:BaseUrl lá.");
         }
 
         var apiBaseUrl = host.Services.GetRequiredService<IOptions<ApiOptions>>().Value.BaseUrl;
@@ -54,7 +56,7 @@ public static class IssuerTokenStartupValidation
             throw new InvalidOperationException(
                 "Identity:Issuer está configurado, e Api:BaseUrl está ausente ou não é uma url absoluta http ou https: "
               + "é pelo endereço interno do apps/api que as chaves do emissor são obtidas. "
-              + "Configure Api:BaseUrl, ou deixe Identity:Issuer vazio para desligar a validação do token do emissor.");
+              + "Configure Api:BaseUrl.");
         }
 
         logger.LogInformation(
@@ -67,7 +69,8 @@ public static class IssuerTokenStartupValidation
         ValidateIssuerClientSubjects(IssuerClientSubjects.Table, [.. ConnectorsSubjectAuthorizationHandler.SubjectRoutes.Keys]);
 
     // Pura: todo subject de destino da tabela de clientes existe na tabela de subjects
-    // do app. O sentido inverso não vale: o HMAC tem subjects que nenhum cliente usa.
+    // do app. O sentido inverso não vale: a tabela de subjects pode ter subject que
+    // nenhum cliente usa.
     public static void ValidateIssuerClientSubjects(
         IReadOnlyDictionary<string, string> clientSubjects, IReadOnlyCollection<string> knownSubjects)
     {
