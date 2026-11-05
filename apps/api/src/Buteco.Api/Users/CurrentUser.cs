@@ -8,9 +8,9 @@ namespace Buteco.Api.Users;
 /// Quem chama uma rota que age sobre "a própria pessoa" (design.md da change
 /// verificacao-2-etapas-totp, D8 e D9): o usuário do <c>sub</c> do access token do emissor,
 /// existente e ativo. O principal das rotas guarda o <c>sub</c> ao lado do subject da tabela de
-/// clientes (<see cref="IssuerTokenAuthentication"/>); o HMAC <c>operator</c> não tem
-/// <c>sub</c>, e o access token de um usuário desativado vale até 15 min. Nos dois casos não
-/// há pessoa a atender, e a rota responde <c>403</c>.
+/// clientes (<see cref="IssuerTokenAuthentication"/>). Um token de operador cujo <c>sub</c> não
+/// é usuário não diz quem é a pessoa, e o access token de um usuário desativado vale até
+/// 15 min. Nos dois casos não há pessoa a atender, e a rota responde <c>403</c>.
 /// </summary>
 public static class CurrentUser
 {

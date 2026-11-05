@@ -39,7 +39,6 @@ aparece longe da causa.
 
 | Segredo | Processos | O que quebra se divergir |
 |---|---|---|
-| `Auth:TokenSigningKey` | `apps/api` + `apps/inbox` + `apps/connectors` | O token HMAC de um app é rejeitado pelos outros. Desde a #235 nenhum serviço assina HMAC: a chave só valida o que ainda chega, e sai na #182 |
 | `ServiceClient:Secret` do `apps/inbox` e `Identity:ServiceClients:Inbox:Secret` do `apps/api` | `apps/inbox` + `apps/api` | O `/connect/token` responde `invalid_client`, e o inbox loga `Error` com o `client_id`. A validação de agente no cadastro de canal responde `502`, e o despacho de mensagens falha como com o `apps/api` fora do ar, tentativa a tentativa (#235) |
 | `ServiceClient:Secret` do `apps/connectors` e `Identity:ServiceClients:Connectors:Secret` do `apps/api` | `apps/connectors` + `apps/api` | O mesmo `invalid_client`, e o ciclo de sincronização e o "Sincronizar agora" falham como com o `apps/api` fora do ar (`503`) (#235) |
 | `Mcp:CredentialEncryptionKey` | `apps/api` + `apps/workers` | `apps/api` cifra a credencial do servidor MCP ao salvar; `apps/workers` não consegue decifrá-la para conectar durante uma execução |
@@ -48,7 +47,9 @@ aparece longe da causa.
 Fora da tabela, porque não é segredo: `Identity:Issuer` do `apps/inbox` e do
 `apps/connectors` precisa ser o `PublicUrl:BaseUrl` do `apps/api` (a barra final
 não importa). Divergente, nenhuma chave do emissor é obtida, o log de erro traz os
-dois valores, e todo token do emissor recebe `503`; o HMAC não muda.
+dois valores, e todo token do emissor recebe `503`. Desde a #182, nenhum segredo
+de assinatura de token é compartilhado: só o `apps/api` assina, e os outros apps
+leem as chaves públicas do JWKS.
 
 `Inbox:CredentialEncryptionKey` é a exceção deliberada: é **própria** de
 `apps/inbox` e nunca deve ter o mesmo valor de `Mcp:CredentialEncryptionKey`
@@ -72,8 +73,8 @@ Ausentes, estes valores **derrubam o processo no boot** (fail-fast):
 
 | Variável | Processo |
 |---|---|
-| `Auth__TokenSigningKey` | `apps/api`, `apps/inbox`, `apps/connectors` |
-| `Api__BaseUrl` | `apps/inbox` |
+| `Identity__Issuer` | `apps/inbox`, `apps/connectors` (#182) |
+| `Api__BaseUrl` | `apps/inbox`, `apps/connectors` (#182) |
 | `TZ` | `apps/workers` |
 | `VITE_API_BASE_URL` | `apps/frontend` (build) |
 | `VITE_INBOX_BASE_URL` | `apps/frontend` (build) |
@@ -121,7 +122,6 @@ restrito, a extensão precisa ser criada antes, por fora da migração.
 |---|---|---|
 | `ConnectionStrings__Postgres` | sim | Banco compartilhado com `apps/workers` (`buteco_agents`) |
 | `RabbitMq__Host` / `__Port` / `__Username` / `__Password` | sim | Broker para publicar jobs de task |
-| `Auth__TokenSigningKey` | **fail-fast** | Chave HMAC de assinatura de token. Mesmo valor de `apps/inbox` |
 | `Auth__OperatorPasswordHash` | não (desde a #217) | Hash inicial do primeiro Admin, lido só pelo bootstrap: `{iterations}.{saltBase64}.{hashBase64}`, PBKDF2-HMAC-SHA256, gerado offline — ver [development.md](development.md#autenticação-em-desenvolvimento). Depois do primeiro login do Admin, pode sair, junto com o `Auth__BootstrapAdminEmail` ([deployment.md](deployment.md#primeiro-admin)). Nome e formato em revisão na #225 |
 | `Auth__BootstrapAdminEmail` | não | E-mail do primeiro Admin (#180). Sem nenhum usuário, o bootstrap cria um usuário ativo com este e-mail e o hash de `Auth__OperatorPasswordHash`, marcado como legado; o primeiro login refaz em Argon2id. Com usuários, é ignorado, com log, e nunca sobrescreve senha nem e-mail. Vazio e sem usuário, o boot avisa no log. Ver [deployment.md](deployment.md#primeiro-admin) |
 | `Mcp__CredentialEncryptionKey` | sim | AES-256 (32 bytes) em base64. Mesmo valor de `apps/workers`. Gerar com `openssl rand -base64 32` |
@@ -144,8 +144,8 @@ restrito, a extensão precisa ser criada antes, por fora da migração.
 | URI absoluta `http` ou `https` | sobe | valida a pasta no `apps/connectors` | sem mudança |
 | presente e inválido | **falha**, nomeando a chave sem mostrar o valor | — | — |
 
-O `apps/api` assina o token `service:api` dessa chamada com a mesma
-`Auth__TokenSigningKey` dos outros apps; não há segredo novo.
+O `apps/api` gera no processo o token do cliente `buteco-servico-api` para essa
+chamada, com as chaves do próprio emissor (#235); não há segredo novo.
 
 `apps/api` **nunca chama o LLM** — apenas verifica a presença das chaves para
 montar a lista de provedores disponíveis.
@@ -242,9 +242,8 @@ runtime.
 | `Inbox__CredentialEncryptionKey` | sim | AES-256 (32 bytes) em base64, para credenciais de canal. **Nunca** a mesma de `Mcp__CredentialEncryptionKey` |
 | `Api__BaseUrl` | **fail-fast** | Onde `apps/api` escuta. Usada para validar `AgentId` (`GET /agents/{id}`) e como cliente A2A (`POST /agents/{id}/a2a`) |
 | `PublicUrl__BaseUrl` | sim | URL pela qual este processo é alcançável a partir de `apps/api` e `apps/workers`. Vai no `pushNotificationConfig.url` de cada `SendMessage` — sem o valor correto, o round-trip nunca completa |
-| `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api`. Só valida o token HMAC que ainda chega; desde a #235 o inbox não assina nada |
 | `ServiceClient__Secret` | **fail-fast** | Segredo do cliente `buteco-servico-inbox` no emissor do `apps/api`: o mesmo valor de `Identity__ServiceClients__Inbox__Secret` lá. Com ele o inbox pede o token de serviço em `{Api__BaseUrl}/connect/token`, com cache até 1 min antes de vencer. Base64 com pelo menos 32 bytes, e **distinto** de `Inbox__CredentialEncryptionKey`: igual, o boot falha nomeando as duas chaves, sem o valor (#235). O `appsettings.Development.json` traz o valor de desenvolvimento |
-| `Identity__Issuer` | não | Issuer do emissor OIDC do `apps/api`: o mesmo valor do `PublicUrl__BaseUrl` de lá. Liga a validação do access token do emissor (audience `buteco-inbox`), ao lado do HMAC. Ver "Validação do token do emissor", abaixo |
+| `Identity__Issuer` | **fail-fast** (#182) | Issuer do emissor OIDC do `apps/api`: o mesmo valor do `PublicUrl__BaseUrl` de lá. É o que o inbox aceita como token (audience `buteco-inbox`); sem ele o app não sobe. Ver "Validação do token do emissor", abaixo |
 | `Debounce__Window` | não | Janela de agrupamento de mensagens da mesma sessão. Default `00:00:10` |
 | `Debounce__SweepInterval` | não | Cadência de varredura do `BackgroundService` que dispara buffers vencidos. Default `00:00:02` |
 | `Debounce__MaxDispatchAttempts` | não | Teto de retentativas em falha de transporte. Default `3` |
@@ -264,20 +263,23 @@ servidor ainda não existe (#119).
 
 | Variável | Obrigatória | Descrição |
 |---|---|---|
-| `Auth__TokenSigningKey` | **fail-fast** | Mesmo valor de `apps/api` e `apps/inbox`. Ausente ou vazia, o boot falha. Só valida o token HMAC que ainda chega; desde a #235 o connectors não assina nada |
-| `ServiceClient__Secret` | com `Api__BaseUrl` | Segredo do cliente `buteco-servico-connectors` no emissor do `apps/api`: o mesmo valor de `Identity__ServiceClients__Connectors__Secret` lá. Com `Api__BaseUrl`, é obrigatório (base64, pelo menos 32 bytes, sem ecoar o valor); sem `Api__BaseUrl`, não é lido (#235). O `appsettings.Development.json` traz o valor de desenvolvimento |
+| `ServiceClient__Secret` | **fail-fast** | Segredo do cliente `buteco-servico-connectors` no emissor do `apps/api`: o mesmo valor de `Identity__ServiceClients__Connectors__Secret` lá. Base64, pelo menos 32 bytes, sem ecoar o valor (#235). Obrigatório porque o `Api__BaseUrl` é (#182). O `appsettings.Development.json` traz o valor de desenvolvimento |
 | `GoogleDrive__ServiceAccountKeyBase64` | não | O arquivo JSON da chave da service account do Google, em base64 numa linha (`base64 -i chave.json \| tr -d '\n'`). **Ausente ou vazia, o provedor `google-drive` não existe** para o processo: o app sobe e `GET /connectors/providers` não o lista. **Presente e inválida, o boot falha**, com a verificação que falhou e sem trecho do valor. Só o `client_email` sai do processo, na rota de provedores |
 | `Cors__AllowedOrigins` | não | Origens do painel autorizadas por CORS, no mesmo formato dos outros apps |
-| `Api__BaseUrl` | não | Endereço do `apps/api`, usado pelo ciclo de sincronização e, com `Identity__Issuer`, para obter as chaves do emissor. Em desenvolvimento, `http://localhost:5017`. Ver abaixo |
-| `Identity__Issuer` | não | Issuer do emissor OIDC do `apps/api`, como no `apps/inbox` (audience `buteco-connectors`). **Com ele, `Api__BaseUrl` passa a ser obrigatório**: sem endereço interno não há de onde ler as chaves, e o boot falha nomeando as duas chaves. Ver "Validação do token do emissor", abaixo |
+| `Api__BaseUrl` | **fail-fast** (#182) | Endereço do `apps/api`, usado pelo ciclo de sincronização e para obter as chaves do emissor. Em desenvolvimento, `http://localhost:5017`. Ver abaixo |
+| `Identity__Issuer` | **fail-fast** (#182) | Issuer do emissor OIDC do `apps/api`, como no `apps/inbox` (audience `buteco-connectors`). Sem ele o app não sobe; com ele e sem `Api__BaseUrl`, o boot falha nomeando as duas chaves, porque não há de onde ler as chaves do emissor. Ver "Validação do token do emissor", abaixo |
 
-`Api__BaseUrl` tem três estados, e só um deles derruba o processo:
+`Api__BaseUrl`:
 
 | valor | boot | ciclo periódico | "Sincronizar agora" |
 |---|---|---|---|
-| ausente ou vazio | sobe, com um aviso no log | não roda | `503` com o código `sync-not-configured`, sem chamada de rede |
+| ausente ou vazio | **falha**, pela checagem do `Identity__Issuer`, nomeando as duas chaves (#182) | — | — |
 | URI absoluta `http` ou `https` | sobe | roda a cada 5 minutos | `202` |
 | outro valor | **falha**, nomeando a chave e sem ecoar o valor | — | — |
+
+*(Até a #182 o `Api__BaseUrl` era opcional: ausente, o app subia com aviso, o ciclo
+não rodava e o "Sincronizar agora" respondia `503 sync-not-configured`. Esse
+tratamento ficou no código, inalcançável, e sai na #241.)*
 
 A navegação e a descrição de pasta não dependem dele. O ciclo chama o `apps/api` como
 `service:connectors` com o token do cliente `buteco-servico-connectors`, obtido no emissor
@@ -291,15 +293,13 @@ chamada responde `502` com o código `api-not-configured`.
 
 ## Validação do token do emissor (`apps/inbox` e `apps/connectors`)
 
-`Identity__Issuer` liga, nos dois apps, a aceitação do access token do emissor
-OIDC do `apps/api` (#208), ao lado do HMAC, que não muda. A forma do token
-decide o esquema: JWS compacto vai à validação do emissor, qualquer outra coisa
-ao HMAC.
+`Identity__Issuer` é, nos dois apps, o emissor cujo access token eles aceitam
+(#208), e o único token aceito desde a #182.
 
-| valor | boot | token do emissor | HMAC |
+| valor | boot | requisição com token | requisição sem token |
 |---|---|---|---|
-| ausente ou vazio | sobe, com o aviso "Validação do token do emissor desligada" | `401` | como antes |
-| URI absoluta `http` ou `https`, sem query nem fragmento | sobe, sem nenhuma chamada ao `apps/api`; as chaves vêm em segundo plano | aceito com a `aud` do app; `503` com `Retry-After: 10` até a primeira obtenção das chaves | como antes |
+| ausente ou vazio | **falha**, nomeando `Identity:Issuer` (#182) | — | — |
+| URI absoluta `http` ou `https`, sem query nem fragmento | sobe, sem nenhuma chamada ao `apps/api`; as chaves vêm em segundo plano | aceito com a `aud` do app; `503` com `Retry-After: 10` até a primeira obtenção das chaves | `401` com `WWW-Authenticate: Bearer`, com ou sem chaves |
 | outro valor | **falha**, nomeando `Identity:Issuer` | — | — |
 
 As chaves são lidas de `{Api__BaseUrl}/.well-known/openid-configuration` (só para
@@ -370,7 +370,6 @@ de configuração que o processo enxerga.
 | `SERVICE_CLIENT_SECRET_INBOX` | `Identity__ServiceClients__Inbox__Secret` no `apps/api` e `ServiceClient__Secret` no `apps/inbox`; distinto do outro segredo de serviço, das chaves de cifra do api e de `INBOX_CREDENTIAL_ENCRYPTION_KEY` |
 | `SERVICE_CLIENT_SECRET_CONNECTORS` | `Identity__ServiceClients__Connectors__Secret` no `apps/api` e `ServiceClient__Secret` no `apps/connectors`; distinto do outro segredo de serviço e das chaves de cifra |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` — só `apps/inbox` |
-| `AUTH_TOKEN_SIGNING_KEY` | `Auth__TokenSigningKey` — byte-idêntica entre `apps/api`, `apps/inbox` e `apps/connectors` (risco aceito, ver [deployment.md](deployment.md)) |
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64` | `GoogleDrive__ServiceAccountKeyBase64` de `apps/connectors`. **Opcional**: vazia, o provedor `google-drive` não aparece. Inválida, só o `apps/connectors` não sobe; o painel continua no ar |
 | `AUTH_OPERATOR_PASSWORD_HASH` / `AUTH_BOOTSTRAP_ADMIN_EMAIL` | `Auth__OperatorPasswordHash` / `Auth__BootstrapAdminEmail` de `apps/api`. **Opcionais** (sem `:?`): só o bootstrap do primeiro Admin as lê, e elas podem sair do `.env.prod` depois do primeiro login dele |
 | `STACK_HTTP_PORT` | porta interna do host onde o nginx do stack escuta. Nunca 80 ou 443 diretamente — o proxy externo faz `proxy_pass` para cá |

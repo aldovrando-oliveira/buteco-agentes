@@ -14,7 +14,8 @@ namespace Buteco.Connectors.Tests;
 /// servicos-token-emissor, D4): anexa o token do <see cref="ServiceAccessTokenSource"/>, e no
 /// <c>401</c> descarta o token sem repetir a chamada. Sem contêiner. Reescrito na
 /// servicos-token-emissor: antes, o caso <c>EveryRequest_CarriesAFreshServiceConnectorsToken</c>
-/// afirmava um HMAC novo por requisição (mudança de asserção declarada no design, D6).
+/// afirmava um token novo por requisição, assinado com a chave compartilhada (mudança de
+/// asserção declarada no design, D6).
 /// </summary>
 public class ServiceTokenDelegatingHandlerTests
 {

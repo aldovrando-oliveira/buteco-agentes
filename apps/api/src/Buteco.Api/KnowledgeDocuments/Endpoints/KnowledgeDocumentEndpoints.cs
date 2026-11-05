@@ -283,9 +283,9 @@ public static class KnowledgeDocumentEndpoints
     /// <summary>
     /// O autor de um evento do histórico é o subject do token, gravado como veio
     /// (design.md da change historico-documentos-base, D6). Lido pela MESMA forma
-    /// de <see cref="ServiceScopeAuthorizationHandler"/>, sobre o claim que
-    /// <see cref="OperatorTokenAuthenticationHandler"/> emite — uma forma só de ler
-    /// o subject na base inteira.
+    /// de <see cref="ServiceScopeAuthorizationHandler"/>, sobre o <c>NameIdentifier</c> que
+    /// <see cref="Identity.Validation.IssuerTokenAuthentication"/> tira da tabela de clientes
+    /// — uma forma só de ler o subject na base inteira.
     ///
     /// <para>
     /// O claim sempre existe aqui: a rota cai na <c>FallbackPolicy</c>

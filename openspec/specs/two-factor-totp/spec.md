@@ -85,14 +85,14 @@ Quando o segredo gravado não decifrar com a chave configurada, o código do app
 - **THEN** o login se completa com `204`
 
 ### Requirement: As rotas de 2 etapas atendem só o usuário real do token
-As rotas sob `/account/two-factor` e a rota `POST /users/{id}/two-factor/reset` SHALL identificar quem chama pelo `sub` do access token do emissor, e SHALL exigir que ele seja um usuário existente e ativo. Token HMAC (sem `sub`), `sub` sem usuário e usuário desativado com access token ainda válido SHALL receber `403`, sem efeito nenhum.
+As rotas sob `/account/two-factor` e a rota `POST /users/{id}/two-factor/reset` SHALL identificar quem chama pelo `sub` do access token do emissor, e SHALL exigir que ele seja um usuário existente e ativo. Token de operador cujo `sub` não é usuário (cliente `buteco-painel`, subject `operator`, `sub` que não é id de usuário) e usuário desativado com access token ainda válido SHALL receber `403`, sem efeito nenhum.
 
-#### Scenario: HMAC de operador em Minha conta
-- **WHEN** `GET /account/two-factor` chega com um token HMAC `operator` válido
+#### Scenario: Operador sem usuário em Minha conta
+- **WHEN** `GET /account/two-factor` chega com um access token do `buteco-painel` cujo `sub` não é id de usuário
 - **THEN** a resposta é `403`
 
-#### Scenario: HMAC de operador na redefinição
-- **WHEN** `POST /users/{id}/two-factor/reset` chega com um token HMAC `operator` válido, para um usuário com a verificação ligada
+#### Scenario: Operador sem usuário na redefinição
+- **WHEN** `POST /users/{id}/two-factor/reset` chega com um access token do `buteco-painel` cujo `sub` não é id de usuário, para um usuário com a verificação ligada
 - **THEN** a resposta é `403`, e o usuário continua com a verificação, os códigos e o mesmo `security_stamp`
 
 #### Scenario: Usuário desativado com access token ainda válido

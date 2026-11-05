@@ -512,7 +512,7 @@ public partial class KnowledgeBaseCatalogTests
         Assert.NotNull(authorization);
         Assert.Equal("Bearer", authorization!.Scheme);
         // O token do emissor gerado no processo (servicos-token-emissor, D2; mudança de asserção
-        // declarada no D6: antes, o ITokenService validava um HMAC service:api).
+        // declarada no D6: antes, o token era o antigo, assinado com a chave compartilhada).
         var token = new Microsoft.IdentityModel.JsonWebTokens.JsonWebToken(authorization.Parameter!);
         Assert.Equal("at+jwt", token.Typ);
         Assert.Equal("buteco-servico-api", token.GetPayloadValue<string>("client_id"));

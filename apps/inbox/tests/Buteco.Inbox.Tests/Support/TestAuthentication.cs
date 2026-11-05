@@ -10,12 +10,6 @@ namespace Buteco.Inbox.Tests.Support;
 // Buteco.Api.Tests.Support.TestAuthentication, apps/api).
 public static class TestAuthentication
 {
-    // Mesmo valor literal usado por Buteco.Api.Tests.Support.TestAuthentication
-    // (apps/api) — não compartilhado em código (projetos de teste
-    // separados), mas precisa ser o mesmo texto para os testes cruzados
-    // de tests/InboxOrchestratorRoundTrip.Tests (design.md, Risco 1).
-    public const string TokenSigningKey = "test-signing-key-shared-between-api-and-inbox-fixtures";
-
     // O segredo do apps/inbox no emissor (servicos-token-emissor, D5), obrigatório no boot.
     // Gerado com `openssl rand -base64 32`; distinto do de desenvolvimento e da
     // Inbox:CredentialEncryptionKey das fixtures.
@@ -23,18 +17,15 @@ public static class TestAuthentication
 
     public static Dictionary<string, string?> ConfigOverrides { get; } = new()
     {
-        ["Auth:TokenSigningKey"] = TokenSigningKey,
         ["ServiceClient:Secret"] = ServiceClientSecret,
     };
 
-    // Identity:Issuer das fixtures (validacao-jwks-inbox-connectors, D7). Vazio desliga a
-    // validação do token do emissor: sem isso, o appsettings.Development.json a ligaria
-    // em toda fixture, com busca de chaves em segundo plano. Por UseSetting, e não em
-    // ConfigOverrides: a WebApplicationFactory aplica o ConfigureAppConfiguration só no
-    // Build(), e o AddIssuerTokenAuthentication decide o registro antes dele, lendo a
-    // configuração do builder. Quem testa o emissor liga com o TestIssuer
-    // (IssuerTokenFactory).
-    public static IWebHostBuilder UseIssuer(this IWebHostBuilder builder, string issuer = "") =>
+    // Identity:Issuer das fixtures (validacao-jwks-inbox-connectors, D7). Obrigatório: sem ele
+    // o app não sobe (remover-hmac-token-servico, D2). Sem isso, o appsettings.Development.json
+    // valeria em toda fixture, com busca de chaves em segundo plano contra o localhost. Por
+    // UseSetting, e não em ConfigOverrides: a WebApplicationFactory aplica o
+    // ConfigureAppConfiguration só no Build(). Vazio só nos casos que provam a falha de boot.
+    public static IWebHostBuilder UseIssuer(this IWebHostBuilder builder, string issuer) =>
         builder.UseSetting("Identity:Issuer", issuer);
 
     /// <summary>

@@ -123,7 +123,6 @@ services:
       Identity__ServiceClients__Inbox__Secret: ${SERVICE_CLIENT_SECRET_INBOX:?defina SERVICE_CLIENT_SECRET_INBOX (openssl rand -base64 32, distinto das outras chaves) — use --env-file .env.prod}
       Identity__ServiceClients__Connectors__Secret: ${SERVICE_CLIENT_SECRET_CONNECTORS:?defina SERVICE_CLIENT_SECRET_CONNECTORS (openssl rand -base64 32, distinto das outras chaves) — use --env-file .env.prod}
       PublicUrl__BaseUrl: ${PUBLIC_DOMAIN:?defina PUBLIC_DOMAIN — use --env-file .env.prod}
-      Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY:?defina AUTH_TOKEN_SIGNING_KEY — use --env-file .env.prod}
       # Hash e e-mail do primeiro Admin: o bootstrap cria o usuário com eles quando não
       # há nenhum, e o primeiro login refaz o hash em Argon2id. Sem :?, porque só o
       # primeiro boot precisa deles: depois do primeiro login, tire os dois do
@@ -158,14 +157,14 @@ services:
       # Issuer do emissor OIDC do apps/api: a mesma variável que vira o
       # PublicUrl__BaseUrl de lá, para os dois valores nunca divergirem
       # (validacao-jwks-inbox-connectors, D3). As chaves vêm pelo Api__BaseUrl
-      # acima, nunca pelo domínio público. Vazia, só o token HMAC é aceito.
+      # acima, nunca pelo domínio público. Obrigatória: sem ela o inbox não sobe
+      # (remover-hmac-token-servico, D2). Vazia, o compose já para antes, pelo :?
+      # do PUBLIC_DOMAIN no serviço api.
       Identity__Issuer: ${PUBLIC_DOMAIN}
       # O segredo do cliente buteco-servico-inbox, o mesmo que o api recebe em
       # Identity__ServiceClients__Inbox__Secret: é com ele que o inbox obtém no
       # emissor o token que manda ao api (servicos-token-emissor, D8).
       ServiceClient__Secret: ${SERVICE_CLIENT_SECRET_INBOX:?defina SERVICE_CLIENT_SECRET_INBOX (o mesmo do serviço api) — use --env-file .env.prod}
-      # Só valida o HMAC que ainda chega (#182 remove); o inbox não assina mais nada.
-      Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY}
     # Sem porta publicada — idem apps/api.
 
   workers:
@@ -230,19 +229,16 @@ services:
       api:
         condition: service_healthy
     environment:
-      # Mesma variável de api e inbox (fonte única). Desde a #235 o connectors só
-      # valida o HMAC que ainda chega, e não assina mais nada; a chave sai na #182.
-      Auth__TokenSigningKey: ${AUTH_TOKEN_SIGNING_KEY}
       # OPCIONAL: vazia, o provedor google-drive não existe e
       # GET /connectors/providers responde []. Presente e inválida, o processo
       # não sobe — e por isso o frontend NÃO depende deste serviço.
       GoogleDrive__ServiceAccountKeyBase64: ${GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY_BASE64:-}
-      # Endereço interno do apps/api para o ciclo de sincronização (#105). Fixo;
-      # vazio desligaria o ciclo. É também por ele que as chaves do emissor
-      # são obtidas.
+      # Endereço interno do apps/api para o ciclo de sincronização (#105). Fixo e
+      # obrigatório: é também por ele que as chaves do emissor são obtidas, e sem
+      # ele o connectors não sobe (remover-hmac-token-servico, D2).
       Api__BaseUrl: "http://api:8080"
       # Issuer do emissor OIDC do apps/api, mesma variável e mesmo motivo do
-      # inbox (validacao-jwks-inbox-connectors, D3).
+      # inbox (validacao-jwks-inbox-connectors, D3). Obrigatória, como lá.
       Identity__Issuer: ${PUBLIC_DOMAIN}
       # O segredo do cliente buteco-servico-connectors, o mesmo que o api recebe em
       # Identity__ServiceClients__Connectors__Secret: é com ele que o ciclo obtém no

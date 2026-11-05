@@ -84,14 +84,6 @@ public sealed class RoundTripFixture : IAsyncLifetime
     // intacto até a push notification recebida por apps/inbox.
     public const string MockedAgentReplyText = "Resposta do agente de teste do round-trip.";
 
-    // Mesmo valor literal usado pelas fixtures de apps/api/apps/inbox
-    // (Buteco.Api.Tests.Support.TestAuthentication,
-    // Buteco.Inbox.Tests.Support.TestAuthentication) — os três projetos de
-    // teste são independentes, sem referência cruzada de código, mas
-    // precisam do mesmo texto pra este teste provar o Risco 1 do
-    // design.md: token emitido por apps/api aceito por apps/inbox sem
-    // coordenação em runtime.
-    private const string TokenSigningKey = "test-signing-key-shared-between-api-and-inbox-fixtures";
     public const string OperatorPassword = "correct-horse-battery-staple";
 
     public WebApplicationFactory<ApiProgram> ApiFactory => _apiFactory!;
@@ -218,7 +210,6 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     // olha só a presença da chave (libs/ProviderCatalog/LlmProviders.cs); a chamada
                     // real ao LLM nunca acontece, IChatClientResolver está mockado em apps/workers.
                     ["OpenAI:ApiKey"] = "test-api-key",
-                    ["Auth:TokenSigningKey"] = TokenSigningKey,
                     ["Auth:OperatorPasswordHash"] = ComputeOperatorPasswordHash(),
                     // O primeiro Admin do bootstrap, com o mesmo hash do operador
                     // (usuarios-locais-login-emissor, D2): é quem faz o fluxo real do
@@ -308,7 +299,6 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     // recém-reivindicada como perda antes de o TaskId ser gravado
                     // (medido em 04/10/2026). O D7 tem guardas em apps/inbox.
                     ["DispatchReconciliation:UntrackedDispatchMaxAge"] = "3650.00:00:00",
-                    ["Auth:TokenSigningKey"] = TokenSigningKey,
                     // O segredo do cliente buteco-servico-inbox (servicos-token-emissor, D5).
                     ["ServiceClient:Secret"] = serviceClientSecret,
                 }));
@@ -462,15 +452,6 @@ public sealed class RoundTripFixture : IAsyncLifetime
             ApiPublicBaseUrl,
             OperatorPassword,
             "openid buteco-api");
-
-    // Um HMAC de operador assinado pelo ITokenService do próprio apps/api,
-    // com a chave compartilhada. Nenhuma rota do apps/api emite este token;
-    // ele existe para provar que apps/inbox valida o HMAC só pela chave.
-    public string OperatorHmacToken()
-    {
-        var tokens = ApiFactory.Services.GetRequiredService<ApiAssembly::Buteco.Api.Auth.ITokenService>();
-        return tokens.Issue(ApiAssembly::Buteco.Api.Auth.ServiceScopeAuthorizationHandler.OperatorSubject, TimeSpan.FromMinutes(5)).Token;
-    }
 
     // O access token de usuário do fluxo real com outro escopo, por exemplo o do
     // apps/inbox ("openid buteco-inbox"), para as rotas de canal.

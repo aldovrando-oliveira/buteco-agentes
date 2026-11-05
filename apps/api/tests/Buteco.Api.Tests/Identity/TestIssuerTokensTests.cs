@@ -12,10 +12,10 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace Buteco.Api.Tests.Identity;
 
 /// <summary>
-/// O helper de teste que as fixtures usam no lugar do HMAC (design.md da change
-/// fixtures-token-emissor, D1): o token do painel tem a forma de um token do fluxo real,
-/// passa no catálogo e recebe <c>403</c> nas rotas de <c>CurrentUser</c>, como o HMAC
-/// <c>operator</c> de antes; o de um cliente de serviço fica nas rotas da lista dele.
+/// O helper de teste que as fixtures usam no lugar do token antigo de operador (design.md da
+/// change fixtures-token-emissor, D1): o token do painel tem a forma de um token do fluxo
+/// real, passa no catálogo e recebe <c>403</c> nas rotas de <c>CurrentUser</c>, porque o
+/// <c>sub</c> não é usuário; o de um cliente de serviço fica nas rotas da lista dele.
 /// </summary>
 public class TestIssuerTokensTests(TestIssuerTokensTests.Fixture factory) : IClassFixture<TestIssuerTokensTests.Fixture>
 {

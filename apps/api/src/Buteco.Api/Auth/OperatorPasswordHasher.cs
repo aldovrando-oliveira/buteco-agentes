@@ -5,7 +5,7 @@ namespace Buteco.Api.Auth;
 
 // Verificação via Rfc2898DeriveBytes.Pbkdf2 (BCL), sem pacote novo —
 // mesmo padrão de "criptografia crua do BCL" de AesGcmChannelCredentialCipher
-// (apps/inbox) e do próprio TokenService (design.md, Decision 5). O hash
+// (apps/inbox) (design.md, Decision 5). O hash
 // armazenado em Auth:OperatorPasswordHash é gerado offline, fora deste
 // código: "{iterations}.{saltBase64}.{hashBase64}".
 public static class OperatorPasswordHasher

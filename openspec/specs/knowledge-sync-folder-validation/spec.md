@@ -121,9 +121,9 @@ Toda requisição do `apps/api` ao `apps/connectors` SHALL levar o access token 
 próprio `apps/api` gera no processo, assinado pelo anel de chaves do emissor, com
 `client_id` `buteco-servico-api`, `aud` `buteco-connectors` e validade de 15 minutos,
 reaproveitado até faltar 1 minuto para vencer. A tabela de clientes do
-`apps/connectors` mapeia `buteco-servico-api` para `service:api`. O `apps/api` SHALL
-NOT assinar token HMAC para essa chamada. O subject `service:api` NÃO SHALL ter
-acesso a nenhuma rota do `apps/api`.
+`apps/connectors` mapeia `buteco-servico-api` para `service:api`. O subject
+`service:api` NÃO SHALL ter acesso a nenhuma rota do `apps/api`: nenhum cliente da
+tabela de clientes do `apps/api` produz esse subject.
 
 #### Scenario: Token enviado
 - **WHEN** o `apps/api` chama o `apps/connectors` para validar uma pasta
@@ -137,8 +137,9 @@ acesso a nenhuma rota do `apps/api`.
 - **THEN** as duas levam o mesmo token, gerado uma vez
 
 #### Scenario: service:api não acessa o apps/api
-- **WHEN** um token validamente assinado com `sub` igual a `service:api` chama
-  `GET /knowledge-bases` e `POST /knowledge-bases`
+- **WHEN** um access token do emissor válido, com `aud` `buteco-api` e `client_id`
+  fora da tabela de clientes do `apps/api`, chama `GET /knowledge-bases` e
+  `POST /knowledge-bases`
 - **THEN** as duas respostas são 403
 
 ### Requirement: Ida e volta entre apps/api e apps/connectors reais

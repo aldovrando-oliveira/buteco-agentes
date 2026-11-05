@@ -6,8 +6,7 @@ Diz o que o `apps/api` expõe como emissor OpenID Connect: discovery, JWKS, toke
 authorize e encerramento de sessão, anônimos, com o issuer vindo de `PublicUrl:BaseUrl`,
 obrigatória, e todos os endereços do discovery montados a partir dele, nunca do host da
 requisição. Cobre os fluxos habilitados e o único cliente que o próprio `apps/api` mantém
-(`buteco-painel`, desde a #180), o formato do token emitido, a convivência com o login e
-a validação HMAC, e o `503` enquanto as chaves não carregam. O fluxo do usuário é da
+(`buteco-painel`, desde a #180), o formato do token emitido, a convivência com o login e o `503` enquanto as chaves não carregam. O fluxo do usuário é da
 capability `issuer-user-login`; quem cadastra clientes externos (#186) fica fora.
 ## Requirements
 ### Requirement: Emissor OIDC publica discovery, JWKS e endpoint de token
@@ -79,21 +78,6 @@ O boot do `apps/api` SHALL falhar, depois da construção do host e com mensagem
 #### Scenario: Url pública inválida derruba o boot
 - **WHEN** o app sobe com `PublicUrl:BaseUrl` igual a `api.exemplo.test` (sem esquema)
 - **THEN** o boot falha com uma mensagem que cita `PublicUrl:BaseUrl`
-
-### Requirement: O emissor convive com a validação HMAC sem mudá-la
-Com o emissor ligado, toda rota autenticada do `apps/api` SHALL continuar aceitando os tokens HMAC de operador e de serviço exatamente como antes. Ao lado deles, as rotas autenticadas do `apps/api` SHALL aceitar o access token do emissor que satisfaça a capability `route-authentication` (audience `buteco-api`, principal pela tabela de clientes). Nenhuma rota do `apps/api` SHALL emitir token HMAC de operador.
-
-#### Scenario: Token HMAC do operador continua aceito com o emissor ligado
-- **WHEN** o emissor está ligado e um token HMAC de operador assinado com `Auth:TokenSigningKey`, dentro do prazo, chama `GET /agents`
-- **THEN** a resposta é `200 OK`
-
-#### Scenario: Token do emissor do painel é credencial das rotas do app
-- **WHEN** um access token emitido pelo fluxo do `buteco-painel`, com a audience `buteco-api`, é enviado como `Bearer` em `GET /agents`
-- **THEN** a resposta é `200 OK`
-
-#### Scenario: Token do emissor de cliente fora da tabela não é credencial
-- **WHEN** um access token emitido por `client_credentials` para um cliente de teste fora da tabela de clientes, com a audience `buteco-api`, é enviado em `GET /agents`
-- **THEN** a resposta é `403 Forbidden`
 
 ### Requirement: Fluxos habilitados e os clientes mantidos pelo apps/api
 O emissor SHALL habilitar os grants `client_credentials`, `authorization_code` e `refresh_token`, com PKCE obrigatório no `authorization_code`. Os únicos clientes que o próprio `apps/api` SHALL manter são o `buteco-painel` (capability `issuer-user-login`) e os clientes de serviço `buteco-servico-inbox` e `buteco-servico-connectors` (requisito "Clientes de serviço mantidos pelo apps/api"). Os únicos escopos são `buteco-api`, `buteco-inbox` e `buteco-connectors`. Todos são sincronizados em segundo plano depois do start. Nenhum outro cliente, escopo ou recurso SHALL ser cadastrado por migration nem por código. Requisição com outro `grant_type` SHALL ser recusada com `unsupported_grant_type`.
@@ -184,4 +168,15 @@ A mensagem SHALL nomear a chave do segredo, e, no caso de igualdade, as duas cha
 #### Scenario: Composição real sobe com os segredos válidos
 - **WHEN** o app sobe com os dois segredos presentes, distintos entre si e das três chaves de cifra
 - **THEN** a checagem passa e a aplicação responde
+
+### Requirement: O access token do emissor é a credencial das rotas do apps/api
+Com o emissor ligado, as rotas autenticadas do `apps/api` SHALL aceitar o access token do emissor que satisfaça a capability `route-authentication` (audience `buteco-api`, principal pela tabela de clientes), e nenhum outro token. Nenhuma rota do `apps/api` SHALL emitir token de operador fora do emissor.
+
+#### Scenario: Token do emissor do painel é credencial das rotas do app
+- **WHEN** um access token emitido pelo fluxo do `buteco-painel`, com a audience `buteco-api`, é enviado como `Bearer` em `GET /agents`
+- **THEN** a resposta é `200 OK`
+
+#### Scenario: Token do emissor de cliente fora da tabela não é credencial
+- **WHEN** um access token emitido por `client_credentials` para um cliente de teste fora da tabela de clientes, com a audience `buteco-api`, é enviado em `GET /agents`
+- **THEN** a resposta é `403 Forbidden`
 

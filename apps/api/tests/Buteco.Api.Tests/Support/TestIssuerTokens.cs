@@ -41,7 +41,7 @@ public static class TestIssuerTokens
 {
     /// <summary>
     /// O <c>sub</c> do token do painel nas fixtures: não é id de usuário, então as rotas de
-    /// <c>CurrentUser</c> respondem <c>403</c>, como ao HMAC <c>operator</c> de antes.
+    /// <c>CurrentUser</c> respondem <c>403</c>: é o operador sem usuário.
     /// </summary>
     public const string PanelSubject = "fixture-sem-usuario";
 

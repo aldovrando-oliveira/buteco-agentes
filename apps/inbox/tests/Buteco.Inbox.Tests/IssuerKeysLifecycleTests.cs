@@ -17,22 +17,24 @@ namespace Buteco.Inbox.Tests;
 /// </summary>
 public class IssuerKeysLifecycleTests(PostgresOnlyFixture postgres) : IClassFixture<PostgresOnlyFixture>
 {
+    // Sem chaves obtidas, quem traz token recebe 503, e quem não traz recebe o 401 padrão,
+    // com o desafio Bearer (change remover-hmac-token-servico, D3).
     [Fact]
-    public async Task BootsWithTheIssuerUnreachable_HmacWorks_AndIssuerTokenIsUnavailable()
+    public async Task WithoutToken_BeforeTheKeys_Is401_WithTheBearerChallenge()
     {
         var issuer = new TestIssuer { Availability = IssuerAvailability.Unreachable };
         await using var factory = new IssuerTokenFactory(postgres, issuer);
 
         var health = await factory.CreateClientWithToken(null).GetAsync("/health");
-        var hmac = await factory.CreateClientWithToken(factory.OperatorHmacToken()).GetAsync("/channels");
+        var withoutToken = await factory.CreateClientWithToken(null).GetAsync("/channels");
         var issued = await factory.CreateClientWithToken(issuer.Issue()).GetAsync("/channels");
 
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, hmac.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, withoutToken.StatusCode);
+        Assert.Equal("Bearer", Assert.Single(withoutToken.Headers.WwwAuthenticate).Scheme);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, issued.StatusCode);
         Assert.Equal("10", issued.Headers.GetValues("Retry-After").Single());
     }
-
     [Fact]
     public async Task IssuerAnsweringWith503_IsAlsoUnavailable()
     {

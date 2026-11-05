@@ -79,19 +79,6 @@ public class SyncEndpointsTests
     }
 
     [Fact]
-    public async Task WithoutApiBaseUrl_Is503SyncNotConfigured_WithoutAnyCall()
-    {
-        await using var factory = Factory(apiBaseUrl: null);
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
-
-        var response = await client.PostAsync(SyncNow(Guid.NewGuid()), null);
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.Equal("sync-not-configured", await CodeOf(response));
-        Assert.Empty(factory.SyncApi.Requests);
-    }
-
-    [Fact]
     public async Task ApiUnreachable_Is503SyncApiUnavailable()
     {
         await using var factory = Factory();

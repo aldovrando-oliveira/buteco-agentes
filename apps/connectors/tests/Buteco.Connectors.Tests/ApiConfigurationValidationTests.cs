@@ -79,34 +79,20 @@ public class ApiConfigurationValidationTests
         Assert.Contains("Api:BaseUrl", Flatten(exception), StringComparison.Ordinal);
     }
 
-    // Sem o endereço, a navegação continua: o ciclo é opcional (D2).
-    [Fact]
-    public async Task RealComposition_WithoutBaseUrl_StartsWarnsAndServesNavigation()
-    {
-        await using var factory = new ConnectorsFactory(extraConfiguration: new Dictionary<string, string?> { ["Api:BaseUrl"] = "" });
-        var client = TestAuthentication.CreateClientAs(factory, "operator");
-
-        var response = await client.GetAsync("/connectors/providers");
-
-        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains(factory.Logs.Lines, line =>
-            line.StartsWith("Warning", StringComparison.Ordinal) && line.Contains("Api:BaseUrl", StringComparison.Ordinal));
-    }
-
     /// <summary>
     /// O factory sobe em <c>Development</c>, e o <c>appsettings.Development.json</c> traz
-    /// <c>Api:BaseUrl</c> (D2). Sem o vazio fixado pelo factory, toda a suíte ligaria o
-    /// ciclo contra <c>localhost:5017</c>. Prova que o vazio posto por <c>UseSetting</c>
-    /// vence o arquivo.
+    /// <c>Api:BaseUrl</c> (D2). Sem o endereço do emissor de teste fixado pelo factory, toda a
+    /// suíte buscaria as chaves e ligaria o ciclo contra <c>localhost:5017</c>. Prova que o
+    /// valor posto por <c>UseSetting</c> vence o arquivo (change remover-hmac-token-servico, P3).
     /// </summary>
     [Fact]
-    public void DefaultFactory_ResolvesApiBaseUrlAsNotConfigured()
+    public void DefaultFactory_ResolvesApiBaseUrlToTheTestIssuer()
     {
         using var factory = new ConnectorsFactory();
 
         var options = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiOptions>>().Value;
 
-        Assert.False(options.IsConfigured, $"Api:BaseUrl resolvido como '{options.BaseUrl}' na composição padrão do factory.");
+        Assert.Equal(TestIssuer.InternalBaseUrl, options.BaseUrl);
     }
 
     private static string Flatten(Exception exception) =>

@@ -7,7 +7,8 @@ namespace Buteco.Connectors.Tests;
 /// O segredo do <c>apps/connectors</c> no emissor, conferido no boot da aplicação real (spec
 /// <c>service-client-credentials</c>, "Segredo do serviço obrigatório e conferido no boot";
 /// design.md da change servicos-token-emissor, D5; convenção 8): com <c>Api:BaseUrl</c>,
-/// presente, base64 e 32 bytes, sem ecoar o valor; sem <c>Api:BaseUrl</c>, dispensado.
+/// presente, base64 e 32 bytes, sem ecoar o valor. Desde a #182 o app não sobe sem
+/// <c>Api:BaseUrl</c>, e o ramo que dispensava o segredo sem ele ficou inalcançável (#241).
 /// </summary>
 public class ServiceClientConfigurationTests
 {
@@ -32,20 +33,6 @@ public class ServiceClientConfigurationTests
         {
             Assert.DoesNotContain(secret, message, StringComparison.Ordinal);
         }
-    }
-
-    [Fact]
-    public void WithoutTheApiAddress_TheSecretIsNotRequired()
-    {
-        using var factory = new ConnectorsFactory(extraConfiguration: new Dictionary<string, string?>
-        {
-            ["Api:BaseUrl"] = "",
-            ["ServiceClient:Secret"] = "",
-        });
-
-        var exception = Record.Exception(() => _ = factory.Services);
-
-        Assert.Null(exception);
     }
 
     [Fact]

@@ -75,14 +75,6 @@ public sealed class IssuerTokenValidationTests(PostgresOnlyFixture postgres) : I
     }
 
     [Fact]
-    public async Task Hs256SignedWithTheHmacKey_IsUnauthorized()
-    {
-        var hmacKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestAuthentication.TokenSigningKey));
-
-        Assert.Equal(HttpStatusCode.Unauthorized, await GetChannelsAsync(_issuer.Issue(key: hmacKey, algorithm: SecurityAlgorithms.HmacSha256)));
-    }
-
-    [Fact]
     public async Task UnsignedToken_IsUnauthorized()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, await GetChannelsAsync(TestIssuer.IssueUnsigned()));
@@ -112,6 +104,17 @@ public sealed class IssuerTokenValidationTests(PostgresOnlyFixture postgres) : I
     public async Task TokenWithoutClientId_IsForbidden()
     {
         Assert.Equal(HttpStatusCode.Forbidden, await GetChannelsAsync(_issuer.Issue(clientId: null, subject: "operator")));
+    }
+
+    // O token que os apps aceitavam até a #182 (change remover-hmac-token-servico, D1): um
+    // ponto só, assinatura simétrica com a chave das fixtures antigas.
+    [Fact]
+    public async Task HmacShapedToken_SignedWithTheOldKey_Is401()
+    {
+        var response = await _factory.CreateClientWithToken(OldSharedKeyToken.Sign()).GetAsync("/channels");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("Bearer", Assert.Single(response.Headers.WwwAuthenticate).Scheme);
     }
 
     private async Task<HttpStatusCode> GetChannelsAsync(string token) =>

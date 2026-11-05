@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
@@ -18,28 +19,23 @@ namespace Buteco.Inbox.Auth;
 // audience e a tabela de clientes.
 
 /// <summary>
-/// Autenticação do <c>apps/inbox</c>: o token HMAC de sempre e, com
-/// <c>Identity:Issuer</c> configurado, o access token do emissor do <c>apps/api</c>
-/// validado pelo JWKS (change validacao-jwks-inbox-connectors).
+/// Autenticação do <c>apps/inbox</c>: o access token do emissor do <c>apps/api</c>,
+/// validado pelo JWKS (change validacao-jwks-inbox-connectors), num esquema só,
+/// <see cref="IssuerSchemeName"/>, que é o padrão (change remover-hmac-token-servico, D1).
 /// <para>
-/// <b>Um esquema por token, escolhido pela forma (D2):</b> o esquema de política
-/// <see cref="PolicySchemeName"/> manda o JWS compacto (exatamente dois pontos) ao
-/// <see cref="IssuerSchemeName"/> e qualquer outra coisa, inclusive a requisição sem
-/// token, ao <see cref="OperatorTokenAuthenticationHandler"/>, que não muda. O HMAC tem
-/// um ponto por construção, então as formas não se sobrepõem. O esquema escolhido é o
-/// único que roda: um JWT inválido nunca é tentado no HMAC, e um HMAC inválido nunca toca
-/// nas chaves do emissor. Desafio e recusa seguem o mesmo seletor.
+/// <b>Sem <c>Identity:Issuer</c>, o app não sobe</b> (D2): quem reprova é a checagem de
+/// boot, <see cref="IssuerTokenStartupValidation"/>. O registro não confere o valor, e é
+/// a checagem que o teste da composição real guarda.
 /// </para>
 /// <para>
-/// <b>Sem <c>Identity:Issuer</c> (D7):</b> registra só o HMAC, como antes desta change;
-/// o aviso sai no boot, por <see cref="IssuerTokenStartupValidation"/>. O registro não
-/// confere o valor, e não lança: quem reprova issuer inválido é a checagem de boot, e é
-/// ela que o teste da composição real guarda.
+/// <b>Desafio (D3):</b> antes da primeira obtenção das chaves, a requisição que traz
+/// <c>Authorization</c> recebe <c>503</c> com <c>Retry-After</c>. A que não traz recebe o
+/// <c>401</c> padrão, com <c>WWW-Authenticate: Bearer</c>, com ou sem chaves: a resposta
+/// dela não depende das chaves.
 /// </para>
 /// </summary>
 public static class IssuerTokenAuthentication
 {
-    public const string PolicySchemeName = "Bearer";
     public const string IssuerSchemeName = "IssuerToken";
 
     // typ do access token do OpenIddict (F9): recusa um id_token do mesmo emissor.
@@ -52,16 +48,6 @@ public static class IssuerTokenAuthentication
     public static IServiceCollection AddIssuerTokenAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<IssuerTokenOptions>(configuration.GetSection(IssuerTokenOptions.SectionName));
-
-        var issuerOptions = configuration.GetSection(IssuerTokenOptions.SectionName).Get<IssuerTokenOptions>() ?? new IssuerTokenOptions();
-        if (!issuerOptions.Enabled)
-        {
-            services
-                .AddAuthentication(OperatorTokenAuthenticationHandler.SchemeName)
-                .AddScheme<AuthenticationSchemeOptions, OperatorTokenAuthenticationHandler>(
-                    OperatorTokenAuthenticationHandler.SchemeName, _ => { });
-            return services;
-        }
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(new IssuerKeysSchedule());
@@ -100,10 +86,7 @@ public static class IssuerTokenAuthentication
         services.AddHostedService<IssuerKeysRefreshService>();
 
         services
-            .AddAuthentication(PolicySchemeName)
-            .AddPolicyScheme(PolicySchemeName, displayName: null, options => options.ForwardDefaultSelector = SelectScheme)
-            .AddScheme<AuthenticationSchemeOptions, OperatorTokenAuthenticationHandler>(
-                OperatorTokenAuthenticationHandler.SchemeName, _ => { })
+            .AddAuthentication(IssuerSchemeName)
             .AddJwtBearer(IssuerSchemeName, _ => { });
 
         services
@@ -135,18 +118,6 @@ public static class IssuerTokenAuthentication
         return services;
     }
 
-    public static string SelectScheme(HttpContext context)
-    {
-        var header = context.Request.Headers.Authorization.ToString();
-        if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-            && header.AsSpan("Bearer ".Length).Trim().Count('.') == 2)
-        {
-            return IssuerSchemeName;
-        }
-
-        return OperatorTokenAuthenticationHandler.SchemeName;
-    }
-
     // D6: o principal é reconstruído. NameIdentifier só pela tabela de clientes; o sub
     // nunca vira subject. Cliente ausente ou fora da tabela autentica sem
     // NameIdentifier, e a SubjectAuthorization responde 403.
@@ -175,11 +146,13 @@ public static class IssuerTokenAuthentication
         return Task.CompletedTask;
     }
 
-    // D4: sem nenhuma chave obtida, o desafio vira 503 com Retry-After. Com chave
-    // obtida, falha de validação é sempre 401.
+    // D4: sem nenhuma chave obtida, o desafio de quem traz Authorization vira 503 com
+    // Retry-After. Com chave obtida, falha de validação é sempre 401. Sem Authorization,
+    // sempre o 401 padrão, com WWW-Authenticate: Bearer (remover-hmac-token-servico, D3).
     private static Task ChallengeWithoutKeysAsUnavailable(JwtBearerChallengeContext context)
     {
-        if (context.HttpContext.RequestServices.GetRequiredService<IssuerKeysState>().Obtained)
+        if (StringValues.IsNullOrEmpty(context.Request.Headers.Authorization)
+            || context.HttpContext.RequestServices.GetRequiredService<IssuerKeysState>().Obtained)
         {
             return Task.CompletedTask;
         }

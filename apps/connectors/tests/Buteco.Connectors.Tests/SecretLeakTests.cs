@@ -71,7 +71,6 @@ public class SecretLeakTests(ITestOutputHelper output)
         {
             Assert.DoesNotContain(ContentMarker, line, StringComparison.Ordinal);
             Assert.DoesNotContain(FileName, line, StringComparison.Ordinal);
-            Assert.DoesNotContain(TestAuthentication.TokenSigningKey, line, StringComparison.Ordinal);
             Assert.DoesNotContain(TestAuthentication.ServiceClientSecret, line, StringComparison.Ordinal);
             Assert.All(sentTokens, token => Assert.DoesNotContain(token, line, StringComparison.Ordinal));
         }

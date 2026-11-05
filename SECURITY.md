@@ -48,16 +48,21 @@ Credentials are write-only and are never returned in any API response; the one
 exception is the TOTP secret, returned once when enrollment starts. Anything that
 could expose a stored credential, or that weakens the encryption, is in scope.
 
-**Authentication tokens.** Two mechanisms coexist. `apps/api` is an OpenID
-Connect issuer (OpenIddict): people sign in to the panel with an email and
-password through the authorization code flow with PKCE, and receive an RS256
-access token (15 minutes) and a rotating refresh token (14 days). All three
-HTTP apps validate that access token locally against the issuer's signing keys.
-Service-to-service calls still use stateless HMAC tokens signed with a shared
-key, each service signing its own; no route issues an operator HMAC token any
-more. Token forgery, signature bypass, `aud`/`iss`/`typ` confusion, scope
-escalation from a service token, refresh token reuse, and lifetime handling
-are all in scope.
+**Authentication tokens.** `apps/api` is an OpenID Connect issuer (OpenIddict)
+and issues every token the system accepts. People sign in to the panel with an
+email and password through the authorization code flow with PKCE, and receive an
+RS256 access token (15 minutes) and a rotating refresh token (14 days). Each
+service that calls `apps/api` (`apps/inbox`, `apps/connectors`) obtains its own
+access token through the client credentials grant, with a secret of its own that
+only it and `apps/api` hold; `apps/api` signs the token it sends to
+`apps/connectors` in-process, with the same keys. Signing keys are rotated and
+published as a JWKS. All three HTTP apps validate access tokens locally, accept
+nothing else, and take the subject from a closed `client_id` table rather than
+from `sub`; each subject is restricted to its own routes (in `apps/api`, a
+subject table; in `apps/inbox`, only the panel). Token forgery, signature bypass,
+`alg`/`aud`/`iss`/`typ` confusion, scope escalation from a service token, a
+service secret letting one service act as another, refresh token reuse, and
+lifetime handling are all in scope.
 
 **Panel session in the browser.** The panel keeps its tokens (access, refresh
 and ID token) in `localStorage`, shared across tabs. This is an accepted cost:
@@ -88,11 +93,13 @@ user's sessions; this is accepted while there are no roles. Bypassing the second
 step, replaying a code, recovering a secret or a recovery code from storage or a
 response, or brute-forcing the code past the lockout are in scope.
 
-**Shared secrets across processes.** `Auth:TokenSigningKey` (shared between
-`apps/api`, `apps/inbox` and `apps/connectors`) and `Mcp:CredentialEncryptionKey` (shared
-between `apps/api` and `apps/workers`) must hold identical values across
-processes. Anything that leaks these values, or that would let one process
-accept material signed with a different key, is in scope.
+**Shared secrets across processes.** No token signing key is shared: only
+`apps/api` holds signing keys, and the other apps hold only the public JWKS.
+`Mcp:CredentialEncryptionKey` (shared between `apps/api` and `apps/workers`) and
+each service client secret (shared only between `apps/api` and that service)
+must hold identical values on both sides. Anything that leaks these values, or
+that would let one process accept material signed with a different key, is in
+scope.
 
 **Anonymous route allowlist.** Every HTTP route in `apps/api` and
 `apps/inbox` requires a token by default. A route becomes anonymous only

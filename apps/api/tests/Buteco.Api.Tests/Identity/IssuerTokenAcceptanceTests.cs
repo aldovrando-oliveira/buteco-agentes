@@ -13,50 +13,21 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace Buteco.Api.Tests.Identity;
 
 /// <summary>
-/// O <c>apps/api</c> aceita o próprio token ao lado do HMAC (spec <c>route-authentication</c>,
-/// "apps/api aceita o access token do emissor ao lado do HMAC"; spec <c>oidc-issuer</c>, "O
-/// emissor convive com o login e a validação HMAC sem mudá-los"; design.md da change
-/// usuarios-locais-login-emissor, D3.3).
+/// O <c>apps/api</c> aceita só o próprio token (spec <c>route-authentication</c>, "apps/api
+/// aceita só o access token do emissor"; spec <c>oidc-issuer</c>, "O access token do emissor é
+/// a credencial das rotas do apps/api"; design.md das changes usuarios-locais-login-emissor,
+/// D3.3, e remover-hmac-token-servico, D1 e D3).
 ///
 /// <para>
-/// Verificado contra o defeito (convenção 15), registro no tasks.md, 7.2:
-/// <list type="bullet">
-/// <item>com o subject tirado do <c>sub</c>, e não da tabela, <see cref="ForgedOperatorSub_IsNotTheOperator"/> reprova;</item>
-/// <item>com um seletor que tenta os dois esquemas, <see cref="InvalidJwt_Is401_WithoutCallingTheHmacValidator"/> reprova.</item>
-/// </list>
+/// Verificado contra o defeito (convenção 15): com o subject tirado do <c>sub</c>, e não da
+/// tabela, <see cref="ForgedOperatorSub_IsNotTheOperator"/> reprova (registro no tasks.md da
+/// change usuarios-locais-login-emissor, 7.2). Os dois casos da remoção do token antigo foram
+/// vistos reprovar na árvore de antes (tasks.md da change remover-hmac-token-servico, 4.6).
 /// </para>
 /// </summary>
 public class IssuerTokenAcceptanceTests(IssuerTokenAcceptanceTests.Fixture factory) : IClassFixture<IssuerTokenAcceptanceTests.Fixture>
 {
-    /// <summary>Conta as validações HMAC, para provar que o JWT inválido não chega lá.</summary>
-    public sealed class CountingTokenService(ITokenService inner) : ITokenService
-    {
-        public int ValidateCalls;
-
-        public (string Token, DateTimeOffset ExpiresAt) Issue(string subject, TimeSpan lifetime) => inner.Issue(subject, lifetime);
-
-        public TokenValidationResult Validate(string token)
-        {
-            Interlocked.Increment(ref ValidateCalls);
-            return inner.Validate(token);
-        }
-    }
-
-    public sealed class Fixture : LocalUsersFixture
-    {
-        public CountingTokenService? Counter { get; private set; }
-
-        protected override void ConfigureWebHost(IWebHostBuilder builder)
-        {
-            base.ConfigureWebHost(builder);
-            builder.ConfigureServices(services =>
-            {
-                services.RemoveAll<ITokenService>();
-                services.AddSingleton<ITokenService>(provider =>
-                    Counter = new CountingTokenService(ActivatorUtilities.CreateInstance<TokenService>(provider)));
-            });
-        }
-    }
+    public sealed class Fixture : LocalUsersFixture;
 
     private const string Password = "senha-certa-do-teste";
     private const string ClientSecret = "segredo-do-cliente";
@@ -155,30 +126,30 @@ public class IssuerTokenAcceptanceTests(IssuerTokenAcceptanceTests.Fixture facto
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAgentsAsync(token)).StatusCode);
     }
 
+    // Sem token, a rota que existe e a que não existe respondem igual: 401, corpo vazio e o
+    // desafio Bearer (remover-hmac-token-servico, D3).
     [Fact]
-    public async Task HmacToken_IsStillAccepted_AndAnInvalidOneStill401()
+    public async Task UnknownRoute_WithoutToken_Is401_WithTheBearerChallenge()
     {
-        var hmac = factory.Services.GetRequiredService<ITokenService>().Issue(ServiceScopeAuthorizationHandler.OperatorSubject, TimeSpan.FromMinutes(5)).Token;
+        var unknown = await Anonymous().GetAsync("/rota-que-nao-existe");
+        var known = await GetAgentsAsync(null);
 
-        Assert.Equal(HttpStatusCode.OK, (await GetAgentsAsync(hmac)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await GetAgentsAsync("payload.assinatura-errada")).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await GetAgentsAsync(null)).StatusCode);
+        foreach (var response in new[] { unknown, known })
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.Equal("Bearer", Assert.Single(response.Headers.WwwAuthenticate).Scheme);
+            Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        }
     }
 
+    // O token que os apps aceitavam até a #182 (remover-hmac-token-servico, D1): um ponto só,
+    // assinatura simétrica com a chave das fixtures antigas.
     [Fact]
-    public async Task InvalidJwt_Is401_WithoutCallingTheHmacValidator()
+    public async Task HmacShapedToken_SignedWithTheOldKey_Is401()
     {
-        var valid = await UserTokenAsync();
-        var parts = valid.Split('.');
-        var forged = $"{parts[0]}.{parts[1]}.{parts[2][..^4]}{(parts[2].EndsWith("AAAA", StringComparison.Ordinal) ? "BBBB" : "AAAA")}";
-        _ = factory.Services.GetRequiredService<ITokenService>();
-        var before = factory.Counter!.ValidateCalls;
+        var response = await GetAgentsAsync(OldSharedKeyToken.Sign());
 
-        var forgedResponse = await GetAgentsAsync(forged);
-        var garbage = await GetAgentsAsync("a.b.c");
-
-        Assert.Equal(HttpStatusCode.Unauthorized, forgedResponse.StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, garbage.StatusCode);
-        Assert.Equal(before, factory.Counter.ValidateCalls);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("Bearer", Assert.Single(response.Headers.WwwAuthenticate).Scheme);
     }
 }

@@ -16,15 +16,8 @@ public static class TestAuthentication
 {
     public const string KnownOperatorPassword = "correct-horse-battery-staple";
 
-    // Mesmo valor usado por InboxFactoryFixture (apps/inbox) — prova que
-    // um token emitido por apps/api é aceito por apps/inbox sem
-    // coordenação em runtime, só pela chave compartilhada (design.md,
-    // Decision 1, Risco 1).
-    public const string TokenSigningKey = "test-signing-key-shared-between-api-and-inbox-fixtures";
-
     public static Dictionary<string, string?> ConfigOverrides { get; } = new()
     {
-        ["Auth:TokenSigningKey"] = TokenSigningKey,
         ["Auth:OperatorPasswordHash"] = ComputeKnownOperatorPasswordHash(),
 
         // TZ é PRÉ-REQUISITO DE BOOT desde a change rotas-de-agregacao-sistema:
@@ -80,16 +73,6 @@ public static class TestAuthentication
     // painel, do emissor (fixtures-token-emissor, D1).
     public static void AttachPanelToken(HttpClient client, IServiceProvider services) =>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestIssuerTokens.Panel(services));
-
-    // HMAC operator. Só para os casos que provam o próprio HMAC e saem com ele
-    // na #182 (fixtures-token-emissor, D6): os OperatorHmac_ de
-    // AccessLinkCallerTests, UserRoutesCallerTests e TwoFactorCallerTests.
-    public static void AttachOperatorToken(HttpClient client, IServiceProvider services)
-    {
-        var tokenService = services.GetRequiredService<ITokenService>();
-        var (token, _) = tokenService.Issue("operator", TimeSpan.FromMinutes(30));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-    }
 
     public static string ComputeKnownOperatorPasswordHash()
     {

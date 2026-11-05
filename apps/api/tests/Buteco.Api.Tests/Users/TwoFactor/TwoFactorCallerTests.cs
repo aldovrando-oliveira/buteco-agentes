@@ -9,38 +9,39 @@ namespace Buteco.Api.Tests.Users.TwoFactor;
 /// verificacao-2-etapas-totp, D8 e D9, revisão do dono de 01/11/2026).
 ///
 /// <para>
-/// Verificado contra o defeito (convenção 15), registro no tasks.md, 6.1: com a redefinição
-/// aceitando o HMAC (sem o <c>CurrentUser</c>), <see cref="OperatorHmac_OnTheReset_Is403_AndChangesNothing"/>
-/// reprova.
+/// Verificado contra o defeito (convenção 15), registro no tasks.md, 6.1, e de novo no 4.5 da
+/// change remover-hmac-token-servico, com o token de operador sem usuário
+/// (<see cref="TestIssuerTokens.Panel"/>): com a redefinição sem o <c>CurrentUser</c>,
+/// <see cref="OperatorWithoutUser_OnTheReset_Is403_AndChangesNothing"/> reprova.
 /// </para>
 /// </summary>
 public class TwoFactorCallerTests(TwoFactorCallerTests.Fixture factory) : IClassFixture<TwoFactorCallerTests.Fixture>
 {
     public sealed class Fixture : LocalUsersFixture;
 
-    private HttpClient HmacClient()
+    private HttpClient OperatorWithoutUserClient()
     {
         var client = IdentityIssuerUserFlow.Client(factory);
-        TestAuthentication.AttachOperatorToken(client, factory.Services);
+        TestAuthentication.AttachPanelToken(client, factory.Services);
         return client;
     }
 
     [Fact]
-    public async Task OperatorHmac_OnMyAccount_Is403()
+    public async Task OperatorWithoutUser_OnMyAccount_Is403()
     {
-        var response = await HmacClient().GetAsync("/account/two-factor");
+        var response = await OperatorWithoutUserClient().GetAsync("/account/two-factor");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task OperatorHmac_OnTheReset_Is403_AndChangesNothing()
+    public async Task OperatorWithoutUser_OnTheReset_Is403_AndChangesNothing()
     {
         var target = await LocalUserSeed.CreateUserAsync(factory.Services, LocalUserSeed.UniqueEmail("alvo"), TwoFactorAccount.Password);
         await TwoFactorTestClient.SeedEnabledAsync(factory.Services, target.Id);
         var before = await TwoFactorTestClient.StateAsync(factory.Services, target.Id);
 
-        var response = await HmacClient().PostAsync($"/users/{target.Id}/two-factor/reset", content: null);
+        var response = await OperatorWithoutUserClient().PostAsync($"/users/{target.Id}/two-factor/reset", content: null);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(before, await TwoFactorTestClient.StateAsync(factory.Services, target.Id));

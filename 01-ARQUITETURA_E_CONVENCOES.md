@@ -524,49 +524,42 @@ um laço que falharia pelo mesmo motivo.
 
 ## Autenticação
 
-**Hoje convivem dois mecanismos.** O token HMAC, descrito abaixo, continua
-validado em todas as rotas até a #182, e é emitido só pelos serviços, para si
-mesmos. Ao lado dele, desde a #179, o `apps/api` é emissor OpenID Connect (ver
-"Emissor OIDC", abaixo). Desde a #208, o `apps/inbox` e o `apps/connectors`
-aceitam o access token dele, validado pelo JWKS ("Validação do token do
-emissor", abaixo). Desde a #180, o próprio `apps/api` também o aceita, e há
-usuários locais com login por e-mail e senha pelo fluxo authorization code +
-PKCE ("Usuários locais" e "Sessão do emissor", abaixo). **Desde a #217, o painel
-entra pelo emissor** ("O painel e a sessão do emissor", abaixo), e o
-`POST /auth/login` não existe mais: nenhuma rota emite HMAC de operador.
+**Um mecanismo só: o access token do emissor OpenID Connect do `apps/api`**
+(#179, "Emissor OIDC", abaixo). O painel entra pelo fluxo authorization code +
+PKCE com usuários locais (#180, #217), cada serviço obtém o seu por
+`client_credentials` (#234, #235), e os três apps o validam localmente: o
+`apps/api` pelas chaves do próprio anel, o `apps/inbox` e o `apps/connectors` pelo
+JWKS (#208). Cada app registra um esquema só, o `JwtBearer`, como padrão. O
+`POST /auth/login` não existe mais.
 
-**Token stateless assinado com HMAC**, sem sessão em banco. O texto anterior
-dizia "sem biblioteca JWT"; essa convenção foi **revogada em 24/10/2026**
-(`emissor-oidc-api`, D11). Emitir OIDC, e a partir da #208 validar token de
-terceiro, é exatamente o caso em que biblioteca mantida vence implementação
-própria: rotação, JWKS, discovery e validação de `aud`/`iss`/`exp` são o tipo
-de código em que defeito vira falha de segurança. O HMAC continua sem
-biblioteca até sair, na #182. Nenhuma rota emite o HMAC de operador desde a #217;
-ele continua aceito até a #184 recusar o subject `operator` no HMAC. **Desde a #235,
-nenhum serviço assina token HMAC**: o token de serviço vem do emissor
-("Tokens de serviço", abaixo), e o HMAC de serviço só continua aceito, até a #182.
-*(Até a #235, cada serviço assinava o próprio token de serviço com a chave
-compartilhada, num `ServiceTokenDelegatingHandler` por app.)*
+*(Até a #182, convivia com ele um token stateless assinado com HMAC e uma chave
+compartilhada pelos três apps (`Auth:TokenSigningKey`), escolhido pela forma do
+token num esquema de política. Quem guardasse a chave de qualquer processo assinava
+um token de `operator`: o risco aceito na #117. A #182 removeu o token, a chave e
+o seletor, depois de a #235 tirar o último emissor e a #236 as fixtures que ainda
+o usavam.)* A convenção "sem biblioteca JWT" foi **revogada em 24/10/2026**
+(`emissor-oidc-api`, D11): emitir OIDC e validar token de terceiro é o caso em
+que biblioteca mantida vence implementação própria, porque rotação, JWKS,
+discovery e validação de `aud`/`iss`/`exp` são o tipo de código em que defeito
+vira falha de segurança.
 
-**Nenhuma requisição espera o `apps/api` para ser autenticada.** O token HMAC
-é validado localmente pela chave compartilhada, no `apps/api`, no `apps/inbox`
-e no `apps/connectors`, como antes. O token do emissor é validado localmente
-pelas chaves públicas do JWKS, que o `apps/inbox` e o `apps/connectors` obtêm
-do `apps/api` pelo endereço interno **fora do caminho da requisição**: em
-segundo plano depois do start, renovadas a cada hora, e de novo diante de um
-`kid` desconhecido, no máximo uma vez por minuto. Com o `apps/api` fora do ar,
-o app sobe e o HMAC funciona; o token do emissor valida com as chaves já
-obtidas, e recebe `503` se nenhuma foi obtida ainda. Foi o que permitiu
-autenticar apps com bancos isolados sem introduzir store compartilhado.
+**Nenhuma requisição espera o `apps/api` para ser autenticada.** O token do
+emissor é validado localmente pelas chaves públicas do JWKS, que o `apps/inbox`
+e o `apps/connectors` obtêm do `apps/api` pelo endereço interno **fora do
+caminho da requisição**: em segundo plano depois do start, renovadas a cada
+hora, e de novo diante de um `kid` desconhecido, no máximo uma vez por minuto.
+Com o `apps/api` fora do ar, o app sobe; o token do emissor valida com as
+chaves já obtidas, e recebe `503` se nenhuma foi obtida ainda. A requisição sem
+token recebe `401`, com ou sem chaves (#182). Foi o que permitiu autenticar apps
+com bancos isolados sem introduzir store compartilhado.
 *(Reescrito em 25/10/2026, `validacao-jwks-inbox-connectors`, D8. Dizia: "`apps/api`
 e `apps/inbox` validam **localmente**, compartilhando apenas a chave de
 assinatura via configuração — nenhuma chamada de rede entre os processos para
-validar token." A obtenção das chaves é a única chamada, e não afeta o HMAC; o
-texto também omitia o `apps/connectors`, que valida o HMAC do mesmo jeito desde
-a #103.)*
+validar token." A obtenção das chaves é a única chamada; o texto também omitia
+o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
 
 - **Sem operador único desde a #217.** O `POST /auth/login`, o
-  `Auth:OperatorUsername` e o `Auth:OperatorTokenLifetime` saíram. O
+  `Auth:OperatorUsername` e o tempo de vida configurável do token de operador saíram. O
   `Auth:OperatorPasswordHash` ficou só para o bootstrap do primeiro Admin
   ("Usuários locais", abaixo). Os usuários locais ainda não têm papel (RBAC é da
   M2), e todo usuário tem o acesso do operador, pela tabela de clientes
@@ -595,7 +588,8 @@ a #103.)*
   acesso do operador. A lista de rotas de cada serviço é conferida no boot
   (convenção 8), e pegou na primeira execução a barra final do `RawText` que
   `MapGroup` gera para `MapGet("/")`. A tabela protege contra defeito de
-  código, não contra quem guarda a chave (#117). O `apps/inbox` aceita só
+  código; contra roubo de credencial, cada serviço tem a sua, e só o
+  `apps/api` assina token (#182, que fechou a #117). O `apps/inbox` aceita só
   `operator` nas rotas autenticadas, e outro subject recebe `403` (#116); o
   serviço que precisar de rota dele traz a lista por subject e a checagem de
   boot, no molde do `apps/api`.
@@ -607,9 +601,12 @@ a #103.)*
   cliente HTTP compartilhado (convenção 7, com a leitura registrada lá).
 - **Rota inexistente sem token responde `401`**, e não `404`, no `apps/api`: o
   `FallbackPolicy` (`RequireAuthenticatedUser`) vale também para o pedido que não
-  casa com rota, e o `401` sai com o corpo vazio e sem `WWW-Authenticate`. É
-  intencional: quem chega sem token não descobre quais rotas existem. Com token
-  válido, a rota inexistente responde `404`.
+  casa com rota, e o `401` sai com o corpo vazio e com o desafio padrão do
+  `JwtBearer`, `WWW-Authenticate: Bearer`, igual ao da rota que existe. É
+  intencional: quem chega sem token não descobre quais rotas existem, porque as
+  duas respostas são iguais. Com token válido, a rota inexistente responde `404`.
+  *(Até a #182, o `401` saía sem `WWW-Authenticate`, porque a requisição sem token
+  caía no esquema HMAC.)*
 
 - **Emissor OIDC** (#179), com OpenIddict 7.7.2, só o servidor. Endpoints
   anônimos:
@@ -738,13 +735,13 @@ a #103.)*
     regeneração e remoção com um código) e `POST /users/{id}/two-factor/reset` (o
     admin apaga o segredo e os códigos, troca o stamp e revoga as sessões; a si mesmo,
     não). As duas
-    atendem só o usuário real do `sub` do token do emissor (`CurrentUser`); o HMAC
-    `operator` recebe `403`;
+    atendem só o usuário real do `sub` do token do emissor (`CurrentUser`); o token
+    de operador cujo `sub` não é usuário recebe `403`;
   - **o cadastro fica fechado em produção** (`Identity:TwoFactor:EnrollmentEnabled`)
     até o painel ter a tela do código (#183); a obrigatoriedade e a remoção da opção
     são da #220. Sem `amr` no token: ninguém o lê na M1.
-- **Minha conta e Usuários** (#219), para o usuário real do token (`CurrentUser`; o HMAC
-  `operator` recebe `403`). Na M1, sem papéis, todo usuário chama todas; a #184 restringe
+- **Minha conta e Usuários** (#219), para o usuário real do token (`CurrentUser`; o token
+  de operador cujo `sub` não é usuário recebe `403`). Na M1, sem papéis, todo usuário chama todas; a #184 restringe
   `/users` ao Admin:
   - **`/account`:** os próprios dados; a troca da senha, com a atual conferida como no
     login e contada no bloqueio por e-mail (durante o bloqueio, `423` sem conferir); a
@@ -831,31 +828,30 @@ a #103.)*
   consulta ao emissor. Isso é **aceito na M1**. A renovação seguinte é recusada.
   A revogação para as aplicações externas é da #186.
 - **O `apps/api` aceita o próprio token** (#180), com o mesmo desenho da #208:
-  - esquema de política pela forma do token;
+  - um esquema só, o `JwtBearer`, como padrão (#182);
   - `aud` `buteco-api`;
   - principal pela tabela de clientes, nunca pelo `sub`: `buteco-painel` → `operator` e,
     desde a #234, `buteco-servico-inbox` → `service:inbox` e `buteco-servico-connectors` →
-    `service:connectors`, cada um só nas rotas da lista do subject dele. Até a #235, nenhum
-    serviço manda esse token: eles continuam com o HMAC.
+    `service:connectors`, cada um só nas rotas da lista do subject dele.
 
   A diferença é que **as chaves vêm do anel do próprio processo**, sem HTTP. O
   boot confere que todo subject de destino da tabela existe. **`libs/` continua
   sem autenticação.** O núcleo comum é de ~40 linhas, e é exatamente o que difere
   em valor entre os apps (`aud`, tabela de clientes, tabela de subjects). Uma
   `libs/` de fronteira de segurança abriria os três apps a um mesmo defeito, e a
-  #182 encolhe o código. **Gatilho para voltar à pergunta:** um quarto
+  #182 encolheu o código. **Gatilho para voltar à pergunta:** um quarto
   consumidor, ou uma correção que precise ser aplicada idêntica nos três.
 - **Validação do token do emissor** (#208), no `apps/inbox` e no
   `apps/connectors`, com `Microsoft.AspNetCore.Authentication.JwtBearer`
-  10.0.13 e `ConfigurationManager` próprio. **Um esquema por token, pela
-  forma:** JWS compacto (dois pontos) vai ao esquema do emissor, qualquer outra
-  coisa ao HMAC, sem queda de um no outro. Exige RS256, `typ` `at+jwt`, `iss`
-  igual a `Identity:Issuer` (normalizado com barra final), a `aud` do app
+  10.0.13 e `ConfigurationManager` próprio, num esquema só, o padrão (#182).
+  Exige RS256, `typ` `at+jwt`, `iss` igual a `Identity:Issuer` (normalizado com barra final), a `aud` do app
   (`buteco-inbox`, `buteco-connectors`; `buteco-api` na #180) e `exp`, com
   30 s de tolerância. **As chaves vêm de `{Api:BaseUrl}/.well-known/jwks`**,
   nunca do `jwks_uri` público, e o `issuer` do discovery lido pelo endereço
-  interno é conferido contra `Identity:Issuer`. Sem `Identity:Issuer`, a
-  validação fica desligada, com aviso no boot. **O subject vem do
+  interno é conferido contra `Identity:Issuer`. **Sem `Identity:Issuer`, o app
+  não sobe** (#182), e no `apps/connectors` o mesmo vale para o `Api:BaseUrl`. Antes
+  das chaves, quem traz token recebe `503` com `Retry-After`, e quem não traz recebe
+  o `401` com `WWW-Authenticate: Bearer`. **O subject vem do
   `client_id`**, por uma tabela fechada por app (`buteco-painel` → `operator`; no
   `apps/connectors`, desde a #234, também `buteco-servico-api` → `service:api`, só em
   descrever pasta), e nunca do `sub`: cliente fora da tabela recebe `403`. As tabelas de subjects

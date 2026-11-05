@@ -18059,3 +18059,80 @@ O excesso está no suporte: o `TestIssuerTokens` com a espera do anel (C3), o `C
 - **#182:** a lista de remoções está [no comentário da #182](https://github.com/aldovrando-oliveira/buteco-agentes/issues/182#issuecomment-6622921574). São 55 casos por nome: 46 saem e 9 se reescrevem (os 4 mistos, os 4 de `CurrentUser` com o token do `buteco-servico-inbox` e o do autor com o token do painel). O `TokenService.Issue` agora só tem chamadores do G2 e da Q3. O `TokenService.Issue` agora só tem chamadores do G2 e da Q3.
 - **#176:** um caso novo da família, `RoundTripTests.MessageReceived_…InRawPersistedJson`, reprovou uma vez só na change, com os insumos idênticos aos da baseline. O `TerminalTask_…` reprovou duas vezes na medição. Os dois estão comentados lá.
 - **`apps/api` inteiro:** a suíte derruba a CPU sozinha em toda rodada. Reprovação válida dela só sai em partes.
+
+## `remover-hmac-token-servico` — o HMAC e a chave compartilhada saem dos três apps (#182)
+
+**Change proposta e implementada em 04/11/2026**, na branch `feat/182-remover-hmac`, num worktree próprio, a partir de `8decb1e` (merge do PR #240). Entrega M1 · 12 de 15. É o **passo D**, o último, da divisão da #182: receptores (#234), emissores (#235), fixtures (#236) e remoção (esta). Fecha a #182, a #117 (o risco aceito da chave compartilhada) e a #122 (o `SECURITY.md`).
+- **O que muda:** os três apps deixam de aceitar o token HMAC. Saem, em cada um, `TokenService`, `ITokenService`, `TokenValidationResult`, `TokenSigningOptions` e `OperatorTokenAuthenticationHandler`, mais o esquema de política `Bearer` e o seletor pela forma do token. O `JwtBearer` do emissor é o único esquema e o padrão.
+- **Configuração:** sem `Identity:Issuer`, o `apps/inbox` e o `apps/connectors` não sobem, e a mensagem nomeia a chave. No connectors, o emissor já exigia o `Api:BaseUrl`, que passa a ser obrigatório na prática. A `Auth:TokenSigningKey` e a `AUTH_TOKEN_SIGNING_KEY` saem dos `appsettings`, do `docker-compose.prod.yml` e dos dois `.env` de exemplo.
+- **`401` sem token sai com `WWW-Authenticate: Bearer`** nos três apps, inclusive no inbox e no connectors antes da primeira obtenção das chaves. O `503` antes das chaves fica só para quem traz `Authorization` (D3, P6).
+- **Capacidades alteradas:** 14 deltas, entre eles `issuer-token-validation`, `route-authentication`, `operator-authentication`, `oidc-issuer`, os três `*-scaffold`, `server-deployment` e os quatro de usuário, cujo "HMAC `operator` → `403`" passa a "operador sem usuário".
+
+**Decisões do dono** (04/11/2026; detalhe no design, "Decisões do dono"):
+- **P0/P4:** 7 reescritos. A H1 da P4 caiu na fonte: o `JsonWebKeySet` da Microsoft.IdentityModel 8.19.2 descarta a chave `oct` por padrão. Os dois `Hs256SignedWithTheHmacKey_IsUnauthorized` saíram, e o `Rs512WithThePublishedKey_IsUnauthorized` ficou como o guarda da restrição a RS256, visto reprovar sem o `ValidAlgorithms` nos dois apps.
+- **P1:** os ramos "sem `Api:BaseUrl`" do connectors ficam, inalcançáveis; saem na **#241**, sem milestone (convenção 25).
+- **P2:** os quatro de `CurrentUser` usam o token do painel com `sub` que não é usuário (`OperatorWithoutUser_…`).
+- **P3:** dois casos fora da lista dependiam do emissor desligado. Um saiu (`WithoutTheApiAddress_TheSecretIsNotRequired`, coberto pelo caso de boot da #208) e um foi reescrito (`DefaultFactory_ResolvesApiBaseUrlToTheTestIssuer`).
+- **P5/P6:** a lista de exceções da varredura e o `401` sem token antes das chaves.
+
+### A medição da Q5 (antes de remover)
+
+Num worktree descartável em `8decb1e`, o emissor ficou obrigatório e a fábrica do connectors passou a ligá-lo, sem remover nada. Reprovaram exatamente os 7 nomeados: os 2 da Q3 (`RealComposition_WithoutBaseUrl_…` e `WithoutApiBaseUrl_Is503SyncNotConfigured_…`), os 2 `WithoutIssuer_ValidationIsOff_…`, os 2 da P3 e o `IssuerWithoutApiBaseUrl_FailsTheRealApplicationStartup_NamingBothKeys`, cuja fixture muda. Nenhum caso HMAC da lista reprovou com o emissor ligado.
+
+### Correções na implementação (convenção 9)
+
+Nenhuma mudou comportamento, contrato ou cobertura. Estão no `tasks.md` da change ([`openspec/changes/archive/2026-11-05-remover-hmac-token-servico/tasks.md`](openspec/changes/archive/2026-11-05-remover-hmac-token-servico/tasks.md); o CLI datou a pasta pelo dia UTC).
+- **O arquivo do seletor não saiu inteiro** no inbox e no connectors. O `AnonymousRoute_WithInvalidJwt_StillAnswersByTheRoute`, fora da lista, ficou na mesma classe.
+- **O guarda do "sem token antes das chaves"** usa o issuer `Unreachable` em vez de segurar as chaves no `TestIssuer`. O desenho previa segurar, e o caso não precisa.
+- **R8 e R9:** o defeito "primeiro usuário do banco" não fazia os casos reprovarem (banco vazio no R8; o próprio alvo no R9). O defeito usado foi o do guarda original da #218: sem a recusa, quem chama segue nulo.
+- **Docs:** a seção do #180 no `docs/deployment.md` também virou "(histórico)". O runbook da #182, que nomeia a chave, e o `OldSharedKeyToken` dos `HmacShapedToken_…` entraram como exceções da varredura.
+- **Sync:** além do Purpose do `connectors-scaffold`, a varredura com `--specs` achou o HMAC nos Purposes do `issuer-token-validation` e do `oidc-issuer`, que a delta não alcança. Os dois foram corrigidos à mão. A proibição do `operator-authentication` ("nenhum app SHALL ler chave simétrica de assinatura de token") fica como exceção.
+- **Incidente no `guard.py`:** a restauração com `copy2` mantinha o mtime antigo, e o build incremental ficou com o defeito compilado (3 reprovações com a fonte certa). A restauração passou a `copyfile` mais `touch`, e os guardas foram refeitos.
+
+### O que a implementação mediu
+
+Suítes pelo `~/.cache/buteco-agents/bin/suite-182.sh`, com a regra assimétrica, em `~/.cache/buteco-agents/182D-baseline/` e `182D-change/`.
+
+| suíte | baseline `8decb1e` | change | por nome |
+|---|---|---|---|
+| `apps/api` | 1.280 + 1 ignorado | **1.269 + 1 ignorado** | saem 13, renomeados 5, entram 2 |
+| `apps/inbox` | 325 | **315** | saem 13, entram 3 |
+| `apps/connectors` | 339 + 1 ignorado | **320 + 1 ignorado** | saem 22, renomeados 3, entram 3 |
+| `rt-inbox` | 15 | 14 | sai 1 |
+| `rt-connectors` | 10 | 10 | os mesmos |
+| `rt-crossapp` | 4 | 4 | os mesmos |
+
+**Critério de aceite:**
+- **Por nome:** 1.973 nomes na baseline e 1.932 na change. **49 saem, 8 são renomeados, 8 entram**, e nada além disso.
+- **Varredura (g):** 0 violações e 34 ocorrências, todas em exceção.
+- **Guardas (convenção 15):** os 15 reprovaram contra o defeito nomeado, com o arquivo de volta pela cópia e o sha conferido. Os casos novos foram vistos reprovar no worktree da baseline.
+- **Tempo:** com CPU 100, connectors 11 s contra 12 s, inbox 41 s contra 34–36 s (1,2×), e rt igual. A rodada final e as partes do api rodaram com a máquina em `CPU_Speed_Limit` 23 nos dois worktrees. Para o api, por decisão do dono, vale a comparação das cinco partes com a CPU em 23 nos dois worktrees, que rodaram sob a mesma limitação: p1 147 s / 177 s, p2 120 / 118, p3 58 / 230, p4 243 / 237, p5 270 / 315. Nenhuma passou de 1,5×.
+- **Uma reprovação inconclusiva:** o `DebounceSweepServiceTests.InfrastructureFailure_…`, caso de tempo e fora da autenticação, reprovou uma vez com a CPU caindo para 23 e passou sozinho na repetição.
+
+**Conferência local** (8.2):
+- **Logs:** o inbox e o connectors registraram "Validação do token do emissor ligada".
+- **Sem token e com o token antigo:** sem token, os três apps respondem `401` com `WWW-Authenticate: Bearer`. O token no formato antigo, assinado com a chave de dev de antes, recebe `401 invalid_token` nos três.
+- **S1–S4:** passaram, com os tokens de serviço nos três logs, nenhum `invalid_client` e nenhum 401 ou 403 nas chamadas de saída.
+- **Painel:** entra, lista Agentes e Canais, e o "Sincronizar agora" deu 202. Um clique isolado registrou um `503` na aba de rede, sem corpo capturado. Pelo endereço, saiu do processo do connectors, mas os logs da manhã não dizem de qual ramo. Na fonte, o estado das chaves não volta a "não obtido", então não é a P6. **Não reproduzido em duas tentativas** atravessando a renovação do token de serviço, com o connectors reiniciado: curl a cada 5 s do minuto 13 ao 16 (72 de 72 deram 202), e o painel com o token perto de vencer (33 de 33). Detalhe no `tasks.md`, 8.2, e em `~/.cache/buteco-agents/182D-verificacao/manual/503/`.
+- **Sem `Identity__Issuer`:** o inbox não sobe e nomeia a chave.
+
+**Convenção 18:**
+
+| coluna | projetado (design, "Tamanho") | medido |
+|---|---|---|
+| produção | ~−590 / +25 | **−661 / +96**, 35 arquivos |
+| testes e suporte | ~−820 / +300 (realista +300 a +500) | **−737 / +289**: testes −539 / +162, suporte −198 / +127 |
+| docs e deploy | — | −255 / +266 |
+
+A produção saiu 12% acima do projetado na remoção. O `+96` inclui os comentários reescritos e as mensagens de boot. Os testes ficaram dentro da faixa.
+
+### Deploy e retirada da chave
+
+- **Deploy:** _(data a preencher)_. Runbook em `docs/deployment.md`, "Remoção do token antigo e da chave compartilhada (#182)".
+- **Retirada da `AUTH_TOKEN_SIGNING_KEY` do `.env.prod`:** 7 dias depois do deploy, em _(data a preencher)_, pelo passo do runbook. Até lá, ela fica para o rollback.
+
+### Para as próximas
+
+- **#241:** os ramos "sem `Api:BaseUrl`" do connectors e o `sync-not-configured` do painel, inalcançáveis desde esta change.
+- **#55:** a `TokenSigningKey` sai da lista (comentário no PR).
+- **`apps/api` inteiro:** sem rodada com CPU 100 nesta change, porque a máquina ficou em `CPU_Speed_Limit` 23 por horas. O tempo foi aceito pelas partes, com a mesma limitação nos dois worktrees.

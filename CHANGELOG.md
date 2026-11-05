@@ -300,6 +300,19 @@ o versionamento pretende seguir
   - aceitar e concluir não abrem sessão: o painel faz o login normal com a senha nova;
   - a lista e o detalhe de Usuários mostram o convidado, a validade do convite e quem
     convidou; reativar e desativar recusam o convidado.
+- **O token antigo e a chave compartilhada saem** (#182), último passo da troca do token de
+  serviço (#234, #235, #236). Fecha a #117 e a #122:
+  - os três apps aceitam só o access token do emissor do `apps/api`, num esquema só, e o
+    token assinado com a `Auth:TokenSigningKey` passa a receber `401`;
+  - a `Auth:TokenSigningKey` sai dos três apps, do compose e dos `.env` de exemplo. No
+    `.env.prod`, a `AUTH_TOKEN_SIGNING_KEY` fica uma semana, para o rollback
+    (`docs/deployment.md`);
+  - sem `Identity:Issuer`, o `apps/inbox` e o `apps/connectors` não sobem, e o
+    `apps/connectors` também não sobe sem `Api:BaseUrl`;
+  - o `401` sem token traz `WWW-Authenticate: Bearer`, também antes de o inbox e o
+    connectors obterem as chaves; quem traz token antes delas continua recebendo `503`;
+  - o `SECURITY.md` passa a dizer que o `apps/api` emite todos os tokens, e o risco da
+    chave compartilhada sai da lista de riscos aceitos.
 - **As suítes de integração autenticam pelo token do emissor** (#236), terceiro passo da
   troca do token de serviço (#182), só em testes:
   - as fixtures do `apps/api` anexam um access token do `buteco-painel` gerado no processo

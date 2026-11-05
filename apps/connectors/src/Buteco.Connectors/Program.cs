@@ -8,16 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Fail-fast: sem a chave não há como validar token nenhum.
-var tokenSigningKey = builder.Configuration.GetSection(TokenSigningOptions.SectionName).Get<TokenSigningOptions>()?.TokenSigningKey;
-if (string.IsNullOrWhiteSpace(tokenSigningKey))
-{
-    throw new InvalidOperationException("Auth:TokenSigningKey não configurado.");
-}
-
 builder.Services.AddHealthChecks();
-builder.Services.Configure<TokenSigningOptions>(builder.Configuration.GetSection(TokenSigningOptions.SectionName));
-builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 // Ciclo de sincronização (design.md da change ciclo-de-sincronizacao). Api:BaseUrl é
@@ -35,9 +26,9 @@ builder.Services.AddGoogleDriveConnector(builder.Configuration);
 // registros de conector acima.
 builder.Services.ValidateConnectorRegistrations();
 
-// Token HMAC e, com Identity:Issuer, o access token do emissor do apps/api validado
-// pelo JWKS, um esquema por forma de token (validacao-jwks-inbox-connectors, D2).
-// Nenhuma requisição espera o apps/api: as chaves vêm em segundo plano (D4).
+// O access token do emissor do apps/api, validado pelo JWKS, num esquema só
+// (remover-hmac-token-servico, D1). Nenhuma requisição espera o apps/api: as chaves vêm
+// em segundo plano (validacao-jwks-inbox-connectors, D4).
 builder.Services.AddIssuerTokenAuthentication(builder.Configuration);
 
 // Autenticação MAIS a tabela de subjects (design.md, D1). Só RequireAuthenticatedUser()
@@ -79,9 +70,9 @@ app.ValidateApiConfiguration();
 // Api:BaseUrl, presente, base64 e 32 bytes, sem ecoar o valor.
 app.ValidateServiceClientConfiguration();
 
-// Convenção 8 (validacao-jwks-inbox-connectors, D7): issuer do emissor válido e, com
-// ele, Api:BaseUrl presente; e a tabela de clientes apontando só para subjects de
-// SubjectRoutes. Sem Identity:Issuer, só avisa que a validação está desligada.
+// Convenção 8 (validacao-jwks-inbox-connectors, D7): issuer do emissor presente e válido,
+// e Api:BaseUrl presente; e a tabela de clientes apontando só para subjects de
+// SubjectRoutes. Sem Identity:Issuer, o boot falha (remover-hmac-token-servico, D2).
 app.ValidateIssuerTokenConfiguration();
 app.ValidateIssuerClientSubjects();
 
