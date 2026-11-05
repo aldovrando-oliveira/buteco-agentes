@@ -37,7 +37,7 @@ public sealed class ServiceAccessTokenIssuer(
     private const string ClientId = "buteco-servico-api";
     private const string Audience = IdentityClients.ConnectorsScope;
     private const string Scope = IdentityClients.ConnectorsScope;
-    private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan Lifetime = IdentityTokenLifetimes.AccessToken;
 
     // A mesma margem do painel (#217) e do ServiceAccessTokenSource dos serviços (D3).
     private static readonly TimeSpan RenewalMargin = TimeSpan.FromMinutes(1);

@@ -956,7 +956,8 @@ quem valida (os três apps) ◀── verifica a assinatura pelas chaves do emis
   change futura habilitar.
 - **Fluxos:** `client_credentials` (sem cliente em produção até a #186),
   `authorization_code` com PKCE obrigatório e `refresh_token`, rotativo e
-  deslizante, de 14 dias. Todo access token dura 15 min e sai JWT **não cifrado**,
+  deslizante, de 14 dias. Todo access token dura 15 min (as durações moram em
+  `IdentityTokenLifetimes`, #211) e sai JWT **não cifrado**,
   com `aud` = os recursos dos escopos concedidos. O `sub` é o `client_id` no
   `client_credentials` e o id do usuário no fluxo do painel.
 - **O único cliente mantido pelo `apps/api`** é o público `buteco-painel`, com
@@ -1023,6 +1024,49 @@ quem valida (os três apps) ◀── verifica a assinatura pelas chaves do emis
   `/.well-known/openid-configuration`, `/.well-known/jwks`, `/connect/authorize`
   e `/connect/logout`. Um bloco de prefixo para o resto de `/connect` (hoje só o
   token) mantém o desvio de navegação.
+
+### Leitura do emissor e das chaves (`apps/api`, #211)
+
+`GET /identity` alimenta a tela Identidade do painel (#183). Só leitura, sem
+material de chave nenhum, nem público nem privado:
+
+```
+GET /identity  (Bearer do usuário)
+  emissor            issuer, discovery, jwks, token          ← issuer configurado, como o discovery monta
+                     validadeDoTokenSegundos (900)           ← IdentityTokenLifetimes.AccessToken
+                     sessaoSemAtividadeSegundos (1209600)    ← IdentityTokenLifetimes.RefreshToken
+  chavesDeAssinatura intervaloDeTroca, prePublicacao,        ← IdentityKeyRotationPolicy
+                     retencao, verificacao (segundos)
+                     chaves[]: kid, estado, criadaEm,        ← identity_keys (projeção sem o material)
+                       assinaDesde, assinaAte,                  × IdentityKeyRotationPolicy.Describe(agora)
+                       saiDaPublicacaoEm
+```
+
+- **Acesso:** na M1, todo usuário real e ativo (`CurrentUser`). O token de
+  serviço recebe `403` da política de fallback, e o token sem usuário, da
+  `CurrentUser`. A #184 restringe ao Admin.
+- **Estados**, na ordem do quadro: `em-uso` (assina agora; a mesma escolha do
+  anel), `proxima` (começa a assinar depois de agora, já no JWKS) e
+  `aposentando` (parou de assinar e ainda valida). A chave de cifra e a que já
+  saiu do anel não aparecem.
+- **O estado é o da política no instante da requisição**, não o snapshot do
+  anel: a troca real acontece no primeiro tique depois da data, até
+  `verificacaoSegundos` (1 h) depois. A tela diz isso.
+- **Durações de uma fonte só.** `Identity/IdentityTokenLifetimes.cs` define o
+  access token (15 min), o refresh (14 d, deslizante), o id token (20 min) e o
+  código (5 min). O registro do OpenIddict, o token que o `apps/api` gera para o
+  `apps/connectors` e a rota leem dali. O id token e o código são os padrões do
+  OpenIddict 7.7.2, agora ditos explicitamente. As janelas da rotação continuam
+  na `IdentityKeyRotationPolicy`. O `IdentityOverviewEndpointTests` compara a
+  resposta com as `OpenIddictServerOptions` do host e com as janelas gravadas:
+  uma constante trocada num lado só reprova.
+- **Sem estado "emissor desligado"**: sem url pública o boot já reprova. **Sem
+  campo "operando"**: com o anel fora, o gate responde `503` antes da rota.
+- **A leitura das chaves fica no `IdentityKeyRing`**
+  (`ListSigningKeysAsync`), que continua o único leitor de `identity_keys`. A
+  projeção vai ao SQL, e a coluna do material nem é selecionada.
+- **nginx do stack:** `identity` entrou no bloco de prefixos do `apps/api`, com o
+  desvio de navegação.
 
 ### Usuários locais e login (`apps/api`, #180)
 

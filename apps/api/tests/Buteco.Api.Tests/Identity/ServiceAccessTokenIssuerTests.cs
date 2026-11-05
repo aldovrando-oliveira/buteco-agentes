@@ -54,6 +54,11 @@ public class ServiceAccessTokenIssuerTests(ApiFactoryFixture factory) : IClassFi
         Assert.Equal(IdentityClients.ConnectorsScope, issuedToken.GetPayloadValue<string>(Claims.Scope));
         Assert.Equal(TimeSpan.FromMinutes(15), issuedToken.ValidTo - issuedToken.IssuedAt);
 
+        // A mesma duração que o OpenIddict dá a todo access token (leitura-identidade-emissor, D6).
+        var accessTokenLifetime = factory.Services.GetRequiredService<IOptionsMonitor<OpenIddictServerOptions>>()
+            .CurrentValue.AccessTokenLifetime;
+        Assert.Equal(accessTokenLifetime, issuedToken.ValidTo - issuedToken.IssuedAt);
+
         // O mesmo conjunto de nomes de claims, sem exceção (decisão do dono, Q3).
         Assert.True(ClaimNames(endpointToken).SequenceEqual(ClaimNames(issuedToken)),
             $"/connect/token: {Base64UrlEncoder.Decode(endpointToken.EncodedPayload)}\nno processo: {Base64UrlEncoder.Decode(issuedToken.EncodedPayload)}");

@@ -119,6 +119,87 @@ public class IdentityKeyRotationPolicyTests
         Assert.False(plan.NeedsEncryptionKey);
     }
 
+    // GET /identity (spec identity-issuer-overview, design.md da change
+    // leitura-identidade-emissor, D3): estado de cada chave pela mesma conta da rotação.
+
+    [Fact]
+    public void Describe_ListsInUseNextAndRetiring_InTheOrderOfTheIdentityBoard()
+    {
+        var now = _clock.GetUtcNow();
+        var retiring = Row(new IdentityKeyWindows(now.AddDays(-100), now.AddDays(-10), now.AddDays(5)));
+        var inUse = Row(new IdentityKeyWindows(now.AddDays(-10), now.AddDays(80), now.AddDays(95)));
+        var next = Row(new IdentityKeyWindows(now.AddDays(80), now.AddDays(170), now.AddDays(185)));
+
+        var described = IdentityKeyRotationPolicy.Describe([View(next), View(retiring), View(inUse)], now);
+
+        Assert.Equal(
+            [(inUse.Kid, IdentityKeyState.InUse), (next.Kid, IdentityKeyState.Next), (retiring.Kid, IdentityKeyState.Retiring)],
+            described.Select(d => (d.Key.Kid, d.State)));
+    }
+
+    [Fact]
+    public void Describe_AtTheExactBorders_FollowsTheRingOperators()
+    {
+        var now = _clock.GetUtcNow();
+        var startsNow = Row(new IdentityKeyWindows(now, now.AddDays(90), now.AddDays(105)));
+        var stopsNow = Row(new IdentityKeyWindows(now.AddDays(-90), now, now.AddDays(15)));
+        var leavesNow = Row(new IdentityKeyWindows(now.AddDays(-105), now.AddDays(-15), now));
+
+        var described = IdentityKeyRotationPolicy.Describe([View(startsNow), View(stopsNow), View(leavesNow)], now);
+
+        Assert.Equal(
+            [(startsNow.Kid, IdentityKeyState.InUse), (stopsNow.Kid, IdentityKeyState.Retiring)],
+            described.Select(d => (d.Key.Kid, d.State)));
+    }
+
+    [Fact]
+    public void Describe_LeavesOutTheKeyThatNoLongerValidates()
+    {
+        var now = _clock.GetUtcNow();
+        var inUse = Row(new IdentityKeyWindows(now.AddDays(-1), now.AddDays(89), now.AddDays(104)));
+        var expired = Row(new IdentityKeyWindows(now.AddDays(-200), now.AddDays(-110), now.AddDays(-1)));
+
+        var described = IdentityKeyRotationPolicy.Describe([View(inUse), View(expired)], now);
+
+        Assert.Equal([inUse.Kid], described.Select(d => d.Key.Kid));
+    }
+
+    [Fact]
+    public void Describe_InUse_IsTheKeyTheRingSnapshotSignsWith()
+    {
+        // Duas chaves assinando ao mesmo tempo não acontecem com as janelas contíguas, mas a
+        // regra de desempate tem que ser a do snapshot, e é aqui que ela aparece.
+        var now = _clock.GetUtcNow();
+        var cipher = new IdentityKeyMaterialCipher(Microsoft.Extensions.Options.Options.Create(
+            new Buteco.Api.Identity.IdentityIssuerOptions { SigningKeyEncryptionKey = Support.TestAuthentication.IdentitySigningKeyEncryptionKey }));
+        var factory = new IdentityKeyFactory(cipher);
+        var older = factory.CreateSigningKey(new IdentityKeyWindows(now.AddDays(-30), now.AddDays(60), now.AddDays(75)), now.AddDays(-37));
+        var newer = factory.CreateSigningKey(new IdentityKeyWindows(now.AddDays(-5), now.AddDays(85), now.AddDays(100)), now.AddDays(-12));
+        var encryption = factory.CreateEncryptionKey(IdentityKeyRotationPolicy.EncryptionKey(now.AddDays(-37)), now.AddDays(-37));
+
+        var signingKid = IdentityKeyRingSnapshot.Build([older, newer, encryption], now, cipher).SigningKid;
+        var described = IdentityKeyRotationPolicy.Describe([View(older), View(newer)], now);
+
+        Assert.Equal(signingKid, described.Single(d => d.State == IdentityKeyState.InUse).Key.Kid);
+        Assert.Equal(newer.Kid, signingKid);
+    }
+
+    [Fact]
+    public void Plan_CreatesTheNextKey_ExactlyAtThePrePublicationThreshold()
+    {
+        // A pré-publicação que o GET /identity informa é o limiar que o Plan usa.
+        var now = _clock.GetUtcNow();
+        var justInside = Row(new IdentityKeyWindows(now.AddDays(-80), now + IdentityKeyRotationPolicy.PrePublication - TimeSpan.FromSeconds(1), now.AddDays(30)));
+        var justOutside = Row(new IdentityKeyWindows(now.AddDays(-80), now + IdentityKeyRotationPolicy.PrePublication + TimeSpan.FromSeconds(1), now.AddDays(30)));
+        var encryption = Row(IdentityKeyRotationPolicy.EncryptionKey(now), IdentityKeyUsage.Encryption);
+
+        Assert.NotNull(IdentityKeyRotationPolicy.Plan([justInside, encryption], now).NewSigningKey);
+        Assert.Null(IdentityKeyRotationPolicy.Plan([justOutside, encryption], now).NewSigningKey);
+    }
+
+    private static IdentityKeyWindowsView View(IdentityKey key) =>
+        new(key.Kid, key.CreatedAt, key.SignsFrom, key.SignsUntil, key.ValidatesUntil);
+
     private static List<IdentityKey> Initial(DateTimeOffset now) =>
     [
         Row(IdentityKeyRotationPolicy.FirstSigningKey(now)),
