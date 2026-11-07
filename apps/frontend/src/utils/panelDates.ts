@@ -2,6 +2,9 @@
 // Minha conta"). "Hoje" e "ontem" são decididos pelo calendário do fuso, e não pelo UTC: às
 // 01:00 de São Paulo, 23:30 da véspera é "ontem" mesmo sendo o mesmo dia em UTC. Os
 // parâmetros existem para o teste fixar o agora e o fuso.
+//
+// Comum a Minha conta e a Usuários, que usa o mesmo formato relativo (decisão do dono Q3 da
+// change usuarios-convites-identidade-painel) e o formato curto do vencimento do convite.
 
 interface Parts {
   day: string;
@@ -43,4 +46,10 @@ export function formatRelative(iso: string, now: Date = new Date(), timeZone?: s
   if (dayKey(p) === dayKey(hoje)) return `hoje, ${hora}`;
   if (dayKey(p) === dayKey(ontem)) return `ontem, ${hora}`;
   return `${p.day}/${p.month}/${p.year}, ${hora}`;
+}
+
+/** `dd/mm, HH:MM`, sem o ano: o vencimento do convite na lista de Usuários ("vence em 23/10, 18:02"). */
+export function formatShortDateTime(iso: string, timeZone?: string): string {
+  const p = partsOf(new Date(iso), timeZone);
+  return `${p.day}/${p.month}, ${p.hour}:${p.minute}`;
 }

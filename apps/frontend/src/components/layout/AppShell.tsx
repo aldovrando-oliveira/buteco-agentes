@@ -19,7 +19,9 @@ import {
   MessagesSquare,
   Moon,
   Server,
+  Shield,
   Sun,
+  Users,
 } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router';
 import { Logo } from '../brand/Logo';
@@ -45,6 +47,14 @@ const navItems = [
   { to: '/insights', label: 'Insights', icon: ChartColumn },
 ];
 
+// A seção "Acesso" do protótipo de autenticação, depois de Insights. "Aplicações externas"
+// só chega com a M2 (#184, #185): o item só existe quando a página existe (design.md da
+// change usuarios-convites-identidade-painel, D1).
+const accessItems = [
+  { to: '/users', label: 'Usuários', icon: Users },
+  { to: '/identity', label: 'Identidade', icon: Shield },
+];
+
 export function AppShell() {
   const location = useLocation();
   const naMinhaConta = location.pathname === '/account' || location.pathname.startsWith('/account/');
@@ -65,6 +75,31 @@ export function AppShell() {
     setSaindo(true);
     await logout();
   };
+
+  const navItem = ({ to, label, icon: Icon }: (typeof navItems)[number]) => (
+    <NavLink
+      key={to}
+      component={Link}
+      to={to}
+      label={label}
+      leftSection={<Icon size={18} />}
+      // Ativo para todo o grupo de rotas, não só para a raiz dele: o
+      // detalhe, a criação e a edição continuam marcando o item.
+      active={location.pathname.startsWith(to)}
+      // O fundo já resolve para o tom 1 da escala de destaque — o
+      // --acsf do protótipo — sem declarar cor aqui. A cor do texto,
+      // não: a variante clara do NavLink usa o tom 9, e o protótipo
+      // quer a cor de destaque. O raio também não vem por prop: o
+      // NavLink não expõe `radius`, e o default é um bloco reto de
+      // largura inteira (D5).
+      styles={{
+        root: {
+          borderRadius: 'var(--mantine-radius-sm)',
+          '--nl-color': 'var(--mantine-primary-color-filled)',
+        },
+      }}
+    />
+  );
 
   return (
     // Sem header: a marca sobe para o topo da barra e o controle de tema desce
@@ -87,30 +122,13 @@ export function AppShell() {
         </MantineAppShell.Section>
 
         <MantineAppShell.Section grow component={ScrollArea} p="xs">
-          {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              component={Link}
-              to={to}
-              label={label}
-              leftSection={<Icon size={18} />}
-              // Ativo para todo o grupo de rotas, não só para a raiz dele: o
-              // detalhe, a criação e a edição continuam marcando o item.
-              active={location.pathname.startsWith(to)}
-              // O fundo já resolve para o tom 1 da escala de destaque — o
-              // --acsf do protótipo — sem declarar cor aqui. A cor do texto,
-              // não: a variante clara do NavLink usa o tom 9, e o protótipo
-              // quer a cor de destaque. O raio também não vem por prop: o
-              // NavLink não expõe `radius`, e o default é um bloco reto de
-              // largura inteira (D5).
-              styles={{
-                root: {
-                  borderRadius: 'var(--mantine-radius-sm)',
-                  '--nl-color': 'var(--mantine-primary-color-filled)',
-                },
-              }}
-            />
-          ))}
+          {navItems.map(navItem)}
+          {/* O rótulo da seção, como o `.navsec` do quadro: não é link nem item de
+              navegação, e nunca fica ativo. O tom é o `dimmed`, o mesmo do `SectionLabel`. */}
+          <Text size="xs" fw={600} tt="uppercase" c="dimmed" px={10} pt={14} pb={4} style={{ letterSpacing: '0.04em' }}>
+            Acesso
+          </Text>
+          {accessItems.map(navItem)}
         </MantineAppShell.Section>
 
         {/* O rodapé do protótipo de autenticação (quadro "Editar usuário"): avatar com

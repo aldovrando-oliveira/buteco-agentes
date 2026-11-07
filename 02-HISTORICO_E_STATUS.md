@@ -18395,3 +18395,83 @@ No compose de desenvolvimento, em `~/.cache/buteco-agents/251-medicao/`, com tod
 - **O deploy de produção** está no `docs/deployment.md`, seção "Healthcheck do RabbitMQ (#251)": janela sem uso, `up -d rabbitmq`, conferência com uma task de ponta a ponta, e rollback.
 - **A pausa do broker nas suítes** (`suite-250.sh`) deixa de ser necessária. O `suite-251.sh` tem a `PAUSAR_RABBIT=0`.
 - **#253:** os consumidores dos `workers` conectam com nova tentativa no boot.
+
+## `usuarios-convites-identidade-painel` — Usuários (lista e convites), Identidade e a seção "Acesso" no painel (#250)
+
+**Change proposta e implementada em 07/11/2026**, na branch `feat/250-usuarios-convites-identidade-painel`, num worktree próprio, a partir de `a852946` (merge do PR #249). Entrega M1 · 16 de 18. É a primeira parte do passo C da #183, dividido pelo dono em 07/11/2026 (Q1, opção A); a #183 fica com Editar usuário. **A validação visual (10.4) fica para a homologação da M1** (decisão do dono, 08/11/2026). O dono valida quadro a quadro depois que todas as issues da entrega estiverem mergeadas, sem issue própria, e o PR é mergeado antes dela.
+
+- **O que entra no `apps/frontend`:**
+  - **a seção "Acesso" do menu**, com Usuários e Identidade. O rótulo vai no tom `dimmed`, pelo contraste. "Aplicações externas" fica fora até a M2;
+  - **`/users`:**
+    - a lista (`GET /users`), na ordem do servidor;
+    - o estado com o vencimento do convite, vindo do servidor;
+    - o último acesso no formato de Minha conta;
+    - valores desconhecidos em selo neutro;
+  - **as três ações:**
+    - "Convidar usuário" dentro do cartão e "Gerar novo link" na linha, as duas com a senha de quem chama: vazia não é enviada, o `401` fica no campo sem deslogar, e o `423` vai no aviso;
+    - "Cancelar convite" com confirmação na linha;
+    - o `409` de convite já aceito, com o aviso azul e a lista relida;
+  - **o link do convite**, mostrado uma vez, com "Copiar link". Ele fica só no estado do cartão, com chamadas diretas sem `useMutation`, e nada vai a storage, URL, `history.state` ou cache;
+  - **a linha sem "Editar":** divergência temporária, com um guarda contra link sem destino, que a #183 troca;
+  - **`/identity`:**
+    - o emissor e as chaves de assinatura (`GET /identity`), na ordem da resposta;
+    - as durações pela maior unidade exata, sem número escrito à mão;
+    - "15 min para usuários e módulos" (Q10);
+    - o estado "Indisponível", com polling condicional por função pura (`retryWhileFailing`, convenção 20) só enquanto houver erro;
+  - **`failureNotice`, `useBlockedUntil` e as datas** saem de `features/account/` para `utils/` e `hooks/` (segundo consumidor real, convenção 2). O aviso passa a reconhecer o erro pelos campos, e não pela classe (Q2).
+- **Nada fora do `apps/frontend`.** Sem dependência nova, sem migration, sem mudança no nginx.
+- **Capacidades:** `panel-users-page` e `panel-identity-page`, novas; `frontend-app-shell`, um requisito novo ("Seção Acesso na navegação").
+
+**Decisões do dono** (07/11/2026; detalhe no design, "Decisões do dono"):
+- **Q1:** dois PRs; a #250 nova, com a #183 dependendo dela;
+- **Q2:** avisos e `Retry-After` num lugar comum, conferindo os campos do erro;
+- **Q3:** um formato só de data, o de Minha conta;
+- **Q4 e Q5** (para a #183): o convidado em `/users/:id` volta para `/users`; o link de redefinição com "Vale até {expiraEm}";
+- **Q6:** a senha vazia não é enviada;
+- **Q7:** os erros do novo link;
+- **Q8:** a linha nova na ordem do servidor, marcada;
+- **Q9:** o polling só em erro;
+- **Q10:** "usuários e módulos".
+
+Divergências de texto contra o protótipo: Q3 (o último acesso), Q10 (a validade do token) e, na #183, Q5. O protótipo foi lido na versão `1794066606-fba2`.
+
+### Premissas que caíram (convenção 9)
+
+O registro completo está no `tasks.md` da change ([`openspec/changes/archive/2026-11-07-usuarios-convites-identidade-painel/tasks.md`](openspec/changes/archive/2026-11-07-usuarios-convites-identidade-painel/tasks.md)).
+- **"Nada em storage" lido por `Object.keys`:** o `MemoryStorage` da suíte não expõe as chaves assim, e o caso passou contra o defeito. Passou a ler por `length` e `key(i)` e a afirmar que vê o `buteco.sessao`. A mesma armadilha da #246, em outra forma.
+- **O menu com exatamente 6 ícones:** o caso antigo foi estendido aos 8 itens, sem tirar asserção.
+- **O tom terciário do `.navsec`:** virou o `dimmed`, pelo motivo já registrado no `SectionLabel`.
+- **As rodadas da suíte com o RabbitMQ do compose de pé** saíram inconclusivas: o healthcheck dele custa ~1 núcleo ocioso e acumula sob carga (#251). As válidas foram com o broker pausado durante a suíte (decisão do dono).
+
+### O que a implementação mediu
+
+| suíte `apps/frontend` | baseline `a852946` | change | por nome |
+|---|---|---|---|
+| válida, com o RabbitMQ pausado (`250-alterna-20261107-1815/`) | **2.166 em 168**, 147 s, CPU mínima 32 | **2.248 em 177**, 160 s, CPU mínima 39 | nenhum sumiu ou mudou de nome (os 3 de `accountDates` vão, com o mesmo nome, para `panelDates.test.ts`); entram 82 |
+| inconclusivas, com o broker de pé (`250-frontend-20261107/`, `-r2/`) | — | 39 e 32 reprovações, quase todas `timed out`, fora da change | — |
+
+- **Depois do rebase sobre o `main` com a #251** (08/11/2026, `250-pos-rebase-r1/`): APROVADA, com 2.248 em 177 arquivos e o broker **de pé** (healthcheck TCP), em 139 s e com a CPU mínima em 58. Por nome, ficou idêntica à rodada válida anterior.
+- **Guardas (convenção 15):** 33, todos vistos reprovar contra o defeito nomeado, com a volta pela cópia e o sha conferido, em `~/.cache/buteco-agents/250-guardas/`.
+- **Lint e build:** sem erro. O bundle foi de 1.135,49 kB para 1.155,22 kB (+19,73 kB; +5,46 kB com gzip).
+- **Conferência no navegador** (Chrome, com o Vite e o `apps/api` do worktree; ferramentas em `~/.cache/buteco-agents/250-conferencia/`):
+  - a senha vazia não chega ao servidor;
+  - a errada fica no campo e conta **uma** falha no banco;
+  - o convite criado, com o link uma vez, fora de storage, URL e `history.state`, e fora do DOM depois de "Concluir" e de sair da tela;
+  - o novo link, o cancelamento, e o `409` de um convite aceito pela rota pública;
+  - a Identidade no ar, parada ("Indisponível", sem deslogar) e de volta sozinha, sem pedido novo depois do `200`;
+  - o bloqueio depois de 5 falhas.
+
+  O "Copiado ✓" e o botão bloqueado pelo `Retry-After` (ilegível no desenvolvimento) ficaram para a suíte e para a validação visual.
+- **Validação visual (convenção 14): na homologação da M1** (decisão do dono, 08/11/2026). A lista de quadros e estados está na tarefa 10.4 e no topo do PR.
+- **Tamanho (convenção 18):**
+  - produção: +1.291 / −34 em 23 arquivos, contra ~1.010 projetados (+28%), mais +36 / −6 nos movidos;
+  - testes: +1.222 / −1 em 11, contra ~1.180 (+4%), mais +6 / −1 no movido;
+  - duplos: +92, contra ~120 (−23%).
+
+  A produção passou na máquina de estados do cartão de Usuários e no hook da senha de quem chama, que não estava projetado.
+
+### Para as próximas
+
+- **#183:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6713401861) traz os avisos e as datas no lugar comum, o `CallerPasswordField`, o `InviteLinkPanel`, o guarda da linha sem "Editar" e a pausa do RabbitMQ nas suítes. A parte do design que fica com ela está no [comentário da divisão](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6710514538).
+- **#184:** o [comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/184#issuecomment-6713632615) registra que Usuários e Identidade abrem para todo usuário ativo na M1, e o que ela restringe no `apps/api` e no painel.
+- **#251:** o healthcheck do RabbitMQ; também comentado na [#226](https://github.com/aldovrando-oliveira/buteco-agentes/issues/226#issuecomment-6713392834) e na [#176](https://github.com/aldovrando-oliveira/buteco-agentes/issues/176#issuecomment-6713393019).

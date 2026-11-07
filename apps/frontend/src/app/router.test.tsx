@@ -466,6 +466,19 @@ describe('Minha conta', () => {
   });
 });
 
+describe('Usuários e Identidade', () => {
+  it.each(['/users', '/identity'])('%s sem sessão vai ao /entrar com o voltarPara', async (rota) => {
+    signOutForTest();
+    const router = createMemoryRouter(appRoutes, { initialEntries: [rota] });
+
+    renderProviders(<RouterProvider router={router} />);
+
+    expect(await screen.findByLabelText('E-mail')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/entrar');
+    expect(new URLSearchParams(router.state.location.search).get('voltarPara')).toBe(rota);
+  });
+});
+
 describe('AppRouter', () => {
   beforeEach(() => {
     // AS SEIS, e não só listAgents: a raiz leva ao inventário, que consulta os

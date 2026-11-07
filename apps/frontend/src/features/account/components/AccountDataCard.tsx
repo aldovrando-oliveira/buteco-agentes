@@ -1,7 +1,7 @@
 import { Box, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { getAccount } from '../api/accountApi';
-import { formatDate, formatRelative } from '../accountDates';
+import { formatDate, formatRelative } from '../../../utils/panelDates';
 import { ACCOUNT_QUERY_KEY } from '../queryKeys';
 import { AccountCard, CardLoadError, CardLoading } from './AccountCard';
 
