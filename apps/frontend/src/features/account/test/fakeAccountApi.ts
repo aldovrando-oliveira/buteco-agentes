@@ -1,0 +1,114 @@
+import { vi } from 'vitest';
+
+// O `fetch` falso de Minha conta, por método e caminho (sem a URL base nem a query), ligado
+// ao `fetch` global que o `authRuntime` usa: o `sessionFetch` e o `request<T>` da feature
+// correm de verdade em cima dele, e o `401` de recusa da rota passa pelo critério real
+// (design.md da change minha-conta-painel, D10 e D11).
+//
+// Cada rota tem uma fila de respostas; a última fica valendo para os pedidos seguintes. Um
+// pedido sem resposta falha o teste com o nome da rota.
+
+export type FakeReply =
+  | { status: number; body?: unknown; problem?: string; headers?: Record<string, string> }
+  | Response
+  | 'rede'
+  | (() => Promise<FakeReply>);
+
+export interface FakeRequest {
+  method: string;
+  path: string;
+  body?: unknown;
+  authorization?: string;
+}
+
+export function problem(status: number, title: string, headers: Record<string, string> = {}): FakeReply {
+  return { status, problem: title, headers };
+}
+
+function toResponse(reply: Exclude<FakeReply, Response | 'rede' | (() => Promise<FakeReply>)>): Response {
+  if (reply.problem !== undefined) {
+    return new Response(JSON.stringify({ title: reply.problem, status: reply.status }), {
+      status: reply.status,
+      headers: { 'Content-Type': 'application/problem+json', ...reply.headers },
+    });
+  }
+  if (reply.body === undefined) {
+    return new Response(null, { status: reply.status, headers: reply.headers });
+  }
+  return new Response(JSON.stringify(reply.body), {
+    status: reply.status,
+    headers: { 'Content-Type': 'application/json', ...reply.headers },
+  });
+}
+
+export function fakeAccountApi(routes: Record<string, FakeReply | FakeReply[]> = {}) {
+  const queues = new Map<string, FakeReply[]>(
+    Object.entries(routes).map(([key, reply]) => [key, Array.isArray(reply) ? [...reply] : [reply]]),
+  );
+  const requests: FakeRequest[] = [];
+
+  const resolve = async (reply: FakeReply): Promise<Response> => {
+    if (reply === 'rede') throw new TypeError('Failed to fetch');
+    if (typeof reply === 'function') return resolve(await reply());
+    if (reply instanceof Response) return reply.clone();
+    return toResponse(reply);
+  };
+
+  const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+    const url = new URL(input, 'http://localhost');
+    const method = (init?.method ?? 'GET').toUpperCase();
+    const key = `${method} ${url.pathname}`;
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    requests.push({
+      method,
+      path: url.pathname,
+      body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      authorization: headers.Authorization,
+    });
+    const queue = queues.get(key);
+    if (!queue || queue.length === 0) throw new Error(`fakeAccountApi: sem resposta para ${key}`);
+    const reply = queue.length > 1 ? queue.shift()! : queue[0];
+    return resolve(reply);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  return {
+    fetch: fetchMock,
+    requests,
+    /** Troca (ou acrescenta) a resposta de uma rota. */
+    on(key: string, ...replies: FakeReply[]) {
+      queues.set(key, replies);
+    },
+    /** Os pedidos a uma rota, na ordem. */
+    calls(key: string) {
+      const [method, path] = key.split(' ');
+      return requests.filter((r) => r.method === method && r.path === path);
+    },
+  };
+}
+
+/** As respostas de uma conta comum, para os cartões que o teste não exercita. */
+export const ACCOUNT = {
+  id: 'u-1',
+  nome: 'Ana Souza',
+  email: 'ana@exemplo.test',
+  criadoEm: '2026-08-12T13:00:00Z',
+  ultimoAcesso: '2026-11-06T17:15:00Z',
+  duasEtapas: false,
+};
+
+export const TWO_FACTOR_OFF = { ativa: false, ativadaEm: null, codigosRestantes: 0, cadastroDisponivel: true };
+
+export const SESSIONS = [
+  { id: 's-1', criadaEm: '2026-11-06T12:02:00Z', ultimoUso: '2026-11-06T17:45:00Z', atual: true },
+  { id: 's-2', criadaEm: '2026-10-28T21:30:00Z', ultimoUso: '2026-11-06T00:15:00Z', atual: false },
+  { id: 's-3', criadaEm: '2026-10-20T11:45:00Z', ultimoUso: '2026-10-22T20:00:00Z', atual: false },
+];
+
+export function defaultRoutes(): Record<string, FakeReply> {
+  return {
+    'GET /account': { status: 200, body: ACCOUNT },
+    'GET /account/two-factor': { status: 200, body: TWO_FACTOR_OFF },
+    'GET /account/sessions': { status: 200, body: SESSIONS },
+  };
+}

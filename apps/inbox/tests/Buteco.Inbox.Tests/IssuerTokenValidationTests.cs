@@ -117,6 +117,24 @@ public sealed class IssuerTokenValidationTests(PostgresOnlyFixture postgres) : I
         Assert.Equal("Bearer", Assert.Single(response.Headers.WwwAuthenticate).Scheme);
     }
 
+    // O painel separa os dois 401 pelo corpo (design.md da change minha-conta-painel, D10;
+    // decisão do dono Q0): o 401 com application/problem+json é a recusa da própria rota, e
+    // volta à tela; o 401 de token, sem corpo, faz o apps/frontend/src/auth/sessionFetch.ts
+    // renovar e repetir. Um corpo problem+json aqui faria o painel parar de renovar no token
+    // vencido do apps/inbox. A #247 troca o critério por um campo de tipo.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("nao.e.um.token")]
+    public async Task TokenRejection_401_HasNoProblemBody_ThePanelRenewsOnThis(string? token)
+    {
+        var response = await _factory.CreateClientWithToken(token).GetAsync("/channels");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("Bearer", Assert.Single(response.Headers.WwwAuthenticate).Scheme);
+        Assert.NotEqual("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
     private async Task<HttpStatusCode> GetChannelsAsync(string token) =>
         (await _factory.CreateClientWithToken(token).GetAsync("/channels")).StatusCode;
 }

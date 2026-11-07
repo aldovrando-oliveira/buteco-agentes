@@ -70,7 +70,12 @@ como no protótipo de autenticação (quadro "Editar usuário"), com:
 - no meio, duas linhas: o nome do id token (`panel-issuer-session`), com peso 500 e
   cortado com reticências quando não couber, e, abaixo, em texto menor e cinza, o
   e-mail do id token. Sem nome no id token, o e-mail SHALL ir na primeira linha, e a
-  segunda SHALL ficar vazia;
+  segunda SHALL ficar vazia. As duas linhas SHALL formar um link só para `/account`
+  (Minha conta, `panel-account-page`), com `title` "Minha conta", sem aparência de
+  link (sem sublinhado e sem a cor de link) e com o foco visível. O link SHALL levar
+  `aria-current="page"` quando a rota atual for `/account` ou começar com `/account/`,
+  e SHALL NOT levá-lo nas outras rotas. O avatar e os dois botões SHALL ficar fora do
+  link. Nenhum item de menu SHALL levar a Minha conta;
 - à direita, dois botões só de ícone, nesta ordem: o controle de tema (lua no
   claro, sol no escuro, com o comportamento e o rótulo acessível de
   `frontend-scaffold`) e o "Sair" (ícone de saída, com `aria-label` e `title`
@@ -107,6 +112,18 @@ só revisa o rodapé.
 #### Scenario: Saindo enquanto espera o lock
 - **WHEN** o usuário aciona o "Sair" enquanto uma renovação em outra aba segura o lock
 - **THEN** o botão fica desabilitado, com `aria-label` "Saindo…" e um indicador de carregamento no lugar do ícone, e a navegação ao logout do emissor só acontece depois de o lock ser solto
+
+#### Scenario: O nome no rodapé leva a Minha conta
+- **WHEN** o usuário, em `/agents`, aciona o nome no rodapé
+- **THEN** o painel vai a `/account`, e o link não tem `aria-current`
+
+#### Scenario: Em Minha conta, o link marca a página atual
+- **WHEN** a rota atual é `/account`
+- **THEN** o link do rodapé tem `aria-current="page"`, e o menu da barra lateral não tem item marcado como ativo para Minha conta
+
+#### Scenario: O avatar e os botões ficam fora do link
+- **WHEN** o rodapé é renderizado
+- **THEN** o avatar, o botão de tema e o "Sair" não estão dentro do link para `/account`, e acionar o tema ou o "Sair" não navega para `/account`
 
 ### Requirement: Ícones vindos de uma biblioteca compartilhada
 O sistema SHALL obter os ícones da interface de uma biblioteca de ícones

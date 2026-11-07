@@ -18260,3 +18260,82 @@ Suítes pelo `~/.cache/buteco-agents/bin/suite-245.sh`, com a regra assimétrica
 - **#246:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/246#issuecomment-6700633258) traz o `PasswordField`, a política da senha, o passo do código e o aviso "Senha alterada.", que fica para ela.
 - **#183:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6700633531) traz os links, que agora têm página.
 - **#247:** o campo de tipo no `401` do passo do código.
+
+## `minha-conta-painel` — Minha conta no painel: dados, senha, 2 etapas e sessões (#246)
+
+**Change proposta e implementada em 06–07/11/2026**, na branch `feat/246-minha-conta-painel`, num worktree próprio, a partir de `8884d89` (merge do PR #248). Entrega M1 · 15 de 17, o passo B da divisão da #183. Depende da #245. A #183 (passo C) vem depois.
+
+- **O que entra no `apps/frontend`:**
+  - **`/account` (Minha conta)**, aberta pelo nome no rodapé da casca, sem item no menu. O link marca a página atual;
+  - **quatro cartões**, cada um com o próprio carregamento e erro:
+    - **Dados**, só leitura, do `GET /account`. O "use Usuários" fica sem link até a #183;
+    - **Senha**: depois do `204`, o painel grava o aviso no `sessionStorage` e sai pelo logout do emissor, e o `/entrar` mostra "Senha alterada. Entre com a nova senha.";
+    - **Verificação em 2 etapas**: ligar com o QR (`qrcode.react` 4.2.0, ISC, SVG sem `innerHTML`) ou o segredo com "Copiar"; os 10 códigos com "Copiar todos" e o `.txt` gerado no navegador; gerar novos códigos; remover. O segredo e os códigos ficam só no estado do componente, sem `useMutation`, storage, URL ou `state` do router;
+    - **Sessões**: "Sessão N" pela posição, a atual pelo campo, encerrar uma e encerrar as outras com confirmação, e "Encerrar e sair" pelo logout do emissor.
+- **No `sessionFetch`:** o `401` com `application/problem+json` (senha ou código errado) volta à tela sem renovar.
+- **No logout:** a aba que sai fica marcada, e a rota protegida mostra "Saindo…" em vez de passar pelo `/entrar` interno.
+- **Nos três apps de backend:** só um teste cada, `TokenRejection_401_HasNoProblemBody_ThePanelRenewsOnThis`.
+- **Deploy:** o compose de produção passa a levar `Identity__TwoFactor__EnrollmentEnabled` de `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED` (`:-false`), com o `.env.prod.example` e as notas de abrir, conferir e voltar atrás.
+- **Capacidades:** `panel-account-page`, nova; `frontend-app-shell`, `operator-login-ui` e `panel-issuer-session`, alteradas; `issuer-token-validation`, um requisito novo.
+
+**Decisões do dono** (06–07/11/2026; detalhe no design, "Decisões do dono"):
+- **Q0:** o `401` com problem+json volta à tela, com o teste do `401` sem corpo em cada app; a #247 passa a cobrir também essas recusas;
+- **Q1:** o aviso pelo `sessionStorage`;
+- **Q2:** aviso no cartão para os estados sem quadro;
+- **Q3:** "use Usuários" sem link;
+- **Q4:** "Sessão N" pela posição, e "agora" na atual;
+- **Q5:** poucos códigos com 3 ou menos;
+- **Q6:** os textos do quadro no QR;
+- **Q7:** um PR só;
+- **Q8:** a variável do cadastro no compose;
+- **Q9:** "Encerrar e sair" pelo logout, sem confirmação;
+- **Q10:** os textos de 1 e 0 sessões encerradas;
+- **Q11 (achado da conferência):** a aba que sai mostra "Saindo…" (opção 3).
+
+O protótipo foi lido na versão `1794015615-ba72`, mais nova que a citada no pedido. Nenhuma divergência.
+
+### Premissas que caíram (convenção 9)
+
+O registro completo está no `tasks.md` da change ([`openspec/changes/archive/2026-11-07-minha-conta-painel/tasks.md`](openspec/changes/archive/2026-11-07-minha-conta-painel/tasks.md)).
+- **"O `sessionFetch` só renova no `401` de token"** (exploração): toda recusa de senha ou código das rotas autenticadas também é `401`. Uma senha errada em Minha conta repetia o pedido (duas falhas no bloqueio) e deslogava. Conferido contra o servidor: o `401` de token vem sem corpo, e o de recusa com `application/problem+json`. Mudou comportamento, e foi a Q0.
+- **"A chave do aviso, gravada antes do logout, chega ao `/entrar`"** (D3): o `logout()` apaga o registro antes de a navegação descarregar a página, e o `ProtectedRoute` levava o SPA ao `/entrar?voltarPara=…`, que consumia a chave antes do `/entrar` do logout. Instrumentado no Chrome. Mudou comportamento, e foi a Q11. O mesmo intervalo fazia todo "Sair" mostrar o `/entrar` por um instante.
+- **"As mutações com `gcTime: 0` tiram o segredo do cache"** (D5): o observador do `useMutation` guarda o resultado enquanto o cartão está montado. Viraram chamadas diretas, o que só reforça a garantia.
+- **Dois testes não podiam reprovar como estavam:** "nada no storage" lia o `Storage` do jsdom por spread, que não enumera as chaves, e o guarda passou na primeira vez; o caso novo do `ProtectedRoute` reprovava na árvore limpa por falta do `MantineProvider`. Os dois foram corrigidos antes do guarda valer.
+- **A confirmação de "Encerrar as outras" com uma sessão só** dizia "as outras 1 sessões". Achada na conferência, corrigida com teste e guarda.
+- **Documentação que a change tornou falsa:** o `development.md`, o `configuration.md` e as seções da #218 e da #245 do `deployment.md` diziam "até a #246". Todos foram corrigidos.
+
+### O que a implementação mediu
+
+Suítes pelo `~/.cache/buteco-agents/bin/suite-246.sh`, com a regra assimétrica, em `~/.cache/buteco-agents/baseline-246-20261106-2304/`, `246-frontend-20261107-0104-r2/` e `246-backend-20261107-0008/`.
+
+| suíte | baseline `8884d89` | change | por nome |
+|---|---|---|---|
+| `apps/frontend` | 2.079 em 160 arquivos | **2.166 em 168** | os 2.079 aprovados, nenhum sumiu ou mudou de nome; entram 87 |
+| `apps/api` (filtro `IssuerToken`) | 14 | **16** | entram os 2 de `TokenRejection_401_…` |
+| `apps/inbox` (filtro `IssuerToken`) | 24 | **26** | entram os 2 |
+| `apps/connectors` (filtro `IssuerToken`) | 30 | **32** | entram os 2 |
+
+- **Guardas (convenção 15):** todos vistos reprovar contra o defeito nomeado, com a volta pela cópia e o sha conferido. Registro em `~/.cache/buteco-agents/246-guardas/`.
+- **CPU:** as rodadas foram verdes com o `CPU_Speed_Limit` caindo até 46 a 62, e verde conta mesmo assim.
+- **Lint e build:** sem erro. O bundle foi de 1.097,94 kB para 1.134,93 kB (+36,99 kB; +11,72 kB com gzip), dos quais ~16,6 kB são do `qrcode.react`.
+- **Conferência no navegador** (Chrome, com o Vite e o `apps/api` do worktree; ferramentas em `~/.cache/buteco-agents/246-conferencia/`):
+  - senha e código errados sem deslogar, com o bloqueio contando uma falha só;
+  - o cadastro de ponta a ponta, com o QR decodificado pelo `BarcodeDetector` do Chrome (rótulo "Buteco Agentes:conta.246@buteco.local");
+  - login com o código, gerar novos códigos, e remover com um código de recuperação em minúsculas;
+  - sessões em "dois navegadores" (sessões PKCE pela API), com o encerramento conferido pela renovação recusada;
+  - a troca de senha encerrando as outras sessões e mostrando "Senha alterada." no `/entrar` real, que não volta ao recarregar;
+  - o "Sair" sem o `/entrar` interno.
+- **O QR contra a CSP:** o build de produção servido com a CSP do `nginx.conf`. A CSP bloqueou script inline e `fetch` a outra origem, e nada no QR nem no "Copiar".
+- **Validação visual (convenção 14):** o dono validou quadro a quadro em 07/11/2026, sem divergência, com o app autenticador e o `.txt` baixado. O nome do app não foi informado.
+- **Tamanho (convenção 18):**
+  - produção: +1.516 / −17 em 24 arquivos, contra ~1.260 projetados (+20%);
+  - testes: +1.356 / −2 em 16, contra ~1.670 (−19%);
+  - duplos: +138, contra ~140 (−1%).
+
+  A produção passou no cartão das 2 etapas, nos helpers de falha e na correção da Q11, que não estava projetada.
+
+### Para as próximas
+
+- **#183:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6702276299) traz o `401` das ações com a senha de quem chama, os avisos de falha (candidatos a sair para um lugar comum no segundo consumidor), o "use Usuários" para virar link e o "Saindo…".
+- **#220:** o [comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/220#issuecomment-6702276561) lista o que sai com a opção do cadastro.
+- **#247:** passa a cobrir também os `401` de senha e código errados ([comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/247#issuecomment-6701299874)).

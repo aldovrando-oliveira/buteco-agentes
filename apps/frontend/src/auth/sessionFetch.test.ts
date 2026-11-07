@@ -65,6 +65,48 @@ describe('sessionFetch', () => {
     expect(t.runtime.assign).not.toHaveBeenCalled();
   });
 
+  // A recusa da própria rota (design.md da change minha-conta-painel, D10; decisão do dono
+  // Q0): o 401 com problem+json volta à tela como resposta, sem renovar nem repetir.
+  it('401 com problem+json volta à tela sem renovar nem repetir', async () => {
+    const t = setup(() => 200);
+    t.store.write(session(1, t.clock.now + 600_000));
+    t.fetch.mockImplementation(async (input, init) => {
+      if (input === '/connect/token') return tokenResponse(2);
+      t.calls.push({ url: input, auth: (init?.headers as Record<string, string> | undefined)?.Authorization });
+      return new Response(JSON.stringify({ title: 'Senha atual inválida.', status: 401 }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/problem+json; charset=utf-8' },
+      });
+    });
+
+    const response = await t.sessionFetch(`${API}/account/password`, { method: 'POST' });
+
+    expect(response.status).toBe(401);
+    expect(((await response.json()) as { title: string }).title).toBe('Senha atual inválida.');
+    expect(t.calls).toEqual([{ url: `${API}/account/password`, auth: 'Bearer access-1' }]);
+    expect(t.fetch.mock.calls.some(([input]) => input === '/connect/token')).toBe(false);
+    expect(t.store.read()?.accessToken).toBe('access-1');
+    expect(t.runtime.assign).not.toHaveBeenCalled();
+  });
+
+  // O 401 do JwtBearer: sem corpo e sem Content-Type.
+  it('401 sem corpo continua renovando e repete com o token novo', async () => {
+    const t = setup(() => 200);
+    t.store.write(session(1, t.clock.now + 600_000));
+    t.fetch.mockImplementation(async (input, init) => {
+      if (input === '/connect/token') return tokenResponse(2);
+      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization;
+      t.calls.push({ url: input, auth });
+      return auth === 'Bearer access-1' ? new Response(null, { status: 401 }) : new Response(null, { status: 204 });
+    });
+
+    const response = await t.sessionFetch(`${API}/account/password`, { method: 'POST' });
+
+    expect(response.status).toBe(204);
+    expect(t.calls.map((c) => c.auth)).toEqual(['Bearer access-1', 'Bearer access-2']);
+    expect(t.runtime.assign).not.toHaveBeenCalled();
+  });
+
   it('segundo 401 encerra a sessão e vai ao /entrar com o voltarPara da rota atual', async () => {
     const t = setup(() => 401);
     t.store.write(session(1, t.clock.now + 600_000));

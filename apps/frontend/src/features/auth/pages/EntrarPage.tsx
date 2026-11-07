@@ -20,7 +20,8 @@ import {
   type EntryFailure,
   type EntryNotice,
 } from '../entryNotices';
-import { CODIGO_INVALIDO, ENTRADA_EXPIROU, FALHA_NA_ENTRADA, INICIANDO, SEM_CONEXAO } from '../messages';
+import { CODIGO_INVALIDO, ENTRADA_EXPIROU, FALHA_NA_ENTRADA, INICIANDO, SEM_CONEXAO, SENHA_ALTERADA } from '../messages';
+import { clearPasswordChanged, hasPasswordChanged } from '../passwordChangedNotice';
 
 type Etapa = 'credenciais' | 'codigo';
 
@@ -61,8 +62,16 @@ export function EntrarPage() {
       : null,
   );
   const [seguro] = useState(hasSecureContextApis);
+  // Depois da troca da senha em Minha conta: lido na montagem e apagado no efeito abaixo
+  // (D3 da change minha-conta-painel). Vence o "sessão expirada" durante toda a página: uma
+  // renovação em voo na troca pode chegar aqui com `motivo=sessao-expirada`.
+  const [daTrocaDeSenha] = useState(hasPasswordChanged);
+  const [senhaAlterada, setSenhaAlterada] = useState(daTrocaDeSenha);
+  useEffect(() => {
+    clearPasswordChanged();
+  }, []);
   const motivo = params.get('motivo');
-  const sessaoExpirada = motivo === 'sessao-expirada';
+  const sessaoExpirada = motivo === 'sessao-expirada' && !daTrocaDeSenha;
 
   // Depois de 429 e 503, o botão volta quando passa o Retry-After; nada é reenviado
   // sozinho, porque é a senha (ou o código) da pessoa.
@@ -85,6 +94,7 @@ export function EntrarPage() {
   const handleSubmit = async (values: SessionInput) => {
     if (!seguro) return;
     setAviso(null);
+    setSenhaAlterada(false);
     setExpirou(false);
     setEnviando(true);
     const result = await createSession(values);
@@ -182,6 +192,11 @@ export function EntrarPage() {
                 {FALHA_NA_ENTRADA}
               </Alert>
             )}
+            {senhaAlterada && aviso === null && !expirou && (
+              <Alert color="green" role="status">
+                {SENHA_ALTERADA}
+              </Alert>
+            )}
             {sessaoExpirada && aviso === null && !expirou && (
               <Alert color="blue" role="status">
                 Sua sessão expirou. Entre novamente para continuar de onde parou.
@@ -190,7 +205,10 @@ export function EntrarPage() {
 
             <EntrarForm
               onSubmit={(values) => void handleSubmit(values)}
-              onIncomplete={() => setAviso({ tipo: 'erro', texto: INCOMPLETO })}
+              onIncomplete={() => {
+                setSenhaAlterada(false);
+                setAviso({ tipo: 'erro', texto: INCOMPLETO });
+              }}
               initialEmail={vindoDoLink && 'email' in vindoDoLink ? vindoDoLink.email : undefined}
               submitting={enviando}
               disabled={bloqueadoAte !== null}
