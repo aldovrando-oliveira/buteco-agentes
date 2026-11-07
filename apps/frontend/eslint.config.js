@@ -40,6 +40,15 @@ export default tseslint.config(
               name: 'rehype-raw',
               message: 'O ReactMarkdown não recebe HTML cru (D2 da change painel-entra-pelo-emissor).',
             },
+            // O PasswordInput não marca aria-invalid com erro (#170). O PasswordField, o
+            // único que o importa, desliga a regra na linha do import; o
+            // passwordFieldGuard.test.ts faz a mesma conferência dentro da suíte
+            // (design.md da change entrada-publica-painel, D6).
+            {
+              name: '@mantine/core',
+              importNames: ['PasswordInput'],
+              message: 'Use o PasswordField (components/forms/PasswordField), que marca aria-invalid com erro (#170).',
+            },
           ],
         },
       ],

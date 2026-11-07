@@ -4,6 +4,7 @@ import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from './ProtectedRoute';
 import { EntrarPage } from '../features/auth/pages/EntrarPage';
 import { EntrarRetornoPage } from '../features/auth/pages/EntrarRetornoPage';
+import { ConvitePage, RedefinirSenhaPage } from '../features/auth/pages/AccessLinkPage';
 import { AgentListPage } from '../features/agents/pages/AgentListPage';
 import { AgentCreatePage } from '../features/agents/pages/AgentCreatePage';
 import { AgentDetailPage } from '../features/agents/pages/AgentDetailPage';
@@ -35,11 +36,16 @@ import { SystemInsightsPage } from '../features/insights/pages/SystemInsightsPag
 // diff restrito ao invólucro (Decision 1).
 export const appRoutes: RouteObject[] = createRoutesFromElements(
   <>
-    {/* As únicas rotas sem sessão. `/login` fica para links e favoritos de antes do
+    {/* As rotas de entrada, sem sessão. `/login` fica para links e favoritos de antes do
         login pelo emissor (design.md da change painel-entra-pelo-emissor, D8). */}
     <Route path="entrar" element={<EntrarPage />} />
     <Route path="entrar/retorno" element={<EntrarRetornoPage />} />
     <Route path="login" element={<Navigate to="/entrar" replace />} />
+    {/* As páginas do link de uso único, sem sessão. Os caminhos são os que o apps/api
+        monta no link (`AccessLinkUrls`, #181 D9): mudar um exige mudar o outro (design.md
+        da change entrada-publica-painel, D7). */}
+    <Route path="convite" element={<ConvitePage />} />
+    <Route path="redefinir-senha" element={<RedefinirSenhaPage />} />
     <Route element={<ProtectedRoute />}>
       <Route element={<AppShell />}>
         {/* A raiz redireciona para o inventário; ela não É o inventário. O item

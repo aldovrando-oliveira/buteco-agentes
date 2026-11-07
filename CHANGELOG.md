@@ -314,6 +314,19 @@ o versionamento pretende seguir
     `apps/api` e pela rota. Nenhum valor muda; o id token e o código, que valiam pelo
     padrão do OpenIddict, passam a ser registrados explicitamente com os mesmos 20 e 5 min;
   - o nginx do stack passa a mandar `/identity` ao `apps/api`.
+- **O painel entra com as 2 etapas, e os links de convite e de redefinição abrem tela**
+  (#245, primeiro passo das telas da M1, #183):
+  - o `/entrar` pede o código depois da senha, para quem tem a verificação ligada: o
+    código do app ou um código de recuperação, no mesmo campo. O código errado aparece
+    no campo; a entrada expirada volta a e-mail e senha; bloqueio, limite e chave
+    trocada têm aviso próprio;
+  - "Esqueceu a senha?" orienta a pedir o link a um administrador, e o rodapé orienta a
+    pedir um convite;
+  - `/convite` e `/redefinir-senha`: a página tira o token do endereço antes de qualquer
+    pedido, guarda-o só na aba e o apaga no sucesso, no link inválido e ao sair; mostra
+    quem convidou e o e-mail travado; confere a política (12 a 128 caracteres) e a
+    repetição; e entra em seguida, passando pelo passo do código quando a conta tem as
+    2 etapas. Link vencido, usado ou cancelado mostra "Este link não vale mais".
 - **O token antigo e a chave compartilhada saem** (#182), último passo da troca do token de
   serviço (#234, #235, #236). Fecha a #117 e a #122:
   - os três apps aceitam só o access token do emissor do `apps/api`, num esquema só, e o
@@ -1208,6 +1221,12 @@ o versionamento pretende seguir
   módulo de sessão do emissor.
 
 ### Fixed
+
+- **Campo de senha com erro anunciado como inválido** (#170, na #245): o `PasswordInput`
+  do Mantine não põe `aria-invalid` no campo com erro, e o leitor de tela não o anunciava.
+  Todo campo de senha do painel passa a ser o `PasswordField`, que marca o atributo,
+  inclusive os tokens do WAHA e do Telegram; um teste da suíte e o ESLint barram o
+  `PasswordInput` direto.
 
 - **Login do usuário sem senha gravada** (#181): passa pela verificação contra o hash
   fictício, como o e-mail sem conta. Antes respondia sem derivar nada, e o tempo de

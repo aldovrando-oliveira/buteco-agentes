@@ -12,10 +12,11 @@ import { jsonResponse } from '../../../test/authFakes';
 
 const assign = vi.fn<(url: string) => void>();
 
-function renderPage(path = '/entrar') {
+function renderPage(path = '/entrar', state?: unknown) {
+  const [pathname, search = ''] = path.split('?');
   return render(
     <MantineProvider theme={theme}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[{ pathname, search: search ? `?${search}` : '', state }]}>
         <EntrarPage />
       </MemoryRouter>
     </MantineProvider>,
@@ -66,14 +67,34 @@ describe('EntrarPage', () => {
     expect(container.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('tem E-mail e Senha, sem "Esqueceu a senha?" e sem o convite', () => {
+  // Renomeado na change entrada-publica-painel: o requisito da `operator-login-ui` que
+  // proibia "Esqueceu a senha?" e o convite até a #181 foi invertido nela. Era "tem E-mail
+  // e Senha, sem "Esqueceu a senha?" e sem o convite".
+  it('tem E-mail e Senha, com "Esqueceu a senha?" e o convite ao administrador', () => {
     renderPage();
 
     expect(screen.getByLabelText('E-mail')).toHaveAttribute('autocomplete', 'username');
     expect(screen.getByLabelText('E-mail')).toHaveAttribute('placeholder', 'voce@empresa.com');
     expect(screen.getByLabelText('Senha')).toHaveAttribute('autocomplete', 'current-password');
-    expect(screen.queryByText(/esqueceu a senha/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/convite/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Esqueceu a senha?' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Ainda não tem acesso? Peça um convite ao administrador do painel.'),
+    ).toBeInTheDocument();
+  });
+
+  it('"Esqueceu a senha?" abre e fecha o texto na linha, sem enviar nada', async () => {
+    const fetchMock = respond(new Response(null, { status: 204 }));
+    const user = userEvent.setup();
+    renderPage();
+    const texto =
+      'Peça a um administrador do painel um link para criar uma nova senha. O link vale por 24 horas.';
+
+    expect(screen.queryByText(texto)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Esqueceu a senha?' }));
+    expect(screen.getByText(texto)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Esqueceu a senha?' }));
+    expect(screen.queryByText(texto)).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('204 sem retorno começa o fluxo: POST com email e senha, e o authorize com o voltarPara guardado', async () => {
@@ -243,4 +264,273 @@ describe('EntrarPage', () => {
       Object.defineProperty(navigator, 'locks', { value: locks, configurable: true });
     }
   });
+
+  describe('passo das 2 etapas', () => {
+    // O primeiro pedido é o da senha (200 com o segundo passo); os seguintes, o do código.
+    function respondCode(...codeResponses: Array<Response | Error>) {
+      const queue = [...codeResponses];
+      const fetchMock = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async (input) => {
+        if (input === '/auth/session') return jsonResponse({ segundoPasso: 'totp' }, 200);
+        const next = queue.shift();
+        if (next === undefined) throw new Error('pedido a mais');
+        if (next instanceof Error) throw next;
+        return next;
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    }
+
+    async function openCodeStep(user: ReturnType<typeof userEvent.setup>) {
+      await submit(user);
+      return screen.findByLabelText('Código');
+    }
+
+    async function verify(user: ReturnType<typeof userEvent.setup>, codigo: string) {
+      const campo = screen.getByLabelText('Código');
+      await user.clear(campo);
+      if (codigo) await user.type(campo, codigo);
+      await user.click(screen.getByRole('button', { name: 'Verificar' }));
+    }
+
+    function codeBodies(fetchMock: ReturnType<typeof respondCode>) {
+      return fetchMock.mock.calls
+        .filter(([input]) => input === '/auth/session/second-factor')
+        .map(([, init]) => JSON.parse(String(init?.body)));
+    }
+
+    it('a senha certa de quem tem as 2 etapas abre o passo do código, sem sessão e sem navegar', async () => {
+      respondCode();
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+
+      expect(screen.getByRole('button', { name: 'Verificar' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('E-mail')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Senha')).not.toBeInTheDocument();
+      expect(assign).not.toHaveBeenCalled();
+      expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+    });
+
+    it('o campo aceita texto, com a ajuda do código de recuperação', async () => {
+      respondCode();
+      const user = userEvent.setup();
+      renderPage();
+
+      const campo = await openCodeStep(user);
+
+      expect(campo).toHaveAttribute('inputmode', 'text');
+      expect(campo).toHaveAttribute('autocapitalize', 'characters');
+      expect(campo).toHaveAttribute('autocomplete', 'one-time-code');
+      expect(campo).toHaveAttribute('spellcheck', 'false');
+      expect(campo).toHaveAttribute('placeholder', '000 000');
+      const ids = (campo.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
+      expect(ids.map((id) => document.getElementById(id)?.textContent)).toContain(
+        'Código de recuperação: 16 letras e números, como XXXX-XXXX-XXXX-XXXX.',
+      );
+    });
+
+    it('código certo segue o fluxo do emissor com o voltarPara da URL', async () => {
+      respondCode(new Response(null, { status: 204 }));
+      const user = userEvent.setup();
+      renderPage('/entrar?voltarPara=%2Fagents');
+
+      await openCodeStep(user);
+      await verify(user, '123456');
+
+      await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+      expect(new URL(assign.mock.calls[0][0], 'http://localhost').pathname).toBe('/connect/authorize');
+      expect(JSON.parse(sessionStorage.getItem(PENDING_LOGIN_KEY)!).voltarPara).toBe('/agents');
+    });
+
+    it('código certo com retorno do authorize segue o retorno', async () => {
+      respondCode(new Response(null, { status: 204 }));
+      const retorno = '/connect/authorize?client_id=buteco-painel&state=x';
+      const user = userEvent.setup();
+      renderPage(`/entrar?retorno=${encodeURIComponent(retorno)}`);
+
+      await openCodeStep(user);
+      await verify(user, '123456');
+
+      await waitFor(() => expect(assign).toHaveBeenCalledWith(retorno));
+    });
+
+    it('código errado aparece no campo, com aria-invalid, e a tela continua no passo', async () => {
+      respondCode(jsonResponse({ title: 'Código inválido.' }, 401));
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '000000');
+
+      expect(await screen.findByText('Código inválido.')).toBeInTheDocument();
+      expect(screen.getByLabelText('Código')).toHaveAttribute('aria-invalid', 'true');
+      expect(assign).not.toHaveBeenCalled();
+    });
+
+    it('entrada expirada volta a e-mail e senha, com o aviso em role="status"', async () => {
+      respondCode(jsonResponse({ title: 'A entrada expirou. Informe e-mail e senha de novo.' }, 401));
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '123456');
+
+      expect(await screen.findByLabelText('E-mail')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Código')).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('A entrada expirou. Informe e-mail e senha de novo.');
+    });
+
+    it('outro texto de 401 não é tomado por entrada expirada', async () => {
+      respondCode(jsonResponse({ title: 'A entrada expirou.' }, 401));
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '123456');
+
+      expect(await screen.findByText('Código inválido.')).toBeInTheDocument();
+      expect(screen.getByLabelText('Código')).toBeInTheDocument();
+    });
+
+    it('campo vazio ou só com espaços não envia e mostra "Informe o código."', async () => {
+      const fetchMock = respondCode();
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '   ');
+
+      expect(await screen.findByText('Informe o código.')).toBeInTheDocument();
+      expect(screen.getByLabelText('Código')).toHaveAttribute('aria-invalid', 'true');
+      expect(codeBodies(fetchMock)).toEqual([]);
+    });
+
+    it('espaços nas pontas saem, e o resto vai como está', async () => {
+      const fetchMock = respondCode(new Response(null, { status: 204 }));
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '  7kq2 m9xd-4trb-pw6h  ');
+
+      await waitFor(() => expect(codeBodies(fetchMock)).toEqual([{ codigo: '7kq2 m9xd-4trb-pw6h' }]));
+    });
+
+    it('bloqueio no passo mostra os minutos do Retry-After', async () => {
+      respondCode(jsonResponse({ title: 'Acesso pausado…' }, 423, { 'Retry-After': '600' }));
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '123456');
+
+      expect(
+        await screen.findByText('Muitas tentativas sem sucesso. Por segurança, o acesso desta conta fica pausado por 10 minutos.'),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText('Código')).toBeInTheDocument();
+    });
+
+    it('muitas tentativas desabilita Verificar até o Retry-After', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      respondCode(jsonResponse({}, 429, { 'Retry-After': '1' }));
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '123456');
+
+      expect(await screen.findByText('Muitas tentativas ao mesmo tempo. Tente de novo em instantes.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Verificar' })).toBeDisabled();
+      await act(() => vi.advanceTimersByTimeAsync(1_100));
+      expect(screen.getByRole('button', { name: 'Verificar' })).toBeEnabled();
+    });
+
+    it('painel iniciando no passo desabilita Verificar até o Retry-After', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      respondCode(jsonResponse({}, 503, { 'Retry-After': '5' }));
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '123456');
+
+      expect(await screen.findByText('O painel está iniciando. Tente de novo em alguns segundos.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Verificar' })).toBeDisabled();
+      await act(() => vi.advanceTimersByTimeAsync(4_000));
+      expect(screen.getByRole('button', { name: 'Verificar' })).toBeDisabled();
+      await act(() => vi.advanceTimersByTimeAsync(1_100));
+      expect(screen.getByRole('button', { name: 'Verificar' })).toBeEnabled();
+    });
+
+    it('chave trocada mostra o texto do servidor em role="alert"', async () => {
+      const texto =
+        'Não foi possível conferir o código do app autenticador. Use um código de recuperação ou fale com o administrador.';
+      respondCode(jsonResponse({ title: texto }, 500));
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '123456');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(texto);
+      expect(screen.getByLabelText('Código')).toBeEnabled();
+    });
+
+    it('sem conexão no passo mantém o código digitado', async () => {
+      respondCode(new TypeError('Failed to fetch'));
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+      await verify(user, '123456');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível falar com o servidor.');
+      expect(screen.getByLabelText('Código')).toHaveValue('123456');
+    });
+
+    it('Voltar retorna a e-mail e senha sem enviar nada', async () => {
+      const fetchMock = respondCode();
+      const user = userEvent.setup();
+      renderPage();
+
+      await openCodeStep(user);
+      await user.click(screen.getByRole('button', { name: 'Voltar' }));
+
+      expect(await screen.findByLabelText('E-mail')).toBeInTheDocument();
+      expect(codeBodies(fetchMock)).toEqual([]);
+    });
+
+    it('recarregar volta a e-mail e senha', async () => {
+      respondCode();
+      const user = userEvent.setup();
+      const { unmount } = renderPage();
+      await openCodeStep(user);
+
+      unmount();
+      renderPage();
+
+      expect(screen.getByLabelText('E-mail')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Código')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('vindo das páginas do link', () => {
+    it('com { etapa: "codigo" }, abre no passo do código com o aviso de senha salva', () => {
+      renderPage('/entrar', { etapa: 'codigo' });
+
+      expect(screen.getByLabelText('Código')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Senha salva. A sua conta usa verificação em 2 etapas: digite o código para entrar.',
+      );
+    });
+
+    it('com o login recusado, o e-mail chega preenchido e o aviso do status aparece', () => {
+      renderPage('/entrar', { email: 'marcos.lima@empresa.com', falha: { kind: 'http', status: 429, retryAfter: 1 } });
+
+      expect(screen.getByLabelText('E-mail')).toHaveValue('marcos.lima@empresa.com');
+      expect(screen.getByText('Muitas tentativas ao mesmo tempo. Tente de novo em instantes.')).toBeInTheDocument();
+    });
+  });
 });
+

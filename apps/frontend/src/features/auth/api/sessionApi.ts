@@ -5,6 +5,11 @@ import { retryAfterSeconds } from '../../../auth/transient';
 // ao apps/api, e em desenvolvimento o proxy do Vite, para o cookie ficar na origem do
 // painel (design.md da change painel-entra-pelo-emissor, D10).
 //
+// Para quem tem a verificação em 2 etapas, a senha certa responde `200 { segundoPasso:
+// "totp" }` com o cookie no passo pendente, e o código vai a
+// `POST /auth/session/second-factor` (#218 D2; design.md da change
+// entrada-publica-painel, D1).
+//
 // Sem token e sem `sessionFetch`: não há sessão antes do login. O resultado é um
 // valor, e não um erro lançado, porque cada status tem a sua tela no /entrar (D6).
 
@@ -13,25 +18,30 @@ export interface SessionInput {
   senha: string;
 }
 
+export type HttpFailure = { kind: 'http'; status: number; title?: string; retryAfter?: number };
+
 export type SessionResult =
   | { kind: 'ok' }
-  | { kind: 'http'; status: number; title?: string; retryAfter?: number }
+  | { kind: 'segundo-passo' }
+  | HttpFailure
   | { kind: 'network' };
 
-export async function createSession(input: SessionInput): Promise<SessionResult> {
-  let response: Response;
+export type SecondFactorResult = { kind: 'ok' } | HttpFailure | { kind: 'network' };
+
+/** `POST` com corpo JSON, sem token; `null` na falha de rede. */
+export async function postJson(path: string, body: unknown): Promise<Response | null> {
   try {
-    response = await fetch('/auth/session', {
+    return await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
+      body: JSON.stringify(body),
     });
   } catch {
-    return { kind: 'network' };
+    return null;
   }
+}
 
-  if (response.status === 204) return { kind: 'ok' };
-
+export async function httpFailure(response: Response): Promise<HttpFailure> {
   const problem = (await response.json().catch(() => undefined)) as { title?: unknown } | undefined;
   return {
     kind: 'http',
@@ -39,4 +49,26 @@ export async function createSession(input: SessionInput): Promise<SessionResult>
     title: typeof problem?.title === 'string' ? problem.title : undefined,
     retryAfter: retryAfterSeconds(response),
   };
+}
+
+export async function createSession(input: SessionInput): Promise<SessionResult> {
+  const response = await postJson('/auth/session', input);
+  if (response === null) return { kind: 'network' };
+  if (response.status === 204) return { kind: 'ok' };
+
+  if (response.status === 200) {
+    const body = (await response.json().catch(() => undefined)) as { segundoPasso?: unknown } | undefined;
+    if (body?.segundoPasso === 'totp') return { kind: 'segundo-passo' };
+    return { kind: 'http', status: 200 };
+  }
+
+  return httpFailure(response);
+}
+
+/** O código do app ou um código de recuperação, no mesmo campo (#218 D6). */
+export async function submitSecondFactor(codigo: string): Promise<SecondFactorResult> {
+  const response = await postJson('/auth/session/second-factor', { codigo });
+  if (response === null) return { kind: 'network' };
+  if (response.status === 204) return { kind: 'ok' };
+  return httpFailure(response);
 }

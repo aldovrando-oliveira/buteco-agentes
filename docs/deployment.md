@@ -388,6 +388,40 @@ $C config >/dev/null && echo 'compose ok'      # o compose atual não a lê
 
 Nenhum serviço precisa subir de novo: o compose atual não entrega a variável. Depois da retirada, um rollback para antes da #182 exige recolocar a chave, que está na cópia. A cópia sai junto com a janela de rollback.
 
+### Entrada pública do painel (#245)
+
+**Só o `frontend` muda.** Sem migration, sem variável nova, sem mudança no compose nem no
+`nginx.conf`: `/convite` e `/redefinir-senha` já caem no `location /` (o `index.html`), e
+`/auth/*` já vai ao `apps/api` (#181). O `api`, o `inbox`, o `connectors` e o `workers` não
+mudam.
+
+**O que muda para quem usa o painel:**
+
+- o `/entrar` pede o código das 2 etapas depois da senha, para quem tem a verificação
+  ligada (o código do app ou um código de recuperação, no mesmo campo). Em produção ninguém
+  a tem: o cadastro continua fechado (`Identity__TwoFactor__EnrollmentEnabled`) até a #246;
+- os links de convite e de redefinição que o admin gera pela API passam a abrir a tela de
+  criar a senha. O token sai do endereço ao abrir, e a página entra em seguida;
+- "Esqueceu a senha?" orienta a pedir o link a um administrador, e o rodapé do `/entrar`
+  orienta a pedir um convite.
+
+**Conferência depois do deploy**, contra o domínio:
+
+```
+D=https://agentes.exemplo.com
+# 1. As páginas do link: o HTML do painel, e não o apps/api
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -H 'Sec-Fetch-Mode: navigate' $D/convite
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -H 'Sec-Fetch-Mode: navigate' $D/redefinir-senha
+```
+
+No navegador: abrir `$D/convite#qualquer-coisa` mostra "Este link não vale mais", e a barra
+fica em `$D/convite`, sem o fragmento. O login de sempre continua igual.
+
+**Rollback:** a imagem anterior do `frontend`. Nada no banco. Com a imagem anterior, os
+links de convite e de redefinição voltam a abrir a página de erro do roteador, e quem
+tiver a verificação ligada volta a não entrar pelo painel (o cadastro fechado em
+produção evita os dois casos).
+
 ### Emissor OIDC do `apps/api` (#179)
 
 Com `PUBLIC_DOMAIN` definida, o `apps/api` é emissor OIDC, e o issuer é essa URL.
@@ -663,9 +697,9 @@ em `users` e a tabela `user_recovery_codes`.
 `connectors` e o `workers` não mudam.
 
 **O cadastro da verificação fica fechado** (`Identity__TwoFactor__EnrollmentEnabled`,
-falso por padrão; o compose não o passa). O painel ainda não tem a tela do código (#183)
-e só conhece o `204` do login: quem ligasse a verificação ficaria sem entrar. **Não abra
-o cadastro antes de o painel ter a tela do código.** Com o cadastro fechado, ninguém liga
+falso por padrão; o compose não o passa). Desde a #245 o `/entrar` tem o passo do código;
+a tela do cadastro, em Minha conta, é a #246. **Não abra o cadastro antes da #246**: até lá
+ele só se faz pela API. Com o cadastro fechado, ninguém liga
 a verificação, e o login de todos continua igual. A verificação no login, a remoção e a
 redefinição pelo admin nunca fecham. A #220 remove a opção, junto com a obrigatoriedade.
 
@@ -715,7 +749,9 @@ registram só `GET /convite`, e o painel manda o token no corpo de um `POST`. **
   o anterior. Concluir a redefinição **encerra todas as sessões** da pessoa e **mantém as 2
   etapas**: quem perdeu a senha e o celular precisa das duas redefinições.
 
-**Sem tela ainda.** As rotas existem para a #183; até ela, só pela API.
+**Telas.** As páginas públicas do link (`/convite` e `/redefinir-senha`) existem desde a
+#245. Convidar, gerar novo link, cancelar e gerar a redefinição ainda não têm tela: são da
+#183, e até ela só pela API.
 
 **Conferência depois do deploy**, contra o domínio:
 
