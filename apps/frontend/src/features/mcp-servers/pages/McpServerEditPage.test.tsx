@@ -40,9 +40,9 @@ const mcpServer: McpServer = {
 
 // A mensagem pertence ao campo quando o campo aponta para ela em
 // `aria-describedby`, e o campo se declara inválido em `aria-invalid`. O
-// PasswordInput do Mantine 9.4.2 não põe `aria-invalid` sozinho
-// (PasswordInput.mjs:159 e :165); o McpServerForm passa o atributo explícito, e
-// este helper o afirma nos dois campos.
+// PasswordInput do Mantine não põe `aria-invalid` sozinho (PasswordInput.mjs:159 e
+// :165 na 9.4.2); o campo da credencial é o PasswordField, que passa o atributo
+// (#170), e este helper o afirma nos dois campos.
 function expectErrorOnField(field: HTMLElement, message: string) {
   const errorElement = screen.getByText(message);
   // Sem id, o `toContain('')` abaixo passaria sempre.

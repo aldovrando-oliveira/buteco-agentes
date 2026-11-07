@@ -1,4 +1,5 @@
-import { PasswordInput, Stack } from '@mantine/core';
+import { Stack } from '@mantine/core';
+import { PasswordField } from '../../../components/forms/PasswordField';
 import type { UseFormReturnType } from '@mantine/form';
 import type { ChannelFormValues } from '../types/channel';
 
@@ -10,7 +11,7 @@ interface TelegramCredentialFieldsProps {
 export function TelegramCredentialFields({ form, isEditing }: TelegramCredentialFieldsProps) {
   return (
     <Stack gap="sm">
-      <PasswordInput
+      <PasswordField
         label="Token do bot"
         placeholder={
           isEditing ? 'Deixe em branco para manter o token atual' : 'Token do bot do Telegram'

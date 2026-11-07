@@ -1,4 +1,5 @@
-import { PasswordInput, Stack, TextInput } from '@mantine/core';
+import { Stack, TextInput } from '@mantine/core';
+import { PasswordField } from '../../../components/forms/PasswordField';
 import type { UseFormReturnType } from '@mantine/form';
 import type { ChannelFormValues } from '../types/channel';
 
@@ -24,7 +25,7 @@ export function WahaCredentialFields({ form, isEditing }: WahaCredentialFieldsPr
         withAsterisk={!isEditing}
         {...form.getInputProps('waha.sessionName')}
       />
-      <PasswordInput
+      <PasswordField
         label="Token de autenticação"
         placeholder={`Token de autenticação${keepPlaceholder}`}
         withAsterisk={!isEditing}

@@ -499,15 +499,16 @@ em desenvolvimento.
 
 Em desenvolvimento o cadastro do TOTP está **aberto**
 (`Identity:TwoFactor:EnrollmentEnabled` no `appsettings.Development.json`); em
-produção, fechado até a #183.
+produção, fechado até a tela de cadastro em Minha conta (#246).
 
-> **Quem cadastrar o TOTP pela API não entra mais pelo painel até a #183.** O painel
-> de hoje não tem o passo do código: depois da senha certa, o `POST /auth/session`
-> responde `200 {"segundoPasso":"totp"}`, e o `/entrar` mostra "Não foi possível
-> entrar". A saída é **remover a verificação com um código**
-> (`POST /account/two-factor/remove`, com o token que ainda se tem, abaixo) ou **pedir
-> a outro usuário a redefinição** (`POST /users/{id}/two-factor/reset`). Sem outro
-> usuário e sem token, apague o segredo direto no banco local:
+O `/entrar` tem o passo do código desde a #245: depois da senha certa, o
+`POST /auth/session` responde `200 {"segundoPasso":"totp"}`, e o painel pede o código
+do app ou um código de recuperação, no mesmo campo. Até a #246, o cadastro só se faz
+pela API, como abaixo.
+
+> **Perdeu o segredo e os códigos de recuperação?** Peça a outro usuário a redefinição
+> (`POST /users/{id}/two-factor/reset`). Sem outro usuário, apague o segredo direto no
+> banco local:
 > `UPDATE users SET two_factor_secret = NULL, two_factor_enabled_at = NULL, two_factor_last_step = NULL WHERE normalized_email = 'operador@buteco.local';`
 
 Com o `$TOKEN` do fluxo acima, o cadastro e o login em dois passos por `curl`. O

@@ -438,6 +438,19 @@ describe('appRoutes', () => {
 
     expect(await screen.findByText('Não foi possível concluir a entrada. Entre de novo.')).toBeInTheDocument();
   });
+
+  // As páginas do link de uso único (spec `panel-access-link-pages`): sem token no
+  // fragmento nem na aba, mostram o link inválido, e não vão ao /entrar.
+  it.each(['/convite', '/redefinir-senha'])('%s abre sem sessão', async (path) => {
+    signOutForTest();
+    sessionStorage.clear();
+    const router = createMemoryRouter(appRoutes, { initialEntries: [path] });
+
+    renderProviders(<RouterProvider router={router} />);
+
+    expect(await screen.findByText('Este link não vale mais')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(path);
+  });
 });
 
 describe('AppRouter', () => {

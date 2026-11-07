@@ -14,15 +14,15 @@ const initialValues: ChannelFormValues = {
   telegram: { botToken: '' },
 };
 
-function Wrapper({ isEditing }: { isEditing: boolean }) {
-  const form = useForm<ChannelFormValues>({ initialValues });
+function Wrapper({ isEditing, errors }: { isEditing: boolean; errors?: Record<string, string> }) {
+  const form = useForm<ChannelFormValues>({ initialValues, initialErrors: errors });
   return <WahaCredentialFields form={form} isEditing={isEditing} />;
 }
 
-function renderFields(isEditing: boolean) {
+function renderFields(isEditing: boolean, errors?: Record<string, string>) {
   render(
     <MantineProvider theme={theme}>
-      <Wrapper isEditing={isEditing} />
+      <Wrapper isEditing={isEditing} errors={errors} />
     </MantineProvider>,
   );
 }
@@ -51,5 +51,13 @@ describe('WahaCredentialFields', () => {
       'placeholder',
       expect.stringContaining('deixe em branco para manter a atual'),
     );
+  });
+
+  // #170: o campo de senha com erro é anunciado como inválido. O texto é o da validação
+  // do ChannelForm para o token vazio.
+  it('com o token obrigatório vazio, o campo é anunciado como inválido', () => {
+    renderFields(false, { 'waha.authToken': 'O token de autenticação é obrigatório.' });
+
+    expect(screen.getByLabelText(/token de autenticação/i)).toHaveAttribute('aria-invalid', 'true');
   });
 });

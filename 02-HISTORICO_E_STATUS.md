@@ -8735,22 +8735,26 @@ M1 Autenticação com provedor próprio            acompanhamento #194
   11 #236  fixtures pelo token do emissor, sem HMAC    ← #235
   12 #182  remove o HMAC e a chave compartilhada       ← #180 #217 #236   (fecha #117 e #122)
   13 #211  rota de leitura do emissor e das chaves     ← #179
-  14 #183  painel da M1                                ← #179 #208 #180 #181 #182 #211 #217 #218 #219   (absorve #170 se couber)
-  15 #220  2 etapas obrigatórias para todo usuário     ← #183
+  14 #245  painel: 2 etapas no login, convite, redefinição ← #217 #218 #181   (fecha #170)
+  15 #246  painel: Minha conta                         ← #245
+  16 #183  painel: Usuários, Editar usuário, Identidade ← #246 #211 #219
+  17 #220  2 etapas obrigatórias para todo usuário     ← #183
 M2 Diferentes acessos                            acompanhamento #195
-  16 #184  papéis Admin, Operador, Leitor              ← #180 #208 #217
-  17 #185  painel: papéis, menu, 403                   ← #183 #184
-  18 #186  aplicações externas com credencial          ← #179 #184
-  19 #187  agentes liberados por aplicação             ← #186
-  20 #188  painel de aplicações externas               ← #185 #186 #187
+  18 #184  papéis Admin, Operador, Leitor              ← #180 #208 #217
+  19 #185  painel: papéis, menu, 403                   ← #183 #184
+  20 #186  aplicações externas com credencial          ← #179 #184
+  21 #187  agentes liberados por aplicação             ← #186
+  22 #188  painel de aplicações externas               ← #185 #186 #187
 M3 Autenticação com Google                       acompanhamento #196
-  21 #189  provedores federados e Google               ← #181 #184
-  22 #190  painel: login com provedor e recusas        ← #185 #189
+  23 #189  provedores federados e Google               ← #181 #184
+  24 #190  painel: login com provedor e recusas        ← #185 #189
 M4 Autenticação corporativa                      acompanhamento #197
-  23 #191  provedor OIDC genérico                      ← #189
-  24 #192  aplicações federadas (troca de token)       ← #187 #191
-  25 #193  painel da M4                                ← #188 #190 #192
+  25 #191  provedor OIDC genérico                      ← #189
+  26 #192  aplicações federadas (troca de token)       ← #187 #191
+  27 #193  painel da M4                                ← #188 #190 #192
 ```
+
+*(Atualizada em 05/11/2026, pela `entrada-publica-painel`: a M1 passou de 15 para 17 itens. A #183 foi dividida por decisão do dono, a partir do inventário das telas ([comentário da #183](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6649327956)), em três PRs: a **#245**, a entrada pública; a **#246**, Minha conta; e a própria **#183**, Usuários, Editar usuário e Identidade. A #247, sem milestone, troca o reconhecimento do "expirou" por texto por um campo de tipo.)*
 
 *(Atualizada em 02/11/2026, pela `clientes-servico-emissor`: a M1 passou de 12 para 15 itens.
 A #182 foi dividida por decisão do dono, na revisão do design dela, em quatro passos, cada um
@@ -18188,3 +18192,71 @@ Suítes pelo `~/.cache/buteco-agents/bin/suite-211.sh`, com a regra assimétrica
 
 - **#183:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6648947247) traz o contrato e a única divergência que resta, o selo "Operando".
 - **#184:** restringir a rota ao Admin, a partir dos casos de acesso do `IdentityOverviewEndpointTests`.
+
+## `entrada-publica-painel` — o passo das 2 etapas no `/entrar`, `/convite` e `/redefinir-senha` (#245, #170)
+
+**Change proposta e implementada em 05–06/11/2026**, na branch `feat/245-entrada-publica-painel`, num worktree próprio, a partir de `1131635` (merge do PR #244). Entrega M1 · 14 de 17, o passo A da divisão da #183. A #246 depende dela. Fecha também a #170.
+
+- **O que entra (só `apps/frontend`):**
+  - **o passo das 2 etapas no `/entrar`:** um estado da página, sem rota própria. Ele aceita o código do app e o de recuperação no mesmo campo, tem um aviso por status (423, 429, 503, rede, chave do TOTP) e volta a e-mail e senha quando a entrada expira;
+  - **"Esqueceu a senha?"** ao lado do rótulo Senha, e o rodapé do convite;
+  - **as páginas `/convite` e `/redefinir-senha`** dos links de uso único da #181. O token sai do fragmento por `history.replaceState` antes de qualquer pedido e fica no `sessionStorage` da aba. Depois de criar a senha, a pessoa entra; quem tem as 2 etapas cai no `/entrar` já no passo do código, sem a senha no `state`;
+  - **o `PasswordField`:** o `aria-invalid` num lugar só (#170), no `EntrarForm`, nas páginas do link, no WAHA, no Telegram e no `McpServerForm`. Uma guarda estática na suíte e a regra `no-restricted-imports` do ESLint reprovam o `PasswordInput` direto.
+- **No `apps/api`:** só o teste que fixa o texto do pendente vencido foi renomeado (`SecondFactor_ExpiredPending_KeepsTheMessageThePanelRecognizes`), e o comentário do `TwoFactor:EnrollmentEnabled` foi atualizado. Nenhum contrato muda.
+- **Capacidades:** `panel-access-link-pages` e `frontend-password-field`, novas; `operator-login-ui`, alterada.
+
+**Decisões do dono** (05–06/11/2026; detalhe no design, "Decisões do dono"):
+- **Q1:** o "expirou" é reconhecido por igualdade com o texto do contrato, com o teste do apps/api renomeado. A #247, sem milestone, troca por um campo de tipo;
+- **Q2:** o aceite e a redefinição terminam no `/entrar`, no passo do código, quando a conta tem as 2 etapas;
+- **Q3:** o aviso "Senha alterada." sai do A e vai para a #246;
+- **Q4:** o token fica no `sessionStorage` e é apagado no sucesso, no link inválido e ao sair da página;
+- **Q5:** um texto de link inválido por página;
+- **Q6:** a guarda estática e a regra do ESLint;
+- **Q7 (na validação visual):** o token que fica na aba depois do "voltar" do navegador, saindo do documento, está aceito. Vale uma vez, só naquela aba, e expira em 24 h ou 72 h; apagá-lo quebraria o "avançar".
+
+O protótipo foi corrigido três vezes pelo dono em 05/11/2026, a partir do inventário da #183 ([comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6649327956)). Na versão `1793853618-1811`, nenhuma divergência restou para o A.
+
+### Premissas que caíram (convenção 9)
+
+Nenhuma mudou comportamento, contrato existente ou cobertura. O registro completo está no `tasks.md` da change ([`openspec/changes/archive/2026-11-07-entrada-publica-painel/tasks.md`](openspec/changes/archive/2026-11-07-entrada-publica-painel/tasks.md); o CLI datou a pasta pelo relógio UTC).
+- **"Nenhum teste afirma o `aria-invalid` do `McpServerForm`"** (2.4): o `McpServerEditPage.test.tsx` já o afirmava. Ele virou o guarda do MCP, sem duplicar o caso.
+- **Dois testes novos não podiam reprovar como estavam:**
+  - o caso "sem a senha no `state`" lia o `window.history`, que o `MemoryRouter` não usa. Agora uma sonda lê o `state` do router;
+  - um caso esperava o campo "E-mail", que a página do link também tem, e sob carga o achava antes da navegação. Agora espera o aviso, que só existe no `/entrar`.
+
+  Os dois foram corrigidos antes dos guardas.
+- **Documentação que a change tornou falsa:** o `development.md` dizia que quem cadastrasse o TOTP não entrava mais pelo painel; o `configuration.md`, as seções da #218 e da #181 no `deployment.md` e o comentário do `appsettings.json` diziam que o painel não tinha a tela do código. Todos foram corrigidos.
+
+### O que a implementação mediu
+
+Suítes pelo `~/.cache/buteco-agents/bin/suite-245.sh`, com a regra assimétrica, em `~/.cache/buteco-agents/baseline-245-20261105-0104/`, `245-frontend-20261105-0230-r2/` e `245-api-20261105-0155/`.
+
+| suíte | baseline `1131635` | change | por nome |
+|---|---|---|---|
+| `apps/frontend` | 1.978 em 154 arquivos | **2.079 em 160** | os 1.978 aprovados, menos 1 renomeado; entram 102 |
+| `apps/api` (filtro `TwoFactorLoginTests`) | 10 | **10** | 1 renomeado |
+
+- **Renomeados:**
+  - `TwoFactorLoginTests.ExpiredPendingSession_TheEntryExpired` → `SecondFactor_ExpiredPending_KeepsTheMessageThePanelRecognizes`, aceito pelo dono;
+  - `EntrarPage › tem E-mail e Senha, sem "Esqueceu a senha?" e sem o convite` → `tem E-mail e Senha, com "Esqueceu a senha?" e o convite ao administrador`, porque a spec inverteu o requisito. As asserções de e-mail e senha ficaram.
+- **Guardas (convenção 15):** os 30 reprovaram contra o defeito nomeado, um deles pelo ESLint e não pela suíte. Cada arquivo voltou pela cópia, com o sha conferido. Registro em `~/.cache/buteco-agents/245-guardas/`.
+- **CPU:** a rodada 1 do frontend foi INCONCLUSIVA (CPU até 23) e mostrou o defeito do teste novo, corrigido. A rodada 2 foi verde, com a CPU caindo até 62.
+- **Lint e build:** sem erro. O aviso de chunk acima de 500 kB já existia; o bundle foi de 1.085,6 kB para 1.097,9 kB.
+- **Conferência no navegador** (Chrome real, Vite e `apps/api` do worktree, Postgres do compose de desenvolvimento):
+  - login com e sem as 2 etapas;
+  - um convite aceito, com a barra sem o fragmento e o histórico sem o token;
+  - o link reaberto, inválido;
+  - a redefinição de quem tem as 2 etapas, caindo no passo do código, e um código de recuperação em minúsculas;
+  - "A entrada expirou" depois de 5 min 30 s, contra o servidor real.
+- **Validação visual (convenção 14):** o dono validou quadro a quadro em 06/11/2026, sem divergência.
+- **Tamanho (convenção 18):**
+  - produção: +1.044 / −127 em 21 arquivos, contra ~925 projetados (+13%);
+  - testes: +1.118 / −17 em 12 arquivos, contra ~1.660 projetados (−33%).
+
+  A produção passou no passo do código, porque os avisos foram para um módulo compartilhado com as páginas do link. Os testes ficaram abaixo porque o `describe.each` cobre as duas páginas do link num arquivo só.
+
+### Para as próximas
+
+- **#246:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/246#issuecomment-6700633258) traz o `PasswordField`, a política da senha, o passo do código e o aviso "Senha alterada.", que fica para ela.
+- **#183:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6700633531) traz os links, que agora têm página.
+- **#247:** o campo de tipo no `401` do passo do código.

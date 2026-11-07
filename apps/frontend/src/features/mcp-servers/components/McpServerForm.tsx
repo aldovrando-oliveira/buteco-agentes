@@ -6,7 +6,6 @@ import {
   Divider,
   Group,
   Paper,
-  PasswordInput,
   Radio,
   SimpleGrid,
   Stack,
@@ -15,6 +14,7 @@ import {
   Textarea,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { PasswordField } from '../../../components/forms/PasswordField';
 import { RadioCardOption } from '../../../components/forms/RadioCardOption';
 import { SectionLabel } from '../../../components/data/SectionLabel';
 import { ApiError } from '../api/mcpServersApi';
@@ -412,7 +412,7 @@ export function McpServerForm({
           )}
 
           {authType !== 'None' && (
-            <PasswordInput
+            <PasswordField
               label={isCustomHeader ? 'Token' : 'Credencial'}
               placeholder={
                 keepsSavedCredential
@@ -436,13 +436,6 @@ export function McpServerForm({
               )}
               {...form.getInputProps('credential')}
               error={fieldError('credential')}
-              // O PasswordInput do Mantine 9.4.2 não marca o <input> com
-              // aria-invalid: chama o Input com `withAria: false`
-              // (@mantine/core/esm/components/PasswordInput/PasswordInput.mjs:159)
-              // e põe só `data-invalid` no <input> (:165). As props que sobram
-              // chegam ao <input> pelo `...rest` (:171), então o atributo vai
-              // explícito, como o TextInput já faz sozinho (Input.mjs:75).
-              aria-invalid={fieldError('credential') ? true : undefined}
             />
           )}
 

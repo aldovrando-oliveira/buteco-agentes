@@ -193,8 +193,12 @@ public class TwoFactorLoginTests(TwoFactorLoginTests.Fixture factory) : IClassFi
         Assert.Equal(0, await FailuresAsync(user.NormalizedEmail));
     }
 
+    // O painel reconhece este texto por igualdade (apps/frontend/src/features/auth/messages.ts,
+    // ENTRADA_EXPIROU): com ele, o /entrar volta a e-mail e senha; com outro, mostra
+    // "Código inválido." no passo do código. O literal fica aqui, e não a constante, para
+    // que mudar o texto no servidor reprove este teste. A troca por um campo de tipo é a #247.
     [Fact]
-    public async Task ExpiredPendingSession_TheEntryExpired()
+    public async Task SecondFactor_ExpiredPending_KeepsTheMessageThePanelRecognizes()
     {
         var (user, twoFactor) = await UserWithTheVerificationAsync("vencido");
         var client = Client();
