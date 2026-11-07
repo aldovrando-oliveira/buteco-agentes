@@ -499,12 +499,18 @@ em desenvolvimento.
 
 Em desenvolvimento o cadastro do TOTP está **aberto**
 (`Identity:TwoFactor:EnrollmentEnabled` no `appsettings.Development.json`); em
-produção, fechado até a tela de cadastro em Minha conta (#246).
+produção, fechado por padrão, e o dono o abre com `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED`
+([deployment.md](deployment.md#minha-conta-e-o-cadastro-das-2-etapas-246)).
+
+Desde a #246, o cadastro se faz em **Minha conta** (`/account`, pelo bloco do nome no
+rodapé da barra lateral): a senha, o QR (ou o segredo para digitar), o código do app e os
+10 códigos de recuperação. Na mesma tela ficam "Gerar novos códigos", "Remover
+verificação", a troca de senha e as sessões.
 
 O `/entrar` tem o passo do código desde a #245: depois da senha certa, o
 `POST /auth/session` responde `200 {"segundoPasso":"totp"}`, e o painel pede o código
-do app ou um código de recuperação, no mesmo campo. Até a #246, o cadastro só se faz
-pela API, como abaixo.
+do app ou um código de recuperação, no mesmo campo. O cadastro também se faz pela API,
+como abaixo, para quem precisar dele sem o painel.
 
 > **Perdeu o segredo e os códigos de recuperação?** Peça a outro usuário a redefinição
 > (`POST /users/{id}/two-factor/reset`). Sem outro usuário, apague o segredo direto no

@@ -312,6 +312,7 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` | api (cifra), workers (decifra) | sim | **sim, byte-idêntica** |
 | `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` | `Identity__SigningKeyEncryptionKey` | api (cifra das chaves do emissor OIDC) | sim, fail-fast (o emissor está ligado, porque `PUBLIC_DOMAIN` é obrigatória) | N/A — só um processo. **Distinta** das outras chaves |
 | `IDENTITY_TWO_FACTOR_ENCRYPTION_KEY` | `Identity__TwoFactorEncryptionKey` | api (cifra do segredo do TOTP de cada usuário, #218) | sim, fail-fast, mesmo com o cadastro das 2 etapas fechado | N/A — só um processo. **Distinta** das outras chaves: o boot recusa a igual a `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` ou a `MCP_CREDENTIAL_ENCRYPTION_KEY` |
+| `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED` | `Identity__TwoFactor__EnrollmentEnabled` | api (abre o cadastro das 2 etapas em Minha conta, #246) | não; `false` por padrão | N/A — só um processo. A #220 remove |
 | `SERVICE_CLIENT_SECRET_INBOX` | `Identity__ServiceClients__Inbox__Secret` e `ServiceClient__Secret` | api (segredo do cliente `buteco-servico-inbox` do emissor, #234) e inbox (que pede com ele o token de serviço, #235) | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api, e de `INBOX_CREDENTIAL_ENCRYPTION_KEY`: o boot recusa o igual, nomeando as duas chaves |
 | `SERVICE_CLIENT_SECRET_CONNECTORS` | `Identity__ServiceClients__Connectors__Secret` e `ServiceClient__Secret` | api (segredo do cliente `buteco-servico-connectors`, #234) e connectors (#235) | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
@@ -388,6 +389,57 @@ $C config >/dev/null && echo 'compose ok'      # o compose atual não a lê
 
 Nenhum serviço precisa subir de novo: o compose atual não entrega a variável. Depois da retirada, um rollback para antes da #182 exige recolocar a chave, que está na cópia. A cópia sai junto com a janela de rollback.
 
+### Minha conta e o cadastro das 2 etapas (#246)
+
+**O que muda:** o `frontend` ganha Minha conta (`/account`), aberta pelo nome no rodapé da
+barra lateral: os dados, a troca de senha, a verificação em 2 etapas (ligar com o QR,
+gerar novos códigos, remover) e as sessões. O compose de produção passa a levar ao `api`
+a variável do cadastro, **falsa por padrão**. Sem migration. O `inbox`, o `connectors` e o
+`workers` não mudam. O `nginx.conf` não muda: `/account` já vai ao `apps/api` como fetch
+da SPA e abre o painel como navegação (#218).
+
+**Ordem do deploy:** `api` (relê o compose; nada muda com a variável ausente) → `frontend`.
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api frontend
+```
+
+**Trocar a senha agora sai do painel:** depois de trocar a senha em Minha conta, a pessoa
+sai de todos os navegadores, inclusive o atual, e volta ao `/entrar` com "Senha alterada.
+Entre com a nova senha." (#219 D3).
+
+**Abrir o cadastro das 2 etapas** (decisão do dono, depois do deploy):
+
+1. no `.env.prod`, `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED=true`;
+2. `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api`.
+
+**Conferir:**
+
+```
+D=https://agentes.exemplo.com
+# a variável chegou ao api (no host do compose)
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec api printenv Identity__TwoFactor__EnrollmentEnabled
+```
+
+- no painel, em Minha conta, "Ligar verificação" fica habilitado, e o texto "O cadastro da
+  verificação em 2 etapas ainda não está disponível neste painel." some;
+- um cadastro de ponta a ponta, com um app autenticador: a senha, o QR, o código e
+  "Verificação ligada." com os 10 códigos;
+- sair e entrar de novo: depois da senha, o `/entrar` pede o código.
+
+**Voltar atrás:** `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED=false` (ou a linha removida) e o
+`up -d api` de novo. Só o cadastro novo fecha: quem já ligou a verificação continua com
+ela, porque a verificação no login, a regeneração dos códigos, a remoção e a redefinição
+pelo admin valem com qualquer valor. Para tirar a verificação de alguém, a redefinição pelo
+admin (`POST /users/{id}/two-factor/reset`, #218).
+
+**Rollback da change:** a imagem anterior do `frontend`. Minha conta some; quem ligou a
+verificação continua entrando pelo passo do código (#245), mas sem regenerar nem remover
+pelo painel até o deploy voltar. Com o cadastro aberto, feche-o antes do rollback, para
+ninguém ficar sem a tela de gerenciar.
+
+**A #220 remove a opção**, junto com a obrigatoriedade.
+
 ### Entrada pública do painel (#245)
 
 **Só o `frontend` muda.** Sem migration, sem variável nova, sem mudança no compose nem no
@@ -399,7 +451,9 @@ mudam.
 
 - o `/entrar` pede o código das 2 etapas depois da senha, para quem tem a verificação
   ligada (o código do app ou um código de recuperação, no mesmo campo). Em produção ninguém
-  a tem: o cadastro continua fechado (`Identity__TwoFactor__EnrollmentEnabled`) até a #246;
+  a tem: o cadastro continua fechado (`Identity__TwoFactor__EnrollmentEnabled`), e a #246
+  traz a tela do cadastro e o passo de abri-lo
+  ([Minha conta e o cadastro das 2 etapas](#minha-conta-e-o-cadastro-das-2-etapas-246));
 - os links de convite e de redefinição que o admin gera pela API passam a abrir a tela de
   criar a senha. O token sai do endereço ao abrir, e a página entra em seguida;
 - "Esqueceu a senha?" orienta a pedir o link a um administrador, e o rodapé do `/entrar`
@@ -697,9 +751,11 @@ em `users` e a tabela `user_recovery_codes`.
 `connectors` e o `workers` não mudam.
 
 **O cadastro da verificação fica fechado** (`Identity__TwoFactor__EnrollmentEnabled`,
-falso por padrão; o compose não o passa). Desde a #245 o `/entrar` tem o passo do código;
-a tela do cadastro, em Minha conta, é a #246. **Não abra o cadastro antes da #246**: até lá
-ele só se faz pela API. Com o cadastro fechado, ninguém liga
+falso por padrão). Desde a #245 o `/entrar` tem o passo do código, e desde a #246 a tela
+do cadastro, em Minha conta; a #246 também passou a variável pelo compose
+(`IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED`), com o passo de abrir, conferir e voltar atrás
+([Minha conta e o cadastro das 2 etapas](#minha-conta-e-o-cadastro-das-2-etapas-246)).
+Com o cadastro fechado, ninguém liga
 a verificação, e o login de todos continua igual. A verificação no login, a remoção e a
 redefinição pelo admin nunca fecham. A #220 remove a opção, junto com a obrigatoriedade.
 

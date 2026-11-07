@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { AppShell } from './AppShell';
 import { theme } from '../../theme';
 import { authRuntime } from '../../auth/session';
@@ -244,6 +244,70 @@ describe('AppShell', () => {
     const url = new URL(assign.mock.calls[0][0], 'http://localhost');
     expect(url.pathname).toBe('/connect/logout');
     expect(url.searchParams.get('id_token_hint')).toBe(s.idToken);
+  });
+
+  // O bloco do nome leva a Minha conta (spec `frontend-app-shell`; design.md da change
+  // minha-conta-painel, D1), sem item de menu.
+  describe('link para Minha conta', () => {
+    function Onde() {
+      return <p data-testid="onde">{useLocation().pathname}</p>;
+    }
+
+    function renderComRotas(initialEntry: string) {
+      return render(
+        <MantineProvider theme={theme} defaultColorScheme="auto">
+          <MemoryRouter initialEntries={[initialEntry]}>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route path="*" element={<Onde />} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </MantineProvider>,
+      );
+    }
+
+    it('o nome no rodapé leva a Minha conta, sem marcar a página fora dela', async () => {
+      const user = userEvent.setup();
+      signInForTest();
+      renderComRotas('/agents');
+
+      const link = screen.getByRole('link', { name: /Ana Souza/ });
+      expect(link).toHaveAttribute('href', '/account');
+      expect(link).toHaveAttribute('title', 'Minha conta');
+      expect(link).not.toHaveAttribute('aria-current');
+
+      await user.click(link);
+
+      expect(screen.getByTestId('onde')).toHaveTextContent('/account');
+    });
+
+    it('em Minha conta, o link marca a página atual, e o menu não tem item para ela', () => {
+      signInForTest();
+      renderComRotas('/account');
+
+      expect(screen.getByRole('link', { name: /Ana Souza/ })).toHaveAttribute('aria-current', 'page');
+      // O único link para /account é o do rodapé: nenhum item de menu leva a Minha conta.
+      const paraMinhaConta = screen.getAllByRole('link').filter((a) => a.getAttribute('href') === '/account');
+      expect(paraMinhaConta).toHaveLength(1);
+      expect(paraMinhaConta[0]).toHaveAttribute('title', 'Minha conta');
+    });
+
+    it('o avatar e os botões ficam fora do link', async () => {
+      const user = userEvent.setup();
+      signInForTest();
+      vi.spyOn(authRuntime, 'assign').mockImplementation(() => {});
+      renderComRotas('/agents');
+
+      const link = screen.getByRole('link', { name: /Ana Souza/ });
+      expect(link.querySelector('[aria-hidden="true"]')).toBeNull();
+      expect(link).not.toContainElement(screen.getByRole('button', { name: 'Sair' }));
+      expect(link).not.toContainElement(screen.getByRole('button', { name: /Mudar para tema/ }));
+
+      await user.click(screen.getByRole('button', { name: /Mudar para tema/ }));
+
+      expect(screen.getByTestId('onde')).toHaveTextContent('/agents');
+    });
   });
 
   it('não renderiza barra superior nem controle de gaveta', () => {

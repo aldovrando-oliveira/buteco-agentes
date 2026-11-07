@@ -22,6 +22,9 @@ export const CODIGO_INVALIDO = 'Código inválido.';
 export const SENHA_SALVA_COM_CODIGO =
   'Senha salva. A sua conta usa verificação em 2 etapas: digite o código para entrar.';
 
+/** O aviso do /entrar depois da troca da própria senha em Minha conta (`passwordChangedNotice.ts`). */
+export const SENHA_ALTERADA = 'Senha alterada. Entre com a nova senha.';
+
 export const POLITICA_DE_SENHA = 'A senha precisa ter de 12 a 128 caracteres.';
 export const SENHAS_DIFERENTES = 'As senhas não conferem.';
 export const ENVIO_INDISPONIVEL =

@@ -314,6 +314,19 @@ o versionamento pretende seguir
     `apps/api` e pela rota. Nenhum valor muda; o id token e o código, que valiam pelo
     padrão do OpenIddict, passam a ser registrados explicitamente com os mesmos 20 e 5 min;
   - o nginx do stack passa a mandar `/identity` ao `apps/api`.
+- **Minha conta no painel** (#246, segundo passo das telas da M1, #183), em `/account`,
+  aberta pelo nome no rodapé da barra lateral:
+  - os dados da conta, só leitura;
+  - a troca da própria senha: depois dela a pessoa sai de todos os navegadores e volta
+    ao `/entrar` com "Senha alterada. Entre com a nova senha.";
+  - a verificação em 2 etapas: ligar com o QR (gerado no navegador pelo `qrcode.react`
+    4.2.0, ISC) ou o segredo para digitar, os 10 códigos de recuperação com "Copiar
+    todos" e o `.txt` gerado no navegador, gerar novos códigos e remover. O segredo e os
+    códigos ficam só na memória da tela;
+  - as sessões: "Esta sessão", encerrar uma, encerrar as outras e encerrar a atual;
+  - o cadastro das 2 etapas continua fechado por padrão, e passa a abrir pela
+    `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED` do compose de produção
+    (`docs/deployment.md`). A #220 remove a opção.
 - **O painel entra com as 2 etapas, e os links de convite e de redefinição abrem tela**
   (#245, primeiro passo das telas da M1, #183):
   - o `/entrar` pede o código depois da senha, para quem tem a verificação ligada: o
@@ -1221,6 +1234,16 @@ o versionamento pretende seguir
   módulo de sessão do emissor.
 
 ### Fixed
+
+- **Senha ou código errado não desloga mais** (#246): as rotas que conferem a senha ou o
+  código de quem chama respondem `401`, como o token recusado, e o painel renovava,
+  repetia o pedido com a mesma senha (duas falhas no bloqueio) e, no segundo `401`,
+  encerrava a sessão. O `401` com corpo `application/problem+json` passa a voltar à tela
+  sem renovar; o `401` de token, sem corpo, continua renovando. Um teste em cada app fixa
+  que o `401` de token não traz esse corpo. A #247 troca o critério por um campo de tipo.
+- **O "Sair" não mostra mais o `/entrar` por um instante** (#246): a aba que sai mostra só
+  "Saindo…" até o navegador ir ao logout do emissor. As outras abas seguem ao `/entrar`
+  como antes.
 
 - **Campo de senha com erro anunciado como inválido** (#170, na #245): o `PasswordInput`
   do Mantine não põe `aria-invalid` no campo com erro, e o leitor de tela não o anunciava.

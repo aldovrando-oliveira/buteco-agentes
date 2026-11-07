@@ -38,6 +38,21 @@ function withAuthorization(init: RequestInit | undefined, accessToken: string | 
   return { ...init, headers: accessToken ? { ...base, Authorization: `Bearer ${accessToken}` } : base };
 }
 
+/**
+ * O `401` com corpo `application/problem+json` é a recusa da própria rota (a senha ou o
+ * código que ela confere estava errado), e não do token: o JwtBearer dos três apps responde o
+ * `401` de token sem corpo, o que cada um fixa em
+ * `TokenRejection_401_HasNoProblemBody_ThePanelRenewsOnThis`. Renovar e repetir mandaria a
+ * mesma senha errada de novo, contando duas falhas no bloqueio, e o segundo `401` deslogaria
+ * a pessoa (design.md da change minha-conta-painel, D10; decisão do dono Q0). O
+ * `Content-Type` está na lista segura do CORS, então se lê também no desenvolvimento, que é
+ * cross-origin. A #247 troca este critério por um campo de tipo.
+ */
+function isRouteRefusal(response: Response): boolean {
+  const type = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase();
+  return type === 'application/problem+json';
+}
+
 export function createSessionFetch(runtime: AuthRuntime, renewal: Renewal): SessionFetch {
   const sendToExpiredLogin = () =>
     runtime.assign(
@@ -47,7 +62,7 @@ export function createSessionFetch(runtime: AuthRuntime, renewal: Renewal): Sess
   return async (input, init, { endsSessionOn401 = true } = {}) => {
     const session = await renewal.ensureFresh();
     const first = await runtime.fetch(input, withAuthorization(init, session?.accessToken));
-    if (first.status !== 401) return first;
+    if (first.status !== 401 || isRouteRefusal(first)) return first;
 
     const outcome = await renewal.renew(session?.accessToken);
     if (outcome.kind === 'ended') {

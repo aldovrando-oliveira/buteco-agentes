@@ -8,6 +8,7 @@ import {
   ScrollArea,
   Stack,
   Text,
+  UnstyledButton,
 } from '@mantine/core';
 import {
   BookOpen,
@@ -46,6 +47,7 @@ const navItems = [
 
 export function AppShell() {
   const location = useLocation();
+  const naMinhaConta = location.pathname === '/account' || location.pathname.startsWith('/account/');
   const { setColorScheme } = useMantineColorScheme();
   // useMantineColorScheme devolve a preferência crua, que com o padrão "auto"
   // é a string 'auto' — nunca 'dark'. Quem resolve a preferência do sistema
@@ -138,16 +140,27 @@ export function AppShell() {
             >
               {userInitials(session?.nome, session?.email)}
             </Avatar>
-            <Stack gap={0} style={{ flex: 1, minWidth: 0, lineHeight: 1.25 }}>
-              <Text fz="sm" fw={500} lh={1.25} truncate="end" title={session?.nome ?? session?.email ?? undefined}>
-                {session?.nome ?? session?.email}
-              </Text>
-              {session?.nome && (
-                <Text fz={11} c="dimmed" lh={1.25} truncate="end" title={session.email ?? undefined}>
-                  {session.email}
+            {/* O nome e a segunda linha levam a Minha conta, como no protótipo; o avatar e
+                os botões ficam fora do link (design.md da change minha-conta-painel, D1). O
+                `title` "Minha conta" diz para onde vai; o nome completo continua no texto. */}
+            <UnstyledButton
+              component={Link}
+              to="/account"
+              title="Minha conta"
+              aria-current={naMinhaConta ? 'page' : undefined}
+              style={{ flex: 1, minWidth: 0, borderRadius: 4 }}
+            >
+              <Stack gap={0} style={{ lineHeight: 1.25 }}>
+                <Text fz="sm" fw={500} lh={1.25} truncate="end">
+                  {session?.nome ?? session?.email}
                 </Text>
-              )}
-            </Stack>
+                {session?.nome && (
+                  <Text fz={11} c="dimmed" lh={1.25} truncate="end">
+                    {session.email}
+                  </Text>
+                )}
+              </Stack>
+            </UnstyledButton>
             <ActionIcon
               variant="subtle"
               color="gray"

@@ -3,6 +3,8 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
 import { MemoryRouter } from 'react-router';
+import { StrictMode } from 'react';
+import { PASSWORD_CHANGED_KEY } from '../passwordChangedNotice';
 import { theme } from '../../../theme';
 import { EntrarPage } from './EntrarPage';
 import { authRuntime } from '../../../auth/session';
@@ -263,6 +265,73 @@ describe('EntrarPage', () => {
     } finally {
       Object.defineProperty(navigator, 'locks', { value: locks, configurable: true });
     }
+  });
+
+  // O aviso depois da troca da senha em Minha conta (requisito "Aviso de senha alterada no
+  // /entrar"; design.md da change minha-conta-painel, D3; decisão do dono Q1).
+  describe('aviso de senha alterada', () => {
+    const SENHA_ALTERADA = 'Senha alterada. Entre com a nova senha.';
+
+    it('com a chave na aba, avisa em role="status" e apaga a chave', () => {
+      sessionStorage.setItem(PASSWORD_CHANGED_KEY, '1');
+      renderPage();
+
+      expect(screen.getByRole('status')).toHaveTextContent(SENHA_ALTERADA);
+      expect(sessionStorage.getItem(PASSWORD_CHANGED_KEY)).toBeNull();
+    });
+
+    it('no StrictMode, o aviso aparece e a chave sai', () => {
+      sessionStorage.setItem(PASSWORD_CHANGED_KEY, '1');
+      render(
+        <StrictMode>
+          <MantineProvider theme={theme}>
+            <MemoryRouter initialEntries={['/entrar']}>
+              <EntrarPage />
+            </MemoryRouter>
+          </MantineProvider>
+        </StrictMode>,
+      );
+
+      expect(screen.getByRole('status')).toHaveTextContent(SENHA_ALTERADA);
+      expect(sessionStorage.getItem(PASSWORD_CHANGED_KEY)).toBeNull();
+    });
+
+    it('o aviso aparece uma vez só', () => {
+      sessionStorage.setItem(PASSWORD_CHANGED_KEY, '1');
+      const first = renderPage();
+      first.unmount();
+
+      renderPage();
+
+      expect(screen.queryByText(SENHA_ALTERADA)).not.toBeInTheDocument();
+    });
+
+    it('vence a sessão expirada', () => {
+      sessionStorage.setItem(PASSWORD_CHANGED_KEY, '1');
+      renderPage('/entrar?motivo=sessao-expirada');
+
+      expect(screen.getByRole('status')).toHaveTextContent(SENHA_ALTERADA);
+      expect(screen.queryByText(/Sua sessão expirou/)).not.toBeInTheDocument();
+    });
+
+    it('sem a chave, não há aviso de senha alterada', () => {
+      renderPage();
+
+      expect(screen.queryByText(SENHA_ALTERADA)).not.toBeInTheDocument();
+    });
+
+    it('some ao enviar, e o resultado do envio segue as regras', async () => {
+      const user = userEvent.setup();
+      sessionStorage.setItem(PASSWORD_CHANGED_KEY, '1');
+      respond(jsonResponse({ title: 'E-mail ou senha inválidos.' }, 401));
+      renderPage('/entrar?motivo=sessao-expirada');
+
+      await submit(user);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('E-mail ou senha inválidos.');
+      expect(screen.queryByText(SENHA_ALTERADA)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Sua sessão expirou/)).not.toBeInTheDocument();
+    });
   });
 
   describe('passo das 2 etapas', () => {
