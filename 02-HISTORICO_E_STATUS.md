@@ -18339,3 +18339,59 @@ Suítes pelo `~/.cache/buteco-agents/bin/suite-246.sh`, com a regra assimétrica
 - **#183:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6702276299) traz o `401` das ações com a senha de quem chama, os avisos de falha (candidatos a sair para um lugar comum no segundo consumidor), o "use Usuários" para virar link e o "Saindo…".
 - **#220:** o [comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/220#issuecomment-6702276561) lista o que sai com a opção do cadastro.
 - **#247:** passa a cobrir também os `401` de senha e código errados ([comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/247#issuecomment-6701299874)).
+
+## `healthcheck-rabbitmq-leve` — Healthcheck do RabbitMQ por TCP na porta AMQP (#251)
+
+**Change proposta e implementada em 07/11/2026**, na branch `fix/251-healthcheck-rabbitmq`, num worktree próprio, a partir de `a852946`. Sem milestone. É um achado do fechamento da #250: duas rodadas da suíte do frontend saíram inconclusivas com a VM do Podman a ~450% de CPU.
+
+- **O que muda:** o healthcheck do `rabbitmq`, igual em `docker-compose.yml` e `docker-compose.prod.yml`:
+  - **antes:** `rabbitmq-diagnostics -q ping`, 5s/5s/10, que subia o runtime Erlang do CLI a cada execução;
+  - **depois:** `["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/5672"]`, com `interval` 10s, `timeout` 5s, `retries` 6 e `start_period` 30s.
+
+  Nenhum app muda, e não há migration. O `docs/deployment.md` ganha a seção da #251.
+- **A garantia do `service_healthy` fica mais forte.** O `ping` dava `healthy` antes de o listener AMQP abrir, nos 3 restarts medidos. A checagem TCP dá `healthy` depois, nos 3. Em produção, o `api` e os `workers` esperam esse `healthy`.
+- **O `bash` foi conferido na tag exata** `rabbitmq:4.3-management`: Ubuntu 24.04.4, bash 5.2.21. A variante `-alpine` não serviria.
+- **Capacidades:** `server-deployment` e `local-dev-environment`, um requisito novo cada.
+
+**Decisões do dono** (07/11/2026; detalhe no design):
+- **Q1:** TCP na 5672, com o `bash` conferido;
+- **Q2:** 10s/5s/6/30s, sem `start_interval`;
+- **Q3:** a medição roteirizada como guarda, mais o guarda do `stop_app`;
+- **Q4:** o deploy numa janela sem uso, com `up -d rabbitmq` e uma task de ponta a ponta;
+- **Q5:** a #253, para o consumidor dos `workers` conectar com nova tentativa no boot;
+- **na implementação, opção 1:** o contrato do guarda 2 é a contagem de falhas (`FailingStreak` = `retries`), e não o tempo.
+
+### Premissas que caíram (convenção 9)
+
+O registro completo está no `tasks.md` da change ([`openspec/changes/archive/2026-11-08-healthcheck-rabbitmq-leve/tasks.md`](openspec/changes/archive/2026-11-08-healthcheck-rabbitmq-leve/tasks.md)).
+- **"O `unhealthy` vem entre 50 e 70 s"** (D6 e a spec): com `interval` de 10 s, o Podman roda uma checagem a cada ~11 s, porque conta do fim da anterior, e uma de quatro rodadas deu 71,6 s. Era parada, porque alargar o teto afrouxaria a tolerância, e o dono decidiu pela opção 1: o contrato é a contagem, e 50 a 80 s fica só como prazo de sanidade. O Docker pode contar o intervalo de outro jeito.
+- **O roteiro de medição:** três correções.
+  - A primeira rodada de antes foi com o host estrangulado (23) e foi descartada; agora cada fase espera a CPU em 100 e só vale com 100 do início ao fim.
+  - A %CPU da VM no `top` é relativa ao núcleo desacelerado, e entrou a CPU do cgroup do contêiner.
+  - O relógio da VM estava 4,5 min atrasado.
+- **O guarda do `["CMD", "true"]` na primeira montagem** rodou o `stop_app` antes de o boot terminar (`rc=69`). O roteiro passou a esperar a porta aceitando.
+- **A porta publicada no host não serve para medir:** o encaminhador do Podman aceita na hora, com ou sem listener. Toda sondagem foi feita dentro do contêiner.
+
+### O que a implementação mediu
+
+No compose de desenvolvimento, em `~/.cache/buteco-agents/251-medicao/`, com todas as fases válidas:
+
+| medição | antes (`ping`) | depois (TCP) |
+|---|---|---|
+| CPU de cada execução | 2,2 a 4,1 s | **4 a 6 ms** |
+| CPU da VM, broker de pé / pausado | 66,2% / 15,2% | **23,6%** / 15,8% |
+| CPU do contêiner ocioso (cgroup, 60 s) | 34,2% de um núcleo | **1,4%** |
+| `healthy` / listener depois do restart | +8,0 s / +9,6 s em média; **`healthy` antes** (3 de 3) | +10,8 s / +9,9 s; **`healthy` depois** (3 de 3) |
+
+- **Guarda 1** (o `ping` de volta): reprovou nos dois critérios. O `healthy` veio antes do listener nos 3 restarts, e a VM ficou em 62,9% contra 18,2%.
+- **Guarda 2** (`stop_app`):
+  - com o healthcheck da change, o `unhealthy` veio com `FailingStreak` 6, em 67,1 s, sem checagem passando depois da porta fechada;
+  - com `["CMD", "true"]`, reprovou nas duas asserções (o contêiner ficou `healthy` 120 s, com 11 checagens passando).
+- **Os composes voltaram pela cópia, com o sha conferido**, depois de cada guarda.
+- **Suíte do `apps/frontend` com o broker de pé:** APROVADA na primeira rodada, com 2.166 de 2.166 em 152 s e a CPU mínima em 51. Por nome, ficou idêntica à baseline `a852946`. Com o `ping`, as rodadas da #250 saíram inconclusivas, em 616 s e 606 s.
+
+### Para as próximas
+
+- **O deploy de produção** está no `docs/deployment.md`, seção "Healthcheck do RabbitMQ (#251)": janela sem uso, `up -d rabbitmq`, conferência com uma task de ponta a ponta, e rollback.
+- **A pausa do broker nas suítes** (`suite-250.sh`) deixa de ser necessária. O `suite-251.sh` tem a `PAUSAR_RABBIT=0`.
+- **#253:** os consumidores dos `workers` conectam com nova tentativa no boot.
