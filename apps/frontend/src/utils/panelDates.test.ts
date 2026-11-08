@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatRelative } from './accountDates';
+import { formatDate, formatRelative, formatShortDateTime } from './panelDates';
 
 const SP = 'America/Sao_Paulo';
 
@@ -21,5 +21,10 @@ describe('accountDates', () => {
 
   it('a data só com dia, mês e ano', () => {
     expect(formatDate('2026-08-12T13:00:00Z', SP)).toBe('12/08/2026');
+  });
+
+  it('o formato curto usa o dia e a hora do fuso', () => {
+    // 01:30 de 11/11 em UTC é 22:30 de 10/11 em São Paulo.
+    expect(formatShortDateTime('2026-11-11T01:30:00Z', SP)).toBe('10/11, 22:30');
   });
 });

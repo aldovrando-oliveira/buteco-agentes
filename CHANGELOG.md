@@ -314,6 +314,19 @@ o versionamento pretende seguir
     `apps/api` e pela rota. Nenhum valor muda; o id token e o código, que valiam pelo
     padrão do OpenIddict, passam a ser registrados explicitamente com os mesmos 20 e 5 min;
   - o nginx do stack passa a mandar `/identity` ao `apps/api`.
+- **Usuários e Identidade no painel** (#250, primeira parte do passo C das telas da M1,
+  #183), na seção "Acesso" nova do menu. **A validação visual fica para a homologação da M1.**
+  - `/users`: a lista com formas de entrada, verificação em 2 etapas, estado (com o
+    vencimento do convite, vindo do servidor) e último acesso;
+  - convidar dentro do cartão, e gerar novo link e cancelar convite na linha. As duas
+    primeiras pedem a senha de quem chama: vazia não é enviada, e a errada fica no campo
+    sem deslogar;
+  - o link do convite aparece uma vez, com "Copiar link", e fica só na memória da tela:
+    nada em storage, endereço ou cache;
+  - `/identity`: o emissor e as chaves de assinatura, com as durações e as datas da rota
+    da #211. Se o `apps/api` estiver fora, a tela mostra "Indisponível" e tenta de novo
+    sozinha enquanto o erro durar;
+  - Editar usuário e o "Editar" na linha chegam com a #183.
 - **Minha conta no painel** (#246, segundo passo das telas da M1, #183), em `/account`,
   aberta pelo nome no rodapé da barra lateral:
   - os dados da conta, só leitura;

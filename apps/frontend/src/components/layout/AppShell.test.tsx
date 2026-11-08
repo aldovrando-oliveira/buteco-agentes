@@ -127,6 +127,8 @@ describe('AppShell', () => {
       'Conhecimento',
       'Canais',
       'Insights',
+      'Usuários',
+      'Identidade',
     ]) {
       const link = screen.getByRole('link', { name: label });
       const icon = link.querySelector('svg');
@@ -135,7 +137,8 @@ describe('AppShell', () => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     }
 
-    expect(container.querySelectorAll('a svg')).toHaveLength(6);
+    // 8 desde a seção Acesso (Usuários e Identidade; change usuarios-convites-identidade-painel).
+    expect(container.querySelectorAll('a svg')).toHaveLength(8);
   });
 
   it.each([
@@ -248,6 +251,39 @@ describe('AppShell', () => {
 
   // O bloco do nome leva a Minha conta (spec `frontend-app-shell`; design.md da change
   // minha-conta-painel, D1), sem item de menu.
+  describe('seção Acesso', () => {
+    it('depois de Insights vêm o rótulo Acesso e os links Usuários e Identidade', () => {
+      renderAppShell();
+
+      const nav = screen.getByRole('navigation');
+      const textos = Array.from(nav.querySelectorAll('a, p')).map((el) => el.textContent?.trim());
+      const insights = textos.indexOf('Insights');
+      expect(textos.slice(insights, insights + 4)).toEqual(['Insights', 'Acesso', 'Usuários', 'Identidade']);
+      expect(screen.getByRole('link', { name: 'Usuários' })).toHaveAttribute('href', '/users');
+      expect(screen.getByRole('link', { name: 'Identidade' })).toHaveAttribute('href', '/identity');
+    });
+
+    it('o rótulo Acesso não é link', () => {
+      renderAppShell();
+
+      expect(screen.getByText('Acesso').closest('a')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Acesso' })).not.toBeInTheDocument();
+    });
+
+    it('em /users, o item Usuários fica ativo, e Identidade não', () => {
+      renderAppShell('/users');
+
+      expect(screen.getByRole('link', { name: 'Usuários' })).toHaveAttribute('data-active', 'true');
+      expect(screen.getByRole('link', { name: 'Identidade' })).not.toHaveAttribute('data-active');
+    });
+
+    it('o menu não tem Aplicações externas', () => {
+      renderAppShell();
+
+      expect(screen.queryByText('Aplicações externas')).not.toBeInTheDocument();
+    });
+  });
+
   describe('link para Minha conta', () => {
     function Onde() {
       return <p data-testid="onde">{useLocation().pathname}</p>;

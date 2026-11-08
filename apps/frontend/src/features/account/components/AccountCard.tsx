@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useId } from 'react';
 import { Alert, Anchor, Group, Paper, Skeleton, Stack, Text, Title } from '@mantine/core';
-import { failureText } from '../cardFailure';
+import { failureText } from '../../../utils/failureNotice';
 
 // A moldura dos quatro cartões do quadro `MinhaConta`: o título como cabeçalho da seção,
 // a ação do cabeçalho (o "Trocar senha", o "Encerrar as outras") e o corpo.

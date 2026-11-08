@@ -7,8 +7,8 @@ import { ApiError, changePassword, getAccount } from '../api/accountApi';
 import { POLITICA_DE_SENHA, SENHAS_DIFERENTES } from '../../auth/messages';
 import { passwordFitsPolicy } from '../../auth/passwordPolicy';
 import { markPasswordChanged } from '../../auth/passwordChangedNotice';
-import { blockedUntil, failureNotice, type FailureNotice } from '../cardFailure';
-import { useBlockedUntil } from '../useBlockedUntil';
+import { blockedUntil, failureNotice, type FailureNotice } from '../../../utils/failureNotice';
+import { useBlockedUntil } from '../../../hooks/useBlockedUntil';
 import { AccountCard } from './AccountCard';
 import { ACCOUNT_QUERY_KEY } from '../queryKeys';
 

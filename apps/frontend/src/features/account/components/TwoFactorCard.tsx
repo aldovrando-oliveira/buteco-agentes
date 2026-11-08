@@ -13,10 +13,10 @@ import {
   type TwoFactorSetup,
   type TwoFactorStatus,
 } from '../api/accountApi';
-import { formatDate } from '../accountDates';
+import { formatDate } from '../../../utils/panelDates';
 import { CODIGO_INVALIDO, INFORME_O_CODIGO } from '../../auth/messages';
-import { blockedUntil, failureNotice, type FailureNotice } from '../cardFailure';
-import { useBlockedUntil } from '../useBlockedUntil';
+import { blockedUntil, failureNotice, type FailureNotice } from '../../../utils/failureNotice';
+import { useBlockedUntil } from '../../../hooks/useBlockedUntil';
 import { AccountCard, CardLoadError, CardLoading } from './AccountCard';
 import { ACCOUNT_QUERY_KEY, TWO_FACTOR_QUERY_KEY } from '../queryKeys';
 import { CADASTRO_VENCEU, CONFIRMA_CODIGO_INVALIDO, fewCodesText, remainingText } from '../accountTexts';
