@@ -1,6 +1,7 @@
-import { Alert, Box, Button, Code, CopyButton, Group, Stack, Text, ThemeIcon, Title } from '@mantine/core';
+import { Alert, Box, Button, Group, Stack, Text, ThemeIcon, Title } from '@mantine/core';
 import { Check } from 'lucide-react';
 import { formatLinkExpiry } from '../../auth/linkExpiry';
+import { CopyableLink } from './CopyableLink';
 
 // O link do convite, mostrado uma vez (requisito "Link de convite mostrado uma vez e só na
 // memória da tela"; design.md da change usuarios-convites-identidade-painel, D5). O link chega
@@ -43,18 +44,7 @@ export function InviteLinkPanel({ titulo, email, link, expiraEm, onDone }: Invit
           <Text size="sm" fw={500}>
             Link do convite
           </Text>
-          <Group gap="sm" wrap="nowrap" align="center">
-            <Code block style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
-              {link}
-            </Code>
-            <CopyButton value={link}>
-              {({ copied, copy }) => (
-                <Button size="sm" color={copied ? 'green' : undefined} onClick={copy} aria-live="polite">
-                  {copied ? 'Copiado ✓' : 'Copiar link'}
-                </Button>
-              )}
-            </CopyButton>
-          </Group>
+          <CopyableLink link={link} />
           <Text size="xs" c="dimmed">
             Envie para a pessoa por e-mail, chat ou outro canal. Vale até <b>{formatLinkExpiry(expiraEm)}</b> e funciona
             uma única vez.

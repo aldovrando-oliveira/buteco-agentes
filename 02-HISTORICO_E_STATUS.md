@@ -18475,3 +18475,62 @@ O registro completo está no `tasks.md` da change ([`openspec/changes/archive/20
 - **#183:** o [comentário de entrega](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6713401861) traz os avisos e as datas no lugar comum, o `CallerPasswordField`, o `InviteLinkPanel`, o guarda da linha sem "Editar" e a pausa do RabbitMQ nas suítes. A parte do design que fica com ela está no [comentário da divisão](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6710514538).
 - **#184:** o [comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/184#issuecomment-6713632615) registra que Usuários e Identidade abrem para todo usuário ativo na M1, e o que ela restringe no `apps/api` e no painel.
 - **#251:** o healthcheck do RabbitMQ; também comentado na [#226](https://github.com/aldovrando-oliveira/buteco-agentes/issues/226#issuecomment-6713392834) e na [#176](https://github.com/aldovrando-oliveira/buteco-agentes/issues/176#issuecomment-6713393019).
+
+## `editar-usuario-painel` — Editar usuário no painel (#183)
+
+**Change proposta e implementada em 07 e 08/11/2026**, na branch `feat/183-editar-usuario-painel`, num worktree próprio, a partir de `9c49e4b` (merge do PR #252). Entrega M1 · 17 de 18. É a segunda parte do passo C, dividido pelo dono em 07/11/2026 (Q1 da #250); a #250 levou a lista, os convites, a Identidade e a seção "Acesso". **A validação visual (11.4) fica para a homologação da M1**, como na #250 (decisão do dono, 08/11/2026): o dono valida quadro a quadro depois que todas as issues da entrega estiverem mergeadas, e o PR é mergeado antes dela.
+
+- **O que entra no `apps/frontend`:**
+  - **`/users/:id`**, pelo quadro `UsuarioDetalhe` (`entrega=m1`):
+    - a carga: carregando, erro com "Tentar de novo", e "Usuário não encontrado" no `404`, **sem as repetições do `retry` padrão** (um `GET` só); o convidado volta para `/users` com `replace` (Q4);
+    - o cabeçalho: o selo do estado, "Você", "Desativar" (com confirmação) ou "Reativar" (sem), e o subtítulo com a origem e o último acesso no formato de Minha conta (Q3);
+    - Dados: nome e e-mail pelo `PUT`, com "Salvar alterações" habilitado só quando um campo difere do lido, "Descartar", o `409` no campo e o `400` por campo;
+    - Formas de entrada com "Redefinir senha", que pede a senha de quem chama (vazia não é enviada, a errada fica no campo sem deslogar, o `423` vai no aviso) e mostra o link uma vez, com "Vale até {expiraEm}" (Q5), num painel com a forma do quadro (Q11);
+    - a verificação em 2 etapas, com "Redefinir verificação" e confirmação; o detalhe é relido, e as sessões vão a zero junto, porque o servidor as encerra;
+    - as sessões, com a contagem, o último uso e "Encerrar todas as sessões" com confirmação;
+  - **o próprio usuário**, reconhecido pelo `sub` do id token, lido na hora, sem mudar o registro da sessão: a nota "Este é você…", os links para Minha conta no lugar das ações vetadas a si mesmo, e as sessões só com a contagem, sem "incluindo esta" (Q12);
+  - **uma ação aberta por vez** na página, como a propriedade `acao` do quadro, e a página **remontada a cada id**;
+  - **o link de redefinição** só no estado da página: chamada direta, sem `useMutation`, e nada em storage, URL, `history.state` ou cache;
+  - **o "Editar" na linha** do ativo e do desativado em `/users`, e **"Usuários" de Minha conta** como link para o detalhe do próprio;
+  - `CopyableLink` (a caixa do link, comum ao convite e à redefinição) e `Selo` saíram para componentes próprios da feature, sem mudar o que mostram.
+- **Nada fora do `apps/frontend`.** Sem dependência nova, sem migration, sem mudança no nginx (`users(/|$)` já cobre `/users/<id>`).
+- **Capacidades:** `panel-user-detail-page`, nova; `panel-users-page` ("Ações da linha sem destino inexistente") e `panel-account-page` ("Cartão Dados"), um requisito modificado cada.
+
+**Decisões do dono** (07/11/2026; detalhe no design, "Decisões do dono"):
+- **Q11:** painel próprio para o link de redefinição, com a caixa do link comum aos dois painéis;
+- **Q12:** as sessões do próprio sem a dedução "incluindo esta", registrada como divergência do protótipo;
+- **Q13:** o rodapé com o nome e o e-mail antigos por até 15 min depois de o próprio editar os dados; a tela invalida o detalhe, a lista e a conta, sem forçar renovação;
+- **Q14:** sem guarda de rascunho ao sair da página.
+
+Divergências de texto contra o protótipo: Q3 (o último acesso), Q5 (a validade do link), Q12 (as sessões do próprio) e o N do `Retry-After` no bloqueio. O protótipo foi lido na versão `1794066606-fba2`.
+
+### Premissas que caíram (convenção 9)
+
+O registro completo está no `tasks.md` da change.
+- **A página reaproveitada entre ids** (achado da conferência no navegador): o React Router mantém a instância quando só o `:id` muda, e o aviso "Reativação concluída" de uma pessoa apareceu na página de outra. Pelo mesmo caminho, um link de redefinição aberto passaria para o detalhe de outra pessoa. A página passou a remontar por id, com o caso "o link não passa para a página de outro usuário", visto reprovar sem a correção. Acrescenta teste e cumpre a spec ("ao sair da página"), então seguiu e foi registrado.
+- **O `prettier --write` em diretórios inteiros** reformatou 19 arquivos que a change não tocava: o `main` tem 129 arquivos fora da configuração (`printWidth: 100`), e nada roda o `format:check` (não há CI; débito aberto na [#255](https://github.com/aldovrando-oliveira/buteco-agentes/issues/255)). Os 19 voltaram ao `HEAD`, um a um, e os 7 editados voltaram ao `HEAD` com só as edições reaplicadas.
+- **Dois casos saíram, porque o requisito deles mudou:** "a lista não tem link para o detalhe (/users/:id chega com a #183)" e `"use Usuários" fica sem link até a tela existir (#183)`. Os casos que os substituem cobrem o defeito antigo (link no convidado) e o novo.
+
+### O que a implementação mediu
+
+| suíte `apps/frontend` | baseline `9c49e4b` (`183-baseline/`) | change (`183-frontend-r2/`) | por nome |
+|---|---|---|---|
+| com o RabbitMQ de pé (`PAUSAR_RABBIT=0`) | **2.248 em 177**, 204 s, CPU mínima 48 | **2.329 em 185**, 161 s, CPU mínima 58 | saem os 2 casos trocados; entram 83 |
+
+- A baseline é idêntica, por nome, à última rodada da #250. A primeira rodada da change (`183-frontend-r1/`, 2.328) foi antes da correção da página reaproveitada; da r1 para a r2 entrou só o caso dela.
+- **Guardas (convenção 15):** 25, todos vistos reprovar contra o defeito nomeado, com a volta pela cópia e o sha conferido, em `~/.cache/buteco-agents/183-guardas/`.
+- **Lint e build:** sem erro. O bundle foi de 1.155,22 kB para 1.169,76 kB (+14,54 kB; +3,20 kB com gzip).
+- **Conferência no navegador** (Chrome, com o Vite e o `apps/api` do worktree; ferramentas em `~/.cache/buteco-agents/183-conferencia/`): o detalhe de outro usuário, de um desativado e do próprio; editar o nome e o `409` do e-mail; a redefinição com a senha vazia, errada e certa, sem deslogar; o link uma vez, fora de storage, URL e histórico, e fora do DOM depois de "Concluir" e de abrir outra ação; o link aberto numa aba nova, na tela pública; desativar e reativar; redefinir as 2 etapas, com as sessões relidas; encerrar sessões; o `404` em 53 ms, sem as repetições; o convidado devolvido a `/users`; o "Editar" na lista e o link de Minha conta.
+  - **A senha errada pausou a conta de validação:** ela já tinha falhas da conferência da #250, e o bloqueio progressivo do servidor (#180) foi de 5 para 10 min. O envio que dispara a pausa responde `401`, e o seguinte (com a senha certa) mostrou o aviso do `423` no formulário.
+  - "Copiado ✓", o botão bloqueado pelo `Retry-After` (ilegível no desenvolvimento) e o escuro ficaram para a suíte e para a validação visual.
+- **Validação visual (convenção 14): na homologação da M1.** A lista de quadros e estados está na tarefa 11.4 e no topo do PR.
+- **Tamanho (convenção 18)**, contra a projeção do design (~885 / ~1.210 / ~70):
+  - produção: +1.165 / −35 em 19 arquivos (**+32%**, o mesmo erro da #250, +31%);
+  - testes: +1.168 / −12 em 13 (**−3%**);
+  - duplos: +118 / −1 em 2 (**+69%**): as fixtures do detalhe e o `renderUserDetail` com o data router.
+
+### Para as próximas
+
+- **#184:** Editar usuário abre para todo usuário ativo na M1; o papel no cartão Dados, "O novo papel vale…" e o "Primeiro administrador" voltam a ser revistos com ela.
+- **#220:** a M1 fica com ela só, depois desta.
+- **#255** (sem milestone): os 130 arquivos do `apps/frontend` fora da formatação do prettier, com as duas saídas (formatar tudo e conferir, ou desligar a regra) e o incidente desta change.

@@ -126,15 +126,34 @@ describe('UsersPage', () => {
     expect(screen.getByRole('button', { name: 'Cancelar convite de Joana Prado' })).toBeInTheDocument();
   });
 
-  it('a lista não tem link para o detalhe (/users/:id chega com a #183)', async () => {
-    fakeUsersApi({ 'GET /users': { status: 200, body: [ATIVO, DESATIVADO, CONVIDADA, VENCIDO] } });
-    const { container } = renderUsers();
+  // O "Editar" do quadro (design.md da change editar-usuario-painel, D1): substitui o caso da
+  // #250 "a lista não tem link para o detalhe", porque `/users/:id` passou a existir.
+  it('a linha do ativo e a do desativado têm Editar para /users/{id}', async () => {
+    fakeUsersApi({ 'GET /users': { status: 200, body: [ATIVO, DESATIVADO, CONVIDADA] } });
+    renderUsers();
 
     await screen.findByText('Ana Souza');
-    const table = container.querySelector('table') as HTMLElement;
-    const hrefs = Array.from(table.querySelectorAll('[href]')).map((a) => a.getAttribute('href'));
-    expect(hrefs.filter((h) => h?.startsWith('/users/'))).toEqual([]);
-    expect(within(table).queryByText('Editar')).not.toBeInTheDocument();
+    expect(within(linha('Ana Souza')).getByRole('link', { name: 'Editar Ana Souza' })).toHaveAttribute(
+      'href',
+      '/users/u-ana',
+    );
+    expect(within(linha('Bruno Teixeira')).getByRole('link', { name: 'Editar Bruno Teixeira' })).toHaveAttribute(
+      'href',
+      '/users/u-bruno',
+    );
+  });
+
+  it('a linha do convidado não tem Editar', async () => {
+    fakeUsersApi({ 'GET /users': { status: 200, body: [ATIVO, CONVIDADA, VENCIDO] } });
+    renderUsers();
+
+    await screen.findByText('Joana Prado');
+    for (const nome of ['Joana Prado', 'Paulo Souza']) {
+      const tr = linha(nome);
+      expect(within(tr).queryByRole('link', { name: /Editar/ })).not.toBeInTheDocument();
+      const hrefs = Array.from(tr.querySelectorAll('[href]')).map((a) => a.getAttribute('href'));
+      expect(hrefs.filter((h) => h?.startsWith('/users/'))).toEqual([]);
+    }
   });
 
   describe('cancelar convite', () => {

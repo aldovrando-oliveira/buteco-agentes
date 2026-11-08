@@ -1,4 +1,5 @@
-import { Box, Text } from '@mantine/core';
+import { Anchor, Box, Text } from '@mantine/core';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { getAccount } from '../api/accountApi';
 import { formatDate, formatRelative } from '../../../utils/panelDates';
@@ -7,8 +8,8 @@ import { AccountCard, CardLoadError, CardLoading } from './AccountCard';
 
 // O cartão "Dados" (requisito "Cartão Dados"): do `GET /account`, e não do id token, que só
 // muda na renovação seguinte a uma edição do nome (#219). Só leitura: na M1 a pessoa muda
-// o nome e o e-mail por Usuários (#183), e o texto fica sem link até a tela existir
-// (decisão do dono Q3; a #183 o transforma em link).
+// o nome e o e-mail em Editar usuário, e "Usuários" leva ao detalhe do próprio, pelo `id` do
+// `GET /account`, como no quadro `MinhaConta` (design.md da change editar-usuario-painel, D1).
 export function AccountDataCard() {
   const query = useQuery({ queryKey: ACCOUNT_QUERY_KEY, queryFn: getAccount });
 
@@ -32,7 +33,13 @@ export function AccountDataCard() {
               {query.data.ultimoAcesso ? formatRelative(query.data.ultimoAcesso) : '—'}
             </Text>
           </Box>
-          <Text size="sm" c="dimmed">Para mudar o nome ou o e-mail, use Usuários.</Text>
+          <Text size="sm" c="dimmed">
+            Para mudar o nome ou o e-mail, use{' '}
+            <Anchor component={Link} to={`/users/${encodeURIComponent(query.data.id)}`} size="sm">
+              Usuários
+            </Anchor>
+            .
+          </Text>
         </>
       )}
     </AccountCard>

@@ -37,6 +37,24 @@ describe('sessionStore', () => {
     expect(store.read()).toBeNull();
   });
 
+  it('registro gravado antes desta change continua válido', () => {
+    // O reconhecimento do próprio usuário lê o `sub` do id token na hora (design.md da change
+    // editar-usuario-painel, D2), sem campo novo: um registro com só os campos de antes do deploy
+    // continua aceito, e ninguém é deslogado.
+    const { storage, store } = setup();
+    const antigo = {
+      accessToken: 'access-1',
+      accessExpiresAt: 1000,
+      refreshToken: 'refresh-1',
+      idToken: fakeJwt({ sub: 'u-ana', name: 'Ana Souza', email: 'ana@exemplo.test' }),
+      nome: 'Ana Souza',
+      email: 'ana@exemplo.test',
+    };
+    storage.setItem(SESSION_KEY, JSON.stringify(antigo));
+
+    expect(store.read()).toEqual(antigo);
+  });
+
   it('avisa quando o registro é apagado por outra aba', () => {
     const { storage, events, store } = setup();
     store.write(session(1, 1000));

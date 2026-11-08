@@ -2,7 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { signInForTest, signOutForTest } from '../../../test/authFakes';
 import { authRuntime } from '../../../auth/session';
 import { fakeUsersApi, problem } from '../test/fakeUsersApi';
-import { ApiError, cancelInvitation, inviteUser, listUsers, renewInvitation } from './usersApi';
+import {
+  ApiError,
+  activateUser,
+  cancelInvitation,
+  deactivateUser,
+  getUser,
+  inviteUser,
+  listUsers,
+  renewInvitation,
+  requestPasswordReset,
+  resetTwoFactor,
+  revokeUserSessions,
+  updateUser,
+} from './usersApi';
 
 beforeEach(() => {
   signInForTest('token-de-teste');
@@ -78,5 +91,47 @@ describe('usersApi', () => {
     expect(error.status).toBe(423);
     expect(error.retryAfter).toBe(300);
     expect(error.title).toBe('Acesso pausado por tentativas seguidas. Tente de novo mais tarde.');
+  });
+  describe('Editar usuário (change editar-usuario-painel)', () => {
+    it.each<[string, () => Promise<unknown>, unknown]>([
+      ['GET /users/u%201', () => getUser('u 1'), undefined],
+      [
+        'PUT /users/u%201',
+        () => updateUser('u 1', { nome: 'Rafael', email: 'r@exemplo.test' }),
+        { nome: 'Rafael', email: 'r@exemplo.test' },
+      ],
+      ['POST /users/u%201/deactivate', () => deactivateUser('u 1'), undefined],
+      ['POST /users/u%201/activate', () => activateUser('u 1'), undefined],
+      ['POST /users/u%201/sessions/revoke', () => revokeUserSessions('u 1'), undefined],
+      [
+        'POST /users/u%201/password-reset',
+        () => requestPasswordReset('u 1', 'minha-senha'),
+        { senha: 'minha-senha' },
+      ],
+    ])('%s leva o método, o caminho e o corpo do contrato', async (key, call, body) => {
+      const api = fakeUsersApi({ [key]: { status: 200, body: {} } });
+
+      await call();
+
+      const [request] = api.calls(key);
+      expect(request.body).toEqual(body);
+      expect(request.authorization).toBe('Bearer token-de-teste');
+    });
+
+    it('o reset da verificação com 204 devolve undefined', async () => {
+      const api = fakeUsersApi({ 'POST /users/u-1/two-factor/reset': { status: 204 } });
+
+      await expect(resetTwoFactor('u-1')).resolves.toBeUndefined();
+      expect(api.calls('POST /users/u-1/two-factor/reset')[0].body).toBeUndefined();
+    });
+
+    it('o 404 do detalhe vira ApiError com o title', async () => {
+      fakeUsersApi({ 'GET /users/u-x': problem(404, 'Usuário não encontrado.') });
+
+      await expect(getUser('u-x')).rejects.toMatchObject({
+        status: 404,
+        title: 'Usuário não encontrado.',
+      });
+    });
   });
 });
