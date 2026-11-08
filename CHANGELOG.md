@@ -327,6 +327,15 @@ o versionamento pretende seguir
     da #211. Se o `apps/api` estiver fora, a tela mostra "Indisponível" e tenta de novo
     sozinha enquanto o erro durar;
   - Editar usuário e o "Editar" na linha chegam com a #183.
+- **Editar usuário no painel** (#183, segunda parte do passo C das telas da M1). **A
+  validação visual fica para a homologação da M1.**
+  - `/users/:id`: nome e e-mail editáveis; "Redefinir senha", que pede a senha de quem
+    chama e mostra o link de redefinição uma vez, só na memória da tela; "Redefinir
+    verificação"; "Encerrar todas as sessões"; desativar (com confirmação) e reativar;
+  - o próprio usuário é reconhecido pelo id do token, e as ações dele apontam para Minha
+    conta;
+  - o "Editar" na linha de Usuários, e "Usuários" de Minha conta como link para o detalhe
+    do próprio.
 - **Minha conta no painel** (#246, segundo passo das telas da M1, #183), em `/account`,
   aberta pelo nome no rodapé da barra lateral:
   - os dados da conta, só leitura;

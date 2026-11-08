@@ -94,7 +94,8 @@ export function createSessionStore(
   };
 }
 
-function decodeJwtPayload(jwt: string): Record<string, unknown> {
+/** O payload de um JWT, sem conferir a assinatura; `{}` quando ilegível. Também lê o `sub` (`auth/session.ts`). */
+export function decodeJwtPayload(jwt: string): Record<string, unknown> {
   try {
     const part = jwt.split('.')[1] ?? '';
     const base64 = part.replace(/-/g, '+').replace(/_/g, '/');

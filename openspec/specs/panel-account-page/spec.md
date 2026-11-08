@@ -32,15 +32,15 @@ O cartão "Dados" SHALL vir do `GET /account`, e não do id token, e SHALL mostr
 - "No painel desde": `criadoEm`, como `dd/mm/aaaa`;
 - "Último acesso": `ultimoAcesso`, pelo formato relativo de datas desta capacidade.
 
-Abaixo, SHALL mostrar o texto "Para mudar o nome ou o e-mail, use Usuários.", **sem link** enquanto a tela de Usuários não existir (#183). Nenhum campo do cartão SHALL ser editável.
+Abaixo, SHALL mostrar o texto "Para mudar o nome ou o e-mail, use Usuários.", em que "Usuários" é um link para o detalhe do próprio usuário, `/users/{id}`, com o `id` do `GET /account`. É a forma do quadro `MinhaConta`. Nenhum campo do cartão SHALL ser editável.
 
 #### Scenario: Os dados da conta
 - **WHEN** `GET /account` responde `{ nome: "Ana Souza", email: "ana@exemplo.test", criadoEm: "2026-08-12T…", ultimoAcesso: <hoje às 14:15> }`
 - **THEN** o cartão mostra "Ana Souza", "ana@exemplo.test", "12/08/2026" e "hoje, 14:15"
 
-#### Scenario: "use Usuários" sem link
-- **WHEN** o cartão é renderizado
-- **THEN** o texto "Para mudar o nome ou o e-mail, use Usuários." aparece, e não há link nele
+#### Scenario: "Usuários" leva ao detalhe do próprio usuário
+- **WHEN** `GET /account` responde com `id: "u-ana"`
+- **THEN** o texto "Para mudar o nome ou o e-mail, use Usuários." aparece, e "Usuários" é um link para `/users/u-ana`, e não para `/users`
 
 ### Requirement: Troca da própria senha
 O cartão "Senha" SHALL começar fechado, com "Você entra com `<e-mail>` e a sua senha." e o botão "Trocar senha". O botão SHALL abrir o formulário com:

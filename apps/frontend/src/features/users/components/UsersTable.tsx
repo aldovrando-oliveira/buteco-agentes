@@ -1,25 +1,17 @@
 import { Alert, Badge, Button, Group, Stack, Table, Text } from '@mantine/core';
+import { Link } from 'react-router';
 import { SectionLabel } from '../../../components/data/SectionLabel';
 import { formatRelative } from '../../../utils/panelDates';
 import type { FailureNotice } from '../../../utils/failureNotice';
 import type { UserSummary } from '../api/usersApi';
-import { signInForms, stateBadge, twoFactorBadge, type Tom } from '../usersTexts';
+import { signInForms, stateBadge, twoFactorBadge } from '../usersTexts';
+import { Selo } from './Selo';
 
 // A tabela de Usuários (requisitos "Colunas da lista de Usuários" e "Ações da linha sem
 // destino inexistente"; design.md da change usuarios-convites-identidade-painel, D2 e D8). As
-// linhas vêm na ordem do servidor. A linha do ativo e a do desativado ficam sem ação até a
-// #183: o "Editar" do quadro levaria a `/users/:id`, que ainda não existe.
-
-const COR: Record<Tom, string> = { green: 'green', yellow: 'yellow', gray: 'gray', neutral: 'gray' };
-
-function Selo({ texto, tom }: { texto: string; tom: Tom }) {
-  // O neutro é o contorno, para nunca se confundir com o selo cinza de um estado conhecido.
-  return (
-    <Badge color={COR[tom]} variant={tom === 'neutral' ? 'outline' : 'light'} tt="none" data-tom={tom}>
-      {texto}
-    </Badge>
-  );
-}
+// linhas vêm na ordem do servidor. A linha do ativo e a do desativado têm o "Editar" do quadro,
+// para `/users/:id`; a do convidado não, porque o detalhe dele volta para `/users` (design.md da
+// change editar-usuario-painel, D1).
 
 export interface CancelRow {
   userId: string;
@@ -147,6 +139,17 @@ export function UsersTable({
                         </Alert>
                       )}
                     </Stack>
+                  )}
+                  {!convidado && (
+                    <Button
+                      component={Link}
+                      to={`/users/${encodeURIComponent(user.id)}`}
+                      size="xs"
+                      variant="default"
+                      aria-label={`Editar ${user.nome}`}
+                    >
+                      Editar
+                    </Button>
                   )}
                   {convidado && !confirmando && (
                     <Group gap="sm" wrap="nowrap">

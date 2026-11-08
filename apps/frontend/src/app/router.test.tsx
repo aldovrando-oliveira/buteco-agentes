@@ -477,6 +477,17 @@ describe('Usuários e Identidade', () => {
     expect(router.state.location.pathname).toBe('/entrar');
     expect(new URLSearchParams(router.state.location.search).get('voltarPara')).toBe(rota);
   });
+
+  it('/users/:id (Editar usuário) sem sessão vai ao /entrar com o voltarPara', async () => {
+    signOutForTest();
+    const router = createMemoryRouter(appRoutes, { initialEntries: ['/users/u-rafael'] });
+
+    renderProviders(<RouterProvider router={router} />);
+
+    expect(await screen.findByLabelText('E-mail')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/entrar');
+    expect(new URLSearchParams(router.state.location.search).get('voltarPara')).toBe('/users/u-rafael');
+  });
 });
 
 describe('AppRouter', () => {

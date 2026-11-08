@@ -81,13 +81,15 @@ describe('AccountPage', () => {
       expect(within(dados).getByText(/^hoje, \d\d:\d\d$/)).toBeInTheDocument();
     });
 
-    it('"use Usuários" fica sem link até a tela existir (#183)', async () => {
+    // Substitui o caso da #246 "use Usuários fica sem link até a tela existir": o link leva ao
+    // detalhe do próprio, pelo id do GET /account (design.md da change editar-usuario-painel, D1).
+    it('o link leva a /users/{id da conta}', async () => {
       fakeAccountApi(defaultRoutes());
       renderAccount(<AccountPage />);
 
-      const texto = await within(card('Dados')).findByText('Para mudar o nome ou o e-mail, use Usuários.');
-      expect(texto.closest('a')).toBeNull();
-      expect(within(card('Dados')).queryByRole('link')).not.toBeInTheDocument();
+      const link = await within(card('Dados')).findByRole('link', { name: 'Usuários' });
+      expect(link).toHaveAttribute('href', '/users/u-1');
+      expect(link.closest('p')).toHaveTextContent('Para mudar o nome ou o e-mail, use Usuários.');
     });
   });
 });

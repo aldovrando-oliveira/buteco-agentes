@@ -7,7 +7,7 @@ import { createLeavingFlag, createLogout } from './logout';
 import { createRenewal } from './renewal';
 import { browserRuntime } from './runtime';
 import { createSessionFetch } from './sessionFetch';
-import { createSessionStore, parseSession } from './sessionStore';
+import { createSessionStore, decodeJwtPayload, parseSession } from './sessionStore';
 import type { Session } from './sessionStore';
 
 export const authRuntime = browserRuntime();
@@ -27,4 +27,26 @@ export function useLeaving(): boolean {
 export function useSession(): Session | null {
   const raw = useSyncExternalStore(sessionStore.subscribe, sessionStore.raw);
   return useMemo(() => parseSession(raw), [raw]);
+}
+
+/**
+ * O id do usuário da sessão: o `sub` do id token, lido na hora (design.md da change
+ * editar-usuario-painel, D2). O registro não guarda o `sub`, para os gravados antes dela
+ * continuarem válidos. Sem `sub` legível, `null`: a tela trata o usuário como outro, e o
+ * servidor recusa com `403` as ações vetadas a si mesmo.
+ */
+export function currentUserId(session: Session | null): string | null {
+  if (!session) return null;
+  const sub = decodeJwtPayload(session.idToken).sub;
+  return typeof sub === 'string' && sub !== '' ? sub : null;
+}
+
+/** Se o `sub` é o usuário do id: sem diferença de caixa, porque o `{id:guid}` do apps/api aceita qualquer uma. */
+export function isSameUser(sub: string | null, id: string): boolean {
+  return sub !== null && sub.toLowerCase() === id.toLowerCase();
+}
+
+/** O id do usuário da sessão, recalculado quando o registro muda nesta aba ou em outra. */
+export function useCurrentUserId(): string | null {
+  return currentUserId(useSession());
 }

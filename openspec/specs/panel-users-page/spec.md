@@ -1,7 +1,7 @@
 # panel-users-page Specification
 
 ## Purpose
-A página Usuários do painel (`/users`): a lista de quem pode entrar, o convite com a senha de quem chama, o novo link e o cancelamento do convite, com o link de uso único mostrado uma vez e só na memória da tela (change usuarios-convites-identidade-painel, #250). Editar usuário chega com a #183.
+A página Usuários do painel (`/users`): a lista de quem pode entrar, o convite com a senha de quem chama, o novo link e o cancelamento do convite, com o link de uso único mostrado uma vez e só na memória da tela (change usuarios-convites-identidade-painel, #250). O "Editar" da linha leva a Editar usuário (`panel-user-detail-page`, #183).
 ## Requirements
 ### Requirement: Página Usuários em /users
 `apps/frontend` SHALL prover a página `/users` dentro da casca, com a mesma exigência de sessão das outras rotas autenticadas. A página SHALL ter:
@@ -78,15 +78,19 @@ A coluna Estado SHALL mostrar:
 ### Requirement: Ações da linha sem destino inexistente
 A coluna Ações SHALL mostrar, na linha do convidado, "Gerar novo link" e "Cancelar convite", com `aria-label` "Gerar novo link para {nome}" e "Cancelar convite de {nome}".
 
-A linha do usuário ativo ou desativado SHALL ficar sem ação. Isso é uma divergência temporária do quadro `Usuarios`, resolvida pela #183. Nenhuma linha SHALL ter link para `/users/{id}` enquanto essa rota não existir.
+A linha do usuário ativo e a do desativado SHALL mostrar "Editar", como no quadro `Usuarios`: um link para `/users/{id}`, com o `aria-label` "Editar {nome}" e o id codificado para a URL. A linha do convidado SHALL NOT ter "Editar" nem link para `/users/{id}`: o detalhe de um convidado volta para `/users` (`panel-user-detail-page`).
 
 #### Scenario: Convidado tem as duas ações
 - **WHEN** a lista traz um convidado "Joana Prado"
 - **THEN** a linha tem os botões "Gerar novo link para Joana Prado" e "Cancelar convite de Joana Prado"
 
-#### Scenario: A lista não tem link para o detalhe
-- **WHEN** a lista traz usuários ativos, desativados e convidados
-- **THEN** nenhum elemento da tabela tem `href` que comece com `/users/`
+#### Scenario: Ativo e desativado têm Editar
+- **WHEN** a lista traz o ativo "Rafael Duarte" (`u-rafael`) e o desativado "Bruno Teixeira" (`u-bruno`)
+- **THEN** a linha de cada um tem o link "Editar Rafael Duarte" para `/users/u-rafael` e "Editar Bruno Teixeira" para `/users/u-bruno`
+
+#### Scenario: Convidado não tem Editar
+- **WHEN** a lista traz um convidado "Joana Prado"
+- **THEN** a linha dele não tem link "Editar", e nenhum elemento dela tem `href` que comece com `/users/`
 
 ### Requirement: Um painel por vez no cartão Usuários
 O cartão SHALL mostrar no máximo um destes painéis por vez, entre a faixa e a tabela:
