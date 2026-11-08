@@ -960,6 +960,16 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **O healthcheck do RabbitMQ deixa de ocupar um núcleo e passa a esperar o broker aceitar
+  conexão** (#251), nos dois composes. Ele trocou o `rabbitmq-diagnostics -q ping` a cada 5 s,
+  que subia o runtime Erlang do CLI em cada execução (2 a 6 s de CPU), por uma conexão TCP
+  na porta AMQP, de dentro do contêiner (`interval` 10s, `timeout` 5s, `retries` 6,
+  `start_period` 30s). Medido no compose de desenvolvimento: o contêiner ocioso foi de 34% de
+  um núcleo para 1,4%. O `healthy`, que chegava antes de o listener AMQP abrir, agora chega
+  depois, e o `api` e os `workers` de produção (`depends_on: … service_healthy`) só sobem com
+  o broker aceitando conexão. O deploy recria o broker com `up -d rabbitmq` explícito
+  (`docs/deployment.md`).
+
 - **A sincronização do catálogo do emissor isola cada cliente e cada escopo** (#234). Um
   item que o OpenIddict recusa, ou que falha no banco, gera log de erro com o item, e os
   outros seguem no mesmo ciclo. Antes, a falha de um voltava a transação inteira, e o

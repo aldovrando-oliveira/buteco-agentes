@@ -54,11 +54,16 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD — use --env-file .env.prod}
     volumes:
       - buteco-rabbitmq-data-prod:/var/lib/rabbitmq
+    # TCP na porta AMQP, dentro do contêiner, pelo bash da imagem (base Ubuntu; a variante
+    # -alpine não tem bash). Não usar rabbitmq-diagnostics nem rabbitmqctl aqui: cada execução
+    # sobe o runtime Erlang do CLI (4–6 s de CPU), e o `ping` dava healthy antes de o
+    # listener abrir. Igual nos dois composes (#251, change healthcheck-rabbitmq-leve).
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/5672"]
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 6
+      start_period: 30s
     # Sem porta publicada no host — idem postgres.
 
   migrator:

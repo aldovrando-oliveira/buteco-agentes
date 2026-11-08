@@ -389,6 +389,53 @@ $C config >/dev/null && echo 'compose ok'      # o compose atual não a lê
 
 Nenhum serviço precisa subir de novo: o compose atual não entrega a variável. Depois da retirada, um rollback para antes da #182 exige recolocar a chave, que está na cópia. A cópia sai junto com a janela de rollback.
 
+### Healthcheck do RabbitMQ (#251)
+
+**O que muda:** o healthcheck do `rabbitmq` passa de `rabbitmq-diagnostics -q ping` (a cada
+5 s) para uma conexão TCP na porta AMQP, feita dentro do contêiner pelo `bash` da imagem
+(`["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/5672"]`, `interval` 10s, `timeout` 5s,
+`retries` 6, `start_period` 30s). Ele vale igual no compose de desenvolvimento. Nenhum app
+muda, e não há migration.
+
+**Por quê:** o `ping` sobe o runtime Erlang do CLI a cada execução, de 4 a 6 s de CPU, o que
+dá cerca de um núcleo ocupado o tempo todo. Ele ainda dava `healthy` uns 3 s antes de o
+listener AMQP abrir. Com a checagem TCP, o `api` e os `workers` (`depends_on: rabbitmq:
+condition: service_healthy`) só sobem depois de o broker aceitar conexão.
+
+**O deploy recria o broker, e o redeploy de rotina não o faz.** O passo 4 da seção 2 não
+inclui o `rabbitmq`, então o healthcheck novo só vale com um passo explícito. Ele recria o
+contêiner: são uns 12 s sem broker. As filas são duráveis e o volume
+`buteco-rabbitmq-data-prod` fica. **Faça numa janela sem uso** (sem conversa em curso nos
+canais nem indexação rodando):
+
+```
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d rabbitmq
+```
+
+**Conferência, nesta ordem:**
+
+1. `docker compose --env-file .env.prod -f docker-compose.prod.yml ps`: o `rabbitmq` fica
+   `healthy` (o boot leva uns 12 s, e a primeira checagem depois disso o marca);
+2. `docker inspect --format '{{json .Config.Healthcheck}}' $(docker compose --env-file .env.prod -f docker-compose.prod.yml ps -q rabbitmq)`:
+   o `Test` é o `bash` com o `/dev/tcp`;
+3. `docker stats --no-stream`: a CPU do `rabbitmq` ocioso fica perto de zero, e não em
+   um núcleo;
+4. **uma task de agente de ponta a ponta:** mande uma mensagem por um canal (ou um
+   `SendMessage` A2A a um agente) e confira a resposta. Ela prova que o consumidor dos
+   `workers` voltou depois do reinício do broker. O `RabbitMQ.Client` 7.2.1 reconecta
+   sozinho (`AutomaticRecoveryEnabled`, ligada por padrão), e os publishers do `api`
+   reconectam no envio seguinte. Se a task ficar parada, `docker compose --env-file .env.prod -f docker-compose.prod.yml restart workers`
+   e repita. A conexão com nova tentativa no boot do consumidor é a #253.
+
+**Rollback:** devolva o bloco `healthcheck` anterior no `docker-compose.prod.yml`
+(`["CMD", "rabbitmq-diagnostics", "-q", "ping"]`, 5s, 5s, 10) e rode o mesmo `up -d rabbitmq`,
+com o mesmo reinício de uns 12 s e a mesma conferência. Nenhum dado muda.
+
+**Se a imagem mudar:** a tag `rabbitmq:4.3-management` é móvel. Ao trocar a imagem ou a
+tag, confira o `bash` antes do deploy (`docker run --rm <imagem> bash -c 'echo ok'`). A
+variante `-alpine` não tem `bash`, e com ela o broker ficaria `unhealthy` (o `api` e os
+`workers` não subiriam).
+
 ### Minha conta e o cadastro das 2 etapas (#246)
 
 **O que muda:** o `frontend` ganha Minha conta (`/account`), aberta pelo nome no rodapé da
