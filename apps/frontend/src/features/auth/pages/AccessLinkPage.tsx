@@ -2,13 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Stack, Text, Title } from '@mantine/core';
 import { useNavigate } from 'react-router';
 import { Logo } from '../../../components/brand/Logo';
-import { authRuntime } from '../../../auth/session';
 import { completeLink, lookupLink, type LinkDetails, type LinkPurpose } from '../api/accessLinkApi';
 import { createSession } from '../api/sessionApi';
 import { EntryCard } from '../components/EntryCard';
 import { InvalidLinkCard, LoadingLinkCard, UnavailableLinkCard } from '../components/LinkStateCards';
 import { NewPasswordForm } from '../components/NewPasswordForm';
-import { continueEntry } from '../continueEntry';
 import { formatLinkExpiry } from '../linkExpiry';
 import type { EntrarRouteState } from '../entryNotices';
 import { clearLinkToken, useLinkToken } from '../linkToken';
@@ -107,15 +105,14 @@ export function AccessLinkPage({ purpose }: { purpose: LinkPurpose }) {
 
   const entrar = async (email: string, senha: string) => {
     const login = await createSession({ email, senha });
-    if (login.kind === 'ok') {
-      // O link não traz `voltarPara`: o destino é a tela inicial.
-      authRuntime.assign(await continueEntry(new URLSearchParams()));
-      return;
-    }
-    // A senha não vai no `state` do router: o /entrar abre no passo do código, ou com o
-    // e-mail e a recusa do login (spec `panel-access-link-pages`).
+    // A senha não vai no `state` do router: o /entrar abre na etapa do cadastro (todo convidado
+    // novo, e quem teve a verificação redefinida), no passo do código, ou com o e-mail e a recusa
+    // do login (spec `panel-access-link-pages`; change verificacao-2-etapas-obrigatoria, D7). O
+    // link não traz `voltarPara`: depois do segundo passo, o destino é a tela inicial.
     const state: EntrarRouteState =
-      login.kind === 'segundo-passo' ? { etapa: 'codigo' } : { email, falha: login };
+      login.kind === 'segundo-passo'
+        ? { etapa: login.passo === 'cadastro' ? 'cadastro' : 'codigo' }
+        : { email, falha: login };
     navigate('/entrar', { replace: true, state });
   };
 

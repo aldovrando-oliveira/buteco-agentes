@@ -29,7 +29,7 @@ describe('Verificação em 2 etapas', () => {
     renderUserDetail('u-rafael');
 
     expect(await screen.findByText('Ativa')).toBeInTheDocument();
-    expect(screen.getByText('Use Redefinir se a pessoa perdeu o celular e os códigos de recuperação.')).toBeInTheDocument();
+    expect(screen.getByText('Use Redefinir se a pessoa perdeu ou trocou o celular e os códigos de recuperação.')).toBeInTheDocument();
     expect(botao()).toBeEnabled();
     expect(screen.queryByText(/desde/)).not.toBeInTheDocument();
   });
@@ -39,7 +39,7 @@ describe('Verificação em 2 etapas', () => {
     renderUserDetail('u-rafael');
 
     expect(await screen.findByText('Não configurada')).toBeInTheDocument();
-    expect(screen.getByText('Cada pessoa liga a própria verificação em Minha conta.')).toBeInTheDocument();
+    expect(screen.getByText('A pessoa cadastra a verificação no próximo login.')).toBeInTheDocument();
     expect(botao()).toBeDisabled();
   });
 
@@ -65,7 +65,7 @@ describe('Verificação em 2 etapas', () => {
     await user.click(await screen.findByRole('button', { name: 'Redefinir verificação' }));
     const confirmacao = screen.getByRole('alert');
     expect(confirmacao).toHaveTextContent(
-      'Redefinir a verificação de Rafael Duarte? O app autenticador e os códigos de recuperação deixam de valer, e a pessoa sai de todos os navegadores. Ela pode ligar a verificação de novo em Minha conta.',
+      'Redefinir a verificação de Rafael Duarte? O app autenticador e os códigos de recuperação deixam de valer, e a pessoa sai de todos os navegadores. No próximo login, ela cadastra o app autenticador de novo.',
     );
     await user.click(within(confirmacao).getByRole('button', { name: 'Redefinir' }));
 
@@ -96,7 +96,7 @@ describe('Verificação em 2 etapas', () => {
     const user = userEvent.setup();
     fakeUsersApi({
       'GET /users/u-rafael': { status: 200, body: RAFAEL },
-      [RESET]: problem(403, 'Para remover a sua verificação, use Minha conta, com um código.'),
+      [RESET]: problem(403, 'Você não pode redefinir a própria verificação. Peça a outro usuário, ou use o comando de emergência no servidor.'),
     });
     renderUserDetail('u-rafael');
 
@@ -104,6 +104,6 @@ describe('Verificação em 2 etapas', () => {
     const confirmacao = screen.getAllByRole('alert')[0];
     await user.click(within(confirmacao).getByRole('button', { name: 'Redefinir' }));
 
-    expect(await within(confirmacao).findByText('Para remover a sua verificação, use Minha conta, com um código.')).toBeInTheDocument();
+    expect(await within(confirmacao).findByText('Você não pode redefinir a própria verificação. Peça a outro usuário, ou use o comando de emergência no servidor.')).toBeInTheDocument();
   });
 });

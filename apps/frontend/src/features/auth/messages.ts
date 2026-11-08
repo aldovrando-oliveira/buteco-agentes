@@ -22,6 +22,18 @@ export const CODIGO_INVALIDO = 'Código inválido.';
 export const SENHA_SALVA_COM_CODIGO =
   'Senha salva. A sua conta usa verificação em 2 etapas: digite o código para entrar.';
 
+// A etapa do cadastro no login, do quadro `Main` (estados `cadastro*`; design.md da change
+// verificacao-2-etapas-obrigatoria, D7).
+export const CADASTRO_TITULO = 'Cadastre a verificação em 2 etapas';
+export const CADASTRO_TEXTO =
+  'Este painel exige a verificação em 2 etapas. Para entrar, cadastre um app autenticador no celular, como Google Authenticator, Microsoft Authenticator ou 1Password.';
+export const SENHA_SALVA_COM_CADASTRO = 'Senha salva. Falta só cadastrar o app autenticador para entrar.';
+export const GERANDO_QR = 'Gerando o QR…';
+export const QR_FALHOU = 'Não foi possível gerar o QR.';
+export const CODIGO_INVALIDO_NO_CADASTRO = 'Código inválido. Confira se o relógio do celular está certo.';
+export const PRAZO_DO_CADASTRO = 'Este cadastro vale por 10 minutos. Depois disso, entre de novo com e-mail e senha.';
+export const VERIFICACAO_LIGADA = 'Verificação ligada';
+
 /** O aviso do /entrar depois da troca da própria senha em Minha conta (`passwordChangedNotice.ts`). */
 export const SENHA_ALTERADA = 'Senha alterada. Entre com a nova senha.';
 

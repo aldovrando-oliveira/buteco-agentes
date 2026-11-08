@@ -91,17 +91,13 @@ export function changePassword(senhaAtual: string, novaSenha: string): Promise<v
 }
 
 // --- Verificação em 2 etapas (#218) ---
+// Sem cadastro e sem remoção aqui: o cadastro é o do login, e a remoção saiu com a
+// obrigatoriedade (design.md da change verificacao-2-etapas-obrigatoria, D5 e D7).
 
 export interface TwoFactorStatus {
   ativa: boolean;
   ativadaEm: string | null;
   codigosRestantes: number;
-  cadastroDisponivel: boolean;
-}
-
-export interface TwoFactorSetup {
-  segredo: string;
-  otpauthUri: string;
 }
 
 export interface RecoveryCodes {
@@ -112,24 +108,9 @@ export function getTwoFactor(): Promise<TwoFactorStatus> {
   return request<TwoFactorStatus>('/account/two-factor');
 }
 
-/** `200` o segredo, uma vez; `401` "Senha inválida."; `403` cadastro fechado; `409` já ligada; `423`. */
-export function setupTwoFactor(senha: string): Promise<TwoFactorSetup> {
-  return post<TwoFactorSetup>('/account/two-factor/setup', { senha });
-}
-
-/** `200` os 10 códigos, uma vez; `400` cadastro vencido; `401` código; `403`; `423`. */
-export function confirmTwoFactor(codigo: string): Promise<RecoveryCodes> {
-  return post<RecoveryCodes>('/account/two-factor/confirm', { codigo });
-}
-
 /** `200` 10 novos; `401` código; `409` não ligada; `423`; `500` a chave do TOTP trocada. */
 export function regenerateRecoveryCodes(codigo: string): Promise<RecoveryCodes> {
   return post<RecoveryCodes>('/account/two-factor/recovery-codes', { codigo });
-}
-
-/** `204`; `401` código; `409` não ligada; `423`; `500` a chave do TOTP trocada. */
-export function removeTwoFactor(codigo: string): Promise<void> {
-  return post<void>('/account/two-factor/remove', { codigo });
 }
 
 // --- Sessões (#219) ---

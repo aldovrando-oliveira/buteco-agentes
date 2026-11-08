@@ -40,7 +40,7 @@ public class AccountPasswordTests(AccountPasswordTests.Fixture factory) : IClass
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await ChangeAsync(me, null, NewPassword)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await ChangeAsync(me, "senha-errada-do-teste", NewPassword)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await LoginAsync(me, me.Password)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LoginAsync(me, me.Password), LocalUserSeed.CodeStep);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class AccountPasswordTests(AccountPasswordTests.Fixture factory) : IClass
 
         Assert.Equal(HttpStatusCode.BadRequest, (await ChangeAsync(me, me.Password, "curta-11-ch")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await ChangeAsync(me, me.Password, new string('a', 129))).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await LoginAsync(me, me.Password)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LoginAsync(me, me.Password), LocalUserSeed.CodeStep);
     }
 
     [Fact]
@@ -76,9 +76,9 @@ public class AccountPasswordTests(AccountPasswordTests.Fixture factory) : IClass
     {
         var me = await SignedInUser.CreateAsync(factory, "senha-curta", password: "curta-08");
 
-        Assert.Equal(HttpStatusCode.NoContent, (await LoginAsync(me, "curta-08")).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LoginAsync(me, "curta-08"), LocalUserSeed.CodeStep);
         Assert.Equal(HttpStatusCode.NoContent, (await ChangeAsync(me, "curta-08", new string('b', 12))).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await LoginAsync(me, new string('b', 12))).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LoginAsync(me, new string('b', 12)), LocalUserSeed.CodeStep);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class AccountPasswordTests(AccountPasswordTests.Fixture factory) : IClass
         Assert.Equal(HttpStatusCode.NoContent, (await ChangeAsync(me, me.Password, NewPassword)).StatusCode);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await LoginAsync(me, me.Password)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await LoginAsync(me, NewPassword)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LoginAsync(me, NewPassword), LocalUserSeed.CodeStep);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class AccountPasswordTests(AccountPasswordTests.Fixture factory) : IClass
     {
         var me = await SignedInUser.CreateAsync(factory, "cookie-em-voo");
         var client = SignedInUser.Anonymous(factory);
-        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, me.User.Email, me.Password);
+        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, factory.Services, me.User.Email, me.Password);
 
         Assert.Equal(HttpStatusCode.NoContent, (await ChangeAsync(me, me.Password, NewPassword)).StatusCode);
 

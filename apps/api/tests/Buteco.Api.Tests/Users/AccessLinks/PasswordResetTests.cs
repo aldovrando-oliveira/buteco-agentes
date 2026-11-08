@@ -52,7 +52,7 @@ public class PasswordResetTests(PasswordResetTests.Fixture factory, ITestOutputH
         var stored = await SignedInUser.ReloadAsync(factory.Services, target.User.Id);
         Assert.Equal(AccessLinkPurpose.PasswordReset, stored.AccessLinkPurpose);
         Assert.Equal(target.User.SecurityStamp, stored.SecurityStamp);
-        Assert.Equal(HttpStatusCode.NoContent, (await LocalUserSeed.PostSessionAsync(Client, target.User.Email, target.Password)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LocalUserSeed.PostSessionAsync(Client, target.User.Email, target.Password), LocalUserSeed.CodeStep);
         Assert.True(await SignedInUser.RenewsAsync(factory, target.RefreshToken));
     }
 
@@ -122,7 +122,7 @@ public class PasswordResetTests(PasswordResetTests.Fixture factory, ITestOutputH
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.False(response.Headers.Contains("Set-Cookie"));
         Assert.Equal(HttpStatusCode.Unauthorized, (await LocalUserSeed.PostSessionAsync(Client, target.User.Email, target.Password)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await LocalUserSeed.PostSessionAsync(Client, target.User.Email, NewPassword)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LocalUserSeed.PostSessionAsync(Client, target.User.Email, NewPassword), LocalUserSeed.CodeStep);
         Assert.False(await SignedInUser.RenewsAsync(factory, target.RefreshToken));
         Assert.False(await SignedInUser.RenewsAsync(factory, second.RefreshToken));
         await using var scope = factory.Services.CreateAsyncScope();
@@ -136,7 +136,7 @@ public class PasswordResetTests(PasswordResetTests.Fixture factory, ITestOutputH
         var caller = await SignedInUser.CreateAsync(factory, "conclui-cookie");
         var target = await SignedInUser.CreateAsync(factory, "conclui-cookie-alvo");
         var client = SignedInUser.Anonymous(factory);
-        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, target.User.Email, target.Password);
+        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, factory.Services, target.User.Email, target.Password);
         var token = await AccessLinkClient.TokenAsync(await AccessLinkClient.ResetAsync(Client, caller, target.User.Id, caller.Password));
 
         Assert.Equal(HttpStatusCode.NoContent, (await AccessLinkClient.CompleteAsync(Client, token, NewPassword)).StatusCode);
@@ -173,7 +173,7 @@ public class PasswordResetTests(PasswordResetTests.Fixture factory, ITestOutputH
         }
 
         Assert.Equal(HttpStatusCode.NoContent, (await AccessLinkClient.CompleteAsync(Client, token, NewPassword)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await LocalUserSeed.PostSessionAsync(Client, target.Email, NewPassword)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LocalUserSeed.PostSessionAsync(Client, target.Email, NewPassword), LocalUserSeed.EnrollmentStep);
     }
 
     [Fact]

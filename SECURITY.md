@@ -77,8 +77,13 @@ script run in the panel's origin, bypasses the CSP, leaks a token or code
 through a URL or referrer, or keeps a session alive past sign-out beyond that
 window is in scope.
 
-**Two-step verification (TOTP).** People can turn on a second factor (RFC 6238,
-HMAC-SHA1, 6 digits, 30-second steps, one step of tolerance each way). The TOTP
+**Two-step verification (TOTP).** A second factor is mandatory for every user
+(RFC 6238, HMAC-SHA1, 6 digits, 30-second steps, one step of tolerance each way).
+Someone without it enrolls during login, after the correct password and before any
+session: the pending session cookie (HttpOnly, SameSite=Strict, bound to the user and
+the security stamp) is the only credential the two enrollment routes accept, and the
+authorize endpoint and token renewal refuse any session of a user without the second
+factor. The TOTP
 secret is stored encrypted with AES-256-GCM under its own key
 (`Identity:TwoFactorEncryptionKey`, distinct from the other keys, checked at
 startup), with the user id as associated data. It is returned once, when
@@ -86,11 +91,16 @@ enrollment starts, and never again. A code is accepted only for a step later tha
 the last accepted one, recorded atomically, so a code cannot be replayed. The ten
 recovery codes (80 bits each) are stored only as SHA-256 hashes and are single-use.
 Wrong codes count toward the same per-email lockout as wrong passwords, and a
-correct password does not reset that count while the code is pending. Enrollment
-requires the password; removal and recovery-code regeneration require a valid code.
-Any user can reset another user's verification, which also invalidates that
-user's sessions; this is accepted while there are no roles. Bypassing the second
-step, replaying a code, recovering a secret or a recovery code from storage or a
+correct password does not reset that count while the code is pending. Recovery-code
+regeneration requires a valid code, and a person cannot remove their own
+verification. Any user can reset another user's verification, which also
+invalidates that user's sessions; this is accepted while there are no roles. Whoever
+runs the stack can reset a user's verification with the `two-factor-reset` command
+of the `apps/api` binary, which has no HTTP route. Until each person's first login
+after the second factor became mandatory, someone who knows that person's password
+could enroll their own authenticator first; this window is accepted and documented in
+the deployment notes. Bypassing the second
+step (including reaching a session or a token without it), replaying a code, recovering a secret or a recovery code from storage or a
 response, or brute-forcing the code past the lockout are in scope.
 
 **Shared secrets across processes.** No token signing key is shared: only

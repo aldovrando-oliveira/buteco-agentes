@@ -48,8 +48,8 @@ public class TwoFactorAdminResetTests(TwoFactorAdminResetTests.Fixture factory) 
         var state = await TwoFactorTestClient.StateAsync(factory.Services, other.User.Id);
         Assert.False(state.Enabled);
         Assert.Equal(0, state.Codes);
-        var (login, _) = await TwoFactorTestClient.PasswordStepAsync(client, other.User.Email, TwoFactorAccount.Password);
-        Assert.Equal(HttpStatusCode.NoContent, login.StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(
+            LocalUserSeed.PostSessionAsync(client, other.User.Email, TwoFactorAccount.Password), LocalUserSeed.EnrollmentStep);
         var renewal = await IdentityIssuerUserFlow.RefreshAsync(client, other.RefreshToken);
         Assert.Equal(HttpStatusCode.BadRequest, renewal.StatusCode);
         Assert.Contains("invalid_grant", await renewal.Content.ReadAsStringAsync(), StringComparison.Ordinal);
@@ -80,6 +80,8 @@ public class TwoFactorAdminResetTests(TwoFactorAdminResetTests.Fixture factory) 
         var response = await TwoFactorTestClient.SendAsync(Client(), HttpMethod.Post, $"/users/{admin.User.Id}/two-factor/reset", admin.AccessToken);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("Você não pode redefinir a própria verificação. Peça a outro usuário, ou use o comando de emergência no servidor.",
+            await TwoFactorTestClient.TitleAsync(response));
         Assert.True((await TwoFactorTestClient.StateAsync(factory.Services, admin.User.Id)).Enabled);
     }
 
@@ -101,6 +103,9 @@ public class TwoFactorAdminResetTests(TwoFactorAdminResetTests.Fixture factory) 
     {
         var admin = await TwoFactorAccount.CreateAsync(factory, "admin-409-sessoes");
         var other = await TwoFactorAccount.CreateAsync(factory, "sem-sessoes");
+        // A sessão aberta antes da obrigatoriedade, de quem não tinha a verificação: com ela, o
+        // login de hoje cadastra (change verificacao-2-etapas-obrigatoria, D4).
+        await TwoFactorTestClient.SeedDisabledAsync(factory.Services, other.User.Id);
 
         var response = await TwoFactorTestClient.SendAsync(Client(), HttpMethod.Post, $"/users/{other.User.Id}/two-factor/reset", admin.AccessToken);
 

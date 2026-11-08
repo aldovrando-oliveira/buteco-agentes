@@ -8,7 +8,8 @@ import { Selo } from './Selo';
 
 // A verificação em 2 etapas de outro usuário (requisito "Verificação em 2 etapas de outro
 // usuário"; design.md da change editar-usuario-painel, D9). Sem a data de ativação, que saiu do
-// quadro. O próprio gerencia a dele em Minha conta, com um código.
+// quadro. O próprio não redefine a dele: para trocar de celular, pede a outro usuário (design.md da
+// change verificacao-2-etapas-obrigatoria, D5).
 
 interface UserTwoFactorCardProps {
   user: UserDetail;
@@ -33,10 +34,10 @@ export function UserTwoFactorCard({
 }: UserTwoFactorCardProps) {
   const ativa = user.duasEtapas;
   const texto = proprio
-    ? 'Gerencie a sua em Minha conta.'
+    ? 'Para trocar de celular, peça a outro usuário que redefina a sua verificação.'
     : ativa
-      ? 'Use Redefinir se a pessoa perdeu o celular e os códigos de recuperação.'
-      : 'Cada pessoa liga a própria verificação em Minha conta.';
+      ? 'Use Redefinir se a pessoa perdeu ou trocou o celular e os códigos de recuperação.'
+      : 'A pessoa cadastra a verificação no próximo login.';
 
   return (
     <SectionedCard title="Verificação em 2 etapas">

@@ -74,7 +74,7 @@ O link devolvido SHALL ser `<base do painel>/convite#<token>` para o convite e `
 
 #### Scenario: A senha antiga continua valendo
 - **WHEN** um link de redefinição é gerado para um usuário
-- **THEN** a resposta é `200` com validade de 24 horas, o login com a senha atual dele continua respondendo `204`, e as sessões dele continuam renovando
+- **THEN** a resposta é `200` com validade de 24 horas, o login com a senha atual dele continua aceito (`200` com `{ "segundoPasso": "totp" }`), e as sessões dele continuam renovando
 
 #### Scenario: Para si mesmo
 - **WHEN** um usuário pede o link de redefinição da própria senha
@@ -117,7 +117,7 @@ As quatro rotas administrativas (`POST /users/invitations`, `POST /users/{id}/in
 
 #### Scenario: Aceitar e entrar
 - **WHEN** o convidado aceita com uma senha dentro da política e depois entra com o e-mail e essa senha
-- **THEN** o aceite responde `204` sem cookie de sessão, o usuário fica `ativo`, e o login responde `204` e o authorize emite o código
+- **THEN** o aceite responde `204` sem cookie de sessão, o usuário fica `ativo`, e o login responde `200` com `{ "segundoPasso": "cadastro" }`, porque o convidado ainda não tem a verificação
 
 #### Scenario: Senha fora da política
 - **WHEN** o aceite recebe uma senha de 11 caracteres
@@ -129,7 +129,7 @@ As quatro rotas administrativas (`POST /users/invitations`, `POST /users/{id}/in
 
 #### Scenario: O aceite zera o bloqueio
 - **WHEN** o e-mail do convidado está bloqueado por tentativas de login e o convite é aceito
-- **THEN** o login seguinte com a senha criada responde `204`, e não `423`
+- **THEN** o login seguinte com a senha criada responde `200` com `{ "segundoPasso": "cadastro" }`, e não `423`
 
 ### Requirement: Consultar o link de redefinição e concluir a redefinição
 `POST /auth/password-reset` com `{ token }` SHALL responder `200 { nome, email, expiraEm }` só para um link de redefinição válido (existente, de propósito `password_reset`, de usuário ativo e não vencido), sem gravar nada.
@@ -138,7 +138,7 @@ As quatro rotas administrativas (`POST /users/invitations`, `POST /users/{id}/in
 
 #### Scenario: Concluir a redefinição
 - **WHEN** a pessoa conclui a redefinição com uma senha dentro da política
-- **THEN** a resposta é `204`, o login com a senha antiga responde `401`, e o login com a nova responde `204`
+- **THEN** a resposta é `204`, o login com a senha antiga responde `401`, e o login com a nova responde `200` (com `{ "segundoPasso": "totp" }` para quem tem a verificação, e `{ "segundoPasso": "cadastro" }` para quem não tem)
 
 #### Scenario: Concluir encerra todas as sessões
 - **WHEN** a redefinição é concluída para um usuário com duas sessões vivas

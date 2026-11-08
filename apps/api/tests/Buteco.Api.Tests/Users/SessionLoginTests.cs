@@ -20,14 +20,14 @@ public class SessionLoginTests(LocalUsersFixture factory) : IClassFixture<LocalU
     private HttpClient Client() => factory.CreateClient(new() { HandleCookies = false });
 
     [Fact]
-    public async Task ValidLogin_Returns204_WithTheSessionCookie()
+    public async Task ValidLogin_Returns200WithTheEnrollmentStep_AndThePendingSessionCookie()
     {
         var email = LocalUserSeed.UniqueEmail("valido");
         var user = await LocalUserSeed.CreateUserAsync(factory.Services, email, Password);
 
         var response = await LocalUserSeed.PostSessionAsync(Client(), email.ToUpperInvariant() + " ", Password);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(Task.FromResult(response), LocalUserSeed.EnrollmentStep);
         var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
         Assert.StartsWith("buteco-sessao=", cookie);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
@@ -40,7 +40,9 @@ public class SessionLoginTests(LocalUsersFixture factory) : IClassFixture<LocalU
 
         using var scope = factory.Services.CreateScope();
         var stored = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Users.AsNoTracking().SingleAsync(candidate => candidate.Id == user.Id);
-        Assert.InRange(stored.LastAccessAt!.Value, factory.Clock.GetUtcNow() - TimeSpan.FromMilliseconds(1), factory.Clock.GetUtcNow());
+        // Sem a verificação, o último acesso espera a sessão completa, no confirm do cadastro
+        // (change verificacao-2-etapas-obrigatoria, D1); TwoFactorRequiredLoginTests confere o registro.
+        Assert.Null(stored.LastAccessAt);
     }
 
     [Fact]

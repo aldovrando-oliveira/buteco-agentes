@@ -80,7 +80,7 @@ public class UserDeactivationFlowTests(LocalUsersFixture factory) : IClassFixtur
         var (user, email) = await UserAsync();
         await IdentityIssuerUserFlow.EnsurePanelClientAsync(factory.Services);
         var client = Client();
-        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, email, Password);
+        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, factory.Services, email, Password);
         var pkce = IdentityIssuerUserFlow.Pkce.Create();
         var code = IdentityIssuerUserFlow.CodeFrom(
             await IdentityIssuerUserFlow.AuthorizeAsync(client, IdentityIssuerUserFlow.AuthorizeUrl(pkce), cookie));
@@ -95,7 +95,7 @@ public class UserDeactivationFlowTests(LocalUsersFixture factory) : IClassFixtur
     {
         var (user, email) = await UserAsync();
         await IdentityIssuerUserFlow.EnsurePanelClientAsync(factory.Services);
-        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(Client(), email, Password);
+        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(Client(), factory.Services, email, Password);
 
         await LocalUserSeed.DeactivateAsync(factory.Services, user.Id);
         var response = await IdentityIssuerUserFlow.AuthorizeAsync(

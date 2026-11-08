@@ -59,7 +59,7 @@ public class UserDetailTests(UserDetailTests.Fixture factory) : IClassFixture<Us
         var caller = await SignedInUser.CreateAsync(factory, "detalhe-abandono");
         var target = await SignedInUser.CreateAsync(factory, "abandonou");
         var client = SignedInUser.Anonymous(factory);
-        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, target.User.Email, target.Password);
+        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, factory.Services, target.User.Email, target.Password);
         IdentityIssuerUserFlow.CodeFrom(await IdentityIssuerUserFlow.AuthorizeAsync(client, IdentityIssuerUserFlow.AuthorizeUrl(IdentityIssuerUserFlow.Pkce.Create()), cookie));
 
         var sessions = (await TwoFactorTestClient.JsonAsync(await GetAsync(caller, target.User.Id))).GetProperty("sessoes");

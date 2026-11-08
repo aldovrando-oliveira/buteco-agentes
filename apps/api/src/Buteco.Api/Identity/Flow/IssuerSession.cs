@@ -15,16 +15,19 @@ namespace Buteco.Api.Identity.Flow;
 /// <item><c>HttpOnly</c>, <c>SameSite=Strict</c>, <c>Path=/</c>, sem <c>Domain</c>;</item>
 /// <item><c>Secure</c> sempre fora de <c>Development</c>: o TLS termina fora do stack e o
 /// <c>apps/api</c> vê HTTP, então <c>SameAsRequest</c> nunca marcaria em produção;</item>
-/// <item>5 minutos, sem renovação;</item>
-/// <item>carrega o id do usuário, o <c>security_stamp</c> e, na sessão completa de quem tem a
-/// verificação em 2 etapas, o claim <see cref="TwoFactorClaim"/>.</item>
+/// <item>5 minutos, sem renovação; no cadastro em curso, até o fim do prazo do primeiro
+/// <c>setup</c> (10 minutos);</item>
+/// <item>carrega o id do usuário, o <c>security_stamp</c> e, na sessão completa, o claim
+/// <see cref="TwoFactorClaim"/>; no cadastro em curso, o prazo (<see cref="EnrollmentDeadlineClaim"/>).</item>
 /// </list>
 ///
 /// <para>
 /// <b>Sessão pendente e sessão completa</b> (design.md da change verificacao-2-etapas-totp,
 /// D2): para quem tem a verificação ligada, a senha certa grava o cookie sem o claim, e o
-/// código certo o grava de novo com ele, com 5 minutos a partir dali. O authorize decide pelo
-/// estado atual do usuário (<c>AuthorizeEndpoint</c>).
+/// código certo o grava de novo com ele, com 5 minutos a partir dali. Desde a change
+/// verificacao-2-etapas-obrigatoria (#220), a verificação é obrigatória: quem não a tem recebe o
+/// cookie pendente e cadastra antes da sessão completa. O authorize decide pelo estado atual do
+/// usuário (<c>AuthorizeEndpoint</c>).
 /// </para>
 /// </summary>
 public static class IssuerSession
@@ -46,8 +49,21 @@ public static class IssuerSession
 
     public const string TwoFactorDone = "ok";
 
-    /// <summary>Grava o cookie de sessão do usuário; com <paramref name="twoFactorDone"/>, a sessão completa das 2 etapas.</summary>
-    public static Task SignInAsync(HttpContext httpContext, User user, bool twoFactorDone)
+    /// <summary>
+    /// Claim do fim do prazo do cadastro das 2 etapas no login, em segundos Unix (design.md da
+    /// change verificacao-2-etapas-obrigatoria, D2). Gravado pelo primeiro <c>setup</c>; os
+    /// seguintes o leem e não o estendem.
+    /// </summary>
+    public const string EnrollmentDeadlineClaim = "buteco_cadastro_ate";
+
+    /// <summary>
+    /// Grava o cookie de sessão do usuário; com <paramref name="twoFactorDone"/>, a sessão completa das 2 etapas.
+    /// Com <paramref name="enrollmentDeadline"/>, o cookie do cadastro em curso: leva o claim do prazo
+    /// e vence nesse instante, e não 5 minutos depois. O handler do cookie só calcula o vencimento
+    /// pelo <c>ExpireTimeSpan</c> quando <c>ExpiresUtc</c> não vem preenchido
+    /// (<c>CookieAuthenticationHandler.cs</c> l. 323–325, <c>dotnet/aspnetcore</c> <c>release/10.0</c>).
+    /// </summary>
+    public static Task SignInAsync(HttpContext httpContext, User user, bool twoFactorDone, DateTimeOffset? enrollmentDeadline = null)
     {
         var claims = new List<Claim>
         {
@@ -60,11 +76,23 @@ public static class IssuerSession
             claims.Add(new(TwoFactorClaim, TwoFactorDone));
         }
 
+        if (enrollmentDeadline is { } deadline)
+        {
+            claims.Add(new(EnrollmentDeadlineClaim, deadline.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
         return httpContext.SignInAsync(
             SchemeName,
             new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName, UserIdClaim, roleType: null)),
-            new AuthenticationProperties { IsPersistent = true, AllowRefresh = false });
+            new AuthenticationProperties { IsPersistent = true, AllowRefresh = false, ExpiresUtc = enrollmentDeadline });
     }
+
+    /// <summary>O fim do prazo do cadastro gravado no cookie, ou <c>null</c> antes do primeiro <c>setup</c>.</summary>
+    public static DateTimeOffset? EnrollmentDeadline(ClaimsPrincipal principal) =>
+        long.TryParse(principal.FindFirst(EnrollmentDeadlineClaim)?.Value, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var seconds)
+            ? DateTimeOffset.FromUnixTimeSeconds(seconds)
+            : null;
 
     public static IServiceCollection AddIssuerSessionCookie(this IServiceCollection services)
     {

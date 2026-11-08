@@ -36,7 +36,7 @@ public class UserLoginFlowTests(LocalUsersFixture factory) : IClassFixture<Local
         await IdentityIssuerUserFlow.EnsurePanelClientAsync(factory.Services);
         var email = LocalUserSeed.UniqueEmail(prefix);
         var user = await LocalUserSeed.CreateUserAsync(factory.Services, email, Password, name: "Maria Teste");
-        return (user, await IdentityIssuerUserFlow.SessionCookieAsync(Client(), email, Password));
+        return (user, await IdentityIssuerUserFlow.SessionCookieAsync(Client(), factory.Services, email, Password));
     }
 
     [Fact]

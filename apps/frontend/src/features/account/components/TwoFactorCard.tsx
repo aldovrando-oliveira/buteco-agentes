@@ -1,43 +1,28 @@
 import { useState, type ReactNode } from 'react';
 import { Alert, Badge, Button, Group, Stack, Text, TextInput } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { PasswordField } from '../../../components/forms/PasswordField';
-import {
-  ApiError,
-  confirmTwoFactor,
-  getAccount,
-  getTwoFactor,
-  regenerateRecoveryCodes,
-  removeTwoFactor,
-  setupTwoFactor,
-  type TwoFactorSetup,
-  type TwoFactorStatus,
-} from '../api/accountApi';
+import { ApiError, getAccount, getTwoFactor, regenerateRecoveryCodes, type TwoFactorStatus } from '../api/accountApi';
 import { formatDate } from '../../../utils/panelDates';
 import { CODIGO_INVALIDO, INFORME_O_CODIGO } from '../../auth/messages';
 import { blockedUntil, failureNotice, type FailureNotice } from '../../../utils/failureNotice';
 import { useBlockedUntil } from '../../../hooks/useBlockedUntil';
 import { AccountCard, CardLoadError, CardLoading } from './AccountCard';
 import { ACCOUNT_QUERY_KEY, TWO_FACTOR_QUERY_KEY } from '../queryKeys';
-import { CADASTRO_VENCEU, CONFIRMA_CODIGO_INVALIDO, fewCodesText, remainingText } from '../accountTexts';
-import { RecoveryCodes } from './RecoveryCodes';
-import { TwoFactorQr } from './TwoFactorQr';
+import { fewCodesText, NAO_CONFIGURADA_TEXTO, remainingText, TROCOU_DE_CELULAR } from '../accountTexts';
+import { RecoveryCodes } from '../../two-factor/components/RecoveryCodes';
 
-// O cartão "Verificação em 2 etapas" (design.md da change minha-conta-painel, D4 e D5).
+// O cartão "Verificação em 2 etapas" (design.md da change minha-conta-painel, D4 e D5; e da change
+// verificacao-2-etapas-obrigatoria, D7). A verificação é obrigatória e o cadastro é só o do login:
+// o cartão mostra a situação e gera novos códigos de recuperação. Sem "Ligar verificação" e sem
+// "Remover verificação" (decisão do dono, Q5); quem troca de celular pede a outro usuário que
+// redefina a verificação.
 //
-// O segredo, o otpauthUri e os códigos de recuperação ficam SÓ no estado deste componente:
-// nada vai para storage, URL, `state` do router ou o cache do TanStack Query. Por isso as
-// quatro chamadas que os trazem ou os consomem são chamadas diretas, e não `useMutation`: o
-// `MutationCache` guardaria o `data` da mutação até o `gcTime`, mesmo depois de sair da tela.
-// Sair do passo, ou da página, leva tudo junto.
+// Os códigos novos ficam SÓ no estado deste componente: nada vai para storage, URL, `state` do
+// router ou o cache do TanStack Query. Por isso a chamada que os traz é direta, e não
+// `useMutation`: o `MutationCache` guardaria o `data` da mutação até o `gcTime`, mesmo depois de
+// sair da tela. Sair do passo, ou da página, leva tudo junto.
 
-type Passo =
-  | { tipo: 'estado' }
-  | { tipo: 'senha' }
-  | { tipo: 'qr'; setup: TwoFactorSetup }
-  | { tipo: 'codigos'; codigos: string[]; novos: boolean }
-  | { tipo: 'regenerar' }
-  | { tipo: 'remover' };
+type Passo = { tipo: 'estado' } | { tipo: 'codigos'; codigos: string[] } | { tipo: 'regenerar' };
 
 export function TwoFactorCard() {
   const queryClient = useQueryClient();
@@ -60,72 +45,27 @@ export function TwoFactorCard() {
     await queryClient.invalidateQueries({ queryKey: ACCOUNT_QUERY_KEY });
   };
 
-  /** A falha comum dos passos: `409` e `403` releem o estado; o resto vira o aviso do cartão. */
-  const falhou = async (error: unknown) => {
-    if (error instanceof ApiError && (error.status === 409 || error.status === 403)) {
-      await reler();
-      ir({ tipo: 'estado' });
-      return;
-    }
-    setAviso(failureNotice(error));
-    setBloqueadoAte(blockedUntil(error));
-  };
-
-  const enviar = async (acao: () => Promise<void>) => {
+  const regenerar = async (codigo: string) => {
     setAviso(null);
     setErroDoCampo(null);
     setEnviando(true);
     try {
-      await acao();
+      const { codigosRecuperacao } = await regenerateRecoveryCodes(codigo);
+      ir({ tipo: 'codigos', codigos: codigosRecuperacao });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) setErroDoCampo(error.title ?? CODIGO_INVALIDO);
+      else if (error instanceof ApiError && (error.status === 409 || error.status === 403)) {
+        // A verificação foi redefinida em outro lugar: o cartão relê e vai ao estado do GET.
+        await reler();
+        ir({ tipo: 'estado' });
+      } else {
+        setAviso(failureNotice(error));
+        setBloqueadoAte(blockedUntil(error));
+      }
     } finally {
       setEnviando(false);
     }
   };
-
-  const comecar = (senha: string) =>
-    enviar(async () => {
-      try {
-        ir({ tipo: 'qr', setup: await setupTwoFactor(senha) });
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) setErroDoCampo(error.title ?? 'Senha inválida.');
-        else await falhou(error);
-      }
-    });
-
-  const confirmar = (codigo: string) =>
-    enviar(async () => {
-      try {
-        const { codigosRecuperacao } = await confirmTwoFactor(codigo);
-        ir({ tipo: 'codigos', codigos: codigosRecuperacao, novos: false });
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) setErroDoCampo(CONFIRMA_CODIGO_INVALIDO);
-        else if (error instanceof ApiError && error.status === 400) setAviso({ texto: CADASTRO_VENCEU, cor: 'red' });
-        else await falhou(error);
-      }
-    });
-
-  const regenerar = (codigo: string) =>
-    enviar(async () => {
-      try {
-        const { codigosRecuperacao } = await regenerateRecoveryCodes(codigo);
-        ir({ tipo: 'codigos', codigos: codigosRecuperacao, novos: true });
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) setErroDoCampo(error.title ?? CODIGO_INVALIDO);
-        else await falhou(error);
-      }
-    });
-
-  const remover = (codigo: string) =>
-    enviar(async () => {
-      try {
-        await removeTwoFactor(codigo);
-        await reler();
-        ir({ tipo: 'estado' });
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) setErroDoCampo(error.title ?? CODIGO_INVALIDO);
-        else await falhou(error);
-      }
-    });
 
   const concluir = async () => {
     await reler();
@@ -145,55 +85,21 @@ export function TwoFactorCard() {
       ) : status.isError ? (
         <CardLoadError error={status.error} onRetry={() => void status.refetch()} />
       ) : passo.tipo === 'estado' ? (
-        <TwoFactorState
-          status={status.data}
-          onEnable={() => ir({ tipo: 'senha' })}
-          onRegenerate={() => ir({ tipo: 'regenerar' })}
-          onRemove={() => ir({ tipo: 'remover' })}
-          notice={avisoDoCartao}
-        />
-      ) : passo.tipo === 'senha' ? (
-        <PasswordStep
-          notice={avisoDoCartao}
-          error={erroDoCampo}
-          submitting={enviando}
-          disabled={bloqueado}
-          onSubmit={comecar}
-          onCancel={() => ir({ tipo: 'estado' })}
-        />
-      ) : passo.tipo === 'qr' ? (
-        <QrStep
-          setup={passo.setup}
-          notice={avisoDoCartao}
-          error={erroDoCampo}
-          submitting={enviando}
-          disabled={bloqueado}
-          onSubmit={confirmar}
-          onCancel={() => ir({ tipo: 'estado' })}
-        />
+        <TwoFactorState status={status.data} onRegenerate={() => ir({ tipo: 'regenerar' })} notice={avisoDoCartao} />
       ) : passo.tipo === 'codigos' ? (
         <RecoveryCodes
           codigos={passo.codigos}
           email={account.data?.email ?? ''}
-          titulo={passo.novos ? 'Novos códigos gerados.' : 'Verificação ligada.'}
+          titulo="Novos códigos gerados."
           onDone={() => void concluir()}
         />
       ) : (
         <CodeStep
-          key={passo.tipo}
-          title={passo.tipo === 'regenerar' ? 'Gerar novos códigos de recuperação' : 'Remover a verificação em 2 etapas'}
-          text={
-            passo.tipo === 'regenerar'
-              ? 'Os códigos atuais deixam de valer.'
-              : 'Depois disso, só a senha protege a sua conta, e os códigos de recuperação deixam de valer.'
-          }
-          submitLabel={passo.tipo === 'regenerar' ? 'Gerar códigos' : 'Remover verificação'}
-          danger={passo.tipo === 'remover'}
           notice={avisoDoCartao}
           error={erroDoCampo}
           submitting={enviando}
           disabled={bloqueado}
-          onSubmit={passo.tipo === 'regenerar' ? regenerar : remover}
+          onSubmit={(codigo) => void regenerar(codigo)}
           onCancel={() => ir({ tipo: 'estado' })}
         />
       )}
@@ -203,41 +109,31 @@ export function TwoFactorCard() {
 
 function TwoFactorState({
   status,
-  onEnable,
   onRegenerate,
-  onRemove,
   notice,
 }: {
   status: TwoFactorStatus;
-  onEnable: () => void;
   onRegenerate: () => void;
-  onRemove: () => void;
   notice: ReactNode;
 }) {
   if (!status.ativa) {
+    // Só no intervalo em que o access token de uma sessão de antes da obrigatoriedade ainda vale
+    // (design.md da change verificacao-2-etapas-obrigatoria, D4): o próximo login pede o cadastro.
     return (
       <Stack gap="sm">
         {notice}
-        <Group justify="space-between" wrap="nowrap" align="center">
-          <Stack gap={4}>
-            <Badge color="yellow" variant="light" w="fit-content">
-              Não configurada
-            </Badge>
-            <Text size="sm" c="dimmed">
-              {status.cadastroDisponivel
-                ? 'Com a verificação ligada, além da senha você informa um código do app autenticador do celular.'
-                : 'O cadastro da verificação em 2 etapas ainda não está disponível neste painel.'}
-            </Text>
-          </Stack>
-          <Button onClick={onEnable} disabled={!status.cadastroDisponivel} variant={status.cadastroDisponivel ? 'filled' : 'default'}>
-            Ligar verificação
-          </Button>
-        </Group>
+        <Stack gap={4}>
+          <Badge color="yellow" variant="light" w="fit-content">
+            Não configurada
+          </Badge>
+          <Text size="sm" c="dimmed">
+            {NAO_CONFIGURADA_TEXTO}
+          </Text>
+        </Stack>
       </Stack>
     );
   }
 
-  // A regeneração e a remoção valem com qualquer valor de `cadastroDisponivel` (two-factor-totp).
   const poucos = fewCodesText(status.codigosRestantes);
   return (
     <Stack gap="sm">
@@ -258,15 +154,13 @@ function TwoFactorState({
             {remainingText(status.codigosRestantes)}
           </Text>
         </Stack>
-        <Group gap="xs" wrap="nowrap">
-          <Button variant="default" onClick={onRegenerate}>
-            Gerar novos códigos
-          </Button>
-          <Button variant="subtle" color="red" onClick={onRemove}>
-            Remover verificação
-          </Button>
-        </Group>
+        <Button variant="default" onClick={onRegenerate}>
+          Gerar novos códigos
+        </Button>
       </Group>
+      <Text size="sm" c="dimmed">
+        {TROCOU_DE_CELULAR}
+      </Text>
       {poucos && (
         <Alert color="yellow" role="status">
           {poucos}
@@ -285,114 +179,7 @@ interface StepProps {
   onCancel: () => void;
 }
 
-function PasswordStep({ notice, error, submitting, disabled, onSubmit, onCancel }: StepProps) {
-  const [senha, setSenha] = useState('');
-  return (
-    <form
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit(senha);
-      }}
-    >
-      <Stack gap="sm" maw={420}>
-        <Stack gap={2}>
-          <Text fw={600} size="sm">
-            Ligar a verificação em 2 etapas
-          </Text>
-          <Text size="sm" c="dimmed">
-            Você vai precisar de um app autenticador no celular, como Google Authenticator, Microsoft Authenticator
-            ou 1Password.
-          </Text>
-        </Stack>
-        {notice}
-        <PasswordField
-          label="Sua senha"
-          autoComplete="current-password"
-          description="Para começar, confirme que é você."
-          value={senha}
-          onChange={(event) => setSenha(event.currentTarget.value)}
-          error={error}
-        />
-        <Group gap="sm">
-          <Button type="submit" loading={submitting} disabled={disabled}>
-            Continuar
-          </Button>
-          <Button variant="subtle" onClick={onCancel} disabled={submitting}>
-            Cancelar
-          </Button>
-        </Group>
-      </Stack>
-    </form>
-  );
-}
-
-function QrStep({ setup, notice, error, submitting, disabled, onSubmit, onCancel }: StepProps & { setup: TwoFactorSetup }) {
-  const [codigo, setCodigo] = useState('');
-  const [vazio, setVazio] = useState(false);
-  return (
-    <form
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault();
-        const limpo = codigo.trim();
-        setVazio(limpo === '');
-        if (limpo !== '') onSubmit(limpo);
-      }}
-    >
-      <Stack gap="md">
-        <Group align="flex-start" gap="sm" wrap="nowrap">
-          <Badge circle size="lg" variant="light">
-            1
-          </Badge>
-          <TwoFactorQr segredo={setup.segredo} otpauthUri={setup.otpauthUri} />
-        </Group>
-        <Group align="flex-start" gap="sm" wrap="nowrap">
-          <Badge circle size="lg" variant="light">
-            2
-          </Badge>
-          <Stack gap="sm" maw={360} style={{ flex: 1 }}>
-            <TextInput
-              label="Digite o código de 6 dígitos que o app mostra"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="000 000"
-              value={codigo}
-              onChange={(event) => setCodigo(event.currentTarget.value)}
-              error={vazio ? INFORME_O_CODIGO : error}
-              aria-invalid={vazio || error ? true : undefined}
-            />
-            {notice}
-            <Text size="xs" c="dimmed">
-              Este cadastro vale por 10 minutos. Depois disso, comece de novo.
-            </Text>
-            <Group gap="sm">
-              <Button type="submit" loading={submitting} disabled={disabled}>
-                Confirmar
-              </Button>
-              <Button variant="subtle" onClick={onCancel} disabled={submitting}>
-                Cancelar
-              </Button>
-            </Group>
-          </Stack>
-        </Group>
-      </Stack>
-    </form>
-  );
-}
-
-function CodeStep({
-  title,
-  text,
-  submitLabel,
-  danger,
-  notice,
-  error,
-  submitting,
-  disabled,
-  onSubmit,
-  onCancel,
-}: StepProps & { title: string; text: string; submitLabel: string; danger: boolean }) {
+function CodeStep({ notice, error, submitting, disabled, onSubmit, onCancel }: StepProps) {
   const [codigo, setCodigo] = useState('');
   const [vazio, setVazio] = useState(false);
   return (
@@ -409,10 +196,10 @@ function CodeStep({
       <Stack gap="sm" maw={420}>
         <Stack gap={2}>
           <Text fw={600} size="sm">
-            {title}
+            Gerar novos códigos de recuperação
           </Text>
           <Text size="sm" c="dimmed">
-            {text}
+            Os códigos atuais deixam de valer.
           </Text>
         </Stack>
         {notice}
@@ -428,8 +215,8 @@ function CodeStep({
           aria-invalid={vazio || error ? true : undefined}
         />
         <Group gap="sm">
-          <Button type="submit" color={danger ? 'red' : undefined} loading={submitting} disabled={disabled}>
-            {submitLabel}
+          <Button type="submit" loading={submitting} disabled={disabled}>
+            Gerar códigos
           </Button>
           <Button variant="subtle" onClick={onCancel} disabled={submitting}>
             Cancelar

@@ -2,7 +2,6 @@
 
 ## Purpose
 Diz o que as páginas públicas `/convite` e `/redefinir-senha` do painel fazem com o link de uso único da #181 (#245): o token sai do endereço antes de qualquer pedido e fica só na aba, a consulta e seus estados (carregando, indisponível, link inválido), o formulário da senha nova e a entrada logo depois, inclusive no passo do código para quem tem as 2 etapas.
-
 ## Requirements
 ### Requirement: Páginas públicas do link de uso único
 `apps/frontend` SHALL prover as páginas `/convite` e `/redefinir-senha`, abertas sem sessão, ao lado de `/entrar`. Os caminhos SHALL ser os que o `apps/api` monta no link (`AccessLinkUrls`, `user-access-links`). Uma sessão aberta na aba SHALL NOT impedir nem mudar o uso das páginas.
@@ -177,15 +176,15 @@ No `204` da conclusão, a página SHALL chamar `POST /auth/session` com o `email
 
 | resposta do login | o que a página faz |
 |---|---|
-| `204` | segue o fluxo do emissor para a tela inicial (`/`) |
+| `200` com `{ "segundoPasso": "cadastro" }` | navega a `/entrar` com o `state` `{ etapa: "cadastro" }`, e o `/entrar` abre na etapa do cadastro com o aviso "Senha salva. Falta só cadastrar o app autenticador para entrar." (`operator-login-ui`) |
 | `200` com `{ "segundoPasso": "totp" }` | navega a `/entrar` com o `state` `{ etapa: "codigo" }`, e o `/entrar` abre no passo do código com o aviso "Senha salva…" (`operator-login-ui`) |
 | qualquer outra | navega a `/entrar` com o `state` `{ email, status }`, e o `/entrar` abre com o e-mail preenchido e o aviso daquele status (`operator-login-ui`) |
 
 A senha SHALL ficar só na memória da página, entre a conclusão e o login, e SHALL NOT ir ao `state` do router nem a armazenamento nenhum.
 
-#### Scenario: Aceite seguido do login
-- **WHEN** o aceite responde `204` e o `POST /auth/session` com `marcos.lima@empresa.com` e a senha digitada responde `204`
-- **THEN** o painel navega ao authorize, com `/` como `voltarPara`
+#### Scenario: Aceite seguido do cadastro
+- **WHEN** o aceite responde `204` e o `POST /auth/session` com `marcos.lima@empresa.com` e a senha digitada responde `200` com `{ "segundoPasso": "cadastro" }`
+- **THEN** a URL passa a `/entrar`, a tela mostra a etapa do cadastro com "Senha salva. Falta só cadastrar o app autenticador para entrar.", e o `state` do router não contém a senha
 
 #### Scenario: Redefinição de quem tem as 2 etapas chega ao passo do código
 - **WHEN** a redefinição responde `204` e o `POST /auth/session` responde `200` com `{ "segundoPasso": "totp" }`

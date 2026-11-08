@@ -30,7 +30,7 @@ describe('AccountPage', () => {
 
     expect(screen.getByRole('heading', { level: 2, name: 'Minha conta' })).toBeInTheDocument();
     expect(
-      screen.getByText('Os seus dados, a sua senha, a verificação em 2 etapas e os navegadores em que você está conectado.'),
+      screen.getByText('Os seus dados, a sua senha, os códigos de recuperação e os navegadores em que você está conectado.'),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('region').map((r) => within(r).getAllByRole('heading')[0].textContent)).toEqual([
       'Dados',

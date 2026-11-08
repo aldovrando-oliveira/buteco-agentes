@@ -84,7 +84,7 @@ public class AccountSessionsTests(AccountSessionsTests.Fixture factory) : IClass
     {
         var me = await SignedInUser.CreateAsync(factory, "abandonado");
         var client = SignedInUser.Anonymous(factory);
-        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, me.User.Email, me.Password);
+        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, factory.Services, me.User.Email, me.Password);
         var authorize = await IdentityIssuerUserFlow.AuthorizeAsync(client, IdentityIssuerUserFlow.AuthorizeUrl(IdentityIssuerUserFlow.Pkce.Create()), cookie);
         IdentityIssuerUserFlow.CodeFrom(authorize);
         Assert.Equal(2, (await UserSessionsSeed.AuthorizationStatusesAsync(factory.Services, me.User.Id)).Count(status => status == "valid"));

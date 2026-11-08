@@ -50,7 +50,7 @@ public class UserEditTests(UserEditTests.Fixture factory, Xunit.Abstractions.ITe
         Assert.Equal(target.User.Id, body.GetProperty("id").GetGuid());
         Assert.Equal("Nome Novo", body.GetProperty("nome").GetString());
         var client = SignedInUser.Anonymous(factory);
-        Assert.Equal(HttpStatusCode.NoContent, (await LocalUserSeed.PostSessionAsync(client, newEmail, target.Password)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LocalUserSeed.PostSessionAsync(client, newEmail, target.Password), LocalUserSeed.CodeStep);
         Assert.Equal(HttpStatusCode.Unauthorized, (await LocalUserSeed.PostSessionAsync(client, target.User.Email, target.Password)).StatusCode);
         Assert.True(await SignedInUser.RenewsAsync(factory, target.RefreshToken));
     }

@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Stack, Title, VisuallyHidden } from '@mantine/core';
-import { useLocation, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { Logo } from '../../../components/brand/Logo';
 import { hasSecureContextApis } from '../../../auth/secureContext';
 import { authRuntime } from '../../../auth/session';
 import { createSession, submitSecondFactor } from '../api/sessionApi';
 import type { SessionInput } from '../api/sessionApi';
+import { EnrollmentForm } from '../components/EnrollmentForm';
 import { EntrarForm } from '../components/EntrarForm';
 import { EntryCard } from '../components/EntryCard';
 import { SecondFactorForm, type SecondFactorNotice } from '../components/SecondFactorForm';
@@ -23,7 +24,10 @@ import {
 import { CODIGO_INVALIDO, ENTRADA_EXPIROU, FALHA_NA_ENTRADA, INICIANDO, SEM_CONEXAO, SENHA_ALTERADA } from '../messages';
 import { clearPasswordChanged, hasPasswordChanged } from '../passwordChangedNotice';
 
-type Etapa = 'credenciais' | 'codigo';
+type Etapa = 'credenciais' | 'codigo' | 'cadastro';
+
+/** O logout do emissor sem hint: o "Voltar" da etapa do cadastro encerra o cookie pendente no servidor (D3). */
+const LOGOUT_SEM_HINT = '/connect/logout';
 
 /** O aviso do passo do código para cada recusa do `POST /auth/session/second-factor` (D1). */
 function secondFactorNotice(result: EntryFailure): SecondFactorNotice {
@@ -44,15 +48,29 @@ function secondFactorNotice(result: EntryFailure): SecondFactorNotice {
 export function EntrarPage() {
   const [params] = useSearchParams();
   const location = useLocation();
+  const navigate = useNavigate();
   // O `state` com que as páginas do link abrem o /entrar: lido uma vez, na montagem.
   const [vindoDoLink] = useState(() => readEntrarState(location.state));
-  const [etapa, setEtapa] = useState<Etapa>(vindoDoLink && 'etapa' in vindoDoLink ? 'codigo' : 'credenciais');
+  const [etapa, setEtapa] = useState<Etapa>(
+    vindoDoLink && 'etapa' in vindoDoLink ? vindoDoLink.etapa : 'credenciais',
+  );
+  const [cadastroDoLink, setCadastroDoLink] = useState(vindoDoLink !== null && 'etapa' in vindoDoLink && vindoDoLink.etapa === 'cadastro');
+  // O navegador guarda o `state` do router no histórico: o da etapa do cadastro é limpo ao ser
+  // lido, para recarregar a página voltar a e-mail e senha (decisão do dono, 08/11/2026). Os
+  // outros dois `state` ficam como estão (design.md da change verificacao-2-etapas-obrigatoria, D7).
+  useEffect(() => {
+    if (vindoDoLink && 'etapa' in vindoDoLink && vindoDoLink.etapa === 'cadastro') {
+      void navigate(`${location.pathname}${location.search}`, { replace: true });
+    }
+    // Só na montagem: o `state` é lido uma vez.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [aviso, setAviso] = useState<EntryNotice>(
     vindoDoLink && 'falha' in vindoDoLink ? entryNotice(vindoDoLink.falha) : null,
   );
   const [expirou, setExpirou] = useState(false);
   const [avisoDoCodigo, setAvisoDoCodigo] = useState<SecondFactorNotice>(
-    vindoDoLink && 'etapa' in vindoDoLink ? { tipo: 'senha-salva' } : null,
+    vindoDoLink && 'etapa' in vindoDoLink && vindoDoLink.etapa === 'codigo' ? { tipo: 'senha-salva' } : null,
   );
   const [erroDoCodigo, setErroDoCodigo] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -99,21 +117,22 @@ export function EntrarPage() {
     setEnviando(true);
     const result = await createSession(values);
 
-    if (result.kind === 'ok') {
-      await seguir();
-      return;
-    }
-
     setEnviando(false);
     if (result.kind === 'segundo-passo') {
       setAvisoDoCodigo(null);
       setErroDoCodigo(null);
-      setEtapa('codigo');
+      setCadastroDoLink(false);
+      setEtapa(result.passo === 'cadastro' ? 'cadastro' : 'codigo');
       return;
     }
     setAviso(entryNotice(result));
     esperarRetryAfter(result);
   };
+
+  const voltarExpirado = useCallback(() => {
+    setEtapa('credenciais');
+    setExpirou(true);
+  }, []);
 
   const handleCode = async (codigo: string) => {
     setAvisoDoCodigo(null);
@@ -157,7 +176,14 @@ export function EntrarPage() {
 
         {!seguro && <Alert color="red">O painel precisa ser aberto por HTTPS.</Alert>}
 
-        {etapa === 'codigo' ? (
+        {etapa === 'cadastro' ? (
+          <EnrollmentForm
+            vindoDoLink={cadastroDoLink}
+            onExpired={voltarExpirado}
+            onDone={() => void seguir()}
+            onBack={() => authRuntime.assign(LOGOUT_SEM_HINT)}
+          />
+        ) : etapa === 'codigo' ? (
           <SecondFactorForm
             onSubmit={(codigo) => void handleCode(codigo)}
             onBack={() => {

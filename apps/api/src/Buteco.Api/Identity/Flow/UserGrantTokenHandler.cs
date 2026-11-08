@@ -18,7 +18,12 @@ namespace Buteco.Api.Identity.Flow;
 /// <item>o que não existe mais;</item>
 /// <item>o desativado;</item>
 /// <item>o de <c>security_stamp</c> gravado diferente do claim do código ou do refresh. É o
-/// que impede um refresh de antes da desativação de renovar depois de uma reativação.</item>
+/// que impede um refresh de antes da desativação de renovar depois de uma reativação;</item>
+/// <item>o que não tem a verificação em 2 etapas ligada (design.md da change
+/// verificacao-2-etapas-obrigatoria, D4). É o que encerra, na renovação seguinte, as sessões
+/// abertas antes da obrigatoriedade. A recusa é o <c>400</c> com <c>error: invalid_grant</c> do
+/// endpoint de token, que o painel já trata como sessão encerrada
+/// (<c>apps/frontend/src/auth/renewal.ts</c>).</item>
 /// </list>
 /// No <c>refresh_token</c> aceito, atualiza o último acesso (D3.11); no login, quem atualiza
 /// é o <c>POST /auth/session</c>.
@@ -62,7 +67,7 @@ public sealed class UserGrantTokenHandler(AppDbContext dbContext, TimeProvider t
             ? await dbContext.Users.FindAsync([userId], context.CancellationToken)
             : null;
 
-        if (user is null || !user.IsActive || user.SecurityStamp != stamp)
+        if (user is null || !user.IsActive || user.SecurityStamp != stamp || !user.IsTwoFactorEnabled)
         {
             context.Reject(
                 error: Errors.InvalidGrant,

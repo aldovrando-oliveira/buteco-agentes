@@ -37,10 +37,8 @@ public static class TestAuthentication
         // change emissor-oidc-api, D8). Só de teste, distinta da chave de desenvolvimento.
         ["Identity:SigningKeyEncryptionKey"] = IdentitySigningKeyEncryptionKey,
 
-        // A do TOTP, distinta das outras (verificacao-2-etapas-totp, D5), e o cadastro aberto:
-        // as fixtures exercitam o fluxo inteiro, e só os casos do cadastro fechado o fecham.
+        // A do TOTP, distinta das outras (verificacao-2-etapas-totp, D5).
         ["Identity:TwoFactorEncryptionKey"] = TwoFactorEncryptionKey,
-        ["Identity:TwoFactor:EnrollmentEnabled"] = "true",
 
         // Os segredos dos clientes de serviço, obrigatórios no boot (clientes-servico-emissor,
         // D2): distintos entre si, das chaves acima e dos de desenvolvimento.

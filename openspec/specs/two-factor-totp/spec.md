@@ -99,62 +99,12 @@ As rotas sob `/account/two-factor` e a rota `POST /users/{id}/two-factor/reset` 
 - **WHEN** um usuário é desativado e, dentro da validade do access token dele, chama `GET /account/two-factor` ou `POST /users/{id}/two-factor/reset`
 - **THEN** as duas respostas são `403`
 
-### Requirement: Cadastro em dois tempos, com a senha e um código válido
-`POST /account/two-factor/setup`, com `{ "senha" }`, SHALL conferir a senha da pessoa e gerar um segredo novo, gravado como cadastro pendente por 10 minutos, e SHALL responder `200` com o segredo em base32 sem padding e o URI `otpauth://totp/Buteco%20Agentes:{e-mail}?secret={segredo}&issuer=Buteco%20Agentes&algorithm=SHA1&digits=6&period=30`, com o e-mail codificado. É a única resposta que SHALL conter o segredo. Senha errada SHALL responder `401` e contar como falha no bloqueio por e-mail. Com a verificação já ligada, SHALL responder `409`. Um cadastro pendente novo SHALL substituir o anterior.
-
-`POST /account/two-factor/confirm`, com `{ "codigo" }`, SHALL ligar a verificação só com um código válido do segredo pendente, e SHALL responder `200` com os 10 códigos de recuperação. Código errado SHALL responder `401` e contar como falha; sem cadastro pendente, ou com ele vencido, SHALL responder `400`.
-
-Ligar a verificação SHALL NOT trocar o `security_stamp`.
-
-#### Scenario: Cadastro sem a senha certa
-- **WHEN** `POST /account/two-factor/setup` chega com a senha errada
-- **THEN** a resposta é `401`, nenhum segredo é gerado, e a contagem de falhas do e-mail da pessoa aumenta
-
-#### Scenario: Cadastro devolve o segredo e o URI
-- **WHEN** `POST /account/two-factor/setup` chega com a senha certa
-- **THEN** a resposta é `200` com o segredo de 32 caracteres em base32 e o URI `otpauth://` com o issuer `Buteco Agentes`, o e-mail da pessoa e os parâmetros `SHA1`, `6` e `30`
-
-#### Scenario: Confirmação com código errado não liga
-- **WHEN** `POST /account/two-factor/confirm` chega com um código que não é do segredo pendente
-- **THEN** a resposta é `401`, e a verificação continua desligada
-
-#### Scenario: Confirmação com código certo liga e devolve os códigos
-- **WHEN** `POST /account/two-factor/confirm` chega com um código válido do segredo pendente
-- **THEN** a resposta é `200` com 10 códigos de recuperação distintos, a verificação fica ligada, e o login seguinte da pessoa pede o segundo passo
-
-#### Scenario: Cadastro pendente vencido
-- **WHEN** a confirmação chega mais de 10 minutos depois do `setup`
-- **THEN** a resposta é `400`, e a verificação continua desligada
-
-#### Scenario: Cadastro com a verificação já ligada
-- **WHEN** `POST /account/two-factor/setup` chega de quem já tem a verificação ligada
-- **THEN** a resposta é `409`, e o segredo ativo não muda
-
-#### Scenario: O segredo não volta em nenhuma leitura
-- **WHEN** a pessoa com a verificação ligada chama `GET /account/two-factor`
-- **THEN** a resposta não contém o segredo nem o URI
-
-### Requirement: Cadastro fechado até a tela existir
-Com `Identity:TwoFactor:EnrollmentEnabled` falsa, que é o padrão, `POST /account/two-factor/setup` e `POST /account/two-factor/confirm` SHALL responder `403` com "O cadastro da verificação em 2 etapas ainda não está disponível.", sem gerar segredo nem ligar a verificação. A verificação no login, a remoção, a regeneração dos códigos e a redefinição pelo admin SHALL funcionar com a opção em qualquer valor.
-
-#### Scenario: Cadastro fechado
-- **WHEN** a opção está falsa e `POST /account/two-factor/setup` chega com a senha certa
-- **THEN** a resposta é `403`, e nenhum cadastro pendente é gravado
-
-#### Scenario: Verificação vale com o cadastro fechado
-- **WHEN** a opção está falsa e um usuário que já tem a verificação ligada entra com a senha certa
-- **THEN** o login pede o segundo passo
-
-#### Scenario: Redefinição com o cadastro fechado
-- **WHEN** a opção está falsa e um usuário redefine a verificação de outro
-- **THEN** a redefinição acontece
-
 ### Requirement: Situação da verificação da própria pessoa
-`GET /account/two-factor` SHALL responder com `ativa`, `ativadaEm`, `codigosRestantes` (os códigos de recuperação ainda não usados) e `cadastroDisponivel` (o valor de `Identity:TwoFactor:EnrollmentEnabled`).
+`GET /account/two-factor` SHALL responder com `ativa`, `ativadaEm` e `codigosRestantes` (os códigos de recuperação ainda não usados). O campo `cadastroDisponivel` SHALL NOT fazer parte da resposta.
 
 #### Scenario: Sem a verificação
-- **WHEN** quem não tem a verificação chama `GET /account/two-factor`, com o cadastro fechado
-- **THEN** a resposta traz `ativa: false`, `ativadaEm: null`, `codigosRestantes: 0` e `cadastroDisponivel: false`
+- **WHEN** quem não tem a verificação chama `GET /account/two-factor`, com um access token ainda válido de antes da obrigatoriedade
+- **THEN** a resposta traz `ativa: false`, `ativadaEm: null` e `codigosRestantes: 0`, e não traz `cadastroDisponivel`
 
 #### Scenario: Depois de usar um código de recuperação
 - **WHEN** quem ligou a verificação e entrou uma vez com um código de recuperação chama `GET /account/two-factor`
@@ -175,29 +125,18 @@ Os códigos de recuperação SHALL ser 10 por usuário, com 16 caracteres do alf
 - **WHEN** um código de recuperação aceito é enviado de novo
 - **THEN** ele é recusado
 
-### Requirement: Regeneração dos códigos e remoção da verificação, com um código válido
-`POST /account/two-factor/recovery-codes`, com `{ "codigo" }`, SHALL apagar os códigos de recuperação da pessoa e responder `200` com 10 novos. `POST /account/two-factor/remove`, com `{ "codigo" }`, SHALL apagar o segredo, o cadastro pendente, o último passo e os códigos, e responder `204`. Nas duas, o código SHALL ser um código do app ou de recuperação válido; código errado SHALL responder `401` e contar como falha no bloqueio por e-mail; sem a verificação ligada, SHALL responder `409`. Remover SHALL NOT trocar o `security_stamp`.
-
-#### Scenario: Regeneração invalida os códigos antigos
-- **WHEN** a pessoa regenera os códigos com um código do app válido
-- **THEN** a resposta traz 10 códigos novos, e um código antigo, ainda não usado, passa a ser recusado
-
-#### Scenario: Remoção com código
-- **WHEN** a pessoa remove a verificação com um código válido
-- **THEN** a resposta é `204`, e o login seguinte dela responde `204` sem o segundo passo
-
-#### Scenario: Remoção com código errado
-- **WHEN** a pessoa tenta remover a verificação com um código errado
-- **THEN** a resposta é `401`, a verificação continua ligada, e a contagem de falhas do e-mail aumenta
-
 ### Requirement: Redefinição da verificação pelo admin
-`POST /users/{id}/two-factor/reset` SHALL apagar o segredo, o cadastro pendente, a data de ativação, o último passo e os códigos de recuperação do usuário, trocar o `security_stamp` dele e revogar todas as autorizações dele no emissor, numa mesma transação, respondendo `204`. Usuário inexistente SHALL responder `404`; usuário sem a verificação ligada, `409`, sem trocar o stamp e sem revogar nada; e o próprio usuário que chama, `403`.
+`POST /users/{id}/two-factor/reset` SHALL apagar o segredo, o cadastro pendente, a data de ativação, o último passo e os códigos de recuperação do usuário, trocar o `security_stamp` dele e revogar todas as autorizações dele no emissor, numa mesma transação, respondendo `204`. Usuário inexistente SHALL responder `404`; usuário sem a verificação ligada, `409`, sem trocar o stamp e sem revogar nada; e o próprio usuário que chama, `403` com "Você não pode redefinir a própria verificação. Peça a outro usuário, ou use o comando de emergência no servidor.".
+
+A operação SHALL ser a mesma do comando de emergência ("Comando de emergência para redefinir a verificação"): as duas entradas SHALL usar uma implementação só.
 
 A revogação junto da troca do stamp é a regra de `user-account` ("Toda troca do carimbo de segurança revoga as sessões da pessoa"): sem ela, as sessões mortas pelo stamp continuariam na lista de sessões vivas por até 14 dias.
 
+Depois da redefinição, o login seguinte da pessoa SHALL pedir o cadastro (`issuer-user-login`).
+
 #### Scenario: Redefinir outro usuário
 - **WHEN** um usuário redefine a verificação de outro que a tem ligada
-- **THEN** a resposta é `204`, o login seguinte do outro responde `204` sem o segundo passo, e a próxima renovação de uma sessão do outro, aberta antes, recebe `invalid_grant`
+- **THEN** a resposta é `204`, o login seguinte do outro responde `200` com `{ "segundoPasso": "cadastro" }`, e a próxima renovação de uma sessão do outro, aberta antes, recebe `invalid_grant`
 
 #### Scenario: A redefinição encerra as sessões na lista
 - **WHEN** um usuário com duas sessões vivas tem a verificação redefinida por outro
@@ -205,7 +144,7 @@ A revogação junto da troca do stamp é a regra de `user-account` ("Toda troca 
 
 #### Scenario: Redefinir a si mesmo
 - **WHEN** um usuário chama a redefinição com o próprio id
-- **THEN** a resposta é `403`, e a verificação dele continua ligada
+- **THEN** a resposta é `403` com "Você não pode redefinir a própria verificação. Peça a outro usuário, ou use o comando de emergência no servidor.", e a verificação dele continua ligada
 
 #### Scenario: Redefinir quem não tem a verificação
 - **WHEN** a redefinição é pedida para um usuário sem a verificação ligada
@@ -214,4 +153,87 @@ A revogação junto da troca do stamp é a regra de `user-account` ("Toda troca 
 #### Scenario: Redefinir usuário inexistente
 - **WHEN** a redefinição é pedida para um id que não existe
 - **THEN** a resposta é `404`
+
+### Requirement: Regeneração dos códigos de recuperação, com um código válido
+`POST /account/two-factor/recovery-codes`, com `{ "codigo" }`, SHALL apagar os códigos de recuperação da pessoa e responder `200` com 10 novos. O código SHALL ser um código do app ou de recuperação válido; código errado SHALL responder `401` e contar como falha no bloqueio por e-mail; sem a verificação ligada, SHALL responder `409`.
+
+A própria pessoa SHALL NOT poder remover a verificação: `POST /account/two-factor/remove` SHALL NOT ser mapeada. Quem troca de celular pede a redefinição a outro usuário ("Redefinição da verificação pelo admin") ou usa o comando de emergência.
+
+#### Scenario: Regeneração invalida os códigos antigos
+- **WHEN** a pessoa regenera os códigos com um código do app válido
+- **THEN** a resposta traz 10 códigos novos, e um código antigo, ainda não usado, passa a ser recusado
+
+#### Scenario: Regeneração com código errado
+- **WHEN** a pessoa tenta regenerar os códigos com um código errado
+- **THEN** a resposta é `401`, os códigos antigos continuam valendo, e a contagem de falhas do e-mail aumenta
+
+#### Scenario: Não há rota de remover
+- **WHEN** `POST /account/two-factor/remove` chega com um access token válido e um código válido
+- **THEN** a verificação continua ligada, e a resposta não é `204`
+
+#### Scenario: Não há cadastro por access token
+- **WHEN** `POST /account/two-factor/setup` ou `POST /account/two-factor/confirm` chega com um access token válido
+- **THEN** nenhum segredo é gerado, e a verificação não muda
+
+### Requirement: Comando de emergência para redefinir a verificação
+O binário do `apps/api` SHALL aceitar o comando `two-factor-reset --email <e-mail>`, lido dos argumentos do processo antes de montar o host web. Com ele, o processo SHALL subir sem servidor HTTP, sem rotas e sem serviços em segundo plano, executar a redefinição e terminar. Em produção, roda por `docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --no-deps api two-factor-reset --email <e-mail>`.
+
+O comando SHALL achar o usuário pelo e-mail normalizado e SHALL ter efeito idêntico ao de `POST /users/{id}/two-factor/reset`: apagar o segredo, o cadastro pendente, a data de ativação, o último passo e os códigos de recuperação, trocar o `security_stamp` e revogar as autorizações, numa transação, pela mesma implementação.
+
+**Saída:**
+
+| caso | código de saída | efeito |
+|---|---|---|
+| redefinida | `0` | a redefinição |
+| nenhum usuário com o e-mail | `1` | nenhum |
+| usuário desativado | `2` | nenhum |
+| usuário sem a verificação ligada (inclusive convidado) | `3` | nenhum |
+| `--email` ausente ou argumento desconhecido | `64` | nenhum |
+| falha ao falar com o banco ou erro inesperado | `70` | nenhum (a transação não se completa) |
+
+O código `1` SHALL ser só o de "nenhum usuário com o e-mail", decidido por uma consulta que respondeu. Uma exceção não tratada SHALL NOT sair com `1`, nem com nenhum dos códigos de resultado (`0`, `1`, `2`, `3`): SHALL sair com `70`. O comando SHALL NOT aplicar migrations.
+
+**Registro:** cada execução SHALL escrever uma linha `Warning` com `EventId` próprio, o resultado, o id do usuário quando houver, o e-mail pedido e, na redefinida, quantas sessões foram encerradas. Nenhuma saída do comando SHALL conter segredo, código de recuperação, código TOTP, hash ou o carimbo de segurança. Na saída `70`, a linha de registro SHALL trazer o tipo do erro, e SHALL NOT trazer a string de conexão nem a senha do banco.
+
+O comando SHALL NOT ter rota HTTP equivalente, nem ser alcançável pelo processo web em execução.
+
+#### Scenario: Redefinição pelo comando
+- **WHEN** o comando roda com o e-mail de um usuário ativo que tem a verificação ligada e duas sessões vivas
+- **THEN** o processo sai com `0`, a verificação dele está apagada, o `security_stamp` mudou, as duas autorizações estão revogadas, e o login seguinte dele responde `200` com `{ "segundoPasso": "cadastro" }`
+
+#### Scenario: Mesmo efeito da rota do admin
+- **WHEN** a mesma situação inicial é redefinida uma vez pela rota do admin e uma vez pelo comando
+- **THEN** o estado final do usuário (colunas das 2 etapas, códigos, carimbo trocado, autorizações revogadas) é o mesmo nos dois casos
+
+#### Scenario: E-mail sem usuário
+- **WHEN** o comando roda com um e-mail que não é de nenhum usuário
+- **THEN** o processo sai com `1`, e nada muda no banco
+
+#### Scenario: Usuário desativado
+- **WHEN** o comando roda com o e-mail de um usuário desativado com a verificação ligada
+- **THEN** o processo sai com `2`, e a verificação e o carimbo dele não mudam
+
+#### Scenario: Usuário sem a verificação
+- **WHEN** o comando roda com o e-mail de um usuário sem a verificação ligada
+- **THEN** o processo sai com `3`, e o carimbo dele não muda
+
+#### Scenario: Uso errado
+- **WHEN** o comando roda sem `--email`
+- **THEN** o processo sai com `64`, sem tocar no banco
+
+#### Scenario: Banco fora do ar não vira "usuário inexistente"
+- **WHEN** o comando roda com a conexão apontando para uma porta fechada
+- **THEN** o processo sai com `70`, a saída traz o tipo do erro, não diz que o usuário não existe, e não contém a string de conexão nem a senha
+
+#### Scenario: O comando não aplica migrations
+- **WHEN** o comando roda contra um banco com uma migration pendente
+- **THEN** a tabela de histórico de migrations não muda
+
+#### Scenario: O registro não traz segredo
+- **WHEN** o comando redefine um usuário
+- **THEN** a saída tem uma linha `Warning` com o `EventId` do comando, o id do usuário e o número de sessões encerradas, e não contém o segredo, nenhum código de recuperação nem o carimbo, antigo ou novo
+
+#### Scenario: Não é rota HTTP
+- **WHEN** o `apps/api` sobe como servidor web
+- **THEN** nenhuma rota mapeada executa a redefinição sem um usuário autenticado, e as únicas rotas anônimas novas são as duas de cadastro no login
 

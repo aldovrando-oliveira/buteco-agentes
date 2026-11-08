@@ -78,13 +78,13 @@ public class TwoFactorLoginTests(TwoFactorLoginTests.Fixture factory) : IClassFi
     }
 
     [Fact]
-    public async Task WithoutTheVerification_TheLoginIsStill204()
+    public async Task WithoutTheVerification_TheLoginAsksForTheEnrollment()
     {
         var user = await LocalUserSeed.CreateUserAsync(factory.Services, LocalUserSeed.UniqueEmail("sem-dois"), Password);
 
         var (response, cookie) = await TwoFactorTestClient.PasswordStepAsync(Client(), user.Email, Password);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(Task.FromResult(response), LocalUserSeed.EnrollmentStep);
         Assert.NotNull(cookie);
     }
 
@@ -94,7 +94,8 @@ public class TwoFactorLoginTests(TwoFactorLoginTests.Fixture factory) : IClassFi
         await IdentityIssuerUserFlow.EnsurePanelClientAsync(factory.Services);
         var user = await LocalUserSeed.CreateUserAsync(factory.Services, LocalUserSeed.UniqueEmail("antes"), Password);
         var client = Client();
-        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, user.Email, Password);
+        // O único cookie de antes da verificação, com a obrigatoriedade, é o pendente do cadastro.
+        var (_, cookie) = await TwoFactorTestClient.PasswordStepAsync(client, user.Email, Password);
 
         await TwoFactorTestClient.SeedEnabledAsync(factory.Services, user.Id);
         var authorize = await IdentityIssuerUserFlow.AuthorizeAsync(

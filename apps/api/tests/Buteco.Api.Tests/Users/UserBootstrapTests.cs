@@ -65,8 +65,8 @@ public class UserBootstrapTests(UserBootstrapFixture factory) : IClassFixture<Us
         await WaitForBootstrapUserAsync();
         var client = factory.CreateClient(new() { HandleCookies = false });
 
-        var first = await LocalUserSeed.PostSessionAsync(client, UserBootstrapFixture.BootstrapEmail, TestAuthentication.KnownOperatorPassword);
-        Assert.Equal(System.Net.HttpStatusCode.NoContent, first.StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(
+            LocalUserSeed.PostSessionAsync(client, UserBootstrapFixture.BootstrapEmail, TestAuthentication.KnownOperatorPassword), LocalUserSeed.EnrollmentStep);
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -75,8 +75,8 @@ public class UserBootstrapTests(UserBootstrapFixture factory) : IClassFixture<Us
             Assert.False(user.PasswordHashIsBootstrapLegacy);
         }
 
-        var second = await LocalUserSeed.PostSessionAsync(client, UserBootstrapFixture.BootstrapEmail, TestAuthentication.KnownOperatorPassword);
-        Assert.Equal(System.Net.HttpStatusCode.NoContent, second.StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(
+            LocalUserSeed.PostSessionAsync(client, UserBootstrapFixture.BootstrapEmail, TestAuthentication.KnownOperatorPassword), LocalUserSeed.EnrollmentStep);
     }
 
     [Fact]

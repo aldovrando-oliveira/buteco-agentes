@@ -13,7 +13,7 @@ export function AccountPage() {
       <Stack gap={4}>
         <Title order={2}>Minha conta</Title>
         <Text c="dimmed" size="sm">
-          Os seus dados, a sua senha, a verificação em 2 etapas e os navegadores em que você está conectado.
+          Os seus dados, a sua senha, os códigos de recuperação e os navegadores em que você está conectado.
         </Text>
       </Stack>
       <AccountDataCard />
