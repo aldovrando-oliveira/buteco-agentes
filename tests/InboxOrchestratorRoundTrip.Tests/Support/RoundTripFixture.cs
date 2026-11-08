@@ -442,11 +442,22 @@ public sealed class RoundTripFixture : IAsyncLifetime
         _secondWorkersHost = null;
     }
 
+    /// <summary>
+    /// A conexão do banco de um <c>apps/api</c> da fixture: a chave do cadastro das 2 etapas do Admin
+    /// do bootstrap no <see cref="IssuerUserFlow"/>, porque hosts sobre o mesmo banco compartilham o cadastro.
+    /// </summary>
+    public static string IssuerDatabaseOf(WebApplicationFactory<ApiProgram> api)
+    {
+        using var scope = api.Services.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<ApiAppDbContext>().Database.GetConnectionString()!;
+    }
+
     // O access token de usuário do fluxo real contra apps/api (sessão,
     // authorize com PKCE e troca do código), do primeiro Admin do
     // bootstrap: o mesmo token com que o painel chama apps/api.
     public Task<string> UserAccessTokenAsync() =>
         IssuerUserFlow.AccessTokenAsync(
+            IssuerDatabaseOf(ApiFactory),
             ApiFactory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
             WarmUpIssuerAsync,
             ApiPublicBaseUrl,
@@ -457,6 +468,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
     // apps/inbox ("openid buteco-inbox"), para as rotas de canal.
     public Task<string> UserAccessTokenAsync(string scope) =>
         IssuerUserFlow.AccessTokenAsync(
+            IssuerDatabaseOf(ApiFactory),
             ApiFactory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
             WarmUpIssuerAsync,
             ApiPublicBaseUrl,

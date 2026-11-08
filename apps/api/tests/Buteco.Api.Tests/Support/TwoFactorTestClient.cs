@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Users.TwoFactor;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
@@ -34,6 +35,19 @@ public static class TwoFactorTestClient
         await db.SaveChangesAsync();
         var codes = await scope.ServiceProvider.GetRequiredService<TwoFactorVerifier>().ReplaceRecoveryCodesAsync(userId, CancellationToken.None);
         return new Enabled(secret, codes);
+    }
+
+    /// <summary>
+    /// Desliga a verificação direto no banco, sem trocar o stamp: o estado de quem tinha uma sessão
+    /// aberta antes da obrigatoriedade (change verificacao-2-etapas-obrigatoria, D4).
+    /// </summary>
+    public static async Task SeedDisabledAsync(IServiceProvider services, Guid userId)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE users SET two_factor_secret = NULL, two_factor_enabled_at = NULL, two_factor_last_step = NULL WHERE id = {userId}");
+        await db.UserRecoveryCodes.Where(code => code.UserId == userId).ExecuteDeleteAsync();
     }
 
     public static string CodeNow(byte[] secret, FakeTimeProvider clock, int stepOffset = 0) =>
@@ -67,6 +81,72 @@ public static class TwoFactorTestClient
         var newCookie = response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Single().Split(';')[0] : null;
         return (response, newCookie);
     }
+
+    /// <summary>
+    /// <c>POST</c> de uma rota do cadastro no login (<c>/auth/session/enrollment/…</c>), com o cookie
+    /// pendente, a origem do issuer e JSON (change verificacao-2-etapas-obrigatoria, D1). Devolve a
+    /// resposta e o cookie regravado, se houver.
+    /// </summary>
+    public static async Task<(HttpResponseMessage Response, string? Cookie)> EnrollmentAsync(
+        HttpClient client, string route, string? cookie, object? body = null, string? origin = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/auth/session/enrollment/{route}")
+        {
+            Content = JsonContent.Create(body ?? new { }),
+        };
+        request.Headers.Add("Origin", origin ?? LocalUserSeed.IssuerOrigin);
+        if (cookie is not null)
+        {
+            request.Headers.Add("Cookie", cookie);
+        }
+
+        var response = await client.SendAsync(request);
+        var newCookie = response.Headers.TryGetValues("Set-Cookie", out var values) ? values.Single().Split(';')[0] : null;
+        return (response, newCookie);
+    }
+
+    public sealed record Enrolled(string SessionCookie, byte[] Secret, IReadOnlyList<string> RecoveryCodes);
+
+    /// <summary>
+    /// Do cookie pendente de cadastro à sessão completa: <c>setup</c>, o código do segredo pelo relógio
+    /// do host e <c>confirm</c>. O relógio é o <see cref="TimeProvider"/> registrado, falso ou real.
+    /// </summary>
+    public static async Task<Enrolled> EnrollAsync(HttpClient client, IServiceProvider services, string pendingCookie)
+    {
+        var (setup, enrollmentCookie) = await EnrollmentAsync(client, "setup", pendingCookie);
+        if (setup.StatusCode != HttpStatusCode.OK)
+        {
+            throw new InvalidOperationException($"Setup do cadastro falhou: {(int)setup.StatusCode} {await setup.Content.ReadAsStringAsync()}");
+        }
+
+        var secret = DecodeBase32((await JsonAsync(setup)).GetProperty("segredo").GetString()!);
+        var now = services.GetRequiredService<TimeProvider>().GetUtcNow();
+        var (confirm, complete) = await EnrollmentAsync(
+            client, "confirm", enrollmentCookie ?? pendingCookie, new { codigo = Totp.Compute(secret, Totp.StepAt(now)) });
+        if (confirm.StatusCode != HttpStatusCode.OK)
+        {
+            throw new InvalidOperationException($"Confirmação do cadastro falhou: {(int)confirm.StatusCode} {await confirm.Content.ReadAsStringAsync()}");
+        }
+
+        var codes = (await JsonAsync(confirm)).GetProperty("codigosRecuperacao").EnumerateArray().Select(code => code.GetString()!).ToList();
+        return new Enrolled(complete!, secret, codes);
+    }
+
+    /// <summary>
+    /// Os códigos de recuperação ainda não usados de quem cadastrou pelo login de teste, por e-mail
+    /// normalizado. O login seguinte da mesma pessoa usa um deles no segundo passo: o código do app
+    /// do mesmo passo do relógio seria recusado como reuso (D3 da #218), e avançar o relógio da
+    /// fixture mudaria o tempo dos testes. Um cadastro novo (depois de uma redefinição) substitui a fila.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Collections.Concurrent.ConcurrentQueue<string>> EnrolledCodes = new();
+
+    public static void Remember(string email, IReadOnlyList<string> recoveryCodes) =>
+        EnrolledCodes[Buteco.Api.Users.EmailNormalization.Normalize(email)] = new System.Collections.Concurrent.ConcurrentQueue<string>(recoveryCodes);
+
+    public static string NextRecoveryCode(string email) =>
+        EnrolledCodes.TryGetValue(Buteco.Api.Users.EmailNormalization.Normalize(email), out var codes) && codes.TryDequeue(out var code)
+            ? code
+            : throw new InvalidOperationException($"Sem código de recuperação guardado para {email}: o usuário não cadastrou pelo login de teste.");
 
     /// <summary>Senha, código e cookie da sessão completa.</summary>
     public static async Task<string> CompleteSessionCookieAsync(HttpClient client, string email, string password, string code)

@@ -1,9 +1,14 @@
 // Os textos de Minha conta que dependem de número ou que são do quadro, e não do servidor
 // (design.md da change minha-conta-painel, D4 e D6; decisões do dono Q5, Q6 e Q10).
 
-/** Os textos do quadro no passo do QR, e não os do servidor (Q6). */
-export const CONFIRMA_CODIGO_INVALIDO = 'Código inválido. Confira se o relógio do celular está certo.';
-export const CADASTRO_VENCEU = 'O cadastro venceu. Comece de novo para gerar outro QR.';
+/**
+ * O cartão da verificação sem cadastro e sem remoção (quadro `MinhaConta`, versão 55; design.md
+ * da change verificacao-2-etapas-obrigatoria, D7).
+ */
+export const NAO_CONFIGURADA_TEXTO =
+  'Este painel passou a exigir a verificação em 2 etapas. Na próxima vez que você entrar, o login pede o cadastro do app autenticador.';
+export const TROCOU_DE_CELULAR =
+  'Trocou de celular ou perdeu o app? Peça a outro usuário do painel que redefina a sua verificação; no próximo login você cadastra o app de novo.';
 
 /** O aviso de poucos códigos: de 1 a 3, com o singular para 1, e o texto próprio para 0 (Q5). */
 export function fewCodesText(restantes: number): string | null {
@@ -32,7 +37,3 @@ export function endedText(encerradas: number): string {
   return `${encerradas} sessões encerradas.`;
 }
 
-/** O segredo em grupos de 4, como no quadro ("JBSW Y3DP …"); o valor copiado é o cru. */
-export function groupSecret(segredo: string): string {
-  return segredo.replace(/(.{4})(?=.)/g, '$1 ');
-}

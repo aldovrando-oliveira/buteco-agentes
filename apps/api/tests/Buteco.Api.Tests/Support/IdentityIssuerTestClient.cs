@@ -143,15 +143,34 @@ public static class IdentityIssuerUserFlow
     }
 
     /// <summary>O valor <c>buteco-sessao=…</c> do login, pronto para o header <c>Cookie</c>.</summary>
-    public static async Task<string> SessionCookieAsync(HttpClient client, string email, string password)
+    /// <summary>
+    /// O cookie da sessão completa de quem ainda não tem a verificação em 2 etapas: a senha responde
+    /// <c>200 { segundoPasso: "cadastro" }</c> (change verificacao-2-etapas-obrigatoria, D1), e o
+    /// cadastro no login liga a verificação antes da sessão. O login seguinte da mesma pessoa
+    /// (<c>"totp"</c>) entra com um dos códigos de recuperação guardados no cadastro.
+    /// </summary>
+    public static async Task<string> SessionCookieAsync(HttpClient client, IServiceProvider services, string email, string password)
     {
         var response = await LocalUserSeed.PostSessionAsync(client, email, password);
-        if (response.StatusCode != System.Net.HttpStatusCode.NoContent)
+        var body = await response.Content.ReadAsStringAsync();
+        if (response.StatusCode != System.Net.HttpStatusCode.OK)
         {
-            throw new InvalidOperationException($"Login falhou: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+            throw new InvalidOperationException($"Login falhou: {(int)response.StatusCode} {body}");
         }
 
-        return response.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        var pending = response.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        if (body.Contains("\"totp\"", StringComparison.Ordinal))
+        {
+            // Já cadastrou num login anterior do teste: entra com um dos códigos de recuperação.
+            var (second, complete) = await TwoFactorTestClient.SecondFactorAsync(client, pending, TwoFactorTestClient.NextRecoveryCode(email));
+            return second.StatusCode == System.Net.HttpStatusCode.NoContent
+                ? complete!
+                : throw new InvalidOperationException($"Segundo passo falhou: {(int)second.StatusCode} {await second.Content.ReadAsStringAsync()}");
+        }
+
+        var enrolled = await TwoFactorTestClient.EnrollAsync(client, services, pending);
+        TwoFactorTestClient.Remember(email, enrolled.RecoveryCodes);
+        return enrolled.SessionCookie;
     }
 
     public static string AuthorizeUrl(Pkce? pkce, string scope = AllScopes, string? prompt = null, string redirectUri = "", string clientId = "buteco-painel")
@@ -230,7 +249,7 @@ public static class IdentityIssuerUserFlow
     public static async Task<Tokens> SignInAsync(HttpClient client, IServiceProvider services, string email, string password)
     {
         await EnsurePanelClientAsync(services);
-        var cookie = await SessionCookieAsync(client, email, password);
+        var cookie = await SessionCookieAsync(client, services, email, password);
         var pkce = Pkce.Create();
         var authorize = await AuthorizeAsync(client, AuthorizeUrl(pkce), cookie);
         return await ReadTokensAsync(await RedeemAsync(client, CodeFrom(authorize), pkce.Verifier));

@@ -327,6 +327,19 @@ o versionamento pretende seguir
     da #211. Se o `apps/api` estiver fora, a tela mostra "Indisponível" e tenta de novo
     sozinha enquanto o erro durar;
   - Editar usuário e o "Editar" na linha chegam com a #183.
+- **Verificação em 2 etapas obrigatória para todo usuário** (#220, última issue da M1).
+  **A validação visual fica para a homologação da M1.**
+  - quem ainda não tem a verificação cadastra um app autenticador **no próprio login**,
+    depois da senha e antes da sessão: o QR (ou o segredo para digitar), o código do app e
+    os 10 códigos de recuperação, com "Continuar" para o painel. O convite e a redefinição
+    de senha seguem para a mesma etapa. "Voltar" encerra o cadastro em curso no servidor;
+  - **o comando de emergência** `two-factor-reset --email <e-mail>`, no binário do
+    `apps/api`, para quem perdeu o celular e os códigos, inclusive o último Admin:
+    `docker compose … run --rm --no-deps api two-factor-reset --email …`. Faz o mesmo que a
+    redefinição pelo admin, sem rota HTTP, com uma linha de log sem segredo e códigos de
+    saída próprios (`docs/deployment.md`);
+  - Minha conta mostra a situação e gera novos códigos; quem troca de celular pede a outro
+    usuário a redefinição.
 - **Editar usuário no painel** (#183, segunda parte do passo C das telas da M1). **A
   validação visual fica para a homologação da M1.**
   - `/users/:id`: nome e e-mail editáveis; "Redefinir senha", que pede a senha de quem
@@ -982,6 +995,13 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **O login exige a verificação em 2 etapas** (#220). O `POST /auth/session` não responde
+  mais `204`: a senha certa responde `200` com `{"segundoPasso":"totp"}` ou
+  `{"segundoPasso":"cadastro"}`. O authorize só emite código com a sessão completa de quem
+  tem a verificação, e a renovação de quem não a tem recebe `invalid_grant`: as sessões
+  abertas antes do deploy, de quem não tinha a verificação, acabam em até 15 minutos.
+  A redefinição de si mesmo responde "Você não pode redefinir a própria verificação. Peça a
+  outro usuário, ou use o comando de emergência no servidor.".
 - **O healthcheck do RabbitMQ deixa de ocupar um núcleo e passa a esperar o broker aceitar
   conexão** (#251), nos dois composes. Ele trocou o `rabbitmq-diagnostics -q ping` a cada 5 s,
   que subia o runtime Erlang do CLI em cada execução (2 a 6 s de CPU), por uma conexão TCP
@@ -1256,6 +1276,13 @@ o versionamento pretende seguir
 
 ### Removed
 
+- **A opção do cadastro das 2 etapas** (#220): `Identity__TwoFactor__EnrollmentEnabled`
+  (`IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED` no `.env.prod`) e o `cadastroDisponivel` do
+  `GET /account/two-factor`. Se a variável ficar no `.env.prod`, nada a lê.
+- **O cadastro e a remoção da verificação por access token** (#220):
+  `POST /account/two-factor/setup`, `/confirm` e `/remove`. O cadastro é o do login, e a
+  própria pessoa não remove a verificação; em Minha conta saem "Ligar verificação",
+  "Remover verificação" e o estado "cadastro indisponível".
 - **`POST /auth/login` e o operador único** (#217). Nenhuma rota emite mais o
   token HMAC de operador; os já emitidos valem até o próprio prazo (no máximo
   30 min depois do deploy). Saem `Auth__OperatorUsername`

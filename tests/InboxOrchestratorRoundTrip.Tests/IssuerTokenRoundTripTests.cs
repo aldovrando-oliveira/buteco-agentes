@@ -28,6 +28,7 @@ public class IssuerTokenRoundTripTests(RoundTripFixture fixture) : IClassFixture
     public async Task RealUserToken_IsAcceptedByTheInbox_AndStillAcceptedWithTheApiUnreachable()
     {
         var accessToken = await IssuerUserFlow.AccessTokenAsync(
+            RoundTripFixture.IssuerDatabaseOf(fixture.ApiFactory),
             fixture.ApiFactory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
             WarmUpAsync,
             RoundTripFixture.ApiPublicBaseUrl,

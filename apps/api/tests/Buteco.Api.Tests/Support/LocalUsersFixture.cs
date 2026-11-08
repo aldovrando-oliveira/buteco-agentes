@@ -81,4 +81,21 @@ public static class LocalUserSeed
         request.Headers.Add("Origin", origin ?? IssuerOrigin);
         return client.SendAsync(request);
     }
+
+    /// <summary>O valor de <c>segundoPasso</c> de quem ainda não cadastrou a verificação (change verificacao-2-etapas-obrigatoria, D1).</summary>
+    public const string EnrollmentStep = "cadastro";
+
+    /// <summary>O valor de <c>segundoPasso</c> de quem já tem a verificação.</summary>
+    public const string CodeStep = "totp";
+
+    /// <summary>
+    /// A senha aceita: o <c>POST /auth/session</c> responde <c>200</c> com o segundo passo esperado. Não
+    /// há mais <c>204</c> nessa rota, porque a verificação em 2 etapas é obrigatória.
+    /// </summary>
+    public static async Task AssertPasswordAcceptedAsync(Task<HttpResponseMessage> login, string expectedStep)
+    {
+        var response = await login;
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(expectedStep, System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("segundoPasso").GetString());
+    }
 }

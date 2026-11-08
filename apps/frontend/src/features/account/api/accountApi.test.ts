@@ -5,15 +5,12 @@ import { fakeAccountApi, problem } from '../test/fakeAccountApi';
 import {
   ApiError,
   changePassword,
-  confirmTwoFactor,
   getAccount,
   getTwoFactor,
   listSessions,
   regenerateRecoveryCodes,
-  removeTwoFactor,
   revokeOtherSessions,
   revokeSession,
-  setupTwoFactor,
 } from './accountApi';
 
 beforeEach(() => {
@@ -44,10 +41,7 @@ describe('accountApi', () => {
 
   it.each<[string, () => Promise<unknown>, unknown]>([
     ['POST /account/password', () => changePassword('atual', 'nova-senha-longa'), { senhaAtual: 'atual', novaSenha: 'nova-senha-longa' }],
-    ['POST /account/two-factor/setup', () => setupTwoFactor('minha-senha'), { senha: 'minha-senha' }],
-    ['POST /account/two-factor/confirm', () => confirmTwoFactor('123456'), { codigo: '123456' }],
     ['POST /account/two-factor/recovery-codes', () => regenerateRecoveryCodes('abcd-efgh'), { codigo: 'abcd-efgh' }],
-    ['POST /account/two-factor/remove', () => removeTwoFactor('123456'), { codigo: '123456' }],
     ['POST /account/sessions/s%201/revoke', () => revokeSession('s 1'), undefined],
     ['POST /account/sessions/revoke-others', () => revokeOtherSessions(), undefined],
   ])('%s leva o corpo do contrato', async (key, call, body) => {

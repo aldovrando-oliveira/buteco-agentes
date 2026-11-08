@@ -222,6 +222,16 @@ public sealed class RoundTripFixture : IAsyncLifetime
     }
 
     /// <summary>
+    /// A conexão do banco de um <c>apps/api</c> da fixture: a chave do cadastro das 2 etapas do Admin
+    /// do bootstrap no <see cref="IssuerUserFlow"/>, porque hosts sobre o mesmo banco compartilham o cadastro.
+    /// </summary>
+    public static string IssuerDatabaseOf(WebApplicationFactory<ApiProgram> api)
+    {
+        using var scope = api.Services.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<ApiAppDbContext>().Database.GetConnectionString()!;
+    }
+
+    /// <summary>
     /// Cliente do <c>apps/api</c> com o access token do primeiro Admin, pelo fluxo real
     /// (sessão, authorize com PKCE e troca do código), como o painel chama o <c>apps/api</c>
     /// (fixtures-token-emissor, D4). Um login por host: cada <see cref="Build"/> sobe um
@@ -230,6 +240,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
     public static async Task<HttpClient> OperatorClientAsync(WebApplicationFactory<ApiProgram> api)
     {
         var token = await UserAccessTokens.GetValue(api, host => IssuerUserFlow.AccessTokenAsync(
+            IssuerDatabaseOf(host),
             host.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
             () => WarmUpIssuerAsync(host),
             ApiPublicBaseUrl,
@@ -256,6 +267,7 @@ public sealed class RoundTripFixture : IAsyncLifetime
     {
         Assert.True(ApiOf.TryGetValue(connectors, out var api), "o apps/connectors não saiu de um Build desta fixture");
         var token = await ConnectorsUserAccessTokens.GetValue(api, host => IssuerUserFlow.AccessTokenAsync(
+            IssuerDatabaseOf(host),
             host.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
             () => WarmUpIssuerAsync(host),
             ApiPublicBaseUrl,

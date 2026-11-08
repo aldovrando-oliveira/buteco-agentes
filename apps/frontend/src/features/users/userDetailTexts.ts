@@ -63,4 +63,4 @@ export const reactivated = (nome: string) =>
   `Reativação concluída. ${nome} pode entrar de novo com a senha que já tinha.`;
 
 export const confirmResetTwoFactor = (nome: string) =>
-  `Redefinir a verificação de ${nome}? O app autenticador e os códigos de recuperação deixam de valer, e a pessoa sai de todos os navegadores. Ela pode ligar a verificação de novo em Minha conta.`;
+  `Redefinir a verificação de ${nome}? O app autenticador e os códigos de recuperação deixam de valer, e a pessoa sai de todos os navegadores. No próximo login, ela cadastra o app autenticador de novo.`;

@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using Buteco.Api.Auth;
 using Buteco.Api.Tests.Support;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Buteco.Api.Tests;
 
@@ -81,6 +84,51 @@ public class RouteAuthenticationTests(ApiFactoryFixture factory) : IClassFixture
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Contains("A entrada expirou", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/auth/session/enrollment/setup")]
+    [InlineData("/auth/session/enrollment/confirm")]
+    public async Task EnrollmentRoutes_WithoutToken_StayAnonymous(string path)
+    {
+        // O cadastro das 2 etapas no login é anônimo, como o segundo passo (change
+        // verificacao-2-etapas-obrigatoria, D1): sem o cookie pendente, a rota responde o 401 dela,
+        // com o título, e não o 401 vazio de rota autenticada.
+        var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(new { codigo = "123456" }) };
+        request.Headers.Add("Origin", LocalUserSeed.IssuerOrigin);
+
+        var response = await UnauthenticatedClient().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains("A entrada expirou", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheAuthEntryPoints_AreTheKnownOnes()
+    {
+        // As rotas anônimas de entrada: a #220 acrescenta só as duas do cadastro no login, e nenhuma
+        // outra (tasks.md da change verificacao-2-etapas-obrigatoria, 2.3). Uma rota anônima nova
+        // aqui é uma porta nova, e precisa de decisão.
+        var entryPoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.Metadata.GetMetadata<AnonymousRouteClassification>()?.Reason == AnonymousRouteReason.AuthEntryPoint)
+            .Select(endpoint => endpoint.RoutePattern.RawText)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(
+            [
+                "/auth/invitation",
+                "/auth/invitation/accept",
+                "/auth/password-reset",
+                "/auth/password-reset/complete",
+                "/auth/session",
+                "/auth/session/enrollment/confirm",
+                "/auth/session/enrollment/setup",
+                "/auth/session/second-factor",
+                "/connect/authorize",
+            ],
+            entryPoints);
     }
 
     [Theory]

@@ -108,7 +108,7 @@ public class InvitationAcceptTests(InvitationAcceptTests.Fixture factory, ITestO
         var second = await AccessLinkClient.AcceptAsync(Client, invited.Token, "senha-de-quem-reusou-o-link");
 
         Assert.Equal(HttpStatusCode.NotFound, second.StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await LocalUserSeed.PostSessionAsync(Client, invited.User.Email, NewPassword)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LocalUserSeed.PostSessionAsync(Client, invited.User.Email, NewPassword), LocalUserSeed.EnrollmentStep);
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class InvitationAcceptTests(InvitationAcceptTests.Fixture factory, ITestO
         Assert.Equal((HttpStatusCode)423, (await LocalUserSeed.PostSessionAsync(Client, invited.User.Email, "tentativa-errada")).StatusCode);
 
         Assert.Equal(HttpStatusCode.NoContent, (await AccessLinkClient.AcceptAsync(Client, invited.Token, NewPassword)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await LocalUserSeed.PostSessionAsync(Client, invited.User.Email, NewPassword)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LocalUserSeed.PostSessionAsync(Client, invited.User.Email, NewPassword), LocalUserSeed.EnrollmentStep);
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class InvitationAcceptTests(InvitationAcceptTests.Fixture factory, ITestO
 
             var winner = responses[0].StatusCode == HttpStatusCode.NoContent ? "primeira-senha-da-corrida" : "segunda-senha-da-corrida";
             var loser = winner.StartsWith("primeira", StringComparison.Ordinal) ? "segunda-senha-da-corrida" : "primeira-senha-da-corrida";
-            Assert.Equal(HttpStatusCode.NoContent, (await LocalUserSeed.PostSessionAsync(Client, invited.User.Email, winner)).StatusCode);
+            await LocalUserSeed.AssertPasswordAcceptedAsync(LocalUserSeed.PostSessionAsync(Client, invited.User.Email, winner), LocalUserSeed.EnrollmentStep);
             Assert.Equal(HttpStatusCode.Unauthorized, (await LocalUserSeed.PostSessionAsync(Client, invited.User.Email, loser)).StatusCode);
         }
 

@@ -466,17 +466,36 @@ enquanto houver usuário. Para recomeçar, apague as linhas de `users`.
 
 O painel faz esse fluxo pelo `/entrar`. Para chamar o `apps/api` por `curl`, o
 mesmo fluxo, contra `http://localhost:5017`, termina com o access token em
-`$TOKEN`:
+`$TOKEN`. A verificação em 2 etapas é obrigatória (#220): a senha certa abre o
+segundo passo, e só ele completa a sessão. O código sai do segredo pelo relógio
+local, como num app autenticador:
 
 ```bash
+# O código de 6 dígitos do passo atual (RFC 6238, HMAC-SHA1, 30 s)
+codigo() { python3 -c "import base64,hmac,hashlib,struct,time,sys; k=base64.b32decode(sys.argv[1]); h=hmac.new(k,struct.pack('>Q',int(time.time())//30),hashlib.sha1).digest(); o=h[-1]&15; print('%06d'%((struct.unpack('>I',h[o:o+4])[0]&0x7fffffff)%1000000))" "$1"; }
+J='Content-Type: application/json'; O='Origin: http://localhost:5173'
+
 # PKCE: um verifier aleatório e o challenge S256 dele, em base64url
 VERIFIER=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')
 CHALLENGE=$(printf %s "$VERIFIER" | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '=')
 
-# 1. Sessão do emissor: só JSON, e o Origin precisa ser o do issuer ou o do painel
-curl -s -o /dev/null -w '%{http_code}\n' -c /tmp/buteco-cookie -X POST http://localhost:5017/auth/session \
-     -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' \
-     --data '{"email":"operador@buteco.local","senha":"changeme"}'          # 204
+# 1. Sessão do emissor: só JSON, e o Origin precisa ser o do issuer ou o do painel.
+#    Responde 200 {"segundoPasso":"cadastro"} no primeiro login, e {"segundoPasso":"totp"} nos seguintes.
+curl -s -c /tmp/buteco-cookie -X POST http://localhost:5017/auth/session -H "$J" -H "$O" \
+     --data '{"email":"operador@buteco.local","senha":"changeme"}'
+
+# 1a. Só no primeiro login ("cadastro"): o segredo, e a confirmação com um código dele, que
+#     devolve os 10 códigos de recuperação uma vez e completa a sessão. Guarde o $SEGREDO.
+SEGREDO=$(curl -s -b /tmp/buteco-cookie -c /tmp/buteco-cookie -X POST http://localhost:5017/auth/session/enrollment/setup \
+     -H "$J" -H "$O" --data '{}' | jq -r .segredo)
+curl -s -b /tmp/buteco-cookie -c /tmp/buteco-cookie -X POST http://localhost:5017/auth/session/enrollment/confirm \
+     -H "$J" -H "$O" --data "{\"codigo\":\"$(codigo $SEGREDO)\"}" | jq .
+
+# 1b. Nos logins seguintes ("totp"): o código do app, ou um de recuperação. O mesmo código não
+#     serve duas vezes: espere o próximo passo de 30 s.
+curl -s -o /dev/null -w '%{http_code}\n' -b /tmp/buteco-cookie -c /tmp/buteco-cookie \
+     -X POST http://localhost:5017/auth/session/second-factor -H "$J" -H "$O" \
+     --data "{\"codigo\":\"$(codigo $SEGREDO)\"}"                                   # 204
 
 # 2. Authorize: 302 para http://localhost:5173/entrar/retorno?code=...
 CODE=$(curl -s -o /dev/null -w '%{redirect_url}' -b /tmp/buteco-cookie \
@@ -489,7 +508,7 @@ TOKEN=$(curl -s -X POST http://localhost:5017/connect/token -d grant_type=author
      -d redirect_uri=http://localhost:5173/entrar/retorno -d code_verifier="$VERIFIER" | jq -r .access_token)
 ```
 
-O access token vale 15 minutos; depois, repita os três passos.
+O access token vale 15 minutos; depois, repita os passos (o 1b no lugar do 1a).
 
 O `redirect_uri` usa `Identity:PanelBaseUrl` (`http://localhost:5173`, o Vite).
 Cinco senhas erradas seguidas pausam o e-mail por 5 minutos, e isso vale também
@@ -497,59 +516,27 @@ em desenvolvimento.
 
 ### Verificação em 2 etapas em desenvolvimento
 
-Em desenvolvimento o cadastro do TOTP está **aberto**
-(`Identity:TwoFactor:EnrollmentEnabled` no `appsettings.Development.json`); em
-produção, fechado por padrão, e o dono o abre com `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED`
-([deployment.md](deployment.md#minha-conta-e-o-cadastro-das-2-etapas-246)).
+A verificação é **obrigatória** para todo usuário, em desenvolvimento como em produção
+(#220). No painel, o primeiro login de cada usuário abre o cadastro no próprio `/entrar`:
+o QR (ou o segredo para digitar), o código do app e os 10 códigos de recuperação, e só
+então a sessão. Os logins seguintes pedem o código do app ou um código de recuperação, no
+mesmo campo. Por `curl`, os passos 1a e 1b do fluxo acima.
 
-Desde a #246, o cadastro se faz em **Minha conta** (`/account`, pelo bloco do nome no
-rodapé da barra lateral): a senha, o QR (ou o segredo para digitar), o código do app e os
-10 códigos de recuperação. Na mesma tela ficam "Gerar novos códigos", "Remover
-verificação", a troca de senha e as sessões.
-
-O `/entrar` tem o passo do código desde a #245: depois da senha certa, o
-`POST /auth/session` responde `200 {"segundoPasso":"totp"}`, e o painel pede o código
-do app ou um código de recuperação, no mesmo campo. O cadastro também se faz pela API,
-como abaixo, para quem precisar dele sem o painel.
+Em Minha conta (`/account`) ficam a situação e "Gerar novos códigos". Não há "Remover
+verificação": quem troca de celular pede a outro usuário a redefinição, em Editar usuário.
 
 > **Perdeu o segredo e os códigos de recuperação?** Peça a outro usuário a redefinição
-> (`POST /users/{id}/two-factor/reset`). Sem outro usuário, apague o segredo direto no
-> banco local:
-> `UPDATE users SET two_factor_secret = NULL, two_factor_enabled_at = NULL, two_factor_last_step = NULL WHERE normalized_email = 'operador@buteco.local';`
+> (`POST /users/{id}/two-factor/reset`). Sem outro usuário, use o comando de emergência,
+> com o `apps/api` local:
+>
+> ```bash
+> cd apps/api/src/Buteco.Api && dotnet run -- two-factor-reset --email operador@buteco.local
+> ```
+>
+> Ele apaga a verificação, troca o carimbo de segurança e encerra as sessões, e o próximo
+> login cadastra de novo ([deployment.md](deployment.md#verificação-em-2-etapas-obrigatória-e-o-comando-de-emergência-220)).
 
-Com o `$TOKEN` do fluxo acima, o cadastro e o login em dois passos por `curl`. O
-código sai do segredo pelo relógio local, como num app autenticador:
-
-```bash
-# O código de 6 dígitos do passo atual (RFC 6238, HMAC-SHA1, 30 s)
-codigo() { python3 -c "import base64,hmac,hashlib,struct,time,sys; k=base64.b32decode(sys.argv[1]); h=hmac.new(k,struct.pack('>Q',int(time.time())//30),hashlib.sha1).digest(); o=h[-1]&15; print('%06d'%((struct.unpack('>I',h[o:o+4])[0]&0x7fffffff)%1000000))" "$1"; }
-
-# 1. Cadastro: a senha de novo, e o segredo volta uma vez (o QR sai do otpauthUri)
-SEGREDO=$(curl -s -X POST http://localhost:5017/account/two-factor/setup -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' --data '{"senha":"changeme"}' | jq -r .segredo)
-
-# 2. Confirmação com um código válido: liga a verificação e devolve os 10 códigos de recuperação, uma vez
-curl -s -X POST http://localhost:5017/account/two-factor/confirm -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' --data "{\"codigo\":\"$(codigo $SEGREDO)\"}" | jq .
-
-# 3. Login: a senha certa agora responde 200 {"segundoPasso":"totp"}, com o cookie pendente.
-#    O código da confirmação não serve: espere o próximo passo de 30 s.
-curl -s -c /tmp/buteco-cookie -X POST http://localhost:5017/auth/session \
-     -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' \
-     --data '{"email":"operador@buteco.local","senha":"changeme"}'
-curl -s -o /dev/null -w '%{http_code}\n' -b /tmp/buteco-cookie -c /tmp/buteco-cookie \
-     -X POST http://localhost:5017/auth/session/second-factor \
-     -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' \
-     --data "{\"codigo\":\"$(codigo $SEGREDO)\"}"                                   # 204
-# Daí em diante, os passos 2 e 3 do fluxo acima (authorize e troca do código), iguais.
-
-# Desfazer: remover com um código do app ou de recuperação
-curl -s -o /dev/null -w '%{http_code}\n' -X POST http://localhost:5017/account/two-factor/remove \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data "{\"codigo\":\"$(codigo $SEGREDO)\"}"   # 204
-```
-
-O mesmo código não serve duas vezes, e um código errado conta no mesmo bloqueio de
-5 falhas da senha.
+Um código errado conta no mesmo bloqueio de 5 falhas da senha, também no cadastro.
 
 ---
 

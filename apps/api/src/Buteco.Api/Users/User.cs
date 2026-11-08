@@ -205,11 +205,27 @@ public sealed class User
         DeactivatedAt = null;
     }
 
-    /// <summary>Um cadastro novo substitui o anterior, se houver (D8).</summary>
-    public void StartTwoFactorEnrollment(byte[] protectedSecret, DateTimeOffset now)
+    /// <summary>
+    /// Um cadastro novo substitui o anterior, se houver (D8). <paramref name="startedAt"/> é o início
+    /// do prazo: no login, o do primeiro <c>setup</c> do cookie, também nos seguintes (design.md da
+    /// change verificacao-2-etapas-obrigatoria, D2).
+    /// </summary>
+    public void StartTwoFactorEnrollment(byte[] protectedSecret, DateTimeOffset startedAt)
     {
         TwoFactorPendingSecret = protectedSecret;
-        TwoFactorPendingAt = now;
+        TwoFactorPendingAt = startedAt;
+    }
+
+    /// <summary>
+    /// O logout no meio do cadastro (design.md da change verificacao-2-etapas-obrigatoria, D3):
+    /// apaga o cadastro pendente e troca o stamp, para uma cópia do cookie pendente deixar de valer
+    /// no servidor. Quem não tem a verificação não tem sessão que a troca derrube.
+    /// </summary>
+    public void CancelTwoFactorEnrollment()
+    {
+        TwoFactorPendingSecret = null;
+        TwoFactorPendingAt = null;
+        SecurityStamp = NewSecurityStamp();
     }
 
     /// <summary>
@@ -226,8 +242,11 @@ public sealed class User
         TwoFactorPendingAt = null;
     }
 
-    /// <summary>A remoção pela própria pessoa, com um código (D8). Não troca o stamp.</summary>
-    public void RemoveTwoFactor()
+    /// <summary>
+    /// Apaga a verificação e o cadastro pendente. Só a redefinição a usa: a remoção pela própria
+    /// pessoa saiu com a obrigatoriedade (design.md da change verificacao-2-etapas-obrigatoria, D5).
+    /// </summary>
+    private void RemoveTwoFactor()
     {
         TwoFactorSecret = null;
         TwoFactorEnabledAt = null;
@@ -237,8 +256,8 @@ public sealed class User
     }
 
     /// <summary>
-    /// A redefinição pelo admin (D9): apaga como a remoção e troca o stamp, e o cookie em voo e
-    /// toda renovação de antes deixam de valer.
+    /// A redefinição pelo admin (D9) e pelo comando de emergência: apaga a verificação e troca o
+    /// stamp, e o cookie em voo e toda renovação de antes deixam de valer.
     /// </summary>
     public void ResetTwoFactor()
     {

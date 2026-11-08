@@ -97,7 +97,7 @@ export const ACCOUNT = {
   duasEtapas: false,
 };
 
-export const TWO_FACTOR_OFF = { ativa: false, ativadaEm: null, codigosRestantes: 0, cadastroDisponivel: true };
+export const TWO_FACTOR_OFF = { ativa: false, ativadaEm: null, codigosRestantes: 0 };
 
 export const SESSIONS = [
   { id: 's-1', criadaEm: '2026-11-06T12:02:00Z', ultimoUso: '2026-11-06T17:45:00Z', atual: true },

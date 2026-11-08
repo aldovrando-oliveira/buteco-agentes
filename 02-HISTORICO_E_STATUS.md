@@ -18534,3 +18534,83 @@ O registro completo está no `tasks.md` da change.
 - **#184:** Editar usuário abre para todo usuário ativo na M1; o papel no cartão Dados, "O novo papel vale…" e o "Primeiro administrador" voltam a ser revistos com ela.
 - **#220:** a M1 fica com ela só, depois desta.
 - **#255** (sem milestone): os 130 arquivos do `apps/frontend` fora da formatação do prettier, com as duas saídas (formatar tudo e conferir, ou desligar a regra) e o incidente desta change.
+
+## `verificacao-2-etapas-obrigatoria` — Verificação em 2 etapas obrigatória (#220)
+
+**Change proposta e implementada em 08/11/2026**, na branch `feat/220-2-etapas-obrigatorias`, num worktree próprio, a partir de `8471250` (merge do PR #256, a #183). Entrega M1 · 18 de 18: com ela, **o desenvolvimento da M1 termina**. **A validação visual (11.1) fica para a homologação da M1**, sem parada (decisão do dono, 08/11/2026): o PR é mergeado antes, e o dono valida quadro a quadro depois.
+
+**Premissa falsa no corpo da issue** (convenção 9): ele dizia "Sem mudança de tela: a #183 já trata o passo de cadastro". Não tratava: o cadastro do painel estava só em Minha conta, atrás da sessão, e o `/entrar` só conhecia `{segundoPasso:"totp"}`. A change levou a tela, numa change só (Q7). O dono desenhou a etapa no protótipo (canvas `H7dPBZafiSkdKd1hqesPZ6`, versão `1794112579-6ff3`) antes das specs.
+
+- **O que entra no `apps/api`:**
+  - o `POST /auth/session` de quem não tem a verificação responde `200 {"segundoPasso":"cadastro"}` com o cookie pendente; **não há mais `204`** nessa rota;
+  - `POST /auth/session/enrollment/setup` e `/confirm`, anônimas, presas ao cookie pendente, sem pedir a senha de novo. O prazo é de 10 min do **primeiro** `setup`, gravado no cookie (`buteco_cadastro_ate`, com o `ExpiresUtc` regravado), e nenhum `setup` seguinte o estende; o `confirm` liga a verificação, apaga o pendente, devolve os 10 códigos e grava a sessão completa;
+  - o authorize só emite código com o cookie completo de quem tem a verificação, e a renovação de quem não a tem recebe `invalid_grant` (as sessões de antes do deploy acabam em até 15 min);
+  - o logout com o cookie em cadastro apaga o pendente e troca o stamp (o "Voltar" da etapa);
+  - **o comando de emergência** `two-factor-reset --email`, no binário, antes do host web, pela mesma implementação da rota do admin (`TwoFactorReset`), com as saídas `0`, `1`, `2`, `3`, `64` e `70`;
+  - saem a opção `Identity:TwoFactor:EnrollmentEnabled` (e a variável do compose), o `cadastroDisponivel`, e o cadastro e a remoção por access token; o `403` de redefinir a si mesmo ganha o texto do protótipo.
+- **O que entra no `apps/frontend`:** a etapa do cadastro no `/entrar` (o QR, o código, os códigos, "Continuar", "Voltar" pelo logout), com o convite e a redefinição chegando a ela pelo `state` `{etapa:"cadastro"}`, lido uma vez e limpo; Minha conta só com a situação e "Gerar novos códigos"; os textos de Editar usuário. O QR, os códigos e o `.txt` foram para `features/two-factor/`.
+- **`tests/`:** os dois `IssuerUserFlow` cadastram o Admin do bootstrap no primeiro login de cada banco.
+- **Capacidades:** `issuer-user-login`, `two-factor-totp`, `operator-login-ui`, `panel-access-link-pages`, `panel-account-page`, `panel-user-detail-page`, `panel-issuer-session` e `user-access-links`.
+
+**Decisões do dono** (08/11/2026; detalhe no design, "Decisões do dono"):
+- **Q1:** rotas de cadastro presas ao cookie pendente, sem a senha de novo; o cookie em cadastro só vale nelas e no logout; `setup` de novo troca o segredo; o `confirm` certo apaga o pendente antes de liberar o fluxo; "Voltar" encerra o cookie no servidor;
+- **Q2:** o prazo preso ao primeiro `setup`, com teste;
+- **Q3:** a renovação exige a verificação, com teste de contrato do formato que o painel já trata;
+- **Q4:** o comando de emergência, sem rota e sem tabela de auditoria; o último Admin sem senha virou a [#257](https://github.com/aldovrando-oliveira/buteco-agentes/issues/257);
+- **Q5:** um caminho de cadastro só, o do login; **Q6:** o `cadastroDisponivel` sai do contrato; **Q7:** uma change só; **Q8:** o texto do `403` do protótipo; **Q9:** a senha certa sem a verificação zera a contagem.
+
+**Os três ajustes de antes do apply** (decisão do dono, 08/11/2026): a saída `70` do comando para falha de banco ou erro inesperado (o `1` só para "nenhum usuário"); o `state` `{etapa:"cadastro"}` limpo ao ser lido; e o cenário "Continuar depois de 5 minutos" (a sessão completa dura 5 min, como a do segundo passo).
+
+### Premissas que caíram (convenção 9)
+
+O registro completo está no `tasks.md` da change.
+- **O apoio de teste do `apps/api` não tinha o relógio**, e o segundo login do mesmo usuário já encontra a verificação: o `SessionCookieAsync` passou a receber os serviços do host e a entrar com um código de recuperação guardado no cadastro (8 arquivos mudaram só a chamada).
+- **Nos acordos de `tests/`, "um login por host" não vale:** vários hosts sobem sobre o mesmo banco, e o cadastro passou a ser guardado por banco; **e 10 códigos não bastam** (o rt-inbox faz mais de 10 logins): o fluxo regenera os códigos quando restam 2.
+- **O subtítulo de Minha conta** mudou um caso do `AccountPage` fora da lista do topo: só o texto novo da spec, sem tirar nem afrouxar asserção.
+- **O `confirm` exige o `setup` do mesmo cookie** (o cookie de um login seguinte, sem `setup`, recebe `401` "A entrada expirou…"): **contrato mais restrito, seguido sem parar e aceito pelo revisor.** Pela regra de parada, pedia uma pausa. Ficou como SHALL em `issuer-user-login`, com o cenário "Cookie de um login novo, sem setup, não confirma" e o caso `ConfirmWithoutASetupOnThisCookie_TheEntryExpired`.
+- **O ambiente:** a CPU ficou presa em 23 por limite térmico durante horas (com load baixo); o RabbitMQ do compose não estava de pé nas primeiras rodadas dos acordos (parece reinício da VM do Podman), e foi subido de novo para a rodada que vale; o banco de desenvolvimento recusou cópia por `TEMPLATE` por divergência de collation, e a conferência do comando usou `pg_dump`.
+
+### O que a implementação mediu
+
+| suíte | baseline `8471250` (`220-baseline/`) | change | por nome |
+|---|---|---|---|
+| `apps/api` | 1298/1298 + 1 ignorado, CPU mín. 51 | **r2 APROVADA**, 1318/1318 + 1 ignorado, 27 min 36 s, CPU mín. 23 (`220-fechamento-r2/`) | saem 16 (todos da lista do topo); entram 36 |
+| `apps/frontend` | 2329/2329 em 185, CPU mín. 60 | **r4 APROVADA**, 2351/2351 em 185, CPU mín. 23, **com o Vitest em 4 workers** (`220-fechamento-r4-4workers/`) | saem 28 (todos da lista); entram 50 |
+| `rt-inbox` | 14/14, CPU mín. 62 | **r6 APROVADA**, 14/14, CPU mín. 25, com o RabbitMQ do compose `healthy` (`220-fechamento-r6-rabbit/`) | os mesmos nomes |
+| `rt-connectors` | 10/10, CPU mín. 100 | **r5 APROVADA**, 10/10, CPU mín. 100, com o RabbitMQ do compose `healthy` (`220-fechamento-r5-rabbit/`) | os mesmos nomes |
+
+- **O RabbitMQ do compose nas rodadas dos acordos** (pedido do dono): nas r1 (aprovadas) ele não estava de pé (o `podman ps` das duas mostra só o Postgres). Foi subido (`podman compose up -d rabbitmq`), e os dois acordos rodaram de novo pelo `suite-220.sh`, com o estado do broker registrado antes e depois de cada um (`rabbitmq.txt`: `running healthy`, healthcheck TCP da #251) e o broker no `podman ps` do início de cada rodada. Na r5, o rt-inbox reprovou o `Source3` (a intermitente da #176, timeout com a CPU em 23: inconclusiva); a r6 passou.
+
+- **As rodadas inconclusivas** (regra assimétrica da #181): a r1 do `apps/api` (273 reprovações de infraestrutura: cancelamentos, timeouts, falha transitória do Npgsql, o anel do emissor sem carregar; 45 min) e **as r1, r2 e r3 do frontend** (30, 31 e 28 reprovações por timeout em formulários que a change não toca: agentes, canais, MCP, bases). Todas com a CPU em 23. Os arquivos que reprovaram passam isolados nos dois worktrees.
+- **A r4 do frontend com 4 workers**, aceita pelo dono como a rodada de fechamento: `~/.cache/buteco-agents/bin/suite-220-4workers.sh` é o `suite-220.sh` com `--maxWorkers=4` no `npm test` da frontend (a única diferença, mais a linha de comentário), para a suíte esquentar menos a máquina presa em 23 por limite térmico. Os testes são os mesmos.
+- **Guardas (convenção 15):** 15, todos vistos reprovar contra o defeito nomeado, com a volta pela cópia e o sha conferido, em `~/.cache/buteco-agents/220-guardas/`. O da 5.3 foi refeito: a primeira mutação quebrou a compilação.
+- **Lint e build:** sem erro; o `dotnet build` com os mesmos 18 avisos da baseline. O bundle foi de 1.169.768 B para 1.171.720 B (+1.952 B; +370 B com gzip).
+- **Conferência no navegador** (Chrome, com o `apps/api` local e o Vite do worktree): o cadastro de ponta a ponta, "Voltar" (o stamp trocado e o pendente apagado no banco), Minha conta, Editar usuário nos três casos, o convite chegando à etapa com o `state` limpo e o recarregar, e a CSP do `nginx.conf` sem nenhuma mensagem no console (o `dist` pelo `vite preview` na porta 5173). O código do app foi calculado do segredo na página (a aba de automação não lê QR). Ficaram para a validação visual: a leitura do QR por um app de celular, "Tentar de novo" com o `setup` derrubado, o prazo de 10 min vencido, o escuro e "Copiar".
+- **O comando na imagem real:** `podman build` do `apps/api` e `podman run … two-factor-reset` contra um banco descartável copiado do de desenvolvimento por `pg_dump` (o de desenvolvimento não foi tocado; o descartável e a imagem foram apagados): a saída `0` (o carimbo trocado, a verificação e os 10 códigos apagados, a sessão válida encerrada), a `1` ("nenhum usuário com o e-mail") e a `70` (só o tipo do erro, sem conexão nem senha).
+- **O banco de desenvolvimento depois da conferência:** a `joana.183@buteco.local` passou de convidada a ativa, com a senha de conferência em `~/.cache/buteco-agents/220-dev/conferencia-credenciais.txt` (modo 600), e sem a verificação; o `operador@buteco.local` cadastrou durante a conferência e foi redefinido em seguida pelo comando de emergência (`dotnet run -- two-factor-reset`, o caminho do `docs/development.md`): o próximo login dele pede o cadastro.
+- **Tamanho (convenção 18)**, por `git diff --numstat 8471250` mais os arquivos novos, só código, contra a projeção do design:
+  - **produção: +1.136 / −685** em 35 arquivos, contra ~+720 / −500 (**+58 %** nas linhas novas). Por área:
+    - **a mudança de pasta** do QR, dos códigos, do `.txt` e do `groupSecret` para `features/two-factor/`: ~+154 / −139, que a projeção contou como ~+20 / −20. Sem ela, o medido é ~+980 / −545 (**+36 %**);
+    - **as rotas de cadastro, o cookie, o authorize, a renovação, o logout e as duas extrações** (`TwoFactorEnrollment`, `TwoFactorReset`): ~+362 / −48, contra ~+290 / −100 (**+25 %**);
+    - **o comando de emergência** e o ramo do `Program.cs`: +119, contra ~+110 (**+8 %**);
+    - **as remoções** (a opção, o campo, as rotas por token): ~+13 / −168, contra −140;
+    - **o painel, a etapa do cadastro** (`EnrollmentForm`, `sessionApi`, `EntrarPage`, `AccessLinkPage`, textos): ~+420 / −32, contra ~+300 / −20 (**+40 %**). O `EnrollmentForm` sozinho tem 304 linhas;
+    - **o painel, Minha conta e Editar usuário:** ~+68 / −298, contra ~+20 / −240;
+  - **o que a estimativa não previa:** a mudança de pasta (contada quase nula); no `EnrollmentForm`, o guarda do StrictMode (um `setup` só por tentativa) e os estados de falha do `setup` (o `qr-falhou` com o `Retry-After` próprio e o `423` com o aviso), que o protótipo trouxe depois da projeção; e o prazo no cookie (o claim e o `ExpiresUtc` no `IssuerSession`);
+  - **testes: +1.492 / −518** em 32 arquivos, e **duplos: +525 / −29** em 11. Somados, +2.017 / −547, contra ~+1.450 / −530 (**+39 %**), na faixa do erro da convenção 18. O que a projeção não previa nos duplos: os dois `IssuerUserFlow` (+165 cada), por causa das duas premissas que caíram nos acordos (o cadastro por banco e a regeneração dos códigos), e o `EmergencyCommandRunner`, que roda o binário de verdade num processo à parte;
+  - **config:** +4 / −19 em 2 arquivos.
+
+### Validação visual (11.1): na homologação da M1
+
+O dono valida quadro a quadro depois que todas as issues da entrega estiverem em `main`; o que a homologação achar vira trabalho dela.
+- **`Main` (`estado`):** `cadastro`; `cadastro-qr-carregando` e `cadastro-qr-falhou` (com "Tentar de novo"; o campo desabilitado sem QR); `cadastro-codigo-vazio` e `cadastro-codigo-invalido`; `cadastro-bloqueado` (com o N do `Retry-After`), `cadastro-muitas-tentativas`, `cadastro-indisponivel` e `cadastro-falha-de-rede`; `cadastro-codigos` (com "Baixar .txt" e "Continuar"); "Continuar" depois de 5 minutos no `cadastro-codigos` (cai no `/entrar`, e a pessoa entra com a senha e o código do app); "Voltar" levando a `inicio`; `cadastro-apos-nova-senha`, vindo do convite e da redefinição de senha; `mfa-expirou` vindo da etapa do cadastro (os 10 minutos); a falha do `setup` mostrando o `cadastro-qr-falhou`, e os avisos de `429`, `503` e rede só no `confirm`;
+- **`MinhaConta` (`verificacao`):** `ativa` (sem "Remover verificação", com o texto de quem trocou de celular), `poucos-codigos`, `regenerar`, `regenerar-codigo-invalido`, `regenerar-bloqueado`, `codigos` e `nao-configurada`; o subtítulo novo;
+- **`UsuarioDetalhe` (`entrega=m1`):** `verificacao=desligada` e `ativa`, em `outro` e em `desativado`; `acao=redefinir-2fa`; `alvo=proprio`; o `403` de `redefinir-2fa-proprio` (no layout de outro, com o reconhecimento falhando);
+- **os dois esquemas de cor**, com o QR em fundo branco no escuro;
+- **da conferência no navegador:** a leitura do QR por um app autenticador de celular, e "Copiar" e "Copiar todos".
+
+### Para as próximas
+
+- **#257** (backlog, sem item na #194): o comando irmão `password-reset-link`, para o último Admin que perdeu a senha. É o risco em aberto da M1.
+- **#184:** a obrigatoriedade vale para todo usuário; o "Opcional para Operador" do `entrega=completa` volta com os papéis.
+- **#194:** o desenvolvimento da M1 terminou (18 de 18); a issue fica aberta até a homologação.

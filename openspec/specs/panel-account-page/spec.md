@@ -4,7 +4,7 @@
 Diz o que a página Minha conta (`/account`) do painel faz (#246): os dados da própria conta, a troca da própria senha seguida do logout, o cadastro, a regeneração e a remoção da verificação em 2 etapas (com o QR no navegador e o segredo e os códigos só na memória da tela), as sessões da própria conta, e como o bloqueio e as falhas passageiras aparecem em cada cartão.
 ## Requirements
 ### Requirement: Página Minha conta em /account
-`apps/frontend` SHALL prover a página `/account`, dentro da casca e da exigência de sessão, como as outras rotas autenticadas. Ela SHALL ter o título "Minha conta", o subtítulo "Os seus dados, a sua senha, a verificação em 2 etapas e os navegadores em que você está conectado." e, nesta ordem, os cartões "Dados", "Senha", "Verificação em 2 etapas" e "Sessões" do quadro `MinhaConta` (`entrega=m1`).
+`apps/frontend` SHALL prover a página `/account`, dentro da casca e da exigência de sessão, como as outras rotas autenticadas. Ela SHALL ter o título "Minha conta", o subtítulo "Os seus dados, a sua senha, os códigos de recuperação e os navegadores em que você está conectado." e, nesta ordem, os cartões "Dados", "Senha", "Verificação em 2 etapas" e "Sessões" do quadro `MinhaConta` (`entrega=m1`).
 - A entrada para a página SHALL ser o link do rodapé (`frontend-app-shell`). Nenhum item de menu SHALL levar a ela.
 - Cada cartão SHALL carregar os próprios dados, e SHALL mostrar um indicador de carregamento enquanto espera.
 - Um erro no `GET` de um cartão SHALL mostrar dentro dele um aviso com o texto do erro (D8 do design) e o botão "Tentar de novo", sem afetar os outros cartões.
@@ -15,7 +15,7 @@ Diz o que a página Minha conta (`/account`) do painel faz (#246): os dados da p
 
 #### Scenario: Os quatro cartões, na ordem
 - **WHEN** a pessoa abre `/account` com a sessão válida
-- **THEN** a página mostra "Minha conta", o subtítulo e os cartões "Dados", "Senha", "Verificação em 2 etapas" e "Sessões", nesta ordem
+- **THEN** a página mostra "Minha conta", o subtítulo "Os seus dados, a sua senha, os códigos de recuperação e os navegadores em que você está conectado." e os cartões "Dados", "Senha", "Verificação em 2 etapas" e "Sessões", nesta ordem
 
 #### Scenario: Erro num cartão não derruba os outros
 - **WHEN** `GET /account/sessions` falha por rede, e as outras leituras respondem `200`
@@ -79,95 +79,25 @@ O cartão "Senha" SHALL começar fechado, com "Você entra com `<e-mail>` e a su
 - **THEN** o cartão volta ao estado fechado, e reabrir o formulário mostra os campos vazios
 
 ### Requirement: Estado da verificação em 2 etapas
-O cartão "Verificação em 2 etapas" SHALL vir do `GET /account/two-factor` (`{ ativa, ativadaEm, codigosRestantes, cadastroDisponivel }`):
-- **`ativa: false` e `cadastroDisponivel: false`** (`indisponivel`): o selo "Não configurada", o texto "O cadastro da verificação em 2 etapas ainda não está disponível neste painel." e "Ligar verificação" **desabilitado**;
-- **`ativa: false` e `cadastroDisponivel: true`** (`desligada`): o selo "Não configurada", o texto "Com a verificação ligada, além da senha você informa um código do app autenticador do celular." e "Ligar verificação" habilitado;
-- **`ativa: true`** (`ativa`), com qualquer valor de `cadastroDisponivel`: o selo "Ativa", "desde `<ativadaEm>`" (`dd/mm/aaaa`), "N códigos de recuperação restantes.", "Gerar novos códigos" e "Remover verificação";
+O cartão "Verificação em 2 etapas" SHALL vir do `GET /account/two-factor` (`{ ativa, ativadaEm, codigosRestantes }`):
+- **`ativa: false`** (`nao-configurada`): o selo "Não configurada" e o texto "Este painel passou a exigir a verificação em 2 etapas. Na próxima vez que você entrar, o login pede o cadastro do app autenticador.", sem botão. É o intervalo em que o access token de uma sessão de antes da obrigatoriedade ainda vale;
+- **`ativa: true`** (`ativa`): o selo "Ativa", "desde `<ativadaEm>`" (`dd/mm/aaaa`), "N códigos de recuperação restantes.", "Gerar novos códigos" e o texto "Trocou de celular ou perdeu o app? Peça a outro usuário do painel que redefina a sua verificação; no próximo login você cadastra o app de novo.". O cartão SHALL NOT ter "Remover verificação";
 - **com `ativa: true` e `codigosRestantes` de 1 a 3** (`poucos-codigos`): também o aviso "Restam N códigos de recuperação. Gere novos para não ficar sem acesso se perder o celular.". Com 1, o texto SHALL ser "Resta 1 código de recuperação. Gere novos para não ficar sem acesso se perder o celular.";
 - **com `ativa: true` e `codigosRestantes` 0**: o aviso "Não restam códigos de recuperação. Gere novos para não ficar sem acesso se perder o celular.".
 
 Com 4 códigos ou mais, nenhum desses avisos SHALL aparecer.
 
-#### Scenario: Cadastro fechado
-- **WHEN** `GET /account/two-factor` responde `{ ativa: false, cadastroDisponivel: false }`
-- **THEN** o cartão mostra "Não configurada" e o texto de cadastro indisponível, e "Ligar verificação" está desabilitado
+#### Scenario: Sem a verificação, o cartão não oferece cadastro
+- **WHEN** `GET /account/two-factor` responde `{ ativa: false, ativadaEm: null, codigosRestantes: 0 }`
+- **THEN** o cartão mostra "Não configurada" e "Este painel passou a exigir a verificação em 2 etapas. Na próxima vez que você entrar, o login pede o cadastro do app autenticador.", sem nenhum botão
 
-#### Scenario: Cadastro aberto, verificação desligada
-- **WHEN** `GET /account/two-factor` responde `{ ativa: false, cadastroDisponivel: true }`
-- **THEN** "Ligar verificação" está habilitado
-
-#### Scenario: Ativa com o cadastro fechado continua gerenciável
-- **WHEN** `GET /account/two-factor` responde `{ ativa: true, codigosRestantes: 8, cadastroDisponivel: false }`
-- **THEN** o cartão mostra "Ativa", "8 códigos de recuperação restantes.", "Gerar novos códigos" e "Remover verificação", habilitados
+#### Scenario: Ativa, sem remover
+- **WHEN** `GET /account/two-factor` responde `{ ativa: true, codigosRestantes: 8 }`
+- **THEN** o cartão mostra "Ativa", "8 códigos de recuperação restantes.", "Gerar novos códigos" habilitado e o texto "Trocou de celular ou perdeu o app?…", e não há "Remover verificação"
 
 #### Scenario: Poucos códigos
 - **WHEN** `codigosRestantes` é 3, 2, 1 ou 0
 - **THEN** aparece o aviso com o texto do número (plural, singular para 1, o texto próprio para 0); com 4 ou mais, nenhum aviso
-
-### Requirement: Ligar a verificação em 2 etapas
-"Ligar verificação" SHALL levar ao passo da senha:
-- o título "Ligar a verificação em 2 etapas" e o texto sobre o app autenticador;
-- "Sua senha" (`PasswordField`, com a ajuda "Para começar, confirme que é você.");
-- "Continuar" e "Cancelar".
-
-**`POST /account/two-factor/setup` com `{ senha }`:**
-- `200 { segredo, otpauthUri }`: o passo do QR;
-- `401`: "Senha inválida." no campo;
-- `423`: o aviso de bloqueio.
-
-**O passo do QR:**
-- o passo 1: o QR e o segredo (requisito "QR e segredo");
-- o passo 2: o campo "Digite o código de 6 dígitos que o app mostra" (`inputmode="numeric"`, `autocomplete="one-time-code"`, placeholder `000 000`), a ajuda "Este cadastro vale por 10 minutos. Depois disso, comece de novo.", "Confirmar" e "Cancelar".
-
-**`POST /account/two-factor/confirm` com `{ codigo }`:**
-- `200 { codigosRecuperacao }`: o passo dos códigos, com o título "Verificação ligada.";
-- `401`: "Código inválido. Confira se o relógio do celular está certo." no campo, com `aria-invalid="true"`. É o texto do quadro, e não o do servidor;
-- `400`: o aviso "O cadastro venceu. Comece de novo para gerar outro QR.". É o texto do quadro, e não o do servidor;
-- `423`: o aviso de bloqueio.
-
-"Cancelar", em qualquer passo, SHALL voltar ao estado do `GET`. "Concluir", no passo dos códigos, SHALL reler o `GET` e mostrar o estado `ativa`.
-
-#### Scenario: Senha errada no início do cadastro
-- **WHEN** `POST /account/two-factor/setup` responde `401` "Senha inválida."
-- **THEN** "Senha inválida." aparece no campo "Sua senha", sem deslogar
-
-#### Scenario: Código errado no QR
-- **WHEN** `POST /account/two-factor/confirm` responde `401`
-- **THEN** "Código inválido. Confira se o relógio do celular está certo." aparece no campo do código, com `aria-invalid="true"`
-
-#### Scenario: Cadastro vencido
-- **WHEN** `POST /account/two-factor/confirm` responde `400`
-- **THEN** o aviso "O cadastro venceu. Comece de novo para gerar outro QR." aparece no passo do QR
-
-#### Scenario: Cadastro de ponta a ponta
-- **WHEN** a senha é aceita, o código é aceito, e a pessoa aciona "Concluir"
-- **THEN** o cartão mostra os 10 códigos com "Verificação ligada.", e depois de "Concluir" mostra "Ativa"
-
-### Requirement: QR e segredo do cadastro
-O QR SHALL ser desenhado no navegador pelo `QRCodeSVG` do `qrcode.react` 4.2.0, a partir do `otpauthUri` tal como veio da API:
-- 164 px;
-- `role="img"` e o nome acessível "QR para o app autenticador";
-- módulos escuros sobre fundo branco, com margem, também no tema escuro;
-- **sem `imageSettings`**: o SVG SHALL NOT conter `<image>`, `<foreignObject>` nem `<script>`;
-- nenhum HTML vindo de dado entra por `innerHTML` (`panel-issuer-session`).
-
-Ao lado do QR, SHALL aparecer:
-- "Escaneie o QR com o app autenticador";
-- "Ele aparece no app como **Buteco Agentes**, com o seu e-mail.";
-- "Sem câmera? Digite este código no app:";
-- o segredo em grupos de 4 caracteres separados por espaço, com "Copiar". "Copiar" SHALL copiar o segredo **sem os espaços**, como veio da API.
-
-#### Scenario: O QR traz o otpauthUri
-- **WHEN** `setup` responde `{ segredo: "JBSWY3DPEHPK3PXP", otpauthUri: "otpauth://totp/…" }`
-- **THEN** o QR renderizado tem o nome acessível "QR para o app autenticador", e é o do `otpauthUri`
-
-#### Scenario: O QR não traz imagem nem script
-- **WHEN** o QR é renderizado
-- **THEN** o SVG não contém `<image>`, `<foreignObject>` nem `<script>`
-
-#### Scenario: Copiar copia sem espaços
-- **WHEN** o segredo aparece como "JBSW Y3DP EHPK 3PXP", e a pessoa aciona "Copiar"
-- **THEN** a área de transferência recebe "JBSWY3DPEHPK3PXP"
 
 ### Requirement: Códigos de recuperação mostrados uma vez
 O passo dos códigos SHALL mostrar:
@@ -192,54 +122,21 @@ O passo dos códigos SHALL mostrar:
 - **THEN** um arquivo `buteco-agentes-codigos-de-recuperacao.txt` é baixado com o cabeçalho e os 10 códigos, nenhum pedido sai ao servidor, e a URL do blob é liberada
 
 ### Requirement: Segredo e códigos só na memória da tela
-O `segredo`, o `otpauthUri` e os códigos de recuperação SHALL ficar só no estado do componente do cartão:
-- SHALL NOT ir para o `sessionStorage`, o `localStorage`, a URL, o `state` do router nem o cache do TanStack Query. As chamadas que os trazem ou os consomem (`setup`, `confirm`, `recovery-codes`, `remove`) SHALL NOT passar pelo `useMutation`: o `MutationCache` e o observador da mutação guardariam o resultado enquanto o cartão estivesse montado, e depois até o `gcTime`;
-- SHALL sair ao deixar o passo (cancelar, confirmar, concluir) e ao sair da página.
+Os códigos de recuperação gerados em Minha conta SHALL ficar só no estado do componente do cartão:
+- SHALL NOT ir para o `sessionStorage`, o `localStorage`, a URL, o `state` do router nem o cache do TanStack Query. A chamada que os traz (`recovery-codes`) SHALL NOT passar pelo `useMutation`: o `MutationCache` e o observador da mutação guardariam o resultado enquanto o cartão estivesse montado, e depois até o `gcTime`;
+- SHALL sair ao deixar o passo (cancelar, concluir) e ao sair da página.
 
 #### Scenario: Nada no storage
-- **WHEN** o cartão está no passo do QR ou no dos códigos
-- **THEN** nem o `sessionStorage` nem o `localStorage` contêm o segredo ou algum código
+- **WHEN** o cartão está no passo dos códigos
+- **THEN** nem o `sessionStorage` nem o `localStorage` contêm algum código
 
 #### Scenario: Nada no cache depois de sair
-- **WHEN** a pessoa vê os códigos e sai de `/account`
-- **THEN** o `MutationCache` e o `QueryCache` não contêm o segredo nem nenhum dos códigos
+- **WHEN** a pessoa vê os códigos novos e sai de `/account`
+- **THEN** o `MutationCache` e o `QueryCache` não contêm nenhum dos códigos
 
 #### Scenario: Voltar à página não mostra os códigos
 - **WHEN** a pessoa vê os códigos, sai de `/account` sem "Concluir" e volta
 - **THEN** o cartão mostra o estado do `GET` (`ativa`), e não os códigos
-
-### Requirement: Gerar novos códigos e remover a verificação
-"Gerar novos códigos" SHALL abrir:
-- o título "Gerar novos códigos de recuperação" e o texto "Os códigos atuais deixam de valer.";
-- o campo "Código do app ou de recuperação" (`inputmode="text"`, `autocomplete="one-time-code"`, com `trim` só nas pontas);
-- "Gerar códigos" e "Cancelar".
-
-**`POST /account/two-factor/recovery-codes` com `{ codigo }`:**
-- `200`: o passo dos códigos, com o título "Novos códigos gerados.";
-- `401`: "Código inválido." no campo;
-- `423`: o aviso de bloqueio.
-
-"Remover verificação" SHALL abrir:
-- o título "Remover a verificação em 2 etapas" e o texto "Depois disso, só a senha protege a sua conta, e os códigos de recuperação deixam de valer.";
-- o mesmo campo;
-- "Remover verificação" (ação de perigo) e "Cancelar".
-
-**`POST /account/two-factor/remove` com `{ codigo }`:**
-- `204`: relê o `GET`;
-- `401`: "Código inválido." no campo;
-- `423`: o aviso de bloqueio.
-
-#### Scenario: Novos códigos
-- **WHEN** `recovery-codes` responde `200` com 10 códigos
-- **THEN** o cartão mostra "Novos códigos gerados." e os 10 códigos
-
-#### Scenario: Código errado ao remover
-- **WHEN** `remove` responde `401` "Código inválido."
-- **THEN** "Código inválido." aparece no campo, a verificação continua ligada, e a sessão continua
-
-#### Scenario: Remover desliga
-- **WHEN** `remove` responde `204`, e o `GET` seguinte traz `ativa: false`
-- **THEN** o cartão mostra "Não configurada"
 
 ### Requirement: Sessões da própria conta
 O cartão "Sessões" SHALL vir do `GET /account/sessions`, na ordem do servidor, numa tabela com "Sessão", "Começou em", "Último uso" e "Ações":
@@ -302,8 +199,8 @@ O cartão "Sessões" SHALL vir do `GET /account/sessions`, na ordem do servidor,
 - `429`: "Muitas tentativas ao mesmo tempo. Tente de novo em instantes.";
 - `503`: "O painel está iniciando. Tente de novo em alguns segundos.";
 - falha de rede: "Não foi possível falar com o servidor.";
-- `500`, em "Gerar novos códigos" ou em "Remover verificação": o `title` do servidor ("Não foi possível conferir o código do app autenticador…");
-- `409` ou `403` nas rotas das 2 etapas: o cartão SHALL reler o `GET` e ir ao estado que ele indicar.
+- `500`, em "Gerar novos códigos": o `title` do servidor ("Não foi possível conferir o código do app autenticador…");
+- `409` ou `403` em "Gerar novos códigos": o cartão SHALL reler o `GET` e ir ao estado que ele indicar.
 
 Em todas essas falhas, o que a pessoa digitou SHALL continuar nos campos, e a sessão SHALL continuar.
 
@@ -311,13 +208,13 @@ Em todas essas falhas, o que a pessoa digitou SHALL continuar nos campos, e a se
 - **WHEN** `POST /account/password` responde `423` com `Retry-After: 300`
 - **THEN** aparece "Muitas tentativas sem sucesso. Por segurança, a sua conta fica pausada por 5 minutos.", e "Trocar senha" fica desabilitado até passar o tempo
 
-#### Scenario: Servidor indisponível no cadastro
-- **WHEN** `POST /account/two-factor/setup` responde `503` com `Retry-After: 10`
-- **THEN** o aviso "O painel está iniciando. Tente de novo em alguns segundos." aparece no cartão, e "Continuar" fica desabilitado por 10 segundos
+#### Scenario: Servidor indisponível ao gerar códigos
+- **WHEN** `POST /account/two-factor/recovery-codes` responde `503` com `Retry-After: 10`
+- **THEN** o aviso "O painel está iniciando. Tente de novo em alguns segundos." aparece no cartão, e "Gerar códigos" fica desabilitado por 10 segundos
 
-#### Scenario: Cadastro fechado no meio do caminho
-- **WHEN** `POST /account/two-factor/setup` responde `403`, e o `GET` seguinte traz `cadastroDisponivel: false`
-- **THEN** o cartão mostra o estado de cadastro indisponível
+#### Scenario: Verificação redefinida no meio do caminho
+- **WHEN** `POST /account/two-factor/recovery-codes` responde `409`, e o `GET` seguinte traz `ativa: false`
+- **THEN** o cartão mostra o estado `nao-configurada`
 
 #### Scenario: Chave do TOTP trocada ao gerar códigos
 - **WHEN** `recovery-codes` responde `500` com o `title` "Não foi possível conferir o código do app autenticador. Use um código de recuperação ou fale com o administrador."
@@ -338,4 +235,23 @@ Em todas essas falhas, o que a pessoa digitou SHALL continuar nos campos, e a se
 #### Scenario: Virada do dia pelo fuso
 - **WHEN** o agora é 06/11/2026 01:00 em `America/Sao_Paulo`, e a data é 05/11/2026 23:30 no mesmo fuso (06/11 02:30 UTC)
 - **THEN** o formatador devolve "ontem, 23:30"
+
+### Requirement: Gerar novos códigos de recuperação
+"Gerar novos códigos" SHALL abrir:
+- o título "Gerar novos códigos de recuperação" e o texto "Os códigos atuais deixam de valer.";
+- o campo "Código do app ou de recuperação" (`inputmode="text"`, `autocomplete="one-time-code"`, com `trim` só nas pontas);
+- "Gerar códigos" e "Cancelar".
+
+**`POST /account/two-factor/recovery-codes` com `{ codigo }`:**
+- `200`: o passo dos códigos, com o título "Novos códigos gerados.";
+- `401`: "Código inválido." no campo;
+- `423`: o aviso de bloqueio.
+
+#### Scenario: Novos códigos
+- **WHEN** `recovery-codes` responde `200` com 10 códigos
+- **THEN** o cartão mostra "Novos códigos gerados." e os 10 códigos
+
+#### Scenario: Código errado ao gerar
+- **WHEN** `recovery-codes` responde `401` "Código inválido."
+- **THEN** "Código inválido." aparece no campo, e a sessão continua
 

@@ -1078,12 +1078,16 @@ painel                     nginx                apps/api
   │ ◀──────────────── 302 /entrar?retorno=/connect/authorize?… (caminho relativo)
   │  tela /entrar (SPA): POST /auth/session {email, senha}, só JSON, Origin conferida
   │ ───────────────────────────────────────────▶ bloqueio, Argon2id, estado
-  │ ◀──────────────── 204 Set-Cookie buteco-sessao (HttpOnly, Strict, 5 min)
+  │ ◀──────────────── 200 {segundoPasso} Set-Cookie buteco-sessao pendente (HttpOnly, Strict, 5 min)
+  │  "totp": POST /auth/session/second-factor {codigo}
+  │  "cadastro" (sem a verificação, #220): POST /auth/session/enrollment/setup → QR;
+  │            POST /auth/session/enrollment/confirm {codigo} → 10 códigos de recuperação
+  │ ◀──────────────── Set-Cookie buteco-sessao completa (5 min)
   │  segue o retorno (só se começar por /connect/authorize?)
-  │ ───────────────────────────────────────────▶ cookie + usuário ativo + stamp igual
+  │ ───────────────────────────────────────────▶ cookie completo + ativo + stamp igual + 2 etapas
   │ ◀──────────────── 302 {painel}/entrar/retorno?code=…
   │  POST /connect/token (code + code_verifier)
-  │ ───────────────────────────────────────────▶ relê o usuário: ativo e stamp igual
+  │ ───────────────────────────────────────────▶ relê o usuário: ativo, stamp igual e 2 etapas
   │ ◀──────────────── access (15 min, aud dos três apps) + refresh (14 d) + id token
 ```
 
@@ -1169,7 +1173,7 @@ admin (painel)                    apps/api                            convidado 
   │                              UPDATE users SET senha, active, link = NULL
   │                              WHERE hash AND propósito AND não vencido AND invited
   │                              ────▶ 204 (sem sessão)
-  │                              ◀──── POST /auth/session {email, senha}  (o login de sempre)
+  │                              ◀──── POST /auth/session {email, senha}  (o login de sempre: o convidado cadastra as 2 etapas)
 ```
 
 - **Administrativas**, para o usuário real do token (`CurrentUser`; operador sem

@@ -53,16 +53,19 @@ export function blocksUntilRetry(result: EntryFailure): boolean {
 }
 
 /**
- * O `state` do router com que as páginas do link abrem o /entrar: já no passo do código,
- * ou com o e-mail e a recusa do login (spec `panel-access-link-pages`). A senha nunca vai aqui.
+ * O `state` do router com que as páginas do link abrem o /entrar: já no passo do código, já na
+ * etapa do cadastro (change verificacao-2-etapas-obrigatoria, D7), ou com o e-mail e a recusa do
+ * login (spec `panel-access-link-pages`). A senha nunca vai aqui.
  */
 export type EntrarRouteState =
   | { etapa: 'codigo' }
+  | { etapa: 'cadastro' }
   | { email: string; falha: EntryFailure };
 
 export function readEntrarState(value: unknown): EntrarRouteState | null {
   const state = value as Partial<{ etapa: unknown; email: unknown; falha: unknown }> | null;
   if (state?.etapa === 'codigo') return { etapa: 'codigo' };
+  if (state?.etapa === 'cadastro') return { etapa: 'cadastro' };
   const falha = state?.falha as EntryFailure | undefined;
   if (typeof state?.email === 'string' && (falha?.kind === 'network' || falha?.kind === 'http')) {
     return { email: state.email, falha };

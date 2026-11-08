@@ -56,7 +56,7 @@ public class IssuerTokenAcceptanceTests(IssuerTokenAcceptanceTests.Fixture facto
         var email = LocalUserSeed.UniqueEmail("aceita");
         await LocalUserSeed.CreateUserAsync(factory.Services, email, Password);
         var client = Anonymous();
-        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, email, Password);
+        var cookie = await IdentityIssuerUserFlow.SessionCookieAsync(client, factory.Services, email, Password);
         var pkce = IdentityIssuerUserFlow.Pkce.Create();
         var authorize = await IdentityIssuerUserFlow.AuthorizeAsync(client, IdentityIssuerUserFlow.AuthorizeUrl(pkce, scope), cookie);
         return (await IdentityIssuerUserFlow.ReadTokensAsync(

@@ -37,6 +37,14 @@ using Buteco.Api.Users.TwoFactor;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 
+// O comando de emergência das 2 etapas (design.md da change verificacao-2-etapas-obrigatoria, D6),
+// antes de montar o host web: com ele, o processo não sobe Kestrel, rotas nem serviços em segundo
+// plano, roda a redefinição e sai. O processo web em execução nunca lê argumentos de requisição.
+if (TwoFactorEmergencyCommand.Matches(args))
+{
+    return await TwoFactorEmergencyCommand.RunAsync(args);
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHealthChecks();
@@ -265,5 +273,6 @@ app.ValidateServiceScopeRoutes(ServiceScopeAuthorizationHandler.ServiceRoutes);
 app.ValidateIdentityIssuerEndpoints();
 
 app.Run();
+return 0;
 
 public partial class Program;

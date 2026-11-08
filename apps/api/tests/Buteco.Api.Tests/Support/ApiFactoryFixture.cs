@@ -142,6 +142,12 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
     private volatile bool _migrated;
 
     /// <summary>
+    /// A conexão do Postgres do contêiner, para um processo à parte, como o comando de emergência
+    /// das 2 etapas rodado pelo binário (change verificacao-2-etapas-obrigatoria, D6).
+    /// </summary>
+    public string PostgresConnectionString => _postgres.GetConnectionString();
+
+    /// <summary>
     /// <c>false</c> deixa o banco sem migrar depois de subir o host: é o estado em que o
     /// anel de chaves do emissor não carrega (design.md da change emissor-oidc-api, D6).
     /// Quem desliga migra depois, com <see cref="MigrateAsync"/>.

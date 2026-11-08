@@ -37,6 +37,7 @@ public class IssuerTokenRoundTripTests(RoundTripFixture fixture) : IClassFixture
     {
         var (api, connectors) = fixture.Build();
         var connectorsToken = await IssuerUserFlow.AccessTokenAsync(
+            RoundTripFixture.IssuerDatabaseOf(api),
             api.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false }),
             () => RoundTripFixture.WarmUpIssuerAsync(api),
             RoundTripFixture.ApiPublicBaseUrl,

@@ -119,13 +119,9 @@ services:
       # o api não sobe. Perdê-la torna as chaves gravadas ilegíveis (docs/deployment.md).
       Identity__SigningKeyEncryptionKey: ${IDENTITY_SIGNING_KEY_ENCRYPTION_KEY:?defina IDENTITY_SIGNING_KEY_ENCRYPTION_KEY — use --env-file .env.prod}
       # Cifra em repouso do segredo do TOTP de cada usuário (#218). Só no apps/api, distinta
-      # das duas acima: o boot recusa chave igual. Obrigatória mesmo com o cadastro das 2
-      # etapas fechado. Trocá-la torna os segredos ilegíveis (docs/deployment.md).
+      # das duas acima: o boot recusa chave igual. A verificação é obrigatória para todo
+      # usuário (#220). Trocá-la torna os segredos ilegíveis (docs/deployment.md).
       Identity__TwoFactorEncryptionKey: ${IDENTITY_TWO_FACTOR_ENCRYPTION_KEY:?defina IDENTITY_TWO_FACTOR_ENCRYPTION_KEY (openssl rand -base64 32, distinta das outras chaves) — use --env-file .env.prod}
-      # O cadastro da verificação em 2 etapas, em Minha conta (#246): falso por padrão. O
-      # painel tem a tela do código (#245) e a do cadastro (#246); o dono abre com
-      # IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED=true no .env.prod. A #220 remove a opção.
-      Identity__TwoFactor__EnrollmentEnabled: ${IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED:-false}
       # Segredos dos clientes de serviço do emissor (#234), um por serviço, distintos entre
       # si e das três chaves de cifra acima: o boot recusa valor igual. O catálogo grava só
       # o hash. O inbox e o connectors recebem o deles na #235.

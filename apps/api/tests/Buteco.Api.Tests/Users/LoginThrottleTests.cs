@@ -92,9 +92,9 @@ public class LoginThrottleTests(LocalUsersFixture factory) : IClassFixture<Local
         await LocalUserSeed.CreateUserAsync(factory.Services, email, Password);
 
         await FailAsync(email, 4);
-        Assert.Equal(HttpStatusCode.NoContent, (await LocalUserSeed.PostSessionAsync(Client(), email, Password)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LocalUserSeed.PostSessionAsync(Client(), email, Password), LocalUserSeed.EnrollmentStep);
         await FailAsync(email, 4);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await LocalUserSeed.PostSessionAsync(Client(), email, Password)).StatusCode);
+        await LocalUserSeed.AssertPasswordAcceptedAsync(LocalUserSeed.PostSessionAsync(Client(), email, Password), LocalUserSeed.EnrollmentStep);
     }
 }

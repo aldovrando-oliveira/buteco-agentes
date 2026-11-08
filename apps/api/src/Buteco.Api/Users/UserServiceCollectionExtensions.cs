@@ -19,9 +19,10 @@ public static class UserServiceCollectionExtensions
         services.AddLoginRateLimiting();
 
         // As 2 etapas (design.md da change verificacao-2-etapas-totp).
-        services.Configure<TwoFactorOptions>(configuration.GetSection(TwoFactorOptions.SectionName));
         services.AddSingleton<TwoFactorSecretCipher>();
         services.AddScoped<TwoFactorVerifier>();
+        services.AddScoped<TwoFactorEnrollment>();
+        services.AddScoped<TwoFactorReset>();
 
         // As sessões sobre as tabelas do OpenIddict (design.md da change rotas-conta-usuarios, D2 e D4).
         services.AddScoped<UserSessions>();

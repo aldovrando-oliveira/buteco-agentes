@@ -90,6 +90,11 @@ function renderAt(page: LinkPage, fragment?: string, { strict = false } = {}) {
 
 const ok = (body: unknown = LINK) => jsonResponse(body, 200);
 const noContent = () => new Response(null, { status: 204 });
+// O login depois da senha criada: o convidado (e quem teve a verificação redefinida) cadastra o
+// app autenticador no /entrar (change verificacao-2-etapas-obrigatoria, D7). O setup fica sem
+// resposta: o caso só precisa da etapa aberta.
+const enrollmentStep = () => jsonResponse({ segundoPasso: 'cadastro' }, 200);
+const pendingSetup = () => new Promise<Response>(() => {});
 const notFound = () =>
   jsonResponse(
     { title: 'Este link não vale mais. Se você já criou a senha, entre normalmente; se não, peça um novo link ao administrador.' },
@@ -152,17 +157,26 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
       const calls = respondByPath({
         [ROUTES[page].lookup]: [ok()],
         [ROUTES[page].complete]: [noContent()],
-        '/auth/session': [noContent()],
+        '/auth/session': [enrollmentStep()],
+        '/auth/session/enrollment/setup': [pendingSetup],
       });
       const user = userEvent.setup();
       renderAt(page, 'k7Qp2vX9');
 
       await fillAndSubmit(user, page);
 
-      await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
-      expect(calls.map((c) => c.url)).toEqual([ROUTES[page].lookup, ROUTES[page].complete, '/auth/session']);
+      await screen.findByText('Cadastre a verificação em 2 etapas');
+      await waitFor(() => expect(calls).toHaveLength(4));
+      expect(calls.map((c) => c.url)).toEqual([
+        ROUTES[page].lookup,
+        ROUTES[page].complete,
+        '/auth/session',
+        '/auth/session/enrollment/setup',
+      ]);
       for (const call of calls) expect(call.url).not.toContain('k7Qp2vX9');
-      expect(assign.mock.calls[0][0]).not.toContain('k7Qp2vX9');
+      for (const call of calls) expect(call.href).not.toContain('k7Qp2vX9');
+      expect(JSON.stringify(entrarStates)).not.toContain('k7Qp2vX9');
+      expect(assign).not.toHaveBeenCalled();
     });
 
     it('recarregar reaproveita o token guardado', async () => {
@@ -189,14 +203,15 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
       respondByPath({
         [ROUTES[page].lookup]: [ok()],
         [ROUTES[page].complete]: [noContent()],
-        '/auth/session': [noContent()],
+        '/auth/session': [enrollmentStep()],
+        '/auth/session/enrollment/setup': [pendingSetup],
       });
       const user = userEvent.setup();
       renderAt(page, 'k7Qp2vX9');
 
       await fillAndSubmit(user, page);
 
-      await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+      await screen.findByText('Cadastre a verificação em 2 etapas');
       expect(sessionStorage.getItem(LINK_TOKEN_KEYS[page])).toBeNull();
     });
 
@@ -411,21 +426,27 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
   });
 
   describe('depois de criar a senha', () => {
-    it('entra com o e-mail da consulta e segue o fluxo do emissor para a tela inicial', async () => {
+    // Era "entra com o e-mail da consulta e segue o fluxo do emissor para a tela inicial": o login
+    // não responde mais 204, e quem cria a senha sem a verificação cadastra o app no /entrar.
+    it('entra com o e-mail da consulta e chega ao /entrar na etapa do cadastro, sem a senha no state', async () => {
       const calls = respondByPath({
         [ROUTES[page].lookup]: [ok()],
         [ROUTES[page].complete]: [noContent()],
-        '/auth/session': [noContent()],
+        '/auth/session': [enrollmentStep()],
+        '/auth/session/enrollment/setup': [pendingSetup],
       });
       const user = userEvent.setup();
       renderAt(page, 'tok');
 
       await fillAndSubmit(user, page);
 
-      await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+      expect(await screen.findByText('Cadastre a verificação em 2 etapas')).toBeInTheDocument();
+      expect(screen.getByText('Senha salva. Falta só cadastrar o app autenticador para entrar.')).toBeInTheDocument();
       expect(calls[2]).toMatchObject({ url: '/auth/session', body: { email: 'marcos.lima@empresa.com', senha: 'senha-de-doze' } });
-      expect(new URL(assign.mock.calls[0][0], 'http://localhost').pathname).toBe('/connect/authorize');
-      expect(JSON.parse(sessionStorage.getItem(PENDING_LOGIN_KEY)!).voltarPara).toBe('/');
+      expect(assign).not.toHaveBeenCalled();
+      expect(sessionStorage.getItem(PENDING_LOGIN_KEY)).toBeNull();
+      expect(entrarStates.length).toBeGreaterThan(0);
+      for (const state of entrarStates) expect(JSON.stringify(state ?? null)).not.toContain('senha-de-doze');
     });
 
     it('com as 2 etapas, chega ao /entrar no passo do código, sem a senha no state', async () => {

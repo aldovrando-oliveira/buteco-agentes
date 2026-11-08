@@ -311,8 +311,7 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` | `Embedding__Provider`/`__Model`/`__Dimensions` | workers | **sim** — o compose falha sem `MODEL` e `DIMENSIONS` | N/A. Sem elas o boot **passa** e a **primeira indexação** falha com modelo vazio e dimensão 0. A coluna do índice é `vector(4096)`, fixa na migration |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` | api (cifra), workers (decifra) | sim | **sim, byte-idêntica** |
 | `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` | `Identity__SigningKeyEncryptionKey` | api (cifra das chaves do emissor OIDC) | sim, fail-fast (o emissor está ligado, porque `PUBLIC_DOMAIN` é obrigatória) | N/A — só um processo. **Distinta** das outras chaves |
-| `IDENTITY_TWO_FACTOR_ENCRYPTION_KEY` | `Identity__TwoFactorEncryptionKey` | api (cifra do segredo do TOTP de cada usuário, #218) | sim, fail-fast, mesmo com o cadastro das 2 etapas fechado | N/A — só um processo. **Distinta** das outras chaves: o boot recusa a igual a `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` ou a `MCP_CREDENTIAL_ENCRYPTION_KEY` |
-| `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED` | `Identity__TwoFactor__EnrollmentEnabled` | api (abre o cadastro das 2 etapas em Minha conta, #246) | não; `false` por padrão | N/A — só um processo. A #220 remove |
+| `IDENTITY_TWO_FACTOR_ENCRYPTION_KEY` | `Identity__TwoFactorEncryptionKey` | api (cifra do segredo do TOTP de cada usuário, #218; a verificação é obrigatória desde a #220) | sim, fail-fast | N/A — só um processo. **Distinta** das outras chaves: o boot recusa a igual a `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` ou a `MCP_CREDENTIAL_ENCRYPTION_KEY` |
 | `SERVICE_CLIENT_SECRET_INBOX` | `Identity__ServiceClients__Inbox__Secret` e `ServiceClient__Secret` | api (segredo do cliente `buteco-servico-inbox` do emissor, #234) e inbox (que pede com ele o token de serviço, #235) | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api, e de `INBOX_CREDENTIAL_ENCRYPTION_KEY`: o boot recusa o igual, nomeando as duas chaves |
 | `SERVICE_CLIENT_SECRET_CONNECTORS` | `Identity__ServiceClients__Connectors__Secret` e `ServiceClient__Secret` | api (segredo do cliente `buteco-servico-connectors`, #234) e connectors (#235) | sim, fail-fast | **Distinto** do outro segredo de serviço e das três chaves de cifra do api |
 | `INBOX_CREDENTIAL_ENCRYPTION_KEY` | `Inbox__CredentialEncryptionKey` | inbox | sim | N/A — só um processo |
@@ -436,56 +435,106 @@ tag, confira o `bash` antes do deploy (`docker run --rm <imagem> bash -c 'echo o
 variante `-alpine` não tem `bash`, e com ela o broker ficaria `unhealthy` (o `api` e os
 `workers` não subiriam).
 
-### Minha conta e o cadastro das 2 etapas (#246)
+### Verificação em 2 etapas obrigatória e o comando de emergência (#220)
 
-**O que muda:** o `frontend` ganha Minha conta (`/account`), aberta pelo nome no rodapé da
-barra lateral: os dados, a troca de senha, a verificação em 2 etapas (ligar com o QR,
-gerar novos códigos, remover) e as sessões. O compose de produção passa a levar ao `api`
-a variável do cadastro, **falsa por padrão**. Sem migration. O `inbox`, o `connectors` e o
-`workers` não mudam. O `nginx.conf` não muda: `/account` já vai ao `apps/api` como fetch
-da SPA e abre o painel como navegação (#218).
+**O que muda:** a verificação em 2 etapas passa a ser obrigatória para todo usuário. Quem não
+a tem cadastra um app autenticador no login, depois da senha e antes de entrar (o QR, o código
+e os 10 códigos de recuperação). A opção do cadastro (`IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED`)
+sai: o compose não a lê mais, e Minha conta deixa de ter "Ligar verificação" e "Remover
+verificação". Sem migration. O `nginx.conf` não muda: as rotas novas ficam sob `/auth`. O
+`inbox`, o `connectors` e o `workers` não mudam.
 
-**Ordem do deploy:** `api` (relê o compose; nada muda com a variável ausente) → `frontend`.
+**Antes do deploy (o dono):**
+
+1. conferir o NTP do host: `timedatectl` com "System clock synchronized: yes" (os códigos
+   param de bater para todos com o relógio fora; ver a seção da #218);
+2. **avisar a equipe**: depois do deploy, todos saem do painel em até 15 minutos e, ao entrar,
+   cadastram um app autenticador (Google Authenticator, Microsoft Authenticator, 1Password) e
+   guardam os 10 códigos de recuperação fora do celular. **Peça que entrem logo depois da
+   virada**: até o primeiro login de cada pessoa, quem tiver a senha dela poderia cadastrar o
+   próprio app antes;
+3. ter o próprio celular à mão e o comando de emergência (abaixo) anotado.
+
+**Deploy:** a imagem do `api` e a do `frontend`, juntas.
 
 ```
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api frontend
 ```
 
-**Trocar a senha agora sai do painel:** depois de trocar a senha em Minha conta, a pessoa
-sai de todos os navegadores, inclusive o atual, e volta ao `/entrar` com "Senha alterada.
-Entre com a nova senha." (#219 D3).
-
-**Abrir o cadastro das 2 etapas** (decisão do dono, depois do deploy):
-
-1. no `.env.prod`, `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED=true`;
-2. `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api`.
+`IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED` pode sair do `.env.prod`; se ficar, nada a lê.
 
 **Conferir:**
 
+- o dono entra: senha → QR → código → 10 códigos → "Continuar" → painel;
+- o login seguinte pede o código do app;
+- em Usuários, a coluna da verificação vai ficando "Ativa" conforme as pessoas entram. Quem
+  aparece "Não configurada" depois de ter entrado é sinal de cadastro feito por outra pessoa:
+  redefina a verificação dela em Editar usuário;
+- as rotas do cadastro chegam ao `apps/api` (401 do `apps/api`, e não 200 com o HTML do painel):
+
 ```
 D=https://agentes.exemplo.com
-# a variável chegou ao api (no host do compose)
-docker compose -f docker-compose.prod.yml --env-file .env.prod exec api printenv Identity__TwoFactor__EnrollmentEnabled
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -X POST -H 'Content-Type: application/json' -H "Origin: $D" -d '{}' $D/auth/session/enrollment/setup
 ```
 
-- no painel, em Minha conta, "Ligar verificação" fica habilitado, e o texto "O cadastro da
-  verificação em 2 etapas ainda não está disponível neste painel." some;
-- um cadastro de ponta a ponta, com um app autenticador: a senha, o QR, o código e
-  "Verificação ligada." com os 10 códigos;
-- sair e entrar de novo: depois da senha, o `/entrar` pede o código.
+- o comando de emergência com um e-mail que não existe sai `1`, sem mudar nada.
 
-**Voltar atrás:** `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED=false` (ou a linha removida) e o
-`up -d api` de novo. Só o cadastro novo fecha: quem já ligou a verificação continua com
-ela, porque a verificação no login, a regeneração dos códigos, a remoção e a redefinição
-pelo admin valem com qualquer valor. Para tirar a verificação de alguém, a redefinição pelo
-admin (`POST /users/{id}/two-factor/reset`, #218).
+**Cada usuário:** no próximo acesso, senha, QR, código e os códigos de recuperação guardados.
 
-**Rollback da change:** a imagem anterior do `frontend`. Minha conta some; quem ligou a
-verificação continua entrando pelo passo do código (#245), mas sem regenerar nem remover
-pelo painel até o deploy voltar. Com o cadastro aberto, feche-o antes do rollback, para
-ninguém ficar sem a tela de gerenciar.
+**O comando de emergência** (`two-factor-reset`), para quem perdeu o celular e os códigos de
+recuperação, inclusive o último Admin, que não tem a quem pedir a redefinição:
 
-**A #220 remove a opção**, junto com a obrigatoriedade.
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --no-deps api two-factor-reset --email maria@empresa.com
+```
+
+- **o que faz:** apaga a verificação daquele e-mail, troca o carimbo de segurança e encerra
+  todas as sessões da pessoa, como a redefinição pelo admin em Editar usuário (é a mesma
+  operação). No próximo login, a pessoa cadastra o app de novo;
+- **quem pode usar:** só quem roda `docker compose` no host do stack. Não há rota HTTP para
+  isso, e o processo do comando não abre porta;
+- **o registro:** uma linha `Warning` com o `EventId` 1196 na saída do comando, com o
+  resultado, o e-mail, o id do usuário e as sessões encerradas. Nenhum segredo, código ou
+  carimbo sai. Com `--rm`, o registro é o terminal de quem rodou: guarde-o se precisar;
+- **saídas:**
+
+| código | quando | efeito |
+|---|---|---|
+| `0` | redefinida | a verificação apagada, o carimbo trocado, as sessões encerradas |
+| `1` | nenhum usuário com o e-mail | nenhum |
+| `2` | usuário desativado | nenhum |
+| `3` | usuário sem a verificação (inclusive convidado) | nenhum |
+| `64` | uso errado (sem `--email`) | nenhum |
+| `70` | falha ao falar com o banco, ou erro inesperado | nenhum: a transação não se completa. A linha traz só o tipo do erro |
+
+- **não aplica migrations**: quem migra é o `migrator`.
+- **a senha não entra aqui:** o último Admin que perdeu a senha continua dependendo de outro
+  usuário. O comando irmão para o link de redefinição de senha é a #257.
+
+**Voltar atrás:** a imagem anterior do `api` e do `frontend`.
+
+- quem cadastrou continua com a verificação: a imagem anterior a pede no login (#218), e o
+  painel anterior tem o passo do código (#245). Ninguém fica preso;
+- quem não cadastrou volta a entrar só com a senha;
+- com a variável do cadastro fora do `.env.prod`, Minha conta volta a dizer "cadastro
+  indisponível" para quem não tem a verificação. Para reabri-lo, `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED=true`
+  e `up -d api` (a seção da #246, no histórico deste arquivo no git);
+- o comando de emergência some com a imagem.
+
+### Minha conta (#246) (histórico)
+
+**O que mudou:** o `frontend` ganhou Minha conta (`/account`), aberta pelo nome no rodapé da
+barra lateral: os dados, a troca de senha, a verificação em 2 etapas e as sessões. Sem
+migration. O `nginx.conf` não mudou: `/account` já ia ao `apps/api` como fetch da SPA e abre o
+painel como navegação (#218).
+
+**Trocar a senha sai do painel:** depois de trocar a senha em Minha conta, a pessoa sai de
+todos os navegadores, inclusive o atual, e volta ao `/entrar` com "Senha alterada. Entre com a
+nova senha." (#219 D3).
+
+**O cadastro das 2 etapas** ficava atrás de `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED`, falsa por
+padrão, com o passo de abrir, conferir e voltar atrás. A #220 removeu a opção com a
+obrigatoriedade, e o cadastro passou ao login (seção acima).
 
 ### Entrada pública do painel (#245)
 
@@ -497,10 +546,10 @@ mudam.
 **O que muda para quem usa o painel:**
 
 - o `/entrar` pede o código das 2 etapas depois da senha, para quem tem a verificação
-  ligada (o código do app ou um código de recuperação, no mesmo campo). Em produção ninguém
-  a tem: o cadastro continua fechado (`Identity__TwoFactor__EnrollmentEnabled`), e a #246
-  traz a tela do cadastro e o passo de abri-lo
-  ([Minha conta e o cadastro das 2 etapas](#minha-conta-e-o-cadastro-das-2-etapas-246));
+  ligada (o código do app ou um código de recuperação, no mesmo campo). Na época, ninguém
+  a tinha em produção: o cadastro ficava fechado, e a #246 trouxe a tela dele. Desde a #220 a
+  verificação é obrigatória, e o cadastro é no login
+  ([Verificação em 2 etapas obrigatória](#verificação-em-2-etapas-obrigatória-e-o-comando-de-emergência-220));
 - os links de convite e de redefinição que o admin gera pela API passam a abrir a tela de
   criar a senha. O token sai do endereço ao abrir, e a página entra em seguida;
 - "Esqueceu a senha?" orienta a pedir o link a um administrador, e o rodapé do `/entrar`
@@ -797,14 +846,11 @@ em `users` e a tabela `user_recovery_codes`.
 `nginx.conf`: os prefixos `/account` e `/users` passam a ir ao `apps/api`. O `inbox`, o
 `connectors` e o `workers` não mudam.
 
-**O cadastro da verificação fica fechado** (`Identity__TwoFactor__EnrollmentEnabled`,
-falso por padrão). Desde a #245 o `/entrar` tem o passo do código, e desde a #246 a tela
-do cadastro, em Minha conta; a #246 também passou a variável pelo compose
-(`IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED`), com o passo de abrir, conferir e voltar atrás
-([Minha conta e o cadastro das 2 etapas](#minha-conta-e-o-cadastro-das-2-etapas-246)).
-Com o cadastro fechado, ninguém liga
-a verificação, e o login de todos continua igual. A verificação no login, a remoção e a
-redefinição pelo admin nunca fecham. A #220 remove a opção, junto com a obrigatoriedade.
+**O cadastro da verificação ficava fechado** (`Identity__TwoFactor__EnrollmentEnabled`,
+falso por padrão) até a tela existir: a #245 trouxe o passo do código no `/entrar`, a #246 a
+tela do cadastro em Minha conta e a variável no compose. **A #220 removeu a opção**: a
+verificação passou a ser obrigatória, com o cadastro no login
+([Verificação em 2 etapas obrigatória](#verificação-em-2-etapas-obrigatória-e-o-comando-de-emergência-220)).
 
 **Conferência depois do deploy**, contra o domínio, como fetch da SPA:
 
@@ -813,13 +859,13 @@ D=https://agentes.exemplo.com
 # 1. Os prefixos novos chegam ao apps/api: 401 sem corpo, e não 200 com o HTML do painel
 curl -s -o /dev/null -w '%{http_code} %{content_type}\n' $D/account/two-factor
 curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -X POST $D/users/00000000-0000-0000-0000-000000000000/two-factor/reset
-# 2. Com o token de um usuário (ver docs/development.md), o cadastro está fechado
-curl -s -H "Authorization: Bearer $TOKEN" $D/account/two-factor   # "cadastroDisponivel":false
+# 2. (Até a #220) Com o token de um usuário, o cadastro estava fechado: "cadastroDisponivel":false.
+#    O campo saiu do contrato na #220.
 ```
 
-**Rollback:** a imagem anterior do `api` e do `frontend`. As colunas e a tabela ficam sem
-efeito, e a variável sobra. Como o cadastro estava fechado, ninguém fica preso à
-verificação.
+**Rollback (da #218):** a imagem anterior do `api` e do `frontend`. As colunas e a tabela ficam sem
+efeito, e a variável sobra. Como o cadastro estava fechado, ninguém ficava preso à
+verificação. Depois da #220, ver o "Voltar atrás" da seção dela.
 
 ### Convite e redefinição de senha por link (#181)
 

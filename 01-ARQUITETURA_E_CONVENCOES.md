@@ -710,7 +710,7 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     de 20. Acima disso, `429`. O limite por IP é do proxy de fora.
   - **Sem enumeração.** E-mail sem conta e senha errada respondem igual, com o
     hash fictício. O "Acesso desativado" só aparece para quem acertou a senha.
-- **Verificação em 2 etapas** (#218), para quem a liga:
+- **Verificação em 2 etapas** (#218), **obrigatória para todo usuário** desde a #220:
   - **TOTP pelo RFC 6238, sobre o BCL**, sem pacote: HMAC-SHA1, 6 dígitos, passo de
     30 s, um passo de tolerância para cada lado. O último passo aceito fica em
     `users.two_factor_last_step`, e aceitar um código é um `UPDATE` condicional
@@ -724,22 +724,32 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     recuperação continuam valendo;
   - **o login em dois passos**, no mesmo cookie `buteco-sessao`: a senha certa responde
     `200 {"segundoPasso":"totp"}` com a sessão pendente, e
-    `POST /auth/session/second-factor` a completa com o claim `buteco_2fa`. O authorize
-    decide pelo estado atual do usuário: com a verificação ligada, só o cookie completo
-    emite código;
+    `POST /auth/session/second-factor` a completa com o claim `buteco_2fa`. Quem não tem a
+    verificação recebe `200 {"segundoPasso":"cadastro"}` e cadastra no próprio login
+    (`POST /auth/session/enrollment/setup` e `/confirm`, presas ao cookie pendente, com
+    prazo de 10 min do primeiro `setup`, regravado no cookie); o `confirm` liga a
+    verificação e completa a sessão. O `POST /auth/session` não responde `204`. O
+    authorize só emite código com o cookie completo de quem tem a verificação, e a
+    renovação recusa (`invalid_grant`) quem não a tem. O logout no meio do cadastro
+    apaga o pendente e troca o stamp;
   - **10 códigos de recuperação** de 16 caracteres de Crockford (80 bits), só em
     SHA-256, de uso único, aceitos no mesmo campo do código;
   - **força bruta:** as falhas de código contam no mesmo bloqueio por e-mail da senha,
     e a senha certa não zera a contagem enquanto falta o código;
-  - **rotas:** `/account/two-factor` (situação, cadastro com a senha, confirmação,
-    regeneração e remoção com um código) e `POST /users/{id}/two-factor/reset` (o
-    admin apaga o segredo e os códigos, troca o stamp e revoga as sessões; a si mesmo,
-    não). As duas
+  - **rotas:** `/account/two-factor` (situação e regeneração dos códigos com um código;
+    sem cadastro nem remoção por access token desde a #220) e
+    `POST /users/{id}/two-factor/reset` (o admin apaga o segredo e os códigos, troca o
+    stamp e revoga as sessões; a si mesmo, não). As duas
     atendem só o usuário real do `sub` do token do emissor (`CurrentUser`); o token
     de operador cujo `sub` não é usuário recebe `403`;
-  - **o cadastro fica fechado em produção** (`Identity:TwoFactor:EnrollmentEnabled`)
-    até o painel ter a tela do código (#183); a obrigatoriedade e a remoção da opção
-    são da #220. Sem `amr` no token: ninguém o lê na M1.
+  - **o comando de emergência** `two-factor-reset --email <e-mail>` (#220), no próprio
+    binário do `apps/api`, lido dos argumentos antes do host web: sem rota HTTP, sem
+    Kestrel e sem aplicar migrations, faz a mesma redefinição da rota do admin (o
+    `TwoFactorReset`), com saídas `0`, `1`, `2`, `3`, `64` e `70` e uma linha `Warning`
+    sem segredo. É o caminho de quem perdeu o celular e os códigos, inclusive o último
+    Admin;
+  - **a opção do cadastro** (`Identity:TwoFactor:EnrollmentEnabled`) existiu da #218 à
+    #220, para a transição até a tela. Sem `amr` no token: ninguém o lê na M1.
 - **Minha conta e Usuários** (#219), para o usuário real do token (`CurrentUser`; o token
   de operador cujo `sub` não é usuário recebe `403`). Na M1, sem papéis, todo usuário chama todas; a #184 restringe
   `/users` ao Admin:
