@@ -768,6 +768,14 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     `TwoFactorReset`), com saídas `0`, `1`, `2`, `3`, `64` e `70` e uma linha `Warning`
     sem segredo. É o caminho de quem perdeu o celular e os códigos, inclusive o último
     Admin;
+  - **o comando irmão da senha** `password-reset-link --email <e-mail>` (#257), no mesmo
+    ramo de `args`: imprime o link de redefinição de 24 h pela mesma escrita da rota do
+    admin (o `PasswordResetLink`), **só para Admin ativo** (`4` para os outros; `3` para o
+    convidado), com a base do painel resolvida antes de abrir conexão (`78` sem ela). O
+    link sai uma vez, sozinho no stdout; a linha `Warning` (`EventId` 1197) vai ao stderr,
+    sem o link. Com o `two-factor-reset` antes, é o roteiro do último Admin que perdeu a
+    senha e as 2 etapas, e o link vira credencial completa por 24 h
+    (`docs/deployment.md`);
   - **a opção do cadastro** (`Identity:TwoFactor:EnrollmentEnabled`) existiu da #218 à
     #220, para a transição até a tela. Sem `amr` no token: ninguém o lê na M1.
 - **Minha conta e Usuários** (#219), para o usuário real do token (`CurrentUser`; o token

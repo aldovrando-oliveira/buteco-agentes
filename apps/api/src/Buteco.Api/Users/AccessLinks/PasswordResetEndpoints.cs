@@ -23,6 +23,8 @@ namespace Buteco.Api.Users.AccessLinks;
 /// que pede a senha atual;</item>
 /// <item>só no ativo; o <c>UPDATE</c> é condicionado ao estado ativo, para uma desativação no meio
 /// não deixar um link num desativado, que a reativação traria de volta.</item>
+/// <item>a escrita é o <see cref="PasswordResetLink"/>, a mesma do comando de emergência
+/// <c>password-reset-link</c> (design.md da change comando-password-reset-link, D1).</item>
 /// </list>
 /// </summary>
 public static class PasswordResetEndpoints
@@ -45,7 +47,7 @@ public static class PasswordResetEndpoints
         PasswordHasher hasher,
         IdentityIssuerState issuer,
         IOptions<IdentityIssuerOptions> options,
-        TimeProvider timeProvider,
+        PasswordResetLink link,
         CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
@@ -79,22 +81,13 @@ public static class PasswordResetEndpoints
             return rejected;
         }
 
-        var token = AccessLinkToken.New();
-        var hash = AccessLinkToken.Hash(token);
-        var expiresAt = timeProvider.GetUtcNow() + AccessLinkToken.PasswordResetLifetime;
-        var issued = await dbContext.Users
-            .Where(user => user.Id == id && user.Status == UserStatus.Active)
-            .ExecuteUpdateAsync(
-                set => set
-                    .SetProperty(user => user.AccessLinkHash, hash)
-                    .SetProperty(user => user.AccessLinkPurpose, AccessLinkPurpose.PasswordReset)
-                    .SetProperty(user => user.AccessLinkExpiresAt, expiresAt),
-                cancellationToken);
+        // A base antes da escrita (design.md da change comando-password-reset-link, D1): aqui o boot
+        // já exige o issuer, e a ordem não muda nada visível; é a mesma do comando, onde muda.
+        var panelBase = PanelBaseUrl.Resolve(options.Value, issuer);
 
-        // Desativado entre a leitura e a escrita.
-        return issued == 1
-            ? TypedResults.Ok(new InvitationEndpoints.LinkResponse(
-                AccessLinkUrls.For(AccessLinkPurpose.PasswordReset, PanelBaseUrl.Resolve(options.Value, issuer), token), expiresAt))
+        // Desativado entre a leitura e a escrita: null.
+        return await link.IssueAsync(id, panelBase, cancellationToken) is { } issued
+            ? TypedResults.Ok(new InvitationEndpoints.LinkResponse(issued.Link, issued.ExpiresAt))
             : Deactivated();
     }
 

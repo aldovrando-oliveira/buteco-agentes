@@ -112,7 +112,10 @@ regeneration requires a valid code, and a person cannot remove their own
 verification. Only an Admin can reset another user's verification (including another
 Admin's), which also invalidates that user's sessions. Whoever
 runs the stack can reset a user's verification with the `two-factor-reset` command
-of the `apps/api` binary, which has no HTTP route. Until each person's first login
+of the `apps/api` binary, which has no HTTP route, and can print a password-reset
+link for an active Admin with the sibling `password-reset-link` command (the same link
+the panel generates, valid for 24 hours, printed once on standard output and never in
+the log line). Until each person's first login
 after the second factor became mandatory, someone who knows that person's password
 could enroll their own authenticator first; this window is accepted and documented in
 the deployment notes. Bypassing the second

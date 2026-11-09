@@ -611,8 +611,9 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --no-dep
 | `70` | falha ao falar com o banco, ou erro inesperado | nenhum: a transação não se completa. A linha traz só o tipo do erro |
 
 - **não aplica migrations**: quem migra é o `migrator`.
-- **a senha não entra aqui:** o último Admin que perdeu a senha continua dependendo de outro
-  usuário. O comando irmão para o link de redefinição de senha é a #257.
+- **a senha não entra aqui:** para o último Admin que perdeu a senha, o comando irmão é o
+  `password-reset-link` ([seção abaixo](#comando-de-emergência-da-senha-password-reset-link-257)),
+  com o roteiro de quem perdeu a senha e as 2 etapas.
 
 **Voltar atrás:** a imagem anterior do `api` e do `frontend`.
 
@@ -623,6 +624,91 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --no-dep
   indisponível" para quem não tem a verificação. Para reabri-lo, `IDENTITY_TWO_FACTOR_ENROLLMENT_ENABLED=true`
   e `up -d api` (a seção da #246, no histórico deste arquivo no git);
 - o comando de emergência some com a imagem.
+
+### Comando de emergência da senha: `password-reset-link` (#257)
+
+**O que mudou:** o binário do `api` ganhou o comando irmão do `two-factor-reset`, para o último
+Admin que perdeu a senha e não tem outro Admin a quem pedir o link em Editar usuário. Só a
+imagem do `api`. Sem migration e sem variável nova.
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --no-deps api password-reset-link --email maria@empresa.com
+```
+
+- **o que faz:** gera o link de redefinição de 24 h (`<painel>/redefinir-senha#<token>`), pela
+  mesma operação do botão de Editar usuário: o link anterior daquela pessoa deixa de valer, e a
+  senha atual, o carimbo de segurança e as sessões continuam até a senha nova ser criada;
+- **quem ele atende:** só **Admin ativo**. Operador e Leitor pedem o link a um Admin no painel
+  (sempre sobra um Admin ativo, #184); o convidado recebe um novo link do convite em Usuários;
+- **quem pode usar:** só quem roda `docker compose` no host do stack. Não há rota HTTP, e o
+  processo do comando não abre porta;
+- **onde o link sai:** **uma vez, sozinho numa linha da saída padrão**. A linha `Warning` com o
+  `EventId` 1197 vai à saída de erro, com o resultado, o e-mail, o id, o papel e o vencimento, e
+  nunca com o link, o token ou o hash;
+- **saídas:**
+
+| código | quando | efeito |
+|---|---|---|
+| `0` | link gerado | o link na saída padrão; o anterior deixa de valer |
+| `1` | nenhum usuário com o e-mail | nenhum |
+| `2` | usuário desativado | nenhum |
+| `3` | usuário convidado | nenhum: o link do convite dele continua valendo |
+| `4` | usuário ativo que não é Admin | nenhum |
+| `64` | uso errado (sem `--email`, vazio, argumento a mais) | nenhum |
+| `70` | falha ao falar com o banco, ou erro inesperado | nenhum. A linha traz só o tipo do erro |
+| `78` | url do painel ausente ou inválida (`PUBLIC_DOMAIN`) | nenhum, nem conexão com o banco. A linha cita só os nomes das chaves |
+
+- **não aplica migrations**: quem migra é o `migrator`.
+
+**O link é uma credencial. O cuidado de quem roda o comando:**
+
+- **não cole o link em chat, ticket nem e-mail.** Entregue-o à própria pessoa;
+- **antes de rodar, confira o driver de log do Docker:**
+
+  ```
+  docker info --format '{{.LoggingDriver}}'
+  ```
+
+  O compose não fixa um driver, e o comando passa pelo do daemon (`/etc/docker/daemon.json`).
+  Com `json-file` ou `local`, o log do contêiner some com o `--rm`, ao sair. **Com outro
+  (`journald`, `syslog`, `gelf`, `fluentd`, `awslogs`…), a saída fica gravada** depois do `--rm`;
+- **com um driver que não seja `json-file` nem `local`, abra o link logo depois de gerá-lo e crie
+  a senha:** usar o link apaga o hash no banco, e a cópia que ficou no log morre junto;
+- **se a pessoa não for usar o link na hora, não guarde o link: rode o comando de novo quando ela
+  for usar.** Cada execução invalida o link anterior;
+- **se o link vazou**, rode o comando de novo: o vazado deixa de valer. Sem uso, ele vence em 24 h.
+
+> **⚠ No roteiro abaixo, o link é credencial completa por 24 h.** Cada comando, sozinho, não dá
+> acesso: o link de senha sem a redefinição das 2 etapas ainda esbarra no código do app, e a
+> redefinição das 2 etapas sem a senha não abre sessão. **Depois dos dois, quem abre o link cria a
+> senha, cadastra o próprio app autenticador e entra como Admin.** Rode o segundo comando só quando
+> a pessoa estiver pronta para abrir o link, e entregue-o só a ela.
+
+**O último Admin que perdeu a senha e as 2 etapas** (o celular e os códigos de recuperação).
+**Primeiro as 2 etapas, depois a senha:**
+
+1. `… run --rm --no-deps api two-factor-reset --email maria@empresa.com` → `0`. A verificação dela
+   é apagada, o carimbo trocado e as sessões encerradas. Se ela já não tinha a verificação, sai `3`,
+   e o roteiro segue igual. Redefinir as 2 etapas não toca o link de senha;
+2. `… run --rm --no-deps api password-reset-link --email maria@empresa.com` → `0` e o link;
+3. ela abre o link: "Criar nova senha", "Olá, Maria. Crie uma nova senha…". Cria a senha nova em
+   "Salvar senha e entrar". Isso troca o
+   carimbo, encerra as sessões, apaga o link e **zera o bloqueio** por tentativas erradas;
+4. a página entra sozinha com a senha nova e abre o `/entrar` na etapa do cadastro: "Senha salva.
+   Falta só cadastrar o app autenticador para entrar.";
+5. QR e segredo → o código do app → os **10 códigos de recuperação**, para guardar fora do celular
+   → "Continuar" → o painel.
+
+Na ordem inversa também funciona, mas tropeça: depois de criar a senha, a página abre o passo do
+código, que ela não tem como passar. Aí entra o `two-factor-reset` e um login a mais.
+
+**Só a senha perdida** (com o celular): só o passo 2. O login seguinte pede o código, como sempre.
+
+**Conferir depois do deploy:** `… run --rm --no-deps api password-reset-link --email <e-mail que não existe>`
+sai `1`, sem mudar nada.
+
+**Voltar atrás:** a imagem anterior do `api`. O comando some com ela; links já gerados por ele
+continuam valendo até vencer, porque são links de redefinição comuns.
 
 ### Minha conta (#246) (histórico)
 
