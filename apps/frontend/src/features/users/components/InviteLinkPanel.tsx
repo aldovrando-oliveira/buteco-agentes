@@ -2,6 +2,7 @@ import { Alert, Box, Button, Group, Stack, Text, ThemeIcon, Title } from '@manti
 import { Check } from 'lucide-react';
 import { formatLinkExpiry } from '../../auth/linkExpiry';
 import { CopyableLink } from './CopyableLink';
+import { papelDaResposta, rotuloDoPapel } from '../../../auth/roles';
 
 // O link do convite, mostrado uma vez (requisito "Link de convite mostrado uma vez e só na
 // memória da tela"; design.md da change usuarios-convites-identidade-painel, D5). O link chega
@@ -11,12 +12,15 @@ import { CopyableLink } from './CopyableLink';
 interface InviteLinkPanelProps {
   titulo: string;
   email: string;
+  /** O `papel` do convite, no fio; abaixo do título vai "{e-mail} · {Papel}" (quadro `Usuarios`, `m2`). */
+  papel?: string;
   link: string;
   expiraEm: string;
   onDone: () => void;
 }
 
-export function InviteLinkPanel({ titulo, email, link, expiraEm, onDone }: InviteLinkPanelProps) {
+export function InviteLinkPanel({ titulo, email, papel, link, expiraEm, onDone }: InviteLinkPanelProps) {
+  const rotulo = papelDaResposta(papel);
   return (
     <Box
       role="status"
@@ -35,9 +39,16 @@ export function InviteLinkPanel({ titulo, email, link, expiraEm, onDone }: Invit
             <Title order={3} id="link-titulo" fz="sm" fw={600}>
               {titulo}
             </Title>
-            <Text size="sm" c="dimmed" ff="monospace">
-              {email}
-            </Text>
+            <Group gap={4} wrap="wrap">
+              <Text size="sm" c="dimmed" ff="monospace">
+                {email}
+              </Text>
+              {rotulo && (
+                <Text size="sm" c="dimmed">
+                  · {rotuloDoPapel(rotulo)}
+                </Text>
+              )}
+            </Group>
           </Stack>
         </Group>
         <Stack gap={6} maw={720}>

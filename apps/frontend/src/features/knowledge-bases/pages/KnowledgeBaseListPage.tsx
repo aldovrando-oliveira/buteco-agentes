@@ -32,6 +32,9 @@ import {
 } from '../utils/indexingSummary';
 import { isSyncFailing } from '../utils/syncState';
 import type { KnowledgeBase, KnowledgeBaseIndexingSummary } from '../types/knowledgeBase';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { usePermissoes } from '../../../auth/session';
 
 // QUATRO opções, e a quarta nasceu agora. Até a etapa 5a-1 eram três, e a razão
 // escrita aqui era que `Com falha` filtra por estado de indexação agregado por
@@ -72,7 +75,9 @@ function matchesStatus(
 }
 
 export function KnowledgeBaseListPage() {
-  const { data, isLoading, isError } = useKnowledgeBasesQuery();
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
+  const { data, isLoading, isError, error } = useKnowledgeBasesQuery();
   // Só para derivar a coluna "Consultada por". Uma falha aqui não impede a
   // listagem: a coluna fica sem afirmar uso e o resto continua servindo, mesmo
   // tratamento de McpServerListPage (design.md, D21).
@@ -120,9 +125,11 @@ export function KnowledgeBaseListPage() {
             </Text>
           )}
         </Stack>
-        <Button component={Link} to="/knowledge-bases/new">
-          Nova base
-        </Button>
+        {pode.escrever && (
+          <Button component={Link} to="/knowledge-bases/new">
+            Nova base
+          </Button>
+        )}
       </Group>
 
       {hasKnowledgeBases && (
@@ -162,7 +169,13 @@ export function KnowledgeBaseListPage() {
         </Group>
       )}
 
-      {isError && <Alert color="red">Não foi possível carregar as bases de conhecimento.</Alert>}
+      {/* O `403` é o papel (spec `panel-roles`). */}
+      {isError &&
+        (is403(error) ? (
+          <AccessDenied />
+        ) : (
+          <Alert color="red">Não foi possível carregar as bases de conhecimento.</Alert>
+        ))}
 
       {/* Falha do resumo não derruba a listagem: as bases continuam servindo e as
           duas colunas dizem que não sabem. Dizer por quê é o que impede o
@@ -192,9 +205,11 @@ export function KnowledgeBaseListPage() {
               Uma base guarda documentos markdown que o agente consulta durante a conversa, quando
               julga que o assunto está ali.
             </Text>
-            <Button component={Link} to="/knowledge-bases/new" mt="xs">
-              Criar a primeira base
-            </Button>
+            {pode.escrever && (
+              <Button component={Link} to="/knowledge-bases/new" mt="xs">
+                Criar a primeira base
+              </Button>
+            )}
           </Stack>
         </Paper>
       )}

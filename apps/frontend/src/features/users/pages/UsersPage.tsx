@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Box, Button, Group, Loader, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SectionedCard } from '../../../components/data/SectionedCard';
-import { failureNotice, isApiFailure } from '../../../utils/failureNotice';
+import { failureNotice, isApiFailure, is403 } from '../../../utils/failureNotice';
 import { cancelInvitation, listUsers, type AccessLink, type UserSummary } from '../api/usersApi';
 import { USERS_QUERY_KEY } from '../queryKeys';
 import { conviteAceitoAoCancelar, conviteAceitoAoRenovar } from '../usersTexts';
@@ -10,6 +10,7 @@ import { InviteForm } from '../components/InviteForm';
 import { RenewInviteForm } from '../components/RenewInviteForm';
 import { InviteLinkPanel } from '../components/InviteLinkPanel';
 import { UsersTable, type CancelRow } from '../components/UsersTable';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
 
 // A página Usuários (requisitos de `panel-users-page`; design.md da change
 // usuarios-convites-identidade-painel, D2 a D5). O cartão é uma máquina de estados com um
@@ -20,7 +21,7 @@ type Painel =
   | { tipo: 'nenhum' }
   | { tipo: 'convidar' }
   | { tipo: 'renovar'; user: UserSummary }
-  | { tipo: 'link'; titulo: string; email: string; acesso: AccessLink; marcada: string | null };
+  | { tipo: 'link'; titulo: string; email: string; papel: string; acesso: AccessLink; marcada: string | null };
 
 export function UsersPage() {
   const queryClient = useQueryClient();
@@ -54,6 +55,10 @@ export function UsersPage() {
     await reler();
   };
 
+  // O `403` da lista é o papel, também o do Admin rebaixado com o token de antes (spec
+  // `panel-users-page`; `panel-roles`, "O 403 na carga e na ação").
+  if (users.isError && is403(users.error)) return <AccessDenied />;
+
   return (
     <Stack>
       <Stack gap={2}>
@@ -85,6 +90,7 @@ export function UsersPage() {
                 tipo: 'link',
                 titulo: `Convite criado para ${result.usuario.nome}`,
                 email: result.usuario.email,
+                papel: result.usuario.papel,
                 acesso: { link: result.link, expiraEm: result.expiraEm },
                 marcada: result.usuario.id,
               });
@@ -103,6 +109,7 @@ export function UsersPage() {
                 tipo: 'link',
                 titulo: `Novo link gerado para ${painel.user.nome}`,
                 email: painel.user.email,
+                papel: painel.user.papel,
                 acesso,
                 marcada: null,
               });
@@ -121,6 +128,7 @@ export function UsersPage() {
           <InviteLinkPanel
             titulo={painel.titulo}
             email={painel.email}
+            papel={painel.papel}
             link={painel.acesso.link}
             expiraEm={painel.acesso.expiraEm}
             onDone={() => abrir({ tipo: 'nenhum' })}
@@ -167,8 +175,10 @@ export function UsersPage() {
         </SectionedCard>
         <SectionedCard title="Senha e recuperação">
           <Text size="sm" c="dimmed" px="md" py="sm">
-            Esqueceu a senha: um administrador gera um link de redefinição em Editar usuário. A verificação em 2 etapas é
-            ligada por cada pessoa em Minha conta.
+            {/* O texto do quadro `Usuarios` (`m2`): o anterior, "ligada por cada pessoa em Minha
+                conta", deixou de ser verdade com a #220 (change papeis-no-painel, achado do dono). */}
+            Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário. A verificação em 2 etapas é
+            obrigatória para todos os papéis: cada pessoa cadastra o app autenticador no primeiro login.
           </Text>
         </SectionedCard>
       </SimpleGrid>

@@ -1,7 +1,7 @@
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
 import { cleanup, configure } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { MemoryStorage } from './authFakes';
+import { MemoryStorage, signInForTest } from './authFakes';
 import { FakeLockManager } from './fakeLocks';
 
 // O padrão de 1s das consultas assíncronas do Testing Library é curto para esta
@@ -111,4 +111,14 @@ Object.defineProperty(navigator, 'locks', {
   value: new FakeLockManager(),
   writable: true,
   configurable: true,
+});
+
+// Os testes de página rodam como Admin por padrão (design.md da change papeis-no-painel, D11;
+// condição do dono de 09/11/2026). Sem sessão, o papel é desconhecido e vale Leitor (D1), e
+// toda tela renderizada sem `ProtectedRoute` perderia os botões de escrita. O comportamento de
+// Operador e de Leitor só é provado pelos casos que gravam o papel com `signInAsRole`; os casos
+// de "sem sessão" chamam `signInAsRole(null)` (ou o `signOutForTest`). O access token vale 15
+// min a partir do relógio real; caso com relógio falso grava a sua própria sessão.
+beforeEach(() => {
+  signInForTest();
 });

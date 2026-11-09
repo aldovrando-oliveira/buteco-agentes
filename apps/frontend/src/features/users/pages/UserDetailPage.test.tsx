@@ -165,7 +165,8 @@ describe('UserDetailPage: o próprio usuário', () => {
     }
     expect(screen.getByRole('link', { name: 'Trocar em Minha conta' })).toHaveAttribute('href', '/account');
     expect(screen.getByRole('link', { name: 'Ver em Minha conta' })).toHaveAttribute('href', '/account');
-    expect(screen.getByText('Para trocar de celular, peça a outro usuário que redefina a sua verificação.')).toBeInTheDocument();
+    // Só um Admin redefine (change papeis-no-painel; caso que muda de asserção, listado no tasks.md).
+    expect(screen.getByText('Para trocar de celular, peça a outro Admin que redefina a sua verificação.')).toBeInTheDocument();
     // Os dados continuam editáveis.
     expect(screen.getByLabelText('Nome')).toBeEnabled();
   });

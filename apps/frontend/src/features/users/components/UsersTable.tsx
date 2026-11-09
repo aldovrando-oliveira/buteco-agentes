@@ -6,6 +6,7 @@ import type { FailureNotice } from '../../../utils/failureNotice';
 import type { UserSummary } from '../api/usersApi';
 import { signInForms, stateBadge, twoFactorBadge } from '../usersTexts';
 import { Selo } from './Selo';
+import { papelDaResposta, rotuloDoPapel } from '../../../auth/roles';
 
 // A tabela de Usuários (requisitos "Colunas da lista de Usuários" e "Ações da linha sem
 // destino inexistente"; design.md da change usuarios-convites-identidade-painel, D2 e D8). As
@@ -44,7 +45,7 @@ export function UsersTable({
       <Table>
         <Table.Thead bg="var(--buteco-surface-subtle)">
           <Table.Tr>
-            {['Usuário', 'Formas de entrada', 'Verificação em 2 etapas', 'Estado', 'Último acesso', 'Ações'].map((c) => (
+            {['Usuário', 'Formas de entrada', 'Papel', 'Verificação em 2 etapas', 'Estado', 'Último acesso', 'Ações'].map((c) => (
               <Table.Th key={c}>
                 <SectionLabel>{c}</SectionLabel>
               </Table.Th>
@@ -56,6 +57,7 @@ export function UsersTable({
             const estado = stateBadge(user);
             const mfa = twoFactorBadge(user);
             const formas = signInForms(user);
+            const papel = papelDaResposta(user.papel);
             const confirmando = cancelando?.userId === user.id;
             const convidado = user.estado === 'convidado';
             return (
@@ -94,6 +96,13 @@ export function UsersTable({
                       ))}
                     </Group>
                   )}
+                </Table.Td>
+                {/* O papel, também no convidado; valor desconhecido sai "—", e nunca um dos três
+                    rótulos (spec `panel-users-page`; convenção 13). */}
+                <Table.Td>
+                  <Text size="sm" c={papel ? undefined : 'dimmed'}>
+                    {papel ? rotuloDoPapel(papel) : '—'}
+                  </Text>
                 </Table.Td>
                 <Table.Td>
                   {mfa.texto === '—' ? (

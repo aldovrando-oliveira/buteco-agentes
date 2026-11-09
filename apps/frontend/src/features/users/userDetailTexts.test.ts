@@ -28,9 +28,10 @@ describe('detailSubtitle', () => {
     );
   });
 
-  it('sem convidadoPor é o primeiro administrador', () => {
+  it('sem convidadoPor é o criado na instalação, sem falar em administrador', () => {
     expect(detailSubtitle({ ...PROPRIO, ultimoAcesso: '2026-11-07T17:14:00Z' }, NOW, TZ)).toBe(
-      'Primeiro administrador, criado na instalação · último acesso hoje, 14:14',
+      // A origem sem convite (change papeis-no-painel; caso que muda de asserção, listado no tasks.md).
+      'Criado na instalação · último acesso hoje, 14:14',
     );
   });
 

@@ -5,6 +5,7 @@ import { fakeUsersApi, problem } from '../test/fakeUsersApi';
 import {
   ApiError,
   activateUser,
+  changeUserRole,
   cancelInvitation,
   deactivateUser,
   getUser,
@@ -42,8 +43,8 @@ describe('usersApi', () => {
   it.each<[string, () => Promise<unknown>, unknown]>([
     [
       'POST /users/invitations',
-      () => inviteUser({ nome: 'Marcos Lima', email: 'marcos@exemplo.test', senha: 'minha-senha' }),
-      { nome: 'Marcos Lima', email: 'marcos@exemplo.test', senha: 'minha-senha' },
+      () => inviteUser({ nome: 'Marcos Lima', email: 'marcos@exemplo.test', papel: 'operador', senha: 'minha-senha' }),
+      { nome: 'Marcos Lima', email: 'marcos@exemplo.test', papel: 'operador', senha: 'minha-senha' },
     ],
     ['POST /users/u%201/invitation/renew', () => renewInvitation('u 1', 'minha-senha'), { senha: 'minha-senha' }],
   ])('%s leva o corpo do contrato', async (key, call, body) => {
@@ -72,7 +73,7 @@ describe('usersApi', () => {
       },
     });
 
-    const error = await inviteUser({ nome: 'x', email: 'y', senha: 'z' }).catch((e: unknown) => e);
+    const error = await inviteUser({ nome: 'x', email: 'y', papel: 'leitor', senha: 'z' }).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(400);
@@ -86,7 +87,7 @@ describe('usersApi', () => {
       }),
     });
 
-    const error = (await inviteUser({ nome: 'x', email: 'y', senha: 'z' }).catch((e: unknown) => e)) as ApiError;
+    const error = (await inviteUser({ nome: 'x', email: 'y', papel: 'leitor', senha: 'z' }).catch((e: unknown) => e)) as ApiError;
 
     expect(error.status).toBe(423);
     expect(error.retryAfter).toBe(300);
@@ -103,6 +104,13 @@ describe('usersApi', () => {
       ['POST /users/u%201/deactivate', () => deactivateUser('u 1'), undefined],
       ['POST /users/u%201/activate', () => activateUser('u 1'), undefined],
       ['POST /users/u%201/sessions/revoke', () => revokeUserSessions('u 1'), undefined],
+      // `PUT /users/{id}/role` (change papeis-no-painel): rebaixar não leva senha; promover, sim.
+      ['PUT /users/u%201/role', () => changeUserRole('u 1', { papel: 'leitor' }), { papel: 'leitor' }],
+      [
+        'PUT /users/u%202/role',
+        () => changeUserRole('u 2', { papel: 'admin', senha: 'minha-senha' }),
+        { papel: 'admin', senha: 'minha-senha' },
+      ],
       [
         'POST /users/u%201/password-reset',
         () => requestPasswordReset('u 1', 'minha-senha'),

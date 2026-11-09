@@ -30,6 +30,10 @@ import type { ChannelType } from '../types/channel';
 import { useChannelSessionsQuery, useSessionMessagesQuery } from '../../sessions/api/useSessions';
 import { SessionList } from '../../sessions/components/SessionList';
 import { MessageTimeline } from '../../sessions/components/MessageTimeline';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { notifyFailure } from '../../../utils/notifyFailure';
+import { usePermissoes } from '../../../auth/session';
 
 const channelTypeLabels: Record<ChannelType, string> = {
   waha: 'WAHA',
@@ -107,6 +111,8 @@ function SessionsTab({ channelId, sessionId }: SessionsTabProps) {
 }
 
 export function ChannelDetailPage() {
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
   const { id, sessionId } = useParams<{ id: string; sessionId?: string }>();
   const { data, isLoading, error } = useChannelQuery(id!);
   const agentsQuery = useAgentsQuery();
@@ -123,9 +129,8 @@ export function ChannelDetailPage() {
           message: `"${channel.name}" foi ativado com sucesso.`,
         });
       },
-      onError: () => {
-        notifications.show({
-          color: 'red',
+      onError: (error) => {
+        notifyFailure(error, {
           title: 'Erro ao ativar canal',
           message: 'Não foi possível ativar o canal. Tente novamente.',
         });
@@ -143,10 +148,9 @@ export function ChannelDetailPage() {
           message: `"${channel.name}" foi desativado com sucesso.`,
         });
       },
-      onError: () => {
+      onError: (error) => {
         closeConfirm();
-        notifications.show({
-          color: 'red',
+        notifyFailure(error, {
           title: 'Erro ao desativar canal',
           message: 'Não foi possível desativar o canal. Tente novamente.',
         });
@@ -166,6 +170,9 @@ export function ChannelDetailPage() {
   if (error instanceof ApiError && error.status === 404) {
     return <Alert color="red">Canal não encontrado.</Alert>;
   }
+
+  // O `403` da consulta principal é o papel (spec `panel-roles`, "O 403 na carga e na ação").
+  if (is403(error)) return <AccessDenied />;
 
   if (error || !data) {
     return <Alert color="red">Não foi possível carregar o canal.</Alert>;
@@ -191,37 +198,44 @@ export function ChannelDetailPage() {
         }
         description={`Tipo: ${channelTypeLabels[data.channelType]} · Agente responsável: ${agentLabel}`}
         actions={
-          <>
-            <Button component={Link} to={`/channels/${data.id}/edit`} variant="default">
-              Editar
-            </Button>
-            {data.isActive ? (
-              <Button color="red" variant="outline" onClick={openConfirm}>
-                Desativar
+          pode.escrever && (
+            <>
+              <Button component={Link} to={`/channels/${data.id}/edit`} variant="default">
+                Editar
               </Button>
-            ) : (
-              <Button
-                color="green"
-                variant="outline"
-                onClick={handleActivate}
-                loading={activateMutation.isPending}
-              >
-                Ativar
-              </Button>
-            )}
-          </>
+              {data.isActive ? (
+                <Button color="red" variant="outline" onClick={openConfirm}>
+                  Desativar
+                </Button>
+              ) : (
+                <Button
+                  color="green"
+                  variant="outline"
+                  onClick={handleActivate}
+                  loading={activateMutation.isPending}
+                >
+                  Ativar
+                </Button>
+              )}
+            </>
+          )
         }
       />
 
-      <Tabs defaultValue="sessions">
+      {/* O Leitor não vê o histórico de conversas: sem a aba Sessões, a página abre em
+          Configuração e não monta a lista de sessões, que chamaria `GET /channels/{id}/sessions`
+          e receberia `403` (spec `inbox-channel-catalog-ui`; change papeis-no-painel, Q13). */}
+      <Tabs defaultValue={pode.verHistorico ? 'sessions' : 'config'}>
         <Tabs.List>
-          <Tabs.Tab value="sessions">Sessões</Tabs.Tab>
+          {pode.verHistorico && <Tabs.Tab value="sessions">Sessões</Tabs.Tab>}
           <Tabs.Tab value="config">Configuração</Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="sessions">
-          <SessionsTab channelId={data.id} sessionId={sessionId} />
-        </Tabs.Panel>
+        {pode.verHistorico && (
+          <Tabs.Panel value="sessions">
+            <SessionsTab channelId={data.id} sessionId={sessionId} />
+          </Tabs.Panel>
+        )}
 
         <Tabs.Panel value="config">
           <Card withBorder mt="md">

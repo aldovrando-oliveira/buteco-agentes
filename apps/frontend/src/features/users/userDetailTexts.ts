@@ -13,7 +13,9 @@ export function detailSubtitle(
 ): string {
   const origem = user.convidadoPor
     ? `Convidado por ${user.convidadoPor.nome} em ${formatDate(user.criadoEm, timeZone)}`
-    : 'Primeiro administrador, criado na instalação';
+    : // Sem convite é o usuário criado na instalação. Com papéis, ele pode ter sido rebaixado, e
+      // "administrador" diria um papel que talvez não seja o dele (change papeis-no-painel, D4).
+      'Criado na instalação';
   let estado: string | null = null;
   if (user.estado === 'desativado') {
     estado = user.desativadoEm ? `desativado em ${formatDate(user.desativadoEm, timeZone)}` : null;

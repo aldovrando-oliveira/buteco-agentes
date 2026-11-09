@@ -12,6 +12,8 @@ import { knowledgeBaseRows } from '../utils/knowledgeBaseRows';
 import { KnowledgeBaseLinkModal } from './KnowledgeBaseLinkModal';
 import type { Agent } from '../types/agent';
 import type { KnowledgeBase } from '../../knowledge-bases/types/knowledgeBase';
+import { notifyFailure } from '../../../utils/notifyFailure';
+import { usePermissoes } from '../../../auth/session';
 
 interface AgentKnowledgeTabProps {
   agent: Agent;
@@ -43,6 +45,8 @@ function sameSet(a: string[], b: string[]): boolean {
 //     onde os botões das outras linhas seguem habilitados durante a requisição.
 //  3. As outras duas abas de vínculo deste mesmo detalhe já usam este idioma.
 export function AgentKnowledgeTab({ agent, catalog }: AgentKnowledgeTabProps) {
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
   const mutation = useReplaceAgentKnowledgeBasesMutation(agent.id);
   const savedIds = useMemo(
     () => agent.knowledgeBases.map((knowledgeBase) => knowledgeBase.id),
@@ -77,9 +81,8 @@ export function AgentKnowledgeTab({ agent, catalog }: AgentKnowledgeTabProps) {
           message: `As bases de conhecimento de "${agent.name}" foram atualizadas com sucesso.`,
         });
       },
-      onError: () => {
-        notifications.show({
-          color: 'red',
+      onError: (error) => {
+        notifyFailure(error, {
           title: 'Erro ao atualizar bases de conhecimento',
           message:
             'Não foi possível atualizar as bases de conhecimento do agente. Nenhuma alteração foi gravada.',
@@ -101,7 +104,7 @@ export function AgentKnowledgeTab({ agent, catalog }: AgentKnowledgeTabProps) {
         <Text size="sm" c="dimmed" data-testid="knowledge-summary">
           {summary}
         </Text>
-        <Button onClick={openModal}>Vincular base</Button>
+        {pode.escrever && <Button onClick={openModal}>Vincular base</Button>}
       </Group>
 
       <SectionedCard
@@ -134,9 +137,11 @@ export function AgentKnowledgeTab({ agent, catalog }: AgentKnowledgeTabProps) {
                 Sem vínculo, este agente responde só com o system prompt: ele não tem onde consultar
                 horários, cardápio ou políticas.
               </Text>
-              <Button mt="md" onClick={openModal}>
-                Vincular base
-              </Button>
+              {pode.escrever && (
+                <Button mt="md" onClick={openModal}>
+                  Vincular base
+                </Button>
+              )}
             </Box>
           </SectionedCard.Body>
         ) : (
@@ -159,14 +164,16 @@ export function AgentKnowledgeTab({ agent, catalog }: AgentKnowledgeTabProps) {
                   {/* flex: none — sem isso o botão encolhe até truncar o
                       rótulo ("Desvinc") na linha de descrição longa. Achado na
                       conferência manual; jsdom não enxerga largura. */}
-                  <Button
-                    variant="default"
-                    size="xs"
-                    style={{ flex: 'none' }}
-                    onClick={() => handleToggle(row.id)}
-                  >
-                    Desvincular
-                  </Button>
+                  {pode.escrever && (
+                    <Button
+                      variant="default"
+                      size="xs"
+                      style={{ flex: 'none' }}
+                      onClick={() => handleToggle(row.id)}
+                    >
+                      Desvincular
+                    </Button>
+                  )}
                 </Group>
                 {/* Contraparte de produto do risco R6 da etapa de vínculo: o
                     backend aceita de propósito vincular base inativa, porque o
@@ -191,7 +198,7 @@ export function AgentKnowledgeTab({ agent, catalog }: AgentKnowledgeTabProps) {
         onClose={closeModal}
       />
 
-      {(isDirty || mutation.isPending) && (
+      {pode.escrever && (isDirty || mutation.isPending) && (
         <UnsavedChangesBar
           message="Alterações não salvas nas bases de conhecimento"
           saveLabel="Salvar bases de conhecimento"

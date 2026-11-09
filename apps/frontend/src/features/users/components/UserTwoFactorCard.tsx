@@ -34,7 +34,7 @@ export function UserTwoFactorCard({
 }: UserTwoFactorCardProps) {
   const ativa = user.duasEtapas;
   const texto = proprio
-    ? 'Para trocar de celular, peça a outro usuário que redefina a sua verificação.'
+    ? 'Para trocar de celular, peça a outro Admin que redefina a sua verificação.'
     : ativa
       ? 'Use Redefinir se a pessoa perdeu ou trocou o celular e os códigos de recuperação.'
       : 'A pessoa cadastra a verificação no próximo login.';

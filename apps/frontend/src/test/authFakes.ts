@@ -43,22 +43,34 @@ export function jsonResponse(body: unknown, status = 200, headers: Record<string
   });
 }
 
-export function tokenResponse(n: number, expiresIn = 900) {
+/**
+ * O claim `role` do id token dos fakes (o valor do emissor, em inglês). Os testes rodam como
+ * Admin por padrão (design.md da change papeis-no-painel, D11): o comportamento de Operador e
+ * Leitor só é provado pelos casos que gravam o papel explicitamente, pelo `signInAsRole`.
+ */
+export type ClaimDePapelDeTeste = 'admin' | 'operator' | 'reader';
+
+export function tokenResponse(n: number, expiresIn = 900, role: ClaimDePapelDeTeste | null = 'admin') {
   return jsonResponse({
     access_token: `access-${n}`,
     refresh_token: `refresh-${n}`,
-    id_token: fakeJwt({ name: 'Ana Souza', email: 'ana@exemplo.test', n }),
+    id_token: fakeJwt({ name: 'Ana Souza', email: 'ana@exemplo.test', n, ...(role ? { role } : {}) }),
     expires_in: expiresIn,
     token_type: 'Bearer',
   });
 }
 
-export function session(n: number, accessExpiresAt: number, overrides: Partial<Session> = {}): Session {
+export function session(
+  n: number,
+  accessExpiresAt: number,
+  overrides: Partial<Session> = {},
+  role: ClaimDePapelDeTeste | null = 'admin',
+): Session {
   return {
     accessToken: `access-${n}`,
     accessExpiresAt,
     refreshToken: `refresh-${n}`,
-    idToken: fakeJwt({ name: 'Ana Souza', email: 'ana@exemplo.test', n }),
+    idToken: fakeJwt({ name: 'Ana Souza', email: 'ana@exemplo.test', n, ...(role ? { role } : {}) }),
     nome: 'Ana Souza',
     email: 'ana@exemplo.test',
     ...overrides,
@@ -108,12 +120,31 @@ export function fakeRuntime(shared: {
  * o registro de uma sessão válida por 15 min (o lugar onde o painel a procura), ou o
  * apaga. Substitui o `setToken`/`clearToken` do `auth/token.ts`, que saiu.
  */
-export function signInForTest(accessToken = 'token-de-teste'): Session {
-  const s = session(1, Date.now() + 15 * 60_000, { accessToken });
+export function signInForTest(accessToken = 'token-de-teste', role: ClaimDePapelDeTeste | null = 'admin'): Session {
+  const s = session(1, Date.now() + 15 * 60_000, { accessToken }, role);
   window.localStorage.setItem('buteco.sessao', JSON.stringify(s));
   return s;
 }
 
 export function signOutForTest(): void {
   window.localStorage.removeItem('buteco.sessao');
+}
+
+const CLAIM_DO_PAPEL: Record<'admin' | 'operador' | 'leitor', ClaimDePapelDeTeste> = {
+  admin: 'admin',
+  operador: 'operator',
+  leitor: 'reader',
+};
+
+/**
+ * Grava a sessão de um papel, pelo nome do fio (`admin`, `operador`, `leitor`), ou nenhuma
+ * sessão com `null`. É o único jeito de um caso provar o comportamento de Operador ou de
+ * Leitor: sem ele, o caso roda com a sessão de Admin do `setup.ts` (D11).
+ */
+export function signInAsRole(papel: 'admin' | 'operador' | 'leitor' | null, accessToken = 'token-de-teste'): Session | null {
+  if (papel === null) {
+    signOutForTest();
+    return null;
+  }
+  return signInForTest(accessToken, CLAIM_DO_PAPEL[papel]);
 }

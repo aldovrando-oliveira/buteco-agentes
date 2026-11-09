@@ -27,6 +27,20 @@ export function isApiFailure(error: unknown): error is ApiFailure {
   );
 }
 
+/**
+ * O `403` (spec `panel-roles`, "O 403 na carga e na ação"): na consulta principal, a página
+ * mostra o acesso negado; na ação, o aviso de ação recusada, ou o `title` quando a resposta traz
+ * um (os `403` "a si mesmo" de Editar usuário).
+ */
+export function is403(error: unknown): boolean {
+  return isApiFailure(error) && error.status === 403;
+}
+
+/** O `403` sem `title`: o da tabela de papéis, sem corpo, nos três apps. */
+export function isRoleRefusal(error: unknown): boolean {
+  return is403(error) && !(error as ApiFailure).title;
+}
+
 const GENERICO = 'Não foi possível concluir agora. Tente de novo.';
 
 /** O texto do bloqueio do quadro, com o N do `Retry-After` (o quadro diz "5 minutos" fixo; #217). */

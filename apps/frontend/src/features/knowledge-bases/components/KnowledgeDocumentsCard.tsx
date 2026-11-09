@@ -20,6 +20,11 @@ interface KnowledgeDocumentsCardProps {
   // (frontend-detalhe-base-sincronizada, D1). Obrigatória: quem monta o card
   // decide pela origem da base.
   readOnly: boolean;
+  /**
+   * Falso para o Leitor (spec `panel-roles`; change papeis-no-painel): sem "Adicionar documento",
+   * sem a coluna de ações e sem "Reindexar documento". O motivo da falha continua visível.
+   */
+  canWrite?: boolean;
   onAdd?: () => void;
   onUpdate?: (document: KnowledgeDocumentSummary) => void;
   onDelete?: (document: KnowledgeDocumentSummary) => void;
@@ -70,7 +75,8 @@ function FailureBand({
 }: {
   colSpan: number;
   document: KnowledgeDocumentSummary;
-  onReindex: () => void;
+  /** Sem ele (o Leitor), a faixa mostra o motivo sem o botão. */
+  onReindex?: () => void;
   reindexing: boolean;
 }) {
   return (
@@ -87,15 +93,17 @@ function FailureBand({
               {document.failureReason ??
                 'O motivo desta falha não foi registrado. Reindexar volta a enfileirar o documento.'}
             </Text>
-            <Button
-              size="xs"
-              variant="outline"
-              color="red"
-              onClick={onReindex}
-              loading={reindexing}
-            >
-              Reindexar documento
-            </Button>
+            {onReindex && (
+              <Button
+                size="xs"
+                variant="outline"
+                color="red"
+                onClick={onReindex}
+                loading={reindexing}
+              >
+                Reindexar documento
+              </Button>
+            )}
           </Stack>
         </Alert>
       </Table.Td>
@@ -108,6 +116,7 @@ export function KnowledgeDocumentsCard({
   isLoading,
   error,
   readOnly,
+  canWrite = true,
   onAdd,
   onUpdate,
   onDelete,
@@ -117,15 +126,17 @@ export function KnowledgeDocumentsCard({
   // No lugar do botão, a explicação da prancha 4a: a propriedade é da base e
   // permanente, e cabe no cabeçalho sem disputar atenção com a faixa de itens
   // não utilizáveis (D1).
+  // As ações de documento: só numa base manual, e só para quem escreve.
+  const comAcoes = !readOnly && canWrite;
   const headerAction = readOnly ? (
     <Text size="xs" c="dimmed">
       Somente leitura — o conteúdo vem da pasta
     </Text>
-  ) : (
+  ) : canWrite ? (
     <Button size="xs" onClick={onAdd}>
       Adicionar documento
     </Button>
-  );
+  ) : null;
 
   if (isLoading) {
     return (
@@ -210,7 +221,7 @@ export function KnowledgeDocumentsCard({
               <Table.Th w={readOnly ? '18%' : undefined}>
                 <SectionLabel>Indexação</SectionLabel>
               </Table.Th>
-              {!readOnly && (
+              {comAcoes && (
                 <Table.Th>
                   <SectionLabel>Ações</SectionLabel>
                 </Table.Th>
@@ -251,7 +262,7 @@ export function KnowledgeDocumentsCard({
                       <Badge color={status.color}>{status.label}</Badge>
                     </Group>
                   </Table.Td>
-                  {!readOnly && (
+                  {comAcoes && (
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">
                         <Button size="xs" variant="default" onClick={() => onUpdate?.(document)}>
@@ -272,9 +283,9 @@ export function KnowledgeDocumentsCard({
                 failed ? (
                   <FailureBand
                     key={`${document.id}-failure`}
-                    colSpan={readOnly ? 3 : 4}
+                    colSpan={comAcoes ? 4 : 3}
                     document={document}
-                    onReindex={() => onReindex(document)}
+                    onReindex={canWrite ? () => onReindex(document) : undefined}
                     reindexing={reindexingId === document.id}
                   />
                 ) : null,

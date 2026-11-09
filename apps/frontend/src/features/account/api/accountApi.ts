@@ -76,6 +76,8 @@ export interface Account {
   id: string;
   nome: string;
   email: string;
+  /** O papel GRAVADO (`admin`, `operador`, `leitor`; #184), e não o do token. */
+  papel: string;
   criadoEm: string;
   ultimoAcesso: string | null;
   duasEtapas: boolean;

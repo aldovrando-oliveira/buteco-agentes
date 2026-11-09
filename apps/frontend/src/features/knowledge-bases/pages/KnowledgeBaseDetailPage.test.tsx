@@ -25,6 +25,7 @@ import type { KnowledgeBase } from '../types/knowledgeBase';
 import type { KnowledgeDocumentSummary } from '../types/knowledgeDocument';
 import type { Agent } from '../../agents/types/agent';
 import type { KnowledgeIndexProvenance } from '../types/knowledgeIndex';
+import { signInAsRole } from '../../../test/authFakes';
 
 vi.mock('../api/knowledgeBasesApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/knowledgeBasesApi')>();
@@ -672,5 +673,21 @@ describe('KnowledgeBaseDetailPage', () => {
     expect(
       await screen.findByText('Não foi possível carregar a base de conhecimento.'),
     ).toBeInTheDocument();
+  });
+});
+
+// O que cada papel vê numa base manual (spec `panel-roles`; change papeis-no-painel).
+describe('detalhe da base manual por papel', () => {
+  it('o Leitor não vê "Adicionar documento", nem Atualizar e Excluir do documento', async () => {
+    signInAsRole('leitor');
+    vi.mocked(getKnowledgeBase).mockResolvedValue(knowledgeBase);
+    vi.mocked(listKnowledgeDocuments).mockResolvedValue([documento()]);
+    renderPage();
+
+    expect(await screen.findByText('Faixas de atraso e descontos')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Adicionar documento' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Atualizar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Excluir' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Somente leitura — o conteúdo vem da pasta')).not.toBeInTheDocument();
   });
 });

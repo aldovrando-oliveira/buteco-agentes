@@ -35,6 +35,8 @@ describe('ProtectedRoute', () => {
   });
 
   it('sem o registro, vai ao /entrar com a rota pedida como voltarPara, sem renderizar o conteúdo', () => {
+    // Sem sessão: o setup grava a de Admin antes de cada caso (D11 da papeis-no-painel).
+    signOutForTest();
     const router = renderAt();
 
     expect(screen.getByText('Tela do entrar')).toBeInTheDocument();

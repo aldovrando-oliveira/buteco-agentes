@@ -18728,3 +18728,164 @@ Todas seguidas e registradas; nenhuma mudou comportamento ou contrato, nem reduz
 
 - **#185** (M2 · 3 de 6): as telas dos papéis; a #184 e esta só vão para produção com ela.
 - **O banco de desenvolvimento** precisa da migration da #184 antes da próxima conferência que dependa do papel.
+
+## `papeis-no-painel` — O painel com os papéis (#185)
+
+**Change proposta e implementada em 09/11/2026**, na branch `feat/185-papeis-no-painel`, num worktree próprio, a partir de `85c1b35` (merge do PR #260, a #257). Entrega M2 · 3 de 6. Só o `apps/frontend` muda. **Vai para produção junto com a #184** (decisão do dono, Q9 da #184).
+
+- **O que entra no painel:**
+  - **o papel da sessão:** sai do claim `role` do id token, por um módulo só (`auth/roles.ts`: `admin`/`operator`/`reader` ↔ `admin`/`operador`/`leitor`); o papel desconhecido vale Leitor;
+  - **o menu e as telas por papel:** a seção "Acesso" é só do Admin; o Leitor não vê as escritas, o histórico de conversas, os conectores nem o "Testar conexão", e abre o canal em Configuração sem chamar as sessões;
+  - **a guarda de rota (`RequirePapel`)** mostra "Você não tem acesso a esta página." sem chamar o servidor; o `403` na carga mostra a mesma tela, e o `403` na ação mostra "Você não tem permissão para esta ação.";
+  - **o `sessionFetch`** renova uma vez num `403`, sem repetir a chamada, no máximo uma vez por access token; a consulta não repete o `403`;
+  - **Usuários:** o papel obrigatório no convite e a coluna Papel; "Dados e papel" em Editar usuário (dados antes do papel, promoção com senha, `409` do último Admin, gravação parcial, desativado), o rebaixamento de si mesmo até Minha conta, e o subtítulo "Criado na instalação";
+  - **o rodapé** mostra o papel; **Minha conta** mostra a linha Papel e o texto por papel;
+  - **textos velhos corrigidos:** o cartão "Senha e recuperação" (velho desde a #220), o `403` do conectores, que falava em configuração, e os textos de "peça a outro Admin".
+- **Documentação:** `docs/deployment.md` ("Papéis Admin, Operador e Leitor (#184, #185)", com a volta atrás nas três formas) e `CHANGELOG.md`.
+- **Capacidades:**
+  - nova: `panel-roles`;
+  - modificadas: `panel-issuer-session`, `frontend-app-shell`, `panel-users-page`, `panel-user-detail-page`, `panel-account-page`, `inbox-channel-catalog-ui` e `knowledge-base-sync-source-ui`;
+  - o Purpose de `user-management` foi corrigido à mão (premissa 7).
+- **Protótipo:** canvas `H7dPBZafiSkdKd1hqesPZ6`, versão `1794226793-49cc` (a "versão 58"), `entrega=m2`.
+- **Fora da change, aberta:** #261 (Backlog, sem milestone, ligada à #184), o título do `403` da redefinição das 2 etapas de si mesmo, que pede "outro usuário".
+
+**Decisões do dono** (09/11/2026; detalhe no design, "Revisão do dono"):
+- Q1 a Q13 como recomendadas;
+- Q14: o protótipo das versões 57 e 58;
+- Q15: uma change só;
+- Q16 e Q17: os textos do quadro;
+- D11 aceita, com a condição: **os testes de página rodam como Admin por padrão, e o comportamento de Operador e Leitor só é provado pelos casos que gravam o papel explicitamente** (`signInAsRole`).
+
+### Suítes
+
+`suite-185.sh` (cópia do `suite-257.sh`, com o lock e o `MAXWORKERS`), só a `frontend`, uma por vez. Não precisou da variante de 4 workers.
+
+| rodada | árvore | resultado | casos | CPU mínima |
+|---|---|---|---|---|
+| `185-baseline` | `85c1b35`, limpa | APROVADA | 2351/2351 em 185 arquivos, 151 s | 62 |
+| `185-r0` | só a sessão-padrão (0.2) | **reprovada por arranjo, corrigida** (3 casos "sem sessão" viam a sessão-padrão; não é CPU) | 2348/2351 | 60 |
+| `185-r0b` | só a 0.2, arranjo corrigido | APROVADA | 2351/2351 | 58 |
+| `185-r1` | a change | **APROVADA** | **2491/2491 em 190 arquivos, 178 s** | 60 |
+| `185-r2` | a change, com o ajuste do dono (2 casos do 403) | **APROVADA** | **2493/2493 em 190 arquivos** | 58 |
+
+Contra a `185-r1`, por arquivo + nome: nada saiu, e entraram só os 2 casos do ajuste.
+
+**Comparação por arquivo + nome** (`185-r1` contra `185-baseline`):
+- **saíram 3**, as renomeações da tabela do topo do `tasks.md`: os dois casos do rodapé do `AppShell` e o do subtítulo em `userDetailTexts`;
+- **entraram 143** (140 novos e as 3 renomeações):
+
+| arquivo | casos |
+|---|---|
+| `app/RequirePapel.test.tsx` | 41 |
+| `app/forbiddenPages.test.tsx` | 16 |
+| `features/users/components/UserDataCard.test.tsx` | 16 |
+| `components/layout/AppShell.test.tsx` | 9 |
+| `features/account/pages/AccountPage.test.tsx` | 8 |
+| `auth/sessionFetch.test.ts` | 7 |
+| `features/agents/pages/AgentDetailPage.test.tsx` | 7 |
+| `auth/roles.test.ts` | 6 |
+| `features/users/pages/UsersPage.test.tsx` | 5 |
+| `auth/sessionRole.test.ts` | 4 |
+| `features/users/components/InviteForm.test.tsx` | 3 |
+| `app/queryClient.test.ts`, `components/feedback/AccessDenied.test.tsx`, `features/agents/pages/AgentListPage.test.tsx`, `features/channels/pages/ChannelDetailPage.test.tsx`, `features/knowledge-bases/pages/KnowledgeBaseDetailPage.sync.test.tsx`, `features/knowledge-bases/pages/KnowledgeBaseListPage.test.tsx`, `features/mcp-servers/pages/McpServerDetailPage.test.tsx`, `features/users/api/usersApi.test.ts` | 2 cada |
+| `features/channels/pages/ChannelListPage.test.tsx`, `features/knowledge-bases/pages/KnowledgeBaseDetailPage.test.tsx`, `features/knowledge-bases/utils/connectorErrors.test.ts`, `features/mcp-servers/pages/McpServerListPage.test.tsx`, `features/users/userDetailTexts.test.ts` | 1 cada |
+
+**Dos 10 casos que mudam de asserção** (a tabela do `tasks.md`):
+- 8 mudaram como previsto. Os dois do rodapé e o do subtítulo também mudaram de nome, junto da asserção;
+- a linha "UserDataCard: os casos que leem o título 'Dados'" **não tinha caso nenhum** (premissa da projeção);
+- "nome de uma palavra" mudou só a segunda linha esperada.
+
+### Guardas (convenção 15)
+
+**17 guardas no total.** Pelo `guarda-185.sh`, com o lock; saídas em `~/.cache/buteco-agents/185-guardas/`. Os de `roles.ts`, `routes.tsx`, `UserDataCard.tsx` e `ChannelDetailPage.tsx` foram **refeitos sobre a árvore final**, depois do Prettier, em `185-guardas/final/`, e reprovaram de novo.
+
+| tarefa | defeito | teste que reprovou | mensagem | voltou (sha final) |
+|---|---|---|---|---|
+| 1.1 | `papelDaResposta` aceita `operator`/`reader` | `roles.test.ts` › Valor desconhecido | `expected 'operador' to be null` | `roles.ts` `8ed5f720` |
+| 1.1 | `permissoes(null)` → Admin (papel ausente como Admin) | `roles.test.ts` › o papel desconhecido tem as permissões do Leitor | `expected { gerirAcesso: true, …(3) } to deeply equal { gerirAcesso: false, …(3) }` | `roles.ts` `8ed5f720` |
+| 1.2 | `papelDaSessao … ?? 'admin'` (papel ausente como Admin) | `sessionRole.test.ts` › Id token sem role é papel desconhecido; `AppShell.test.tsx` › Id token sem role, Papel desconhecido | `expected 'admin' to be null`; `expected [ 'Ana Souza', 'Admin' ] to deeply equal [ 'Ana Souza' ]` | `session.ts` `fbcf5419` |
+| 2.1 | sem a marca do token: **o 403 renova duas vezes** | `sessionFetch.test.ts` › Dois 403 seguidos, uma renovação | `expected 3 to be 1` | `sessionFetch.ts` `63f6607f` |
+| 2.1 | **o 403 repete a chamada** depois da renovação | `sessionFetch.test.ts` › Um 403…, nenhuma repetição; A senha não é reenviada | `expected [ {…}, {…} ] to deeply equal [ {…} ]` | `sessionFetch.ts` `63f6607f` |
+| 2.1 (2.1c, ajuste do dono) | **o 403 chama `renew()` sem passar o token atual** | `sessionFetch.test.ts` › A renovação depois do 403 traz o id token novo e o papel derivado; `AppShell.test.tsx` › O 403 renova e a casca passa a Operador sem recarregar | `expected +0 to be 1` (nenhuma renovação); `expect(element).not.toBeInTheDocument()` | `sessionFetch.ts` `63f6607f` |
+| 2.2 | sem o corte do `403` no `queryRetry` | `queryClient.test.ts` › Consulta com 403 não repete | `expected "vi.fn()" to be called 1 times, but got 4 times` | `transient.ts` `156dfd46` |
+| 3.2 | `SO_ADMIN` com o Operador (**a guarda deixa passar o Operador em `/users`**) | `RequirePapel.test.tsx` › Operador em /users (e as linhas de operador de `/users`, `/users/:id`, `/identity`) | `Unable to find an element with the text: Você não tem acesso a esta página.` | `routeRoles.ts` `b9a953c5` |
+| 3.2 | a rota da sessão de canal fora da guarda | `RequirePapel.test.tsx` › Leitor numa sessão de canal | o mesmo | `routes.tsx` `e5e4b9eb` |
+| 5.3 | o convite sai sem papel | `InviteForm.test.tsx` › Sem papel escolhido | `Unable to find an element with the text: Escolha o papel.` | `InviteForm.tsx` `5ab2308e` |
+| 6.3 | **o Salvar grava o papel antes dos dados** | `UserDataCard.test.tsx` › Dados antes do papel (e Dados com falha…, Gravação parcial) | `expected [ 'PUT /users/u-rafael/role', …(1) ] to deeply equal [ 'PUT /users/u-rafael', …(1) ]` | `UserDataCard.tsx` `7758fbaf` |
+| 6.3 | o papel sai depois da falha dos dados | › Dados com falha não mudam o papel | `expected [ { method: 'PUT', …(3) } ] to have a length of +0 but got 1` | `UserDataCard.tsx` `7758fbaf` |
+| 6.3 | o texto longo sem mudança de papel | › só nome e e-mail dão "Alterações salvas.", sem o texto do papel | `Unable to find an element with the text: Alterações salvas.` | `UserDataCard.tsx` `7758fbaf` |
+| 6.4 | **o rebaixamento de si mesmo relê Usuários** | › Rebaixado vai a Minha conta sem reler Usuários | `expected [ { method: 'GET', …(3) } ] to deeply equal []` | `UserDataCard.tsx` `7758fbaf` |
+| 6.4 | o `PUT` antes da confirmação | › A confirmação antes da rota | `Unable to find an element with the text: Deixar de ser Admin? …` | `UserDataCard.tsx` `7758fbaf` |
+| 7.1 | o texto de Minha conta pelo papel do token | `AccountPage.test.tsx` › O papel gravado vale sobre o do token | `Unable to find an element with the text: Para mudar o nome ou o e-mail, peça a um Admin do painel.` | `AccountDataCard.tsx` `cc547da1` |
+| 8.4 | **o Leitor abre o canal na aba Sessões** | `ChannelDetailPage.test.tsx` › Leitor abre o canal em Configuração | `expect(element).toHaveAttribute("aria-selected", "true")` | `ChannelDetailPage.tsx` `70607232` |
+
+### Casos por papel gravado explicitamente
+
+Contados por spec. O Admin aparece só onde é gravado por `signInAsRole('admin')`, ou pelo `signInAs` de Editar usuário.
+
+| spec | Admin | Operador | Leitor |
+|---|---|---|---|
+| `panel-roles` (guarda, telas de domínio, casca) | 13 | 20 | 24 |
+| `frontend-app-shell` | padrão | 2 | 2 |
+| `panel-users-page` (pela guarda de `/users`) | 1 | 2 | 1 |
+| `panel-user-detail-page` (pela guarda de `/users/:id`; o arquivo de Editar usuário inteiro grava Admin) | 1 + todos do arquivo | 1 | 1 |
+| `panel-account-page` (o papel vem do `GET /account`, e não da sessão) | 2 pela resposta | 4 pela resposta | 1 pela resposta |
+| `inbox-channel-catalog-ui` | padrão | 1 | 1 |
+| `knowledge-base-sync-source-ui` (o `403` é por status, sem papel nomeado) | — | — | — |
+
+### Conferência no navegador (11.5)
+
+Ambiente:
+- `apps/api` e `apps/inbox` do checkout em `85c1b35` (o mesmo backend da change), contra os bancos descartáveis `buteco_185_nav` e `buteco_185_nav_inbox`, criados de `template0` e migrados por `dotnet ef database update` (com a `AddUserRole`);
+- o Vite do worktree da change, no Chrome;
+- o primeiro Admin pelo bootstrap, com um hash PBKDF2 gerado para a conferência;
+- os códigos das 2 etapas calculados do segredo mostrado na página (a aba não lê QR).
+
+Passos:
+1. **Admin:** o menu com "Acesso" (Usuários, Identidade) e o rodapé "Admin". Agente e canal (WAHA) criados pela API, com o token dele.
+2. **O convite com papel:** pela tela, Bruno como Operador ("bruno@185.local · Operador" no painel do link). Olga (Operador) e Lia (Leitor) pela mesma rota, chamada da página. Os três aceitos pelo link, com senha nova e o cadastro das 2 etapas. A coluna Papel com os quatro.
+3. **Operadora:** o menu sem "Acesso", o rodapé "Operador"; **`/users` digitado** mostra "Você não tem acesso a esta página.", **sem nenhuma chamada** à API (rede da aba).
+4. **Leitora:** o menu sem "Acesso", o rodapé "Leitor"; **o canal abre em Configuração**, sem a aba Sessões nem Editar/Desativar. A rede teve só `GET /channels/{id}` e `GET /agents`, **nenhum `/sessions`**.
+5. **Promoção com senha:** em Editar usuário, Bruno → Admin. O bloco "Como Admin, Bruno Admin passa a gerir usuários…"; a senha errada deu "Senha inválida." no campo; a certa, "Alterações salvas. O novo papel chega ao painel de Bruno Admin em até 15 minutos…". Olga promovida pela rota.
+6. **Admin rebaixado por outro:**
+   - o Admin em `/agents`, com "Acesso" no menu; Bruno (Admin, com o token dele numa variável da aba) o rebaixou a Operador pela rota (`200`);
+   - o Admin clicou em "Usuários" no menu: **um `GET /users` com `403` e um `POST /connect/token`, sem repetir o `GET`**;
+   - a tela mostrou "Você não tem acesso a esta página."; **o menu perdeu "Acesso" e o rodapé passou a "Operador" sem recarregar** (uma marca na `window` sobreviveu), e o id token novo traz `role` `operator`.
+7. **Rebaixar a si mesmo:**
+   - Olga (Admin) no próprio detalhe → Operador → "Salvar alterações" mostrou a confirmação "Deixar de ser Admin? …";
+   - "Deixar de ser Admin" mandou **um `PUT …/role` (`200`) e um `/connect/token`, e nenhum `GET /users` depois**;
+   - Minha conta abriu com "O seu papel agora é Operador.", a linha Papel "Operador", "peça a um Admin do painel" e o menu sem "Acesso".
+
+Ao fim, os dois bancos foram apagados (`dropdb`), os processos encerrados e os segredos do teste removidos.
+
+**Ficam para a validação visual** (checklist 10.3), com o motivo:
+- os dois esquemas de cor (a conferência rodou só no claro);
+- o `423` da promoção (pediria cinco senhas erradas e o bloqueio da conta de teste);
+- a gravação parcial e o `409` do último Admin pela tela (cobertos por caso; na conferência, o último Admin não foi exercitado);
+- a aparência dos quadros, comparada estado a estado.
+
+### Medição contra a projeção (convenção 18)
+
+| item | projetado | medido | desvio |
+|---|---|---|---|
+| produção | ~35 arq., ~950 linhas | 52 arq., +1157 −324 | +22% nas linhas, +49% nos arquivos |
+| casos | ~106 | 140 novos (+3 renomeados) | +32% |
+| teste | ~1.400–1.700 linhas, ~30 arq. | 30 arq., +1353 −24 | −3% abaixo do piso |
+| duplos | ~80 | 6 arq., +77 −12 | −4% |
+
+**As causas, por leitura:**
+- **Arquivos:** o `notifyFailure` tocou 15 páginas e componentes de domínio que a projeção contava como "sobrepostos"; cada um é um arquivo a mais, com poucas linhas.
+- **Casos:** o `it.each` da guarda gera 36 casos de uma tabela (a projeção contava 8), e a guarda estática do `notifyFailure` gera mais 16 cargas com `403`.
+- **Linhas de teste:** ficaram no piso porque os `it.each` são baratos por caso.
+- **Duplos:** o `fakeAccountApi` ganhou o emissor por padrão e o corpo que não é JSON, e não estava na projeção (a premissa abaixo); o resto bateu.
+
+### Premissas que caíram durante o apply (convenção 9; nenhuma muda contrato, sem parada)
+
+1. **Tabela do `tasks.md`:** a linha "UserDataCard: os casos que leem o título 'Dados'" não tinha caso: nenhum teste lia o título.
+2. **Duplo `fakeAccountApi`:** fazia `JSON.parse` de todo corpo, e a renovação do `403` (form-urlencoded) lançava dentro dele e repetia por 25 s. Corrigido no duplo (D12).
+3. **`renewal.renew()` sem argumento não renova** com o registro válido. **Vale para os dois caminhos que renovam para pegar o papel novo:** o rebaixamento de si mesmo passa o token atual, e o `403` do `sessionFetch` passa o token que recebeu o `403`. No ajuste do dono, entraram os casos que afirmam o id token novo e o papel Operador depois do `403` (unitário e na casca), com o guarda 2.1c. Registrado no design (D4 e D12).
+4. **Casos fora da tabela que mudaram, sem sair, renomear nem afrouxar:**
+   - os índices de "convite pendente", pela coluna nova;
+   - o corpo esperado de "POST /users/invitations leva o corpo do contrato" ganhou `papel` (mais estrito);
+   - arranjo de sessão e de papel em oito arquivos (no `tasks.md`, "Registro do apply").
+5. **O Prettier:** o `main` tem 157 arquivos fora do formato. Só os 57 arquivos tocados que já estavam formatados no `main` foram formatados, e os guardas desses arquivos foram refeitos.

@@ -26,7 +26,8 @@ import {
 import { Link, Outlet, useLocation } from 'react-router';
 import { Logo } from '../brand/Logo';
 import { useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
-import { logout, useSession } from '../../auth/session';
+import { logout, usePapel, useSession } from '../../auth/session';
+import { permissoes, rotuloDoPapel } from '../../auth/roles';
 import { userInitials } from './userInitials';
 
 const navItems = [
@@ -47,9 +48,10 @@ const navItems = [
   { to: '/insights', label: 'Insights', icon: ChartColumn },
 ];
 
-// A seção "Acesso" do protótipo de autenticação, depois de Insights. "Aplicações externas"
-// só chega com a M2 (#184, #185): o item só existe quando a página existe (design.md da
-// change usuarios-convites-identidade-painel, D1).
+// A seção "Acesso" do protótipo de autenticação, depois de Insights, só para o Admin (spec
+// `frontend-app-shell`; design.md da change papeis-no-painel, D2). "Aplicações externas" chega
+// com a #188: o item só existe quando a página existe (design.md da change
+// usuarios-convites-identidade-painel, D1).
 const accessItems = [
   { to: '/users', label: 'Usuários', icon: Users },
   { to: '/identity', label: 'Identidade', icon: Shield },
@@ -66,6 +68,9 @@ export function AppShell() {
   // quem usa o SO no escuro.
   const isDark = useComputedColorScheme('light') === 'dark';
   const session = useSession();
+  // O papel do id token, relido quando a renovação grava um id token novo: o menu e o rodapé
+  // mudam sem recarregar (design.md da change papeis-no-painel, D1).
+  const papel = usePapel();
   const [saindo, setSaindo] = useState(false);
 
   // O logout espera o lock da renovação: com uma renovação em voo em outra aba, isso
@@ -124,17 +129,23 @@ export function AppShell() {
         <MantineAppShell.Section grow component={ScrollArea} p="xs">
           {navItems.map(navItem)}
           {/* O rótulo da seção, como o `.navsec` do quadro: não é link nem item de
-              navegação, e nunca fica ativo. O tom é o `dimmed`, o mesmo do `SectionLabel`. */}
-          <Text size="xs" fw={600} tt="uppercase" c="dimmed" px={10} pt={14} pb={4} style={{ letterSpacing: '0.04em' }}>
-            Acesso
-          </Text>
-          {accessItems.map(navItem)}
+              navegação, e nunca fica ativo. O tom é o `dimmed`, o mesmo do `SectionLabel`.
+              Só para o Admin; o papel desconhecido vale Leitor. */}
+          {permissoes(papel).gerirAcesso && (
+            <>
+              <Text size="xs" fw={600} tt="uppercase" c="dimmed" px={10} pt={14} pb={4} style={{ letterSpacing: '0.04em' }}>
+                Acesso
+              </Text>
+              {accessItems.map(navItem)}
+            </>
+          )}
         </MantineAppShell.Section>
 
-        {/* O rodapé do protótipo de autenticação (quadro "Editar usuário"): avatar com
-            as iniciais, o nome e o e-mail do id token, e os botões de tema e de Sair.
-            Nenhum dado que não venha do id token; a #184 troca a segunda linha pelo
-            papel (design.md da change painel-entra-pelo-emissor, D7). */}
+        {/* O rodapé do protótipo de autenticação (quadros da entrega `m2`): avatar com as
+            iniciais, o nome e, abaixo, o papel do id token, e os botões de tema e de Sair.
+            Nenhum dado que não venha do id token (design.md da change
+            painel-entra-pelo-emissor, D7). A segunda linha passou do e-mail ao papel com a
+            #185 (design.md da change papeis-no-painel, D5); com papel desconhecido, fica vazia. */}
         <MantineAppShell.Section
           p={10}
           style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
@@ -172,9 +183,9 @@ export function AppShell() {
                 <Text fz="sm" fw={500} lh={1.25} truncate="end">
                   {session?.nome ?? session?.email}
                 </Text>
-                {session?.nome && (
+                {papel && (
                   <Text fz={11} c="dimmed" lh={1.25} truncate="end">
-                    {session.email}
+                    {rotuloDoPapel(papel)}
                   </Text>
                 )}
               </Stack>

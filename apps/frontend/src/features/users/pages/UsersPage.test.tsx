@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { signInForTest, signOutForTest } from '../../../test/authFakes';
+import { signInForTest, signOutForTest, tokenResponse } from '../../../test/authFakes';
 import { authRuntime } from '../../../auth/session';
 import { formatRelative, formatShortDateTime } from '../../../utils/panelDates';
 import { ATIVO, CONVIDADA, DESATIVADO, VENCIDO, fakeUsersApi, problem } from '../test/fakeUsersApi';
@@ -29,7 +29,70 @@ describe('UsersPage', () => {
     expect(screen.getByText('Quem pode entrar no painel. O acesso é só por convite.')).toBeInTheDocument();
     expect(screen.getByText('Acesso só por convite')).toBeInTheDocument();
     expect(screen.getByText('Senha e recuperação')).toBeInTheDocument();
+    // O texto do `m2` (change papeis-no-painel; caso que muda de asserção, listado no tasks.md).
+    expect(
+      screen.getByText(
+        'Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário. A verificação em 2 etapas é obrigatória para todos os papéis: cada pessoa cadastra o app autenticador no primeiro login.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/ligada por cada pessoa/)).not.toBeInTheDocument();
     expect(await screen.findByText('Ana Souza')).toBeInTheDocument();
+  });
+
+  // Spec `panel-users-page`, "Colunas da lista de Usuários" e "Página Usuários em /users"
+  // (change papeis-no-painel).
+  it('as colunas, com Papel entre Formas de entrada e Verificação em 2 etapas', async () => {
+    fakeUsersApi({ 'GET /users': { status: 200, body: [ATIVO] } });
+    renderUsers();
+
+    await screen.findByText('Ana Souza');
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      'Usuário',
+      'Formas de entrada',
+      'Papel',
+      'Verificação em 2 etapas',
+      'Estado',
+      'Último acesso',
+      'Ações',
+    ]);
+  });
+
+  it('o papel na linha', async () => {
+    fakeUsersApi({ 'GET /users': { status: 200, body: [{ ...ATIVO, papel: 'operador' }] } });
+    renderUsers();
+
+    const tr = (await screen.findByText('Ana Souza')).closest('tr') as HTMLElement;
+    expect(within(tr).getByText('Operador')).toBeInTheDocument();
+  });
+
+  it('O papel do convidado', async () => {
+    fakeUsersApi({ 'GET /users': { status: 200, body: [CONVIDADA] } });
+    renderUsers();
+
+    const tr = (await screen.findByText('Joana Prado')).closest('tr') as HTMLElement;
+    expect(within(tr).getByText('Leitor')).toBeInTheDocument();
+  });
+
+  it('Papel desconhecido sai neutro', async () => {
+    fakeUsersApi({ 'GET /users': { status: 200, body: [{ ...ATIVO, papel: 'superusuario' }] } });
+    renderUsers();
+
+    const tr = (await screen.findByText('Ana Souza')).closest('tr') as HTMLElement;
+    const celula = within(tr).getAllByRole('cell')[2];
+    expect(celula).toHaveTextContent('—');
+    expect(celula.textContent).not.toMatch(/Admin|Operador|Leitor/);
+  });
+
+  it('Admin rebaixado recebe 403', async () => {
+    // O 403 renova a sessão uma vez (spec `panel-issuer-session`); o emissor responde.
+    const api = fakeUsersApi({ 'GET /users': { status: 403 }, 'POST /connect/token': tokenResponse(2) });
+
+    renderUsers();
+
+    expect(await screen.findByText('Você não tem acesso a esta página.')).toBeInTheDocument();
+    expect(screen.queryByText('Não foi possível carregar os usuários agora.')).not.toBeInTheDocument();
+    expect(api.calls('POST /connect/token')).toHaveLength(1);
+    expect(api.calls('GET /users')).toHaveLength(1);
   });
 
   it('carregando', () => {
@@ -72,11 +135,13 @@ describe('UsersPage', () => {
 
     const tr = (await screen.findByText('Joana Prado')).closest('tr') as HTMLElement;
     const celulas = within(tr).getAllByRole('cell');
+    // Os índices passam uma célula adiante com a coluna Papel (change papeis-no-painel): as
+    // mesmas asserções, sobre as mesmas colunas (formas, verificação, último acesso).
     expect(celulas[1]).toHaveTextContent('—');
-    expect(celulas[2]).toHaveTextContent('—');
+    expect(celulas[3]).toHaveTextContent('—');
     expect(within(tr).getByText('Convite pendente')).toBeInTheDocument();
     expect(within(tr).getByText(`vence em ${formatShortDateTime(CONVIDADA.convite!.expiraEm)}`)).toBeInTheDocument();
-    expect(celulas[4]).toHaveTextContent('—');
+    expect(celulas[5]).toHaveTextContent('—');
   });
 
   it('o vencido vem do servidor', async () => {

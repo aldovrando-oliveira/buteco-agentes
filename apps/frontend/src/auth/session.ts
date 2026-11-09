@@ -9,6 +9,8 @@ import { browserRuntime } from './runtime';
 import { createSessionFetch } from './sessionFetch';
 import { createSessionStore, decodeJwtPayload, parseSession } from './sessionStore';
 import type { Session } from './sessionStore';
+import { papelDoClaim, permissoes } from './roles';
+import type { Papel, Permissoes } from './roles';
 
 export const authRuntime = browserRuntime();
 export const sessionStore = createSessionStore(authRuntime.storage, authRuntime.events);
@@ -49,4 +51,25 @@ export function isSameUser(sub: string | null, id: string): boolean {
 /** O id do usuário da sessão, recalculado quando o registro muda nesta aba ou em outra. */
 export function useCurrentUserId(): string | null {
   return currentUserId(useSession());
+}
+
+/**
+ * O papel da sessão: o claim `role` do id token, lido na hora como o `sub` (spec `panel-roles`;
+ * design.md da change papeis-no-painel, D1). O registro não guarda o papel, para os gravados
+ * antes continuarem válidos, e a renovação já troca o id token. Sem sessão, sem `role` ou com
+ * valor fora da tabela, `null`: a tela o trata como Leitor (`permissoes(null)`).
+ */
+export function papelDaSessao(session: Session | null): Papel | null {
+  if (!session) return null;
+  return papelDoClaim(decodeJwtPayload(session.idToken).role);
+}
+
+/** O papel da sessão, recalculado quando o registro muda nesta aba ou em outra. */
+export function usePapel(): Papel | null {
+  return papelDaSessao(useSession());
+}
+
+/** O que a tela mostra para o papel da sessão; o desconhecido tem as do Leitor. */
+export function usePermissoes(): Permissoes {
+  return permissoes(usePapel());
 }

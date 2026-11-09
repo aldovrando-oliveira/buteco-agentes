@@ -7,6 +7,9 @@ import { useAgentsQuery } from '../../agents/api/useAgents';
 import { useChannelQuery, useUpdateChannelMutation } from '../api/useChannels';
 import { ChannelForm, type ChannelFormSubmitValues } from '../components/ChannelForm';
 import { ApiError } from '../api/channelsApi';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { notifyFailure } from '../../../utils/notifyFailure';
 
 interface ParsedFieldErrors {
   fieldErrors?: Record<string, string>;
@@ -68,8 +71,7 @@ export function ChannelEditPage() {
             });
             return;
           }
-          notifications.show({
-            color: 'red',
+          notifyFailure(mutationError, {
             title: 'Erro ao atualizar canal',
             message: 'Não foi possível atualizar o canal. Tente novamente.',
           });
@@ -90,6 +92,9 @@ export function ChannelEditPage() {
   if (error instanceof ApiError && error.status === 404) {
     return <Alert color="red">Canal não encontrado.</Alert>;
   }
+
+  // O `403` da consulta principal é o papel (spec `panel-roles`, "O 403 na carga e na ação").
+  if (is403(error)) return <AccessDenied />;
 
   if (error || !data) {
     return <Alert color="red">Não foi possível carregar o canal.</Alert>;

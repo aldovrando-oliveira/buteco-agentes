@@ -67,7 +67,12 @@ describe('connectorErrorMessage — navegação (apps/connectors)', () => {
       /O Google não respondeu/,
     ],
     ['401', connectorsError(401), /não aceitou a sua sessão/],
-    ['403', connectorsError(403), /recusou esta consulta para o operador/],
+    // O 403 é o papel (change papeis-no-painel; caso que muda de asserção, listado no tasks.md).
+    [
+      '403',
+      connectorsError(403),
+      /^Você não tem permissão para esta ação\. Se o seu papel mudou há pouco/,
+    ],
     ['código desconhecido', connectorsError(422, 'folder-too-deep'), /código `?folder-too-deep`?/],
     ['sem código', connectorsError(500), /status 500/],
   ];
@@ -276,5 +281,14 @@ describe('sharedCodeSentence', () => {
 
   it('devolve null para código sem frase compartilhada', () => {
     expect(sharedCodeSentence('rate-limited', null, null)).toBeNull();
+  });
+
+  // Spec `knowledge-base-sync-source-ui`, "403 do apps/connectors é o papel".
+  it('403 do apps/connectors é o papel', () => {
+    for (const contexto of ['navigation', 'sync-request'] as const) {
+      const texto = connectorErrorMessage(connectorsError(403), contexto);
+      expect(texto).toContain('Você não tem permissão para esta ação.');
+      expect(texto).not.toContain('configuração da instalação');
+    }
   });
 });

@@ -16,6 +16,7 @@ import { DEFAULT_INSIGHTS_PERIOD } from '../../insights/utils/insightsWindow';
 import type { KnowledgeBase } from '../../knowledge-bases/types/knowledgeBase';
 import type { Agent } from '../types/agent';
 import type { McpServer } from '../../mcp-servers/types/mcpServer';
+import { signInAsRole } from '../../../test/authFakes';
 
 vi.mock('../api/agentsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/agentsApi')>();
@@ -482,6 +483,37 @@ describe('AgentDetailPage', () => {
     expect(screen.getByText('Ativo')).toBeInTheDocument();
   });
 
+  // Spec `panel-roles`, "O 403 na carga e na ação" (change papeis-no-painel).
+  it('Ação recusada pelo papel', async () => {
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+    vi.mocked(deactivateAgent).mockRejectedValue(new ApiError(403, 'Erro 403 ao chamar /agents/a1/deactivate'));
+    const user = userEvent.setup();
+
+    renderPage(activeAgent.id);
+
+    await user.click(await screen.findByRole('button', { name: /desativar/i }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: /confirmar desativação/i }));
+
+    await waitFor(() =>
+      expect(notifications.show).toHaveBeenCalledWith({
+        color: 'red',
+        title: 'Você não tem permissão para esta ação.',
+        message: 'Se o seu papel mudou há pouco, a mudança pode levar até 15 minutos para chegar a todo o painel.',
+      }),
+    );
+    expect(screen.getByText('Ativo')).toBeInTheDocument();
+  });
+
+  it('Detalhe do agente com 403', async () => {
+    vi.mocked(getAgent).mockRejectedValue(new ApiError(403, 'Erro 403 ao chamar /agents/a1'));
+
+    renderPage(activeAgent.id);
+
+    expect(await screen.findByText('Você não tem acesso a esta página.')).toBeInTheDocument();
+    expect(screen.queryByText('Não foi possível carregar o agente.')).not.toBeInTheDocument();
+  });
+
   it('só busca o catálogo de servidores MCP quando a aba de ferramentas está ativa', async () => {
     vi.mocked(getAgent).mockResolvedValue(activeAgent);
     const user = userEvent.setup();
@@ -771,5 +803,75 @@ describe('AgentDetailPage — aba Conhecimento', () => {
       expect(await screen.findByTestId('aba-insights-do-agente')).toBeInTheDocument();
       expect(screen.getByText('Inativo')).toBeInTheDocument();
     });
+  });
+});
+
+// O que cada papel vê (spec `panel-roles`, "O que cada papel vê nas telas de domínio").
+describe('AgentDetailPage por papel', () => {
+  const vinculado: Agent = {
+    ...activeAgent,
+    mcpServers: [{ id: mcpServer.id, name: mcpServer.name, allowedTools: [] }],
+    knowledgeBases: [{ id: knowledgeBase.id, name: knowledgeBase.name }],
+    delegatesTo: [{ id: otherAgent.id, name: otherAgent.name }],
+  };
+
+  beforeEach(() => {
+    vi.mocked(getAgent).mockReset();
+    vi.mocked(getAgent).mockResolvedValue(vinculado);
+    vi.mocked(listAgents).mockReset();
+    vi.mocked(listAgents).mockResolvedValue([vinculado, otherAgent]);
+    vi.mocked(listMcpServers).mockReset();
+    vi.mocked(listMcpServers).mockResolvedValue([mcpServer]);
+    vi.mocked(listKnowledgeBases).mockReset();
+    vi.mocked(listKnowledgeBases).mockResolvedValue([knowledgeBase]);
+  });
+
+  it('o Leitor não vê Editar nem Desativar', async () => {
+    signInAsRole('leitor');
+    renderPage(vinculado.id);
+
+    await screen.findByRole('heading', { name: vinculado.name });
+    expect(screen.queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /desativar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^ativar/i })).not.toBeInTheDocument();
+  });
+
+  it('Leitor nas abas do agente: Ferramentas', async () => {
+    signInAsRole('leitor');
+    renderPage(vinculado.id, '?tab=ferramentas');
+
+    const caixa = await screen.findByRole('checkbox', { name: mcpServer.name });
+    expect(caixa).toBeChecked();
+    expect(caixa).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Salvar vínculo' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ver tools/i })).toBeInTheDocument();
+  });
+
+  it('Leitor nas abas do agente: Conhecimento', async () => {
+    signInAsRole('leitor');
+    renderPage(vinculado.id, '?tab=conhecimento');
+
+    expect(await screen.findByRole('link', { name: knowledgeBase.name })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Vincular base' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Desvincular' })).not.toBeInTheDocument();
+  });
+
+  it('Leitor nas abas do agente: Delegação', async () => {
+    signInAsRole('leitor');
+    renderPage(vinculado.id, '?tab=delegacoes');
+
+    const caixa = await screen.findByRole('checkbox', { name: otherAgent.name });
+    expect(caixa).toBeChecked();
+    expect(caixa).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Salvar delegações' })).not.toBeInTheDocument();
+  });
+
+  it('o Operador vê as escritas e edita o vínculo', async () => {
+    signInAsRole('operador');
+    renderPage(vinculado.id, '?tab=ferramentas');
+
+    expect(await screen.findByRole('link', { name: 'Editar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /desativar/i })).toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: mcpServer.name })).toBeEnabled();
   });
 });

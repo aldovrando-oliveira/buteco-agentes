@@ -9,6 +9,7 @@ import { KnowledgeBaseListPage } from './KnowledgeBaseListPage';
 import { listKnowledgeBaseIndexingSummary, listKnowledgeBases } from '../api/knowledgeBasesApi';
 import { listAgents } from '../../agents/api/agentsApi';
 import type { KnowledgeBase, KnowledgeBaseIndexingSummary } from '../types/knowledgeBase';
+import { signInAsRole } from '../../../test/authFakes';
 
 // Mock TOTAL (fábrica sem `importOriginal`): toda função que a página importa
 // deste módulo precisa estar aqui, ou ela recebe `undefined`.
@@ -421,5 +422,28 @@ describe('KnowledgeBaseListPage', () => {
       expect(screen.getByRole('link', { name: cobranca.name })).toBeInTheDocument();
       expect(screen.queryByText('Nenhuma base corresponde à busca.')).not.toBeInTheDocument();
     });
+  });
+});
+
+// O que cada papel vê (spec `panel-roles`; change papeis-no-painel).
+describe('KnowledgeBaseListPage por papel', () => {
+  it('o Leitor não vê "Nova base" nem "Criar a primeira base"', async () => {
+    signInAsRole('leitor');
+    vi.mocked(listKnowledgeBases).mockResolvedValue([]);
+    renderPage();
+
+    expect(
+      await screen.findByText('Nenhuma base de conhecimento cadastrada ainda.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Nova base' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Criar a primeira base' })).not.toBeInTheDocument();
+  });
+
+  it('o Operador vê "Nova base"', async () => {
+    signInAsRole('operador');
+    vi.mocked(listKnowledgeBases).mockResolvedValue([]);
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: 'Nova base' })).toBeInTheDocument();
   });
 });

@@ -9,6 +9,7 @@ import { ChannelListPage } from './ChannelListPage';
 import { listChannels } from '../api/channelsApi';
 import { listAgents } from '../../agents/api/agentsApi';
 import type { Channel } from '../types/channel';
+import { signInAsRole } from '../../../test/authFakes';
 
 vi.mock('../api/channelsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/channelsApi')>();
@@ -122,5 +123,22 @@ describe('ChannelListPage', () => {
     await screen.findByText('Nenhum canal cadastrado ainda.');
 
     expect(screen.queryByLabelText('Buscar por nome, tipo ou agente')).not.toBeInTheDocument();
+  });
+});
+
+// O que cada papel vê (spec `panel-roles`; change papeis-no-painel).
+describe('ChannelListPage por papel', () => {
+  it('o Leitor não vê "Novo canal", e o Operador vê', async () => {
+    signInAsRole('leitor');
+    vi.mocked(listChannels).mockResolvedValue([channel]);
+    const { unmount } = renderPage();
+
+    expect(await screen.findByText(channel.name)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Novo canal' })).not.toBeInTheDocument();
+    unmount();
+
+    signInAsRole('operador');
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'Novo canal' })).toBeInTheDocument();
   });
 });

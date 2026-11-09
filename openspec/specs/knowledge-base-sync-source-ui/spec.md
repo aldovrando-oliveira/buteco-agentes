@@ -223,6 +223,11 @@ autenticadas até a renovação: o painel renova a sessão uma vez e repete a ch
 nem redirecionar para o login: a chamada falha com o texto de sessão recusada pelo
 serviço de conectores, e o registro da sessão continua.
 
+O `403` sem `code` do `apps/connectors` é a recusa pelo papel (`route-roles`,
+desde a #184), e não configuração da instalação: SHALL mostrar o texto de ação
+recusada de `panel-roles`, "Você não tem permissão para esta ação." com o texto do
+prazo, e SHALL NOT dizer que é configuração da instalação.
+
 A orientação de excluir existe desde a change `exclusao-base-painel` (#136), que
 trouxe a exclusão de base ao painel; até ali o texto era proibido de falar em
 excluir, porque a tela não oferecia a ação.
@@ -263,6 +268,11 @@ excluir, porque a tela não oferecia a ação.
 - **WHEN** a consulta de pastas responde `401` antes e depois da renovação da sessão
 - **THEN** o registro da sessão continua, o painel não navega para `/entrar`, e o
   seletor exibe o texto de sessão recusada pelo serviço de conectores
+
+#### Scenario: 403 do apps/connectors é o papel
+- **WHEN** a consulta de pastas, ou o "Sincronizar agora", recebe `403` sem `code`
+- **THEN** o painel mostra "Você não tem permissão para esta ação." com o texto do
+  prazo, e o texto não contém "configuração da instalação"
 
 ### Requirement: Cadastro de base sincronizada
 Com Sincronizada marcada, provedor e pasta escolhidos, o formulário SHALL enviar

@@ -5,7 +5,7 @@ import { signOutForTest } from '../../../test/authFakes';
 import { authRuntime } from '../../../auth/session';
 import { ACCOUNT_QUERY_KEY } from '../../account/queryKeys';
 import { USERS_QUERY_KEY } from '../queryKeys';
-import { PROPRIO, PROPRIO_ID, RAFAEL, fakeUsersApi, problem } from '../test/fakeUsersApi';
+import { BRUNO, PROPRIO, PROPRIO_ID, RAFAEL, fakeUsersApi, problem } from '../test/fakeUsersApi';
 import { renderUserDetail, signInAs } from '../test/renderUserDetail';
 
 // O cartão Dados de Editar usuário (requisito "Cartão Dados de Editar usuário"; design.md da
@@ -159,5 +159,251 @@ describe('Cartão Dados', () => {
     await user.click(salvar());
 
     await waitFor(() => expect(screen.getByText('Usuário não encontrado')).toBeInTheDocument());
+  });
+});
+
+// "Dados e papel" (spec `panel-user-detail-page`, "Cartão Dados de Editar usuário" e "Rebaixar a
+// si mesmo"; change papeis-no-painel, D4). A sessão é a de um Admin (`signInAs`).
+describe('Dados e papel', () => {
+  const papel = () => screen.getByLabelText('Papel');
+  const RAFAEL_ADMIN = { ...RAFAEL, papel: 'admin' };
+  const TEXTO_DO_PAPEL = /O novo papel chega ao painel de/;
+
+  const ordem = (api: Awaited<ReturnType<typeof abrir>>['api']) =>
+    api.requests.filter((r) => r.method === 'PUT').map((r) => `${r.method} ${r.path}`);
+
+  it('o título, o papel lido e a descrição', async () => {
+    await abrir();
+
+    expect(screen.getByText('Dados e papel')).toBeInTheDocument();
+    expect(papel()).toHaveValue('operador');
+    expect(
+      screen.getByText('Agentes, MCP, conhecimento, canais e histórico de conversas. Não gerencia usuários e não vê Identidade.'),
+    ).toBeInTheDocument();
+  });
+
+  it('só nome e e-mail dão "Alterações salvas.", sem o texto do papel', async () => {
+    const { user, api } = await abrir({ 'PUT /users/u-rafael': { status: 200, body: { ...RAFAEL, nome: 'Rafael D.' } } });
+
+    await user.type(screen.getByLabelText('Nome'), ' D.');
+    await user.click(salvar());
+
+    expect(await screen.findByText('Alterações salvas.')).toBeInTheDocument();
+    expect(screen.queryByText(TEXTO_DO_PAPEL)).not.toBeInTheDocument();
+    expect(api.calls('PUT /users/u-rafael/role')).toHaveLength(0);
+  });
+
+  it('Rebaixar outro', async () => {
+    const { user, api } = await abrir({
+      'GET /users/u-rafael': { status: 200, body: RAFAEL_ADMIN },
+      'PUT /users/u-rafael/role': { status: 200, body: { ...RAFAEL_ADMIN, papel: 'operador' } },
+    });
+
+    await user.selectOptions(papel(), 'operador');
+    await user.click(salvar());
+
+    expect(
+      await screen.findByText(
+        'Alterações salvas. O novo papel chega ao painel de Rafael Duarte em até 15 minutos, quando a sessão renovar; um rebaixamento já vale na hora em Usuários e Identidade.',
+      ),
+    ).toBeInTheDocument();
+    expect(api.calls('PUT /users/u-rafael/role')[0].body).toEqual({ papel: 'operador' });
+    expect(api.calls('PUT /users/u-rafael')).toHaveLength(0);
+  });
+
+  it('Dados antes do papel', async () => {
+    const { user, api } = await abrir({
+      'GET /users/u-rafael': { status: 200, body: RAFAEL_ADMIN },
+      'PUT /users/u-rafael': { status: 200, body: { ...RAFAEL_ADMIN, nome: 'Rafael D.' } },
+      'PUT /users/u-rafael/role': { status: 200, body: { ...RAFAEL_ADMIN, nome: 'Rafael D.', papel: 'leitor' } },
+    });
+
+    await user.type(screen.getByLabelText('Nome'), ' D.');
+    await user.selectOptions(papel(), 'leitor');
+    await user.click(salvar());
+
+    expect(await screen.findByText(TEXTO_DO_PAPEL)).toBeInTheDocument();
+    expect(ordem(api)).toEqual(['PUT /users/u-rafael', 'PUT /users/u-rafael/role']);
+  });
+
+  it('Dados com falha não mudam o papel', async () => {
+    const { user, api } = await abrir({
+      'GET /users/u-rafael': { status: 200, body: RAFAEL_ADMIN },
+      'PUT /users/u-rafael': problem(409, 'Já existe um usuário com este e-mail.'),
+    });
+
+    await user.type(screen.getByLabelText('E-mail'), 'x');
+    await user.selectOptions(papel(), 'leitor');
+    await user.click(salvar());
+
+    expect(await screen.findByText('Já existe um usuário com este e-mail.')).toBeInTheDocument();
+    expect(api.calls('PUT /users/u-rafael/role')).toHaveLength(0);
+  });
+
+  it('O último Admin', async () => {
+    const { user } = await abrir({
+      'GET /users/u-rafael': { status: 200, body: RAFAEL_ADMIN },
+      'PUT /users/u-rafael/role': problem(409, 'A instalação precisa de pelo menos um Admin ativo.'),
+    });
+
+    await user.selectOptions(papel(), 'operador');
+    await user.click(salvar());
+
+    expect(await screen.findByText('A instalação precisa de pelo menos um Admin ativo.')).toBeInTheDocument();
+    expect(papel()).toHaveValue('operador');
+    expect(screen.queryByText(/Alterações salvas/)).not.toBeInTheDocument();
+  });
+
+  it('Promover pede a senha', async () => {
+    const { user, api } = await abrir({
+      'PUT /users/u-rafael/role': { status: 200, body: RAFAEL_ADMIN },
+    });
+
+    await user.selectOptions(papel(), 'admin');
+    expect(
+      screen.getByText('Como Admin, Rafael Duarte passa a gerir usuários e a ver Identidade. Para promover, confirme com a sua senha.'),
+    ).toBeInTheDocument();
+
+    await user.click(salvar());
+    expect(await screen.findByText('Informe a sua senha.')).toBeInTheDocument();
+    expect(api.calls('PUT /users/u-rafael/role')).toHaveLength(0);
+
+    await user.type(screen.getByLabelText('Sua senha'), 'minha-senha');
+    await user.click(salvar());
+
+    expect(await screen.findByText(TEXTO_DO_PAPEL)).toBeInTheDocument();
+    expect(api.calls('PUT /users/u-rafael/role')[0].body).toEqual({ papel: 'admin', senha: 'minha-senha' });
+  });
+
+  it('Promoção com a senha errada', async () => {
+    const { user, api } = await abrir({ 'PUT /users/u-rafael/role': problem(401, 'Senha inválida.') });
+
+    await user.selectOptions(papel(), 'admin');
+    await user.type(screen.getByLabelText('Sua senha'), 'errada');
+    await user.click(salvar());
+
+    expect(await screen.findByText('Senha inválida.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sua senha')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Sua senha')).toHaveValue('');
+    expect(api.calls('PUT /users/u-rafael/role')).toHaveLength(1);
+    // O 401 com problem+json é da rota: não renova a sessão (#246, D10).
+    expect(api.calls('POST /connect/token')).toHaveLength(0);
+  });
+
+  it('Promoção bloqueada', async () => {
+    const { user } = await abrir({
+      'PUT /users/u-rafael/role': problem(423, 'Acesso pausado por tentativas seguidas.', { 'Retry-After': '300' }),
+    });
+
+    await user.selectOptions(papel(), 'admin');
+    await user.type(screen.getByLabelText('Sua senha'), 'minha-senha');
+    await user.click(salvar());
+
+    expect(await screen.findByText(/5 minutos/)).toBeInTheDocument();
+    expect(salvar()).toBeDisabled();
+  });
+
+  it('Desativado não muda de papel', async () => {
+    await abrir({ 'GET /users/u-bruno': { status: 200, body: { ...BRUNO, papel: 'leitor' } } }, 'u-bruno');
+
+    expect(papel()).toBeDisabled();
+    expect(screen.getByText('Reative o usuário antes de mudar o papel.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Nome')).toBeEnabled();
+  });
+
+  it('Descartar volta o papel', async () => {
+    const { user } = await abrir();
+
+    await user.type(screen.getByLabelText('E-mail'), 'x');
+    await user.selectOptions(papel(), 'leitor');
+    await user.click(screen.getByRole('button', { name: 'Descartar' }));
+
+    expect(screen.getByLabelText('E-mail')).toHaveValue('rafael.duarte@empresa.com');
+    expect(papel()).toHaveValue('operador');
+    expect(salvar()).toBeDisabled();
+  });
+
+  it('o 403 sem corpo no papel é a ação recusada', async () => {
+    const { user } = await abrir({ 'PUT /users/u-rafael/role': { status: 403 } });
+
+    await user.selectOptions(papel(), 'leitor');
+    await user.click(salvar());
+
+    expect(await screen.findByText('Você não tem permissão para esta ação.')).toBeInTheDocument();
+  });
+
+  describe('Rebaixar a si mesmo', () => {
+    const PROPRIO_ADMIN = { ...PROPRIO, papel: 'admin' };
+
+    async function abrirProprio(routes: Parameters<typeof fakeUsersApi>[0] = {}) {
+      return abrir({ [`GET /users/${PROPRIO_ID}`]: { status: 200, body: PROPRIO_ADMIN }, ...routes }, PROPRIO_ID);
+    }
+
+    it('A confirmação antes da rota', async () => {
+      const { user, api } = await abrirProprio();
+
+      await user.selectOptions(papel(), 'operador');
+      await user.click(salvar());
+
+      expect(
+        screen.getByText(
+          'Deixar de ser Admin? Usuários e Identidade saem do seu menu agora, e você vai para Minha conta. Para voltar a ser Admin, outro Admin precisa promover você.',
+        ),
+      ).toBeInTheDocument();
+      expect(api.calls(`PUT /users/${PROPRIO_ID}/role`)).toHaveLength(0);
+
+      await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+      expect(screen.queryByText(/Deixar de ser Admin\?/)).not.toBeInTheDocument();
+      expect(papel()).toHaveValue('operador');
+    });
+
+    it('Rebaixado vai a Minha conta sem reler Usuários', async () => {
+      const { user, api, router, queryClient } = await abrirProprio({
+        [`PUT /users/${PROPRIO_ID}/role`]: { status: 200, body: { ...PROPRIO_ADMIN, papel: 'operador' } },
+      });
+      const invalidar = vi.spyOn(queryClient, 'invalidateQueries');
+
+      await user.selectOptions(papel(), 'operador');
+      await user.click(salvar());
+      await user.click(screen.getByRole('button', { name: 'Deixar de ser Admin' }));
+
+      await waitFor(() => expect(router.state.location.pathname).toBe('/account'));
+      expect(router.state.location.state).toEqual({ papelNovo: 'operador' });
+      expect(api.calls('POST /connect/token')).toHaveLength(1);
+      const depois = api.requests.slice(api.requests.findIndex((r) => r.method === 'PUT') + 1);
+      expect(depois.filter((r) => r.method === 'GET' && r.path.startsWith('/users'))).toEqual([]);
+      expect(invalidar).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: USERS_QUERY_KEY }));
+    });
+
+    it('O último Admin não se rebaixa', async () => {
+      const { user, router } = await abrirProprio({
+        [`PUT /users/${PROPRIO_ID}/role`]: problem(409, 'A instalação precisa de pelo menos um Admin ativo.'),
+      });
+
+      await user.selectOptions(papel(), 'leitor');
+      await user.click(salvar());
+      await user.click(screen.getByRole('button', { name: 'Deixar de ser Admin' }));
+
+      expect(await screen.findByText('A instalação precisa de pelo menos um Admin ativo.')).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe(`/users/${PROPRIO_ID}`);
+    });
+
+    it('Gravação parcial', async () => {
+      const { user } = await abrirProprio({
+        [`PUT /users/${PROPRIO_ID}`]: { status: 200, body: { ...PROPRIO_ADMIN, nome: 'Aldo' } },
+        [`PUT /users/${PROPRIO_ID}/role`]: problem(409, 'A instalação precisa de pelo menos um Admin ativo.'),
+      });
+
+      await user.clear(screen.getByLabelText('Nome'));
+      await user.type(screen.getByLabelText('Nome'), 'Aldo');
+      await user.selectOptions(papel(), 'operador');
+      await user.click(salvar());
+      await user.click(screen.getByRole('button', { name: 'Deixar de ser Admin' }));
+
+      expect(
+        await screen.findByText('Nome e e-mail salvos. O papel não mudou: A instalação precisa de pelo menos um Admin ativo.'),
+      ).toBeInTheDocument();
+      expect(papel()).toHaveValue('operador');
+    });
   });
 });

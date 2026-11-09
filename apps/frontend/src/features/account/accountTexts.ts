@@ -7,8 +7,9 @@
  */
 export const NAO_CONFIGURADA_TEXTO =
   'Este painel passou a exigir a verificação em 2 etapas. Na próxima vez que você entrar, o login pede o cadastro do app autenticador.';
+/** Só um Admin redefine a verificação de outro (quadro `MinhaConta`, `m2`; change papeis-no-painel). */
 export const TROCOU_DE_CELULAR =
-  'Trocou de celular ou perdeu o app? Peça a outro usuário do painel que redefina a sua verificação; no próximo login você cadastra o app de novo.';
+  'Trocou de celular ou perdeu o app? Peça a um Admin do painel que redefina a sua verificação; no próximo login você cadastra o app de novo.';
 
 /** O aviso de poucos códigos: de 1 a 3, com o singular para 1, e o texto próprio para 0 (Q5). */
 export function fewCodesText(restantes: number): string | null {

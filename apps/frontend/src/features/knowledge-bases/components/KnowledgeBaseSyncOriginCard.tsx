@@ -27,6 +27,8 @@ interface KnowledgeBaseSyncOriginCardProps {
   syncAvailable: boolean;
   request: SyncRequestView;
   onSync: () => void;
+  /** Falso para o Leitor, que não usa os conectores (spec `panel-roles`): sem o botão. */
+  canSync?: boolean;
 }
 
 const FOLDER_LABEL = {
@@ -58,6 +60,7 @@ export function KnowledgeBaseSyncOriginCard({
   syncAvailable,
   request,
   onSync,
+  canSync = true,
 }: KnowledgeBaseSyncOriginCardProps) {
   const status = syncStatus(syncState);
   const failing = status === 'failing' || status === 'failing-never-completed';
@@ -86,7 +89,7 @@ export function KnowledgeBaseSyncOriginCard({
   return (
     <SectionedCard
       title="Origem — pasta sincronizada"
-      action={syncButton}
+      action={canSync ? syncButton : undefined}
       data-testid="sync-origin-card"
     >
       <SectionedCard.Body>

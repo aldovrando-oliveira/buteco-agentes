@@ -12,6 +12,7 @@ import { SYNC_WAIT_LIMIT_MS } from '../utils/syncState';
 import type { KnowledgeBase, KnowledgeBaseSyncState } from '../types/knowledgeBase';
 import type { KnowledgeDocumentSummary } from '../types/knowledgeDocument';
 import type { KnowledgeDocumentEvent } from '../types/knowledgeDocumentEvent';
+import { signInAsRole } from '../../../test/authFakes';
 
 // ACEITES DA #107 (frontend-detalhe-base-sincronizada, D10). SEM mock de módulo,
 // ao contrário de KnowledgeBaseDetailPage.test.tsx: o `fetch` global é
@@ -525,5 +526,48 @@ describe('aba Histórico e o Sincronizar agora', () => {
     );
     await waitFor(() => expect(eventGets(calls).length).toBeGreaterThan(eventsBefore));
     expect(eventGets(calls).every((url) => !url.includes('cursor='))).toBe(true);
+  });
+});
+
+// Spec `panel-roles`, "Leitor no detalhe da base" e "Operador vê as escritas" (change
+// papeis-no-painel). O papel é gravado: o padrão do setup é o Admin.
+describe('detalhe da base sincronizada por papel', () => {
+  const falho = documento({
+    id: 'doc-f',
+    title: 'Garantia estendida',
+    indexingStatus: 'Failed',
+    indexedAt: null,
+    failureReason: 'x',
+  });
+
+  it('Leitor no detalhe da base', async () => {
+    vi.stubEnv('VITE_CONNECTORS_BASE_URL', CONNECTORS);
+    signInAsRole('leitor');
+    installFetch({ base: () => upToDate(T0), documents: [falho, documento()] });
+    renderPage();
+    const card = await loaded();
+
+    expect(
+      within(card).queryByRole('button', { name: /sincronizar agora/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reindexar documento' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /desativar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Excluir a base' })).not.toBeInTheDocument();
+    expect(screen.getByText('Garantia estendida')).toBeInTheDocument();
+    expect(card).toBeInTheDocument();
+  });
+
+  it('Operador vê as escritas', async () => {
+    vi.stubEnv('VITE_CONNECTORS_BASE_URL', CONNECTORS);
+    signInAsRole('operador');
+    installFetch({ base: () => upToDate(T0), documents: [falho, documento()] });
+    renderPage();
+    const card = await loaded();
+
+    expect(within(card).getByRole('button', { name: 'Sincronizar agora' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reindexar documento' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Editar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /desativar/i })).toBeInTheDocument();
   });
 });

@@ -10,6 +10,9 @@ import {
 import { KnowledgeBaseForm } from '../components/KnowledgeBaseForm';
 import { ApiError } from '../api/knowledgeBasesApi';
 import type { CreateKnowledgeBaseInput } from '../types/knowledgeBase';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { notifyFailure } from '../../../utils/notifyFailure';
 
 function fieldErrorsFrom(error: unknown): Record<string, string> | undefined {
   if (error instanceof ApiError && error.status === 400 && error.problem?.errors) {
@@ -46,8 +49,7 @@ export function KnowledgeBaseEditPage() {
             setFieldErrors(validation);
             return;
           }
-          notifications.show({
-            color: 'red',
+          notifyFailure(mutationError, {
             title: 'Erro ao atualizar base',
             message: 'Não foi possível atualizar a base de conhecimento. Tente novamente.',
           });
@@ -68,6 +70,9 @@ export function KnowledgeBaseEditPage() {
   if (error instanceof ApiError && error.status === 404) {
     return <Alert color="red">Base de conhecimento não encontrada.</Alert>;
   }
+
+  // O `403` da consulta principal é o papel (spec `panel-roles`, "O 403 na carga e na ação").
+  if (is403(error)) return <AccessDenied />;
 
   if (error || !data) {
     return <Alert color="red">Não foi possível carregar a base de conhecimento.</Alert>;

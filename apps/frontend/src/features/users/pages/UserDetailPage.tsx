@@ -4,7 +4,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, useParams } from 'react-router';
 import { DetailHeader } from '../../../components/layout/DetailHeader';
 import { isSameUser, useCurrentUserId } from '../../../auth/session';
-import { failureNotice, isApiFailure, type FailureNotice } from '../../../utils/failureNotice';
+import {
+  failureNotice,
+  isApiFailure,
+  type FailureNotice,
+  is403,
+} from '../../../utils/failureNotice';
 import {
   activateUser,
   deactivateUser,
@@ -24,6 +29,7 @@ import { UserDataCard } from '../components/UserDataCard';
 import { SignInFormsCard, type ResetState } from '../components/SignInFormsCard';
 import { UserTwoFactorCard } from '../components/UserTwoFactorCard';
 import { UserSessionsCard } from '../components/UserSessionsCard';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
 
 // Editar usuário (`/users/:id`; requisitos de `panel-user-detail-page`; design.md da change
 // editar-usuario-painel, D2 a D10). A página guarda UMA ação aberta, como a propriedade `acao` do
@@ -109,6 +115,9 @@ function UserDetail({ id }: { id: string }) {
       </Group>
     );
   }
+
+  // O `403` do detalhe é o papel (spec `panel-roles`, "O 403 na carga e na ação").
+  if (query.isError && is403(query.error)) return <AccessDenied />;
 
   if (query.isError && is404(query.error)) {
     return (

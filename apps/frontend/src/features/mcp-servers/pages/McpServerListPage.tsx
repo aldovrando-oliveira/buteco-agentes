@@ -5,9 +5,14 @@ import { useMcpServersQuery } from '../api/useMcpServers';
 import { useAgentsQuery } from '../../agents/api/useAgents';
 import { McpServerTable } from '../components/McpServerTable';
 import { matchesSearch } from '../../../utils/searchText';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { usePermissoes } from '../../../auth/session';
 
 export function McpServerListPage() {
-  const { data, isLoading, isError } = useMcpServersQuery();
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
+  const { data, isLoading, isError, error } = useMcpServersQuery();
   // Só para derivar a coluna de uso. Uma falha aqui não impede a listagem:
   // a coluna fica vazia e o resto continua servindo (Decision 2 do
   // design.md da change frontend-mcp-servidor-uso-e-diagnostico).
@@ -36,9 +41,11 @@ export function McpServerListPage() {
             </Text>
           )}
         </Stack>
-        <Button component={Link} to="/mcp-servers/new">
-          Novo servidor MCP
-        </Button>
+        {pode.escrever && (
+          <Button component={Link} to="/mcp-servers/new">
+            Novo servidor MCP
+          </Button>
+        )}
       </Group>
 
       {hasMcpServers && (
@@ -58,7 +65,13 @@ export function McpServerListPage() {
         </Group>
       )}
 
-      {isError && <Alert color="red">Não foi possível carregar os servidores MCP.</Alert>}
+      {/* O `403` é o papel (spec `panel-roles`). */}
+      {isError &&
+        (is403(error) ? (
+          <AccessDenied />
+        ) : (
+          <Alert color="red">Não foi possível carregar os servidores MCP.</Alert>
+        ))}
 
       {showEmptyCatalog && <Text c="dimmed">Nenhum servidor MCP cadastrado ainda.</Text>}
 

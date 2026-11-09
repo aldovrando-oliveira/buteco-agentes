@@ -92,4 +92,60 @@ describe('AccountPage', () => {
       expect(link.closest('p')).toHaveTextContent('Para mudar o nome ou o e-mail, use Usuários.');
     });
   });
+
+  // Spec `panel-account-page` (change papeis-no-painel). O papel do cartão é o GRAVADO, do
+  // GET /account; a sessão do setup é de Admin.
+  describe('papel', () => {
+    it('Os dados da conta, com o papel', async () => {
+      fakeAccountApi({ ...defaultRoutes(), 'GET /account': { status: 200, body: { ...ACCOUNT, papel: 'operador' } } });
+      renderAccount(<AccountPage />);
+
+      const dados = card('Dados');
+      expect(await within(dados).findByText('Papel')).toBeInTheDocument();
+      expect(within(dados).getByText('Operador')).toBeInTheDocument();
+    });
+
+    it.each(['operador', 'leitor', 'superusuario'])('Quem não é Admin pede a um Admin (%s)', async (papel) => {
+      fakeAccountApi({ ...defaultRoutes(), 'GET /account': { status: 200, body: { ...ACCOUNT, papel } } });
+      renderAccount(<AccountPage />);
+
+      expect(
+        await within(card('Dados')).findByText('Para mudar o nome ou o e-mail, peça a um Admin do painel.'),
+      ).toBeInTheDocument();
+      expect(within(card('Dados')).queryByRole('link', { name: 'Usuários' })).not.toBeInTheDocument();
+    });
+
+    it('O papel gravado vale sobre o do token', async () => {
+      // O id token da sessão ainda é de Admin (setup); o servidor já diz Operador.
+      fakeAccountApi({ ...defaultRoutes(), 'GET /account': { status: 200, body: { ...ACCOUNT, papel: 'operador' } } });
+      renderAccount(<AccountPage />);
+
+      const dados = card('Dados');
+      expect(await within(dados).findByText('Operador')).toBeInTheDocument();
+      expect(within(dados).getByText('Para mudar o nome ou o e-mail, peça a um Admin do painel.')).toBeInTheDocument();
+    });
+
+    it('Chegada depois do rebaixamento', async () => {
+      fakeAccountApi({ ...defaultRoutes(), 'GET /account': { status: 200, body: { ...ACCOUNT, papel: 'operador' } } });
+      renderAccount(<AccountPage />, '/account', { papelNovo: 'operador' });
+
+      expect(screen.getByText('O seu papel agora é Operador.')).toBeInTheDocument();
+    });
+
+    it('Entrada comum sem aviso', async () => {
+      fakeAccountApi(defaultRoutes());
+      renderAccount(<AccountPage />);
+
+      await within(card('Dados')).findByText('Ana Souza');
+      expect(screen.queryByText(/O seu papel agora é/)).not.toBeInTheDocument();
+    });
+
+    it('o estado com Admin não mostra aviso', async () => {
+      fakeAccountApi(defaultRoutes());
+      renderAccount(<AccountPage />, '/account', { papelNovo: 'admin' });
+
+      await within(card('Dados')).findByText('Ana Souza');
+      expect(screen.queryByText(/O seu papel agora é/)).not.toBeInTheDocument();
+    });
+  });
 });

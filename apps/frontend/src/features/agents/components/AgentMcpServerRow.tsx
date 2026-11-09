@@ -20,6 +20,8 @@ interface AgentMcpServerRowProps {
   allowedTools: string[];
   expanded: boolean;
   onToggleSelected: (selected: boolean) => void;
+  /** O Leitor vê o vínculo, sem editar (spec `panel-roles`; change papeis-no-painel). */
+  readOnly?: boolean;
   onToggleExpanded: () => void;
   onToggleTool: (toolName: string, checked: boolean) => void;
   onToolsDiscovered: (toolNames: string[]) => void;
@@ -31,6 +33,7 @@ export function AgentMcpServerRow({
   allowedTools,
   expanded,
   onToggleSelected,
+  readOnly = false,
   onToggleExpanded,
   onToggleTool,
   onToolsDiscovered,
@@ -65,6 +68,7 @@ export function AgentMcpServerRow({
         <Group gap="xs" wrap="nowrap" align="flex-start" style={{ minWidth: 0 }}>
           <Checkbox
             checked={selected}
+            disabled={readOnly}
             onChange={(event) => onToggleSelected(event.currentTarget.checked)}
             aria-label={mcpServer.name}
           />
@@ -133,7 +137,7 @@ export function AgentMcpServerRow({
                   key={tool.name}
                   label={tool.name}
                   description={tool.description}
-                  disabled={!selected}
+                  disabled={readOnly || !selected}
                   checked={allowedTools.includes(tool.name)}
                   onChange={(event) => onToggleTool(tool.name, event.currentTarget.checked)}
                 />

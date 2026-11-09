@@ -59,9 +59,37 @@ export function createSessionFetch(runtime: AuthRuntime, renewal: Renewal): Sess
       `/entrar?motivo=sessao-expirada&voltarPara=${encodeURIComponent(safeReturnPath(runtime.currentPath()))}`,
     );
 
+  // Os access tokens que já renovaram por um `403`, ou que vieram de uma renovação por `403`
+  // (design.md da change papeis-no-painel, D3, decisão do dono Q1). Um `403` com um deles não
+  // renova de novo: quem insiste numa rota que o papel não abre não força uma renovação por
+  // clique. Guarda só os últimos, que são os que ainda podem estar em uso.
+  const renovadosPor403: string[] = [];
+  const marcar = (token: string) => {
+    renovadosPor403.push(token);
+    if (renovadosPor403.length > 4) renovadosPor403.shift();
+  };
+
+  /**
+   * O `403`: o papel do token não abre a rota, ou o papel gravado mudou (rebaixamento). Renova
+   * uma vez, para o id token trazer o papel gravado e a tela se redesenhar, e devolve o MESMO
+   * `403`, sem repetir a chamada: a repetição daria `403` de novo no rebaixamento, a promoção
+   * já chega pela renovação de rotina antes de a tela oferecer o botão, e repetir reenviaria a
+   * senha das ações que a pedem. O `403` com corpo também renova: é o do Admin rebaixado nas
+   * rotas que releem o papel gravado (`CurrentUser`), justamente o caso a pegar.
+   */
+  async function onForbidden(response: Response, accessToken: string | undefined): Promise<Response> {
+    if (accessToken === undefined || renovadosPor403.includes(accessToken)) return response;
+    marcar(accessToken);
+    const outcome = await renewal.renew(accessToken);
+    if (outcome.kind === 'ended') sendToExpiredLogin();
+    else if (outcome.kind === 'ok') marcar(outcome.session.accessToken);
+    return response;
+  }
+
   return async (input, init, { endsSessionOn401 = true } = {}) => {
     const session = await renewal.ensureFresh();
     const first = await runtime.fetch(input, withAuthorization(init, session?.accessToken));
+    if (first.status === 403) return onForbidden(first, session?.accessToken);
     if (first.status !== 401 || isRouteRefusal(first)) return first;
 
     const outcome = await renewal.renew(session?.accessToken);
@@ -75,6 +103,7 @@ export function createSessionFetch(runtime: AuthRuntime, renewal: Renewal): Sess
     if (outcome.kind === 'unavailable') return first;
 
     const second = await runtime.fetch(input, withAuthorization(init, outcome.session.accessToken));
+    if (second.status === 403) return onForbidden(second, outcome.session.accessToken);
     if (second.status === 401 && endsSessionOn401) {
       await renewal.endSessionIfCurrent(outcome.session.accessToken);
       sendToExpiredLogin();

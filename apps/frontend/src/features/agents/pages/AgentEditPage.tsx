@@ -8,6 +8,9 @@ import { useProvidersQuery } from '../api/useProviders';
 import { AgentForm } from '../components/AgentForm';
 import { ApiError } from '../api/agentsApi';
 import type { CreateAgentInput } from '../types/agent';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { notifyFailure } from '../../../utils/notifyFailure';
 
 function fieldErrorsFrom(error: unknown): Record<string, string> | undefined {
   if (error instanceof ApiError && error.status === 400 && error.problem?.errors) {
@@ -45,8 +48,7 @@ export function AgentEditPage() {
             setFieldErrors(errors);
             return;
           }
-          notifications.show({
-            color: 'red',
+          notifyFailure(mutationError, {
             title: 'Erro ao atualizar agente',
             message: 'Não foi possível atualizar o agente. Tente novamente.',
           });
@@ -67,6 +69,9 @@ export function AgentEditPage() {
   if (error instanceof ApiError && error.status === 404) {
     return <Alert color="red">Agente não encontrado.</Alert>;
   }
+
+  // O `403` da consulta principal é o papel (spec `panel-roles`, "O 403 na carga e na ação").
+  if (is403(error)) return <AccessDenied />;
 
   if (error || !data) {
     return <Alert color="red">Não foi possível carregar o agente.</Alert>;

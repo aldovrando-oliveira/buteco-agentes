@@ -39,6 +39,8 @@ async function criarConvite() {
   await user.click(await screen.findByRole('button', { name: 'Convidar usuário' }));
   await user.type(screen.getByLabelText('Nome'), 'Marcos Lima');
   await user.type(screen.getByLabelText('E-mail'), 'marcos@exemplo.test');
+  // O papel é obrigatório desde a #184 (change papeis-no-painel): mudança de arranjo.
+  await user.selectOptions(screen.getByLabelText('Papel'), 'operador');
   await user.type(screen.getByLabelText('Sua senha'), 'minha-senha-certa');
   await user.click(screen.getByRole('button', { name: 'Gerar convite' }));
   await screen.findByText(LINK);

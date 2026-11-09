@@ -83,6 +83,11 @@ export interface UserSummary {
   email: string;
   /** `ativo`, `desativado` ou `convidado`; outro valor sai neutro na tela (convenção 13). */
   estado: string;
+  /**
+   * `admin`, `operador` ou `leitor` (#184), também no convidado; lido pelo `papelDaResposta`
+   * de `auth/roles.ts`, e outro valor sai neutro na tela (change papeis-no-painel).
+   */
+  papel: string;
   formasDeEntrada: string[];
   duasEtapas: boolean;
   ultimoAcesso: string | null;
@@ -103,6 +108,8 @@ export interface InvitationCreated extends AccessLink {
 export interface InvitationRequest {
   nome: string;
   email: string;
+  /** Obrigatório desde a #184: `admin`, `operador` ou `leitor` (`papelParaCorpo`). */
+  papel: string;
   senha: string;
 }
 
@@ -110,7 +117,7 @@ export function listUsers(): Promise<UserSummary[]> {
   return request<UserSummary[]>('/users');
 }
 
-/** `201`; `400` campos; `409` e-mail em uso; `401` "Senha inválida."; `423` + `Retry-After`. */
+/** `201`; `400` campos (inclusive `papel`); `409` e-mail em uso; `401` "Senha inválida."; `423` + `Retry-After`. */
 export function inviteUser(body: InvitationRequest): Promise<InvitationCreated> {
   return post<InvitationCreated>('/users/invitations', body);
 }
@@ -179,4 +186,14 @@ export function requestPasswordReset(id: string, senha: string): Promise<AccessL
 /** `204`; `403` a si mesmo; `404`; `409` já não configurada. Encerra as sessões da pessoa. */
 export function resetTwoFactor(id: string): Promise<void> {
   return post<void>(`${segment(id)}/two-factor/reset`);
+}
+
+/**
+ * `PUT /users/{id}/role` (#184; change papeis-no-painel, D4). A `senha` de quem chama vai só na
+ * promoção a Admin; rebaixar não a pede, e o corpo não a leva. `200` detalhe; `400`
+ * `errors.papel`; `401` "Senha inválida."; `423`; `403`; `404`; `409` o último Admin ou o
+ * desativado.
+ */
+export function changeUserRole(id: string, body: { papel: string; senha?: string }): Promise<UserDetail> {
+  return request<UserDetail>(`${segment(id)}/role`, { method: 'PUT', body: JSON.stringify(body) });
 }
