@@ -2,6 +2,8 @@ import { Navigate, Route, createRoutesFromElements, redirect } from 'react-route
 import type { RouteObject } from 'react-router';
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from './ProtectedRoute';
+import { RequirePapel } from './RequirePapel';
+import { ADMIN_E_OPERADOR, SO_ADMIN } from './routeRoles';
 import { EntrarPage } from '../features/auth/pages/EntrarPage';
 import { EntrarRetornoPage } from '../features/auth/pages/EntrarRetornoPage';
 import { ConvitePage, RedefinirSenhaPage } from '../features/auth/pages/AccessLinkPage';
@@ -64,14 +66,20 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
         <Route path="account" element={<AccountPage />} />
         {/* A seção "Acesso" do menu (design.md da change usuarios-convites-identidade-painel,
             D1), e Editar usuário (design.md da change editar-usuario-painel, D1). */}
-        <Route path="users" element={<UsersPage />} />
-        <Route path="users/:id" element={<UserDetailPage />} />
-        <Route path="identity" element={<IdentityPage />} />
+        {/* Só o Admin (spec `panel-roles`, "Guarda de rota por papel"; design.md da change
+            papeis-no-painel, D3). A guarda não substitui o `403` do servidor. */}
+        <Route element={<RequirePapel papeis={SO_ADMIN} />}>
+          <Route path="users" element={<UsersPage />} />
+          <Route path="users/:id" element={<UserDetailPage />} />
+          <Route path="identity" element={<IdentityPage />} />
+        </Route>
         <Route path="agents">
           <Route index element={<AgentListPage />} />
-          <Route path="new" element={<AgentCreatePage />} />
           <Route path=":id" element={<AgentDetailPage />} />
-          <Route path=":id/edit" element={<AgentEditPage />} />
+          <Route element={<RequirePapel papeis={ADMIN_E_OPERADOR} />}>
+            <Route path="new" element={<AgentCreatePage />} />
+            <Route path=":id/edit" element={<AgentEditPage />} />
+          </Route>
           {/* A gestão do vínculo virou aba do detalhe do agente. A rota
               continua existindo, sem componente, só para que links salvos
               antes da mudança não quebrem. É o único loader do projeto: não
@@ -84,22 +92,29 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
         </Route>
         <Route path="mcp-servers">
           <Route index element={<McpServerListPage />} />
-          <Route path="new" element={<McpServerCreatePage />} />
           <Route path=":id" element={<McpServerDetailPage />} />
-          <Route path=":id/edit" element={<McpServerEditPage />} />
+          <Route element={<RequirePapel papeis={ADMIN_E_OPERADOR} />}>
+            <Route path="new" element={<McpServerCreatePage />} />
+            <Route path=":id/edit" element={<McpServerEditPage />} />
+          </Route>
         </Route>
         <Route path="knowledge-bases">
           <Route index element={<KnowledgeBaseListPage />} />
-          <Route path="new" element={<KnowledgeBaseCreatePage />} />
           <Route path=":id" element={<KnowledgeBaseDetailPage />} />
-          <Route path=":id/edit" element={<KnowledgeBaseEditPage />} />
+          <Route element={<RequirePapel papeis={ADMIN_E_OPERADOR} />}>
+            <Route path="new" element={<KnowledgeBaseCreatePage />} />
+            <Route path=":id/edit" element={<KnowledgeBaseEditPage />} />
+          </Route>
         </Route>
         <Route path="channels">
           <Route index element={<ChannelListPage />} />
-          <Route path="new" element={<ChannelCreatePage />} />
           <Route path=":id" element={<ChannelDetailPage />} />
-          <Route path=":id/sessions/:sessionId" element={<ChannelDetailPage />} />
-          <Route path=":id/edit" element={<ChannelEditPage />} />
+          {/* A sessão é o histórico de conversas, que o Leitor não vê. */}
+          <Route element={<RequirePapel papeis={ADMIN_E_OPERADOR} />}>
+            <Route path="new" element={<ChannelCreatePage />} />
+            <Route path=":id/sessions/:sessionId" element={<ChannelDetailPage />} />
+            <Route path=":id/edit" element={<ChannelEditPage />} />
+          </Route>
         </Route>
       </Route>
     </Route>

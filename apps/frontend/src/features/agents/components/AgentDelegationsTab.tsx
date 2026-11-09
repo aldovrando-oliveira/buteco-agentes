@@ -8,6 +8,8 @@ import { useUnsavedChangesGuard } from '../../../hooks/useUnsavedChangesGuard';
 import { ApiError } from '../api/agentsApi';
 import { useReplaceAgentDelegationsMutation } from '../api/useAgents';
 import type { Agent } from '../types/agent';
+import { notifyFailure } from '../../../utils/notifyFailure';
+import { usePermissoes } from '../../../auth/session';
 
 interface AgentDelegationsTabProps {
   agent: Agent;
@@ -57,6 +59,8 @@ function refusalFrom(error: unknown): string | undefined {
 // da aba de ferramentas (Decision 8 do design.md da change
 // frontend-agente-detalhe-abas).
 export function AgentDelegationsTab({ agent, agentsCatalog }: AgentDelegationsTabProps) {
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
   const mutation = useReplaceAgentDelegationsMutation(agent.id);
   const savedIds = useMemo(
     () => agent.delegatesTo.map((delegate) => delegate.id),
@@ -110,8 +114,7 @@ export function AgentDelegationsTab({ agent, agentsCatalog }: AgentDelegationsTa
           setRefusal(permanent);
           return;
         }
-        notifications.show({
-          color: 'red',
+        notifyFailure(error, {
           title: 'Erro ao atualizar delegações',
           message: 'Não foi possível atualizar as delegações do agente. Tente novamente.',
         });
@@ -181,6 +184,7 @@ export function AgentDelegationsTab({ agent, agentsCatalog }: AgentDelegationsTa
                       <Checkbox
                         label={candidate.name}
                         checked={selection.includes(candidate.id)}
+                        disabled={!pode.escrever}
                         onChange={(event) =>
                           handleToggle(candidate.id, event.currentTarget.checked)
                         }
@@ -197,7 +201,7 @@ export function AgentDelegationsTab({ agent, agentsCatalog }: AgentDelegationsTa
         </>
       )}
 
-      {(isDirty || mutation.isPending) && (
+      {pode.escrever && (isDirty || mutation.isPending) && (
         <UnsavedChangesBar
           message="Alterações não salvas nas delegações"
           saveLabel="Salvar delegações"

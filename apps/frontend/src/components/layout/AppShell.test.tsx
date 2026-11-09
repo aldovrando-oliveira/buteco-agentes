@@ -5,11 +5,12 @@ import { MantineProvider } from '@mantine/core';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { AppShell } from './AppShell';
 import { theme } from '../../theme';
-import { authRuntime } from '../../auth/session';
+import { authRuntime, sessionFetch, sessionStore } from '../../auth/session';
 import { SESSION_LOCK } from '../../auth/renewal';
 import { SESSION_KEY } from '../../auth/sessionStore';
 import { deferred } from '../../test/fakeLocks';
-import { signInForTest } from '../../test/authFakes';
+import { fakeJwt, session, signInAsRole, signInForTest, tokenResponse } from '../../test/authFakes';
+import { act } from '@testing-library/react';
 
 // O mesmo defaultColorScheme da aplicação: sem preferência salva, o esquema
 // vem do sistema operacional. O matchMedia de src/test/setup.ts responde
@@ -41,6 +42,9 @@ function prefersDark() {
 describe('AppShell', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    // O clear apaga também a sessão de Admin do setup (D11 da papeis-no-painel): sem ela, o
+    // papel é desconhecido e a seção Acesso some. Os casos de outro papel gravam o seu.
+    signInForTest();
   });
 
   afterEach(() => {
@@ -177,9 +181,10 @@ describe('AppShell', () => {
     expect(screen.getAllByText('Buteco Agentes')).toHaveLength(1);
   });
 
-  // O rodapé do protótipo de autenticação (quadro "Editar usuário"): avatar com as
-  // iniciais, o nome e o e-mail do id token em duas linhas, e os botões de tema e de
-  // Sair, nesta ordem.
+  // O rodapé do protótipo de autenticação (quadros da entrega `m2`): avatar com as
+  // iniciais, o nome e o papel do id token em duas linhas, e os botões de tema e de
+  // Sair, nesta ordem. A segunda linha passou do e-mail ao papel com a #185 (change
+  // papeis-no-painel; caso que muda de asserção, listado no tasks.md).
   function rodape(container: HTMLElement) {
     const sair = screen.getByRole('button', { name: /^(Sair|Saindo…)$/ });
     const secao = sair.closest('.mantine-AppShell-section') as HTMLElement;
@@ -187,7 +192,7 @@ describe('AppShell', () => {
     return { secao, avatar: secao.querySelector('.mantine-Avatar-root'), container };
   }
 
-  it('nome com duas palavras: avatar com as duas iniciais, o nome e, abaixo, o e-mail', () => {
+  it('nome com duas palavras: avatar com as duas iniciais, o nome e, abaixo, o papel', () => {
     signInForTest();
     const { container } = renderAppShell();
     const { secao, avatar } = rodape(container);
@@ -195,7 +200,7 @@ describe('AppShell', () => {
     expect(avatar).toHaveTextContent(/^AS$/);
     expect(avatar).toHaveAttribute('aria-hidden', 'true');
     const textos = [...secao.querySelectorAll('p')].map((p) => p.textContent);
-    expect(textos).toEqual(['Ana Souza', 'ana@exemplo.test']);
+    expect(textos).toEqual(['Ana Souza', 'Admin']);
     const botoes = [...secao.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'));
     expect(botoes).toEqual(['Mudar para tema escuro', 'Sair']);
     expect(screen.getByRole('button', { name: 'Sair' })).toHaveAttribute('title', 'Sair');
@@ -203,23 +208,69 @@ describe('AppShell', () => {
 
   it('nome de uma palavra: avatar com uma inicial', () => {
     const s = signInForTest();
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...s, nome: 'admin', email: 'admin@exemplo.test' }));
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ ...s, nome: 'admin', email: 'admin@exemplo.test' }),
+    );
     const { container } = renderAppShell();
     const { secao, avatar } = rodape(container);
 
     expect(avatar).toHaveTextContent(/^A$/);
-    expect([...secao.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['admin', 'admin@exemplo.test']);
+    expect([...secao.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['admin', 'Admin']);
   });
 
-  it('sem nome no id token, o e-mail vai na primeira linha e a segunda fica vazia', () => {
+  it('sem nome no id token, o e-mail vai na primeira linha e o papel na segunda', () => {
     const s = signInForTest();
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...s, nome: null, email: 'bia@exemplo.test' }));
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ ...s, nome: null, email: 'bia@exemplo.test' }),
+    );
     const { container } = renderAppShell();
     const { secao, avatar } = rodape(container);
 
     expect(avatar).toHaveTextContent(/^B$/);
-    expect([...secao.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['bia@exemplo.test']);
+    expect([...secao.querySelectorAll('p')].map((p) => p.textContent)).toEqual([
+      'bia@exemplo.test',
+      'Admin',
+    ]);
     expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+  });
+
+  it('O papel na segunda linha', () => {
+    const s = signInAsRole('leitor')!;
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...s, nome: 'Rafael Duarte' }));
+    const { container } = renderAppShell();
+    const { secao } = rodape(container);
+
+    expect([...secao.querySelectorAll('p')].map((p) => p.textContent)).toEqual([
+      'Rafael Duarte',
+      'Leitor',
+    ]);
+    expect(secao).not.toHaveTextContent('ana@exemplo.test');
+  });
+
+  it('Nome de uma palavra, com o papel Operador', () => {
+    const s = signInAsRole('operador')!;
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...s, nome: 'admin' }));
+    const { container } = renderAppShell();
+    const { secao } = rodape(container);
+
+    expect([...secao.querySelectorAll('p')].map((p) => p.textContent)).toEqual([
+      'admin',
+      'Operador',
+    ]);
+  });
+
+  it('Papel desconhecido', () => {
+    const s = signInForTest();
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ ...s, idToken: fakeJwt({ name: 'Ana Souza' }) }),
+    );
+    const { container } = renderAppShell();
+    const { secao } = rodape(container);
+
+    expect([...secao.querySelectorAll('p')].map((p) => p.textContent)).toEqual(['Ana Souza']);
   });
 
   it('Sair mostra "Saindo…" enquanto espera o lock, e depois vai ao logout do emissor sem o registro', async () => {
@@ -258,7 +309,12 @@ describe('AppShell', () => {
       const nav = screen.getByRole('navigation');
       const textos = Array.from(nav.querySelectorAll('a, p')).map((el) => el.textContent?.trim());
       const insights = textos.indexOf('Insights');
-      expect(textos.slice(insights, insights + 4)).toEqual(['Insights', 'Acesso', 'Usuários', 'Identidade']);
+      expect(textos.slice(insights, insights + 4)).toEqual([
+        'Insights',
+        'Acesso',
+        'Usuários',
+        'Identidade',
+      ]);
       expect(screen.getByRole('link', { name: 'Usuários' })).toHaveAttribute('href', '/users');
       expect(screen.getByRole('link', { name: 'Identidade' })).toHaveAttribute('href', '/identity');
     });
@@ -281,6 +337,65 @@ describe('AppShell', () => {
       renderAppShell();
 
       expect(screen.queryByText('Aplicações externas')).not.toBeInTheDocument();
+    });
+
+    // Spec `frontend-app-shell`, "Seção Acesso na navegação", e `panel-roles` (change
+    // papeis-no-painel). O papel é gravado explicitamente: o padrão do setup é o Admin.
+    it.each(['operador', 'leitor'] as const)('Operador e Leitor sem a seção: %s', (papel) => {
+      signInAsRole(papel);
+      renderAppShell();
+
+      expect(screen.queryByText('Acesso')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Usuários' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Identidade' })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Inventário' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Insights' })).toBeInTheDocument();
+    });
+
+    it('Id token sem role', () => {
+      const s = signInForTest('token-de-teste', null);
+      localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+      renderAppShell();
+
+      expect(screen.queryByText('Acesso')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Usuários' })).not.toBeInTheDocument();
+    });
+
+    // Spec `panel-issuer-session`, "A renovação traz o papel novo", pelo caminho inteiro: o
+    // `sessionFetch` real recebe o 403, renova pelo emissor, e a casca se redesenha.
+    it('O 403 renova e a casca passa a Operador sem recarregar', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string) =>
+          input === '/connect/token'
+            ? tokenResponse(2, 900, 'operator')
+            : new Response(null, { status: 403 }),
+        ),
+      );
+      renderAppShell('/agents');
+      expect(screen.getByRole('link', { name: 'Usuários' })).toBeInTheDocument();
+
+      await act(async () => {
+        await sessionFetch('http://localhost:5017/users');
+      });
+
+      expect(screen.queryByRole('link', { name: 'Usuários' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Acesso')).not.toBeInTheDocument();
+      expect(screen.getByText('Operador')).toBeInTheDocument();
+      vi.unstubAllGlobals();
+    });
+
+    it('A renovação traz o papel novo: a seção some sem recarregar', () => {
+      renderAppShell('/agents');
+      expect(screen.getByRole('link', { name: 'Usuários' })).toBeInTheDocument();
+
+      // A renovação grava o registro com o id token novo, como o `renew` do `sessionFetch`
+      // depois de um 403 (spec `panel-issuer-session`, "A renovação traz o papel novo").
+      act(() => sessionStore.write(session(2, Date.now() + 15 * 60_000, {}, 'operator')));
+
+      expect(screen.queryByRole('link', { name: 'Usuários' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Acesso')).not.toBeInTheDocument();
+      expect(screen.getByText('Operador')).toBeInTheDocument();
     });
   });
 
@@ -322,9 +437,14 @@ describe('AppShell', () => {
       signInForTest();
       renderComRotas('/account');
 
-      expect(screen.getByRole('link', { name: /Ana Souza/ })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: /Ana Souza/ })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
       // O único link para /account é o do rodapé: nenhum item de menu leva a Minha conta.
-      const paraMinhaConta = screen.getAllByRole('link').filter((a) => a.getAttribute('href') === '/account');
+      const paraMinhaConta = screen
+        .getAllByRole('link')
+        .filter((a) => a.getAttribute('href') === '/account');
       expect(paraMinhaConta).toHaveLength(1);
       expect(paraMinhaConta[0]).toHaveAttribute('title', 'Minha conta');
     });

@@ -67,7 +67,8 @@ describe('TwoFactorCard: o estado', () => {
     expect(screen.getByRole('button', { name: 'Gerar novos códigos' })).toBeEnabled();
     expect(
       screen.getByText(
-        'Trocou de celular ou perdeu o app? Peça a outro usuário do painel que redefina a sua verificação; no próximo login você cadastra o app de novo.',
+        // Só um Admin redefine (change papeis-no-painel; caso que muda de asserção, listado no tasks.md).
+        'Trocou de celular ou perdeu o app? Peça a um Admin do painel que redefina a sua verificação; no próximo login você cadastra o app de novo.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remover verificação' })).not.toBeInTheDocument();

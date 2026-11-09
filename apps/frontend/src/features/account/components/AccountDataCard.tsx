@@ -5,6 +5,7 @@ import { getAccount } from '../api/accountApi';
 import { formatDate, formatRelative } from '../../../utils/panelDates';
 import { ACCOUNT_QUERY_KEY } from '../queryKeys';
 import { AccountCard, CardLoadError, CardLoading } from './AccountCard';
+import { papelDaResposta, rotuloDoPapel } from '../../../auth/roles';
 
 // O cartão "Dados" (requisito "Cartão Dados"): do `GET /account`, e não do id token, que só
 // muda na renovação seguinte a uma edição do nome (#219). Só leitura: na M1 a pessoa muda
@@ -26,6 +27,10 @@ export function AccountDataCard() {
             <Text component="dd" size="sm" m={0}>{query.data.nome}</Text>
             <Text component="dt" size="sm" c="dimmed">E-mail</Text>
             <Text component="dd" size="sm" m={0} ff="monospace">{query.data.email}</Text>
+            <Text component="dt" size="sm" c="dimmed">Papel</Text>
+            <Text component="dd" size="sm" m={0}>
+              {papelDaResposta(query.data.papel) ? rotuloDoPapel(papelDaResposta(query.data.papel)!) : '—'}
+            </Text>
             <Text component="dt" size="sm" c="dimmed">No painel desde</Text>
             <Text component="dd" size="sm" m={0}>{formatDate(query.data.criadoEm)}</Text>
             <Text component="dt" size="sm" c="dimmed">Último acesso</Text>
@@ -33,13 +38,21 @@ export function AccountDataCard() {
               {query.data.ultimoAcesso ? formatRelative(query.data.ultimoAcesso) : '—'}
             </Text>
           </Box>
-          <Text size="sm" c="dimmed">
-            Para mudar o nome ou o e-mail, use{' '}
-            <Anchor component={Link} to={`/users/${encodeURIComponent(query.data.id)}`} size="sm">
-              Usuários
-            </Anchor>
-            .
-          </Text>
+          {/* Pelo papel GRAVADO: Usuários é só do Admin, e para os outros o link levaria ao
+              acesso negado (change papeis-no-painel, D5; quadro `MinhaConta`, `m2`). */}
+          {papelDaResposta(query.data.papel) === 'admin' ? (
+            <Text size="sm" c="dimmed">
+              Para mudar o nome ou o e-mail, use{' '}
+              <Anchor component={Link} to={`/users/${encodeURIComponent(query.data.id)}`} size="sm">
+                Usuários
+              </Anchor>
+              .
+            </Text>
+          ) : (
+            <Text size="sm" c="dimmed">
+              Para mudar o nome ou o e-mail, peça a um Admin do painel.
+            </Text>
+          )}
         </>
       )}
     </AccountCard>

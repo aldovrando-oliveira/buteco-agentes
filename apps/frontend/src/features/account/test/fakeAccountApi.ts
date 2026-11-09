@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { tokenResponse } from '../../../test/authFakes';
 
 // O `fetch` falso de Minha conta, por método e caminho (sem a URL base nem a query), ligado
 // ao `fetch` global que o `authRuntime` usa: o `sessionFetch` e o `request<T>` da feature
@@ -41,9 +42,25 @@ function toResponse(reply: Exclude<FakeReply, Response | 'rede' | (() => Promise
   });
 }
 
+// O corpo em JSON das rotas da API, ou o texto cru do `/connect/token`, que é
+// `application/x-www-form-urlencoded`: a renovação de um `403` passa por ele (change
+// papeis-no-painel, D3), e um `JSON.parse` que lançasse deixaria a renovação repetindo
+// por 25 s sem nunca chegar à rota falsa.
+function parseBody(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return body;
+  }
+}
+
 export function fakeAccountApi(routes: Record<string, FakeReply | FakeReply[]> = {}) {
+  // O emissor responde por padrão: todo `403` renova a sessão uma vez (change papeis-no-painel,
+  // D3), e sem resposta a renovação repetiria por 25 s. O caso que quer outro emissor declara a
+  // sua `POST /connect/token`.
+  const comEmissor: Record<string, FakeReply | FakeReply[]> = { 'POST /connect/token': () => Promise.resolve(tokenResponse(2)), ...routes };
   const queues = new Map<string, FakeReply[]>(
-    Object.entries(routes).map(([key, reply]) => [key, Array.isArray(reply) ? [...reply] : [reply]]),
+    Object.entries(comEmissor).map(([key, reply]) => [key, Array.isArray(reply) ? [...reply] : [reply]]),
   );
   const requests: FakeRequest[] = [];
 
@@ -62,7 +79,7 @@ export function fakeAccountApi(routes: Record<string, FakeReply | FakeReply[]> =
     requests.push({
       method,
       path: url.pathname,
-      body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      body: typeof init?.body === 'string' ? parseBody(init.body) : undefined,
       authorization: headers.Authorization,
     });
     const queue = queues.get(key);
@@ -92,6 +109,7 @@ export const ACCOUNT = {
   id: 'u-1',
   nome: 'Ana Souza',
   email: 'ana@exemplo.test',
+  papel: 'admin',
   criadoEm: '2026-08-12T13:00:00Z',
   ultimoAcesso: '2026-11-06T17:15:00Z',
   duasEtapas: false,

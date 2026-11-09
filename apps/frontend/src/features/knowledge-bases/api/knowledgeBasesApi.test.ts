@@ -59,6 +59,8 @@ describe('request', () => {
   });
 
   it('não anexa Authorization quando não há token armazenado', async () => {
+    // Sem sessão: o setup grava a de Admin antes de cada caso (D11 da papeis-no-painel).
+    signOutForTest();
     const fetchMock = stubFetch();
 
     await request('/knowledge-bases');

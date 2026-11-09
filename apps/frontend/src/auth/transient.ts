@@ -29,7 +29,13 @@ export function isUnavailableError(error: unknown): error is UnavailableError {
 const DEFAULT_RETRIES = 3;
 const defaultRetryDelay = (failureCount: number) => Math.min(1000 * 2 ** failureCount, 30_000);
 
-export function queryRetry(failureCount: number): boolean {
+/**
+ * O `403` não se repete (spec `panel-issuer-session`; design.md da change papeis-no-painel, D3):
+ * o papel não muda entre as tentativas, e a espera exponencial deixaria a tela uns 7 s em
+ * "Carregando…" antes do acesso negado. A renovação do `sessionFetch` já buscou o papel novo.
+ */
+export function queryRetry(failureCount: number, error?: unknown): boolean {
+  if ((error as { status?: unknown } | null)?.status === 403) return false;
   return failureCount < DEFAULT_RETRIES;
 }
 

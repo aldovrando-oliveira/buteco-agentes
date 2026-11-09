@@ -3,8 +3,9 @@
 ## Purpose
 Diz como um usuário gere os outros no `apps/api`, sob `/users`: lista, detalhe com a
 contagem das sessões vivas, edição de nome e e-mail, desativação sem nunca deixar a
-instalação sem usuário ativo, reativação e o encerramento das sessões de outro. Na M1, sem
-papéis, todo usuário real chama todas; a #184 restringe ao Admin. Introduzida pela change
+instalação sem usuário ativo, reativação, o encerramento das sessões de outro e a mudança de
+papel. Todas são só do Admin, com o papel gravado relido a cada requisição (`route-roles`, desde
+a #184); a tela é a de Editar usuário (#183, #185). Introduzida pela change
 `rotas-conta-usuarios` (#219). A redefinição das 2 etapas, no mesmo prefixo, está em
 `two-factor-totp`; o convite e a redefinição de senha por link são da #181; as telas, da
 #183.

@@ -7,6 +7,9 @@ import { useMcpServerQuery, useUpdateMcpServerMutation } from '../api/useMcpServ
 import { McpServerForm } from '../components/McpServerForm';
 import { ApiError } from '../api/mcpServersApi';
 import type { CreateMcpServerInput } from '../types/mcpServer';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { notifyFailure } from '../../../utils/notifyFailure';
 
 function fieldErrorsFrom(error: unknown): Record<string, string> | undefined {
   if (error instanceof ApiError && error.status === 400 && error.problem?.errors) {
@@ -43,8 +46,7 @@ export function McpServerEditPage() {
             setFieldErrors(errors);
             return;
           }
-          notifications.show({
-            color: 'red',
+          notifyFailure(mutationError, {
             title: 'Erro ao atualizar servidor MCP',
             message: 'Não foi possível atualizar o servidor MCP. Tente novamente.',
           });
@@ -65,6 +67,9 @@ export function McpServerEditPage() {
   if (error instanceof ApiError && error.status === 404) {
     return <Alert color="red">Servidor MCP não encontrado.</Alert>;
   }
+
+  // O `403` da consulta principal é o papel (spec `panel-roles`, "O 403 na carga e na ação").
+  if (is403(error)) return <AccessDenied />;
 
   if (error || !data) {
     return <Alert color="red">Não foi possível carregar o servidor MCP.</Alert>;

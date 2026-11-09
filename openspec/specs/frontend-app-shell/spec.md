@@ -61,7 +61,7 @@ rodapé da barra lateral, preservando o comportamento já especificado em
 que descreve o esquema efetivo.
 
 O rodapé SHALL ser uma linha só, separada da navegação por uma borda superior,
-como no protótipo de autenticação (quadro "Editar usuário"), com:
+como no protótipo de autenticação (quadros da entrega `m2`), com:
 
 - à esquerda, um avatar circular de 30 px, decorativo (oculto da tecnologia
   assistiva), com fundo azul-claro e texto azul-escuro, que traz as iniciais do
@@ -69,8 +69,10 @@ como no protótipo de autenticação (quadro "Editar usuário"), com:
   quando o nome tem uma palavra. Sem nome, a primeira letra do e-mail;
 - no meio, duas linhas: o nome do id token (`panel-issuer-session`), com peso 500 e
   cortado com reticências quando não couber, e, abaixo, em texto menor e cinza, o
-  e-mail do id token. Sem nome no id token, o e-mail SHALL ir na primeira linha, e a
-  segunda SHALL ficar vazia. As duas linhas SHALL formar um link só para `/account`
+  rótulo do papel do id token ("Admin", "Operador" ou "Leitor", `panel-roles`). Sem
+  nome no id token, o e-mail SHALL ir na primeira linha. Com papel desconhecido, a
+  segunda linha SHALL ficar vazia. O e-mail SHALL NOT aparecer na segunda linha. As
+  duas linhas SHALL formar um link só para `/account`
   (Minha conta, `panel-account-page`), com `title` "Minha conta", sem aparência de
   link (sem sublinhado e sem a cor de link) e com o foco visível. O link SHALL levar
   `aria-current="page"` quando a rota atual for `/account` ou começar com `/account/`,
@@ -83,9 +85,7 @@ como no protótipo de autenticação (quadro "Editar usuário"), com:
   SHALL ficar desabilitado, com um indicador de carregamento no lugar do ícone e o
   `aria-label` "Saindo…".
 
-O rodapé SHALL NOT exibir dado de identidade que não venha do id token. A #184
-troca a segunda linha pelo papel do usuário, quando os papéis existirem, e a #183
-só revisa o rodapé.
+O rodapé SHALL NOT exibir dado de identidade que não venha do id token.
 
 #### Scenario: O controle de tema vive no rodapé
 - **WHEN** o operador visualiza a barra lateral
@@ -98,16 +98,24 @@ só revisa o rodapé.
 - **THEN** a interface é renderizada no esquema escolhido anteriormente
 
 #### Scenario: Nome com duas palavras
-- **WHEN** a sessão tem um id token com `name` "Ana Souza" e `email` "ana@exemplo.test"
-- **THEN** o rodapé mostra o avatar com "AS", "Ana Souza" na primeira linha e "ana@exemplo.test" na segunda, e depois o botão de tema e o "Sair", nesta ordem
+- **WHEN** a sessão tem um id token com `name` "Ana Souza", `email` "ana@exemplo.test" e `role` `admin`
+- **THEN** o rodapé mostra o avatar com "AS", "Ana Souza" na primeira linha e "Admin" na segunda, e depois o botão de tema e o "Sair", nesta ordem
+
+#### Scenario: O papel na segunda linha
+- **WHEN** o id token da sessão tem `name` "Rafael Duarte" e `role` `reader`
+- **THEN** a segunda linha é "Leitor", e o e-mail não aparece no rodapé
 
 #### Scenario: Nome de uma palavra
-- **WHEN** o id token da sessão tem `name` "admin"
-- **THEN** o avatar mostra "A", e o rodapé mostra "admin" e, abaixo, o e-mail
+- **WHEN** o id token da sessão tem `name` "admin" e `role` `operator`
+- **THEN** o avatar mostra "A", e o rodapé mostra "admin" e, abaixo, "Operador"
 
 #### Scenario: Sem nome no id token
-- **WHEN** o id token da sessão tem `email` "bia@exemplo.test" e não tem `name`
-- **THEN** o avatar mostra "B", "bia@exemplo.test" vai na primeira linha, e não há segunda linha
+- **WHEN** o id token da sessão tem `email` "bia@exemplo.test" e `role` `admin`, e não tem `name`
+- **THEN** o avatar mostra "B", "bia@exemplo.test" vai na primeira linha, e "Admin" na segunda
+
+#### Scenario: Papel desconhecido
+- **WHEN** o id token da sessão tem `name` "Ana Souza" e não tem `role`
+- **THEN** o rodapé mostra "Ana Souza" e não tem segunda linha
 
 #### Scenario: Saindo enquanto espera o lock
 - **WHEN** o usuário aciona o "Sair" enquanto uma renovação em outra aba segura o lock
@@ -150,26 +158,30 @@ componente de feature ou de layout.
   de layout
 
 ### Requirement: Seção Acesso na navegação
-A navegação da barra lateral SHALL ter, depois do item "Insights", o rótulo de seção "Acesso", e, abaixo dele, os itens "Usuários" (`/users`) e "Identidade" (`/identity`), nesta ordem.
+Para a sessão de papel Admin (`panel-roles`), a navegação da barra lateral SHALL ter, depois do item "Insights", o rótulo de seção "Acesso", e, abaixo dele, os itens "Usuários" (`/users`) e "Identidade" (`/identity`), nesta ordem. Para o Operador, o Leitor e o papel desconhecido, a navegação SHALL NOT ter o rótulo nem os dois itens.
 
 - O rótulo SHALL seguir o `.navsec` do protótipo: maiúsculas e menor que os itens, no tom `dimmed` do `SectionLabel`, que é o tom que passa no contraste exigido pela `frontend-visual-theme`.
 - O rótulo SHALL NOT ser link nem item de navegação, e SHALL NOT receber o estado ativo.
 - Os dois itens SHALL seguir o requisito "Navegação com ícone e estado ativo por grupo de rotas": cada um com ícone decorativo e rótulo textual, ativo enquanto a rota atual começar pelo caminho dele.
-- A seção SHALL NOT ter o item "Aplicações externas", que só chega com a M2.
+- A seção SHALL NOT ter o item "Aplicações externas", que chega com a #188.
 
 #### Scenario: A seção e os dois itens
-- **WHEN** a pessoa visualiza a barra lateral
+- **WHEN** a sessão de um Admin visualiza a barra lateral
 - **THEN** depois de "Insights" aparece o rótulo "Acesso" e, abaixo dele, os links "Usuários" e "Identidade"
+
+#### Scenario: Operador e Leitor sem a seção
+- **WHEN** a sessão de um Operador, e depois a de um Leitor, visualiza a barra lateral
+- **THEN** não há o rótulo "Acesso" nem os links "Usuários" e "Identidade", e os itens de "Inventário" a "Insights" continuam
 
 #### Scenario: O rótulo não é link
 - **WHEN** a pessoa percorre a navegação por teclado
 - **THEN** o rótulo "Acesso" não recebe foco, e não há link com o nome "Acesso"
 
 #### Scenario: Usuários ativo na página de Usuários
-- **WHEN** a pessoa está em `/users`
+- **WHEN** a sessão de um Admin está em `/users`
 - **THEN** o item "Usuários" aparece ativo, e "Identidade" não
 
 #### Scenario: Sem Aplicações externas
-- **WHEN** a pessoa visualiza a barra lateral
+- **WHEN** a sessão de um Admin visualiza a barra lateral
 - **THEN** não há item "Aplicações externas"
 

@@ -18,6 +18,10 @@ import { AgentToolsTab } from '../components/AgentToolsTab';
 import { AgentInsightsTab } from '../../insights/components/AgentInsightsTab';
 import { parsePeriod, type InsightsPeriod } from '../../insights/utils/insightsWindow';
 import { ApiError } from '../api/agentsApi';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { notifyFailure } from '../../../utils/notifyFailure';
+import { usePermissoes } from '../../../auth/session';
 
 const OVERVIEW_TAB = 'visao-geral';
 const TOOLS_TAB = 'ferramentas';
@@ -57,6 +61,8 @@ function TabCounter({ count }: { count: number }) {
 }
 
 export function AgentDetailPage() {
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = parseTab(searchParams.get('tab'));
@@ -145,9 +151,8 @@ export function AgentDetailPage() {
           message: `"${agent.name}" foi ativado com sucesso.`,
         });
       },
-      onError: () => {
-        notifications.show({
-          color: 'red',
+      onError: (error) => {
+        notifyFailure(error, {
           title: 'Erro ao ativar agente',
           message: 'Não foi possível ativar o agente. Tente novamente.',
         });
@@ -165,10 +170,9 @@ export function AgentDetailPage() {
           message: `"${agent.name}" foi desativado com sucesso.`,
         });
       },
-      onError: () => {
+      onError: (error) => {
         closeConfirm();
-        notifications.show({
-          color: 'red',
+        notifyFailure(error, {
           title: 'Erro ao desativar agente',
           message: 'Não foi possível desativar o agente. Tente novamente.',
         });
@@ -188,6 +192,9 @@ export function AgentDetailPage() {
   if (error instanceof ApiError && error.status === 404) {
     return <Alert color="red">Agente não encontrado.</Alert>;
   }
+
+  // O `403` da consulta principal é o papel (spec `panel-roles`, "O 403 na carga e na ação").
+  if (is403(error)) return <AccessDenied />;
 
   if (error || !data) {
     return <Alert color="red">Não foi possível carregar o agente.</Alert>;
@@ -211,25 +218,27 @@ export function AgentDetailPage() {
         }
         description={data.description ?? undefined}
         actions={
-          <>
-            <Button component={Link} to={`/agents/${data.id}/edit`} variant="default">
-              Editar
-            </Button>
-            {data.isActive ? (
-              <Button color="red" variant="outline" onClick={openConfirm}>
-                Desativar
+          pode.escrever && (
+            <>
+              <Button component={Link} to={`/agents/${data.id}/edit`} variant="default">
+                Editar
               </Button>
-            ) : (
-              <Button
-                color="green"
-                variant="outline"
-                onClick={handleActivate}
-                loading={activateMutation.isPending}
-              >
-                Ativar
-              </Button>
-            )}
-          </>
+              {data.isActive ? (
+                <Button color="red" variant="outline" onClick={openConfirm}>
+                  Desativar
+                </Button>
+              ) : (
+                <Button
+                  color="green"
+                  variant="outline"
+                  onClick={handleActivate}
+                  loading={activateMutation.isPending}
+                >
+                  Ativar
+                </Button>
+              )}
+            </>
+          )
         }
       />
 

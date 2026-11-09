@@ -11,6 +11,8 @@ import { useReplaceAgentMcpServersMutation } from '../api/useAgents';
 import { AgentMcpServerRow } from './AgentMcpServerRow';
 import type { Agent } from '../types/agent';
 import type { McpServer } from '../../mcp-servers/types/mcpServer';
+import { notifyFailure } from '../../../utils/notifyFailure';
+import { usePermissoes } from '../../../auth/session';
 
 interface AgentToolsTabProps {
   agent: Agent;
@@ -36,6 +38,8 @@ function normalize(links: Links): string {
 }
 
 export function AgentToolsTab({ agent, mcpServers }: AgentToolsTabProps) {
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
   const mutation = useReplaceAgentMcpServersMutation(agent.id);
   const savedLinks = useMemo(() => linksFromAgent(agent), [agent]);
   const [draft, setDraft] = useState<Links>(() => linksFromAgent(agent));
@@ -121,8 +125,7 @@ export function AgentToolsTab({ agent, mcpServers }: AgentToolsTabProps) {
           });
           return;
         }
-        notifications.show({
-          color: 'red',
+        notifyFailure(error, {
           title: 'Erro ao salvar vínculo',
           message: 'Não foi possível atualizar os servidores MCP do agente. Tente novamente.',
         });
@@ -137,9 +140,11 @@ export function AgentToolsTab({ agent, mcpServers }: AgentToolsTabProps) {
           <Text size="sm" c="dimmed">
             Nenhum servidor MCP cadastrado ainda.
           </Text>
-          <Button component={Link} to="/mcp-servers/new">
-            Cadastrar servidor MCP
-          </Button>
+          {pode.escrever && (
+            <Button component={Link} to="/mcp-servers/new">
+              Cadastrar servidor MCP
+            </Button>
+          )}
         </Stack>
       </Card>
     );
@@ -174,6 +179,7 @@ export function AgentToolsTab({ agent, mcpServers }: AgentToolsTabProps) {
             <AgentMcpServerRow
               mcpServer={mcpServer}
               selected={mcpServer.id in draft}
+              readOnly={!pode.escrever}
               allowedTools={draft[mcpServer.id] ?? []}
               expanded={expanded[mcpServer.id] ?? false}
               onToggleSelected={(selected) => handleToggleSelected(mcpServer.id, selected)}
@@ -192,7 +198,7 @@ export function AgentToolsTab({ agent, mcpServers }: AgentToolsTabProps) {
         ))}
       </SectionedCard>
 
-      {(isDirty || mutation.isPending) && (
+      {pode.escrever && (isDirty || mutation.isPending) && (
         <UnsavedChangesBar
           message="Alterações não salvas neste vínculo"
           saveLabel="Salvar vínculo"

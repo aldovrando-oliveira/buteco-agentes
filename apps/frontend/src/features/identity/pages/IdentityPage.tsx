@@ -5,6 +5,8 @@ import { getIdentity, IDENTITY_QUERY_KEY } from '../api/identityApi';
 import { IssuerCard } from '../components/IssuerCard';
 import { SigningKeysCard } from '../components/SigningKeysCard';
 import { retryWhileFailing } from '../retryWhileFailing';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
 
 // A página Identidade (requisitos de `panel-identity-page`; design.md da change
 // usuarios-convites-identidade-painel, D6). O `retry` é o do QueryClient do painel (até 3
@@ -13,6 +15,9 @@ import { retryWhileFailing } from '../retryWhileFailing';
 
 export function IdentityPage() {
   const identity = useQuery({ queryKey: IDENTITY_QUERY_KEY, queryFn: getIdentity, refetchInterval: retryWhileFailing });
+
+  // O `403` é o papel, também o do Admin rebaixado com o token de antes (spec `panel-roles`).
+  if (identity.isError && is403(identity.error)) return <AccessDenied />;
 
   return (
     <Stack>

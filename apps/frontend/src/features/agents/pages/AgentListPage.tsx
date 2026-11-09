@@ -15,6 +15,9 @@ import { useAgentsQuery } from '../api/useAgents';
 import { AgentTable } from '../components/AgentTable';
 import { matchesSearch } from '../../../utils/searchText';
 import type { Agent } from '../types/agent';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { usePermissoes } from '../../../auth/session';
 
 const ALL = 'todos';
 const ACTIVE = 'ativos';
@@ -37,7 +40,9 @@ function matchesStatus(agent: Agent, filter: StatusFilter): boolean {
 }
 
 export function AgentListPage() {
-  const { data, isLoading, isError } = useAgentsQuery();
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
+  const { data, isLoading, isError, error } = useAgentsQuery();
   // Busca e filtro são estado de componente, não parâmetro de rota: um
   // termo em digitação encheria o histórico de navegação a cada tecla, e
   // ninguém compartilha uma lista filtrada por um prefixo (Decision 3 do
@@ -66,9 +71,11 @@ export function AgentListPage() {
             </Text>
           )}
         </Stack>
-        <Button component={Link} to="/agents/new">
-          Novo agente
-        </Button>
+        {pode.escrever && (
+          <Button component={Link} to="/agents/new">
+            Novo agente
+          </Button>
+        )}
       </Group>
 
       {hasAgents && (
@@ -109,7 +116,13 @@ export function AgentListPage() {
         </Group>
       )}
 
-      {isError && <Alert color="red">Não foi possível carregar os agentes.</Alert>}
+      {/* O `403` é o papel (spec `panel-roles`). */}
+      {isError &&
+        (is403(error) ? (
+          <AccessDenied />
+        ) : (
+          <Alert color="red">Não foi possível carregar os agentes.</Alert>
+        ))}
 
       {showEmptyCatalog && <Text c="dimmed">Nenhum agente cadastrado ainda.</Text>}
 

@@ -12,9 +12,11 @@ import { PROPRIO_ID } from './fakeUsersApi';
  * `RAFAEL`, de propósito: o reconhecimento do próprio é pelo `sub` (D2).
  */
 export function signInAs(sub: string | null = PROPRIO_ID) {
+  // Editar usuário é só do Admin (change papeis-no-painel): a sessão traz o `role` dele.
   const claims: Record<string, unknown> = {
     name: 'Rafael Duarte',
     email: 'rafael.duarte@empresa.com',
+    role: 'admin',
   };
   if (sub !== null) claims.sub = sub;
   const s = session(1, Date.now() + 15 * 60_000, {

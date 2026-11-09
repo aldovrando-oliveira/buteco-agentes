@@ -7,6 +7,7 @@ import { useCreateMcpServerMutation } from '../api/useMcpServers';
 import { McpServerForm } from '../components/McpServerForm';
 import { ApiError } from '../api/mcpServersApi';
 import type { CreateMcpServerInput } from '../types/mcpServer';
+import { notifyFailure } from '../../../utils/notifyFailure';
 
 function fieldErrorsFrom(error: unknown): Record<string, string> | undefined {
   if (error instanceof ApiError && error.status === 400 && error.problem?.errors) {
@@ -39,8 +40,7 @@ export function McpServerCreatePage() {
           setFieldErrors(errors);
           return;
         }
-        notifications.show({
-          color: 'red',
+        notifyFailure(error, {
           title: 'Erro ao cadastrar servidor MCP',
           message: 'Não foi possível cadastrar o servidor MCP. Tente novamente.',
         });

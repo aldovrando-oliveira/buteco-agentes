@@ -8,6 +8,7 @@ import { theme } from '../../../theme';
 import { AgentListPage } from './AgentListPage';
 import { listAgents } from '../api/agentsApi';
 import type { Agent } from '../types/agent';
+import { signInAsRole } from '../../../test/authFakes';
 
 vi.mock('../api/agentsApi', () => ({
   listAgents: vi.fn(),
@@ -225,5 +226,26 @@ describe('AgentListPage', () => {
     // isto, a busca deixaria de ser alcançável por quem usa leitor de tela.
     expect(screen.getByLabelText('Buscar por nome ou descrição')).toBeInTheDocument();
     expect(screen.queryByText('Buscar')).not.toBeInTheDocument();
+  });
+});
+
+// O que cada papel vê (spec `panel-roles`; change papeis-no-painel). O papel é gravado: o
+// padrão do setup é o Admin.
+describe('AgentListPage por papel', () => {
+  it('o Leitor não vê "Novo agente", e vê a lista', async () => {
+    signInAsRole('leitor');
+    vi.mocked(listAgents).mockResolvedValue([agent]);
+    renderPage();
+
+    expect(await screen.findByText(agent.name)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Novo agente' })).not.toBeInTheDocument();
+  });
+
+  it('o Operador vê "Novo agente"', async () => {
+    signInAsRole('operador');
+    vi.mocked(listAgents).mockResolvedValue([agent]);
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: 'Novo agente' })).toBeInTheDocument();
   });
 });

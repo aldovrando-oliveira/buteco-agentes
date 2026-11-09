@@ -36,9 +36,13 @@ async function abrirConvite(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByRole('form', { name: 'Convidar usuário' });
 }
 
-async function preencher(user: ReturnType<typeof userEvent.setup>, senha = 'minha-senha-certa') {
+// O papel é obrigatório desde a #184 (change papeis-no-painel): o preenchimento escolhe
+// Operador, e só os casos do papel ausente deixam de escolher. É mudança de arranjo, sem mudar
+// nenhuma asserção dos casos de antes.
+async function preencher(user: ReturnType<typeof userEvent.setup>, senha = 'minha-senha-certa', papel: string | null = 'operador') {
   await user.type(screen.getByLabelText('Nome'), 'Marcos Lima');
   await user.type(screen.getByLabelText('E-mail'), 'marcos@exemplo.test');
+  if (papel) await user.selectOptions(screen.getByLabelText('Papel'), papel);
   if (senha) await user.type(screen.getByLabelText('Sua senha'), senha);
 }
 
@@ -72,11 +76,15 @@ describe('Convidar usuário', () => {
 
     expect(await screen.findByRole('heading', { name: 'Convite criado para Marcos Lima' })).toBeInTheDocument();
     expect(screen.getByText(LINK)).toBeInTheDocument();
+    // O corpo leva o papel (change papeis-no-painel; caso que muda de asserção, listado no tasks.md).
     expect(api.calls('POST /users/invitations')[0].body).toEqual({
       nome: 'Marcos Lima',
       email: 'marcos@exemplo.test',
+      papel: 'operador',
       senha: 'minha-senha-certa',
     });
+    const painel = screen.getByRole('status', { name: 'Convite criado para Marcos Lima' });
+    expect(painel).toHaveTextContent('marcos@exemplo.test· Leitor');
     await waitFor(() => expect(api.calls('GET /users')).toHaveLength(2));
     await waitFor(() => expect(screen.getByText('Marcos Lima', { selector: 'p' }).closest('tr')).toHaveAttribute('data-marcada', 'true'));
   });
@@ -214,5 +222,66 @@ describe('Senha de quem chama', () => {
     await user.click(screen.getByRole('button', { name: 'Gerar convite' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível falar com o servidor.');
+  });
+
+  // Spec `panel-users-page`, "Convidar usuário" (change papeis-no-painel).
+  it('Sem papel escolhido', async () => {
+    const user = userEvent.setup();
+    const api = fakeUsersApi({ 'GET /users': { status: 200, body: [ATIVO] } });
+    renderUsers();
+
+    await abrirConvite(user);
+    await preencher(user, 'minha-senha-certa', null);
+    await user.click(screen.getByRole('button', { name: 'Gerar convite' }));
+
+    expect(await screen.findByText('Escolha o papel.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Papel')).toHaveAttribute('aria-invalid', 'true');
+    expect(api.calls('POST /users/invitations')).toHaveLength(0);
+  });
+
+  it('A descrição acompanha a escolha', async () => {
+    const user = userEvent.setup();
+    fakeUsersApi({ 'GET /users': { status: 200, body: [ATIVO] } });
+    renderUsers();
+
+    const form = await abrirConvite(user);
+    expect(within(form).getByLabelText('Papel')).toHaveValue('');
+    expect(within(form).getByRole('option', { name: 'Escolha o papel' })).toBeInTheDocument();
+    expect(
+      within(form).getByText('O que a pessoa pode fazer no painel. Dá para mudar depois em Editar usuário.'),
+    ).toBeInTheDocument();
+
+    await user.selectOptions(within(form).getByLabelText('Papel'), 'leitor');
+    expect(
+      within(form).getByText(
+        'Vê agentes, MCP, conhecimento, canais e Insights. Não altera nada, não vê o histórico de conversas nem usa os conectores.',
+      ),
+    ).toBeInTheDocument();
+    await user.selectOptions(within(form).getByLabelText('Papel'), 'operador');
+    expect(
+      within(form).getByText(
+        'Agentes, MCP, conhecimento, canais e histórico de conversas. Não gerencia usuários e não vê Identidade.',
+      ),
+    ).toBeInTheDocument();
+    await user.selectOptions(within(form).getByLabelText('Papel'), 'admin');
+    expect(within(form).getByText('Tudo, inclusive usuários e Identidade.')).toBeInTheDocument();
+  });
+
+  it('o erro de papel do servidor vai ao campo', async () => {
+    const user = userEvent.setup();
+    fakeUsersApi({
+      'GET /users': { status: 200, body: [ATIVO] },
+      'POST /users/invitations': {
+        status: 400,
+        body: { title: 'One or more validation errors occurred.', errors: { papel: ['O papel precisa ser admin, operador ou leitor.'] } },
+      },
+    });
+    renderUsers();
+
+    await abrirConvite(user);
+    await preencher(user);
+    await user.click(screen.getByRole('button', { name: 'Gerar convite' }));
+
+    expect(await screen.findByText('O papel precisa ser admin, operador ou leitor.')).toBeInTheDocument();
   });
 });

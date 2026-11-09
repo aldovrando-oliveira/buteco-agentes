@@ -1,5 +1,6 @@
 import { ConnectorsError } from '../api/connectorsApi';
 import { ApiError } from '../api/knowledgeBasesApi';
+import { PRAZO_DO_PAPEL, SEM_PERMISSAO_ACAO } from '../../../components/feedback/accessTexts';
 
 // TEXTO DA TELA PARA CADA CÓDIGO, a tabela da D3 do design.md da change
 // frontend-cadastro-base-sincronizada. Duas origens de erro, um vocabulário só:
@@ -160,13 +161,15 @@ function codeMessage(
   if (code) {
     return `Erro inesperado (código ${code}).`;
   }
-  // Sem `code`, só a autorização do subject usa 401/403 no apps/connectors
-  // (connectors-api, D9 da apps-connectors-google-drive).
+  // Sem `code`, só a autorização usa 401/403 no apps/connectors (connectors-api, D9 da
+  // apps-connectors-google-drive). Desde a #184 o `403` é a recusa pelo PAPEL (`route-roles`: as
+  // três rotas do conectores são de Admin e Operador), e não configuração da instalação: o texto
+  // é o da ação recusada (spec `panel-roles`; change papeis-no-painel, premissa 10).
   if (status === 401) {
     return 'O serviço de conectores não aceitou a sua sessão. Saia e entre de novo no painel; se continuar, é configuração da instalação.';
   }
   if (status === 403) {
-    return 'O serviço de conectores recusou esta consulta para o operador. É configuração da instalação.';
+    return `${SEM_PERMISSAO_ACAO} ${PRAZO_DO_PAPEL}`;
   }
   return `Erro inesperado (status ${status ?? 'desconhecido'}).`;
 }

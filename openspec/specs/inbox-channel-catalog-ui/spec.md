@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - defined by change frontend-inbox-catalogo-canais. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Listagem de canais na interface
 O sistema SHALL prover, em `apps/frontend`, uma página que lista os
 canais de entrada cadastrados consumindo `GET /channels`, exibindo para
@@ -123,10 +121,20 @@ comportamento em relação à página anterior de card único. A credencial
 nunca é exibida, pois `ChannelResponse` nunca a inclui. O conteúdo da aba
 Sessões é definido pela capability `inbox-message-history-ui`.
 
+Para a sessão de papel Leitor (`panel-roles`), que não vê o histórico de
+conversas, a página SHALL NOT ter a aba Sessões, SHALL abrir na aba
+Configuração, SHALL NOT chamar `GET /channels/{id}/sessions` e SHALL NOT
+mostrar `Editar` nem `Ativar`/`Desativar`.
+
 #### Scenario: Aba Sessões é a aba padrão
-- **WHEN** o usuário acessa a página de detalhe de um canal existente
+- **WHEN** a sessão de um Admin ou de um Operador acessa a página de detalhe de um canal existente
 - **THEN** a aba Sessões é exibida selecionada por padrão, sem exigir
   clique do usuário
+
+#### Scenario: Leitor abre o canal em Configuração
+- **WHEN** a sessão de um Leitor acessa a página de detalhe de um canal existente
+- **THEN** a aba Configuração aparece selecionada, não há a aba Sessões, nem
+  `Editar` nem `Desativar`, e nenhum `GET /channels/{id}/sessions` é feito
 
 #### Scenario: Aba Configuração carregada com sucesso
 - **WHEN** o usuário seleciona a aba Configuração no detalhe de um canal
@@ -150,7 +158,7 @@ Sessões é definido pela capability `inbox-message-history-ui`.
   sem exigir nenhuma ação manual
 
 #### Scenario: Ações de editar/desativar independem da aba aberta
-- **WHEN** o usuário está na aba Sessões ou na aba Configuração do
+- **WHEN** a sessão de um Admin ou de um Operador está na aba Sessões ou na aba Configuração do
   detalhe de um canal
 - **THEN** os botões `Editar` e `Ativar`/`Desativar` permanecem visíveis
   acima das abas, e agem sobre o canal, não sobre a aba aberta
@@ -258,3 +266,4 @@ Com o catálogo vazio, o campo de busca SHALL NOT ser exibido.
 - **WHEN** não há nenhum canal cadastrado
 - **THEN** o campo de busca não é exibido, e a interface indica que não há canal
   cadastrado
+

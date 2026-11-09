@@ -18,6 +18,7 @@ import { listAgents } from '../../agents/api/agentsApi';
 import { listMcpServerTools } from '../api/mcpServersApi';
 import type { McpServer } from '../types/mcpServer';
 import type { Agent } from '../../agents/types/agent';
+import { signInAsRole } from '../../../test/authFakes';
 
 vi.mock('../api/mcpServersApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/mcpServersApi')>();
@@ -357,5 +358,30 @@ describe('McpServerDetailPage', () => {
     const volta = await screen.findByRole('link', { name: 'Servidores MCP' });
 
     expect(volta).toHaveAttribute('href', '/mcp-servers');
+  });
+});
+
+// Spec `panel-roles`, "Leitor no MCP" (change papeis-no-painel).
+describe('McpServerDetailPage por papel', () => {
+  it('Leitor no MCP', async () => {
+    signInAsRole('leitor');
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+    renderPage(activeMcpServer.id);
+
+    await screen.findByRole('heading', { name: activeMcpServer.name });
+    expect(screen.queryByRole('button', { name: 'Testar conexão' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /desativar/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /ver tools|carregar tools|atualizar/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('o Operador vê Testar conexão', async () => {
+    signInAsRole('operador');
+    vi.mocked(getMcpServer).mockResolvedValue(activeMcpServer);
+    renderPage(activeMcpServer.id);
+
+    expect(await screen.findByRole('button', { name: 'Testar conexão' })).toBeInTheDocument();
   });
 });

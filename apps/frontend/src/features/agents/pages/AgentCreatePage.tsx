@@ -8,6 +8,7 @@ import { useProvidersQuery } from '../api/useProviders';
 import { AgentForm } from '../components/AgentForm';
 import { ApiError } from '../api/agentsApi';
 import type { CreateAgentInput } from '../types/agent';
+import { notifyFailure } from '../../../utils/notifyFailure';
 
 function fieldErrorsFrom(error: unknown): Record<string, string> | undefined {
   if (error instanceof ApiError && error.status === 400 && error.problem?.errors) {
@@ -41,8 +42,7 @@ export function AgentCreatePage() {
           setFieldErrors(errors);
           return;
         }
-        notifications.show({
-          color: 'red',
+        notifyFailure(error, {
           title: 'Erro ao criar agente',
           message: 'Não foi possível cadastrar o agente. Tente novamente.',
         });

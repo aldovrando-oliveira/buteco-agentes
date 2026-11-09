@@ -28,6 +28,8 @@ describe('request', () => {
   });
 
   it('não anexa Authorization quando não há token armazenado', async () => {
+    // Sem sessão: o setup grava a de Admin antes de cada caso (D11 da papeis-no-painel).
+    signOutForTest();
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
     vi.stubGlobal('fetch', fetchMock);
 

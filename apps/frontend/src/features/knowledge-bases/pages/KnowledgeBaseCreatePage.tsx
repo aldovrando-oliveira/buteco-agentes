@@ -26,6 +26,7 @@ import type {
   CreateManualKnowledgeBaseInput,
   KnowledgeBaseContentMode,
 } from '../types/knowledgeBase';
+import { notifyFailure } from '../../../utils/notifyFailure';
 
 function fieldErrorsFrom(error: unknown): Record<string, string> | undefined {
   if (error instanceof ApiError && error.status === 400 && error.problem?.errors) {
@@ -198,8 +199,7 @@ export function KnowledgeBaseCreatePage() {
           setSubmitError(connectorErrorMessage(error, 'create', input.provider));
           return;
         }
-        notifications.show({
-          color: 'red',
+        notifyFailure(error, {
           title: 'Erro ao cadastrar base',
           message: 'Não foi possível cadastrar a base de conhecimento. Tente novamente.',
         });

@@ -17,6 +17,7 @@ import {
 import type { Channel } from '../types/channel';
 import type { Agent } from '../../agents/types/agent';
 import type { ChannelSession } from '../../sessions/types/session';
+import { signInAsRole } from '../../../test/authFakes';
 
 vi.mock('../api/channelsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/channelsApi')>();
@@ -283,5 +284,43 @@ describe('ChannelDetailPage', () => {
     const volta = await screen.findByRole('link', { name: 'Canais' });
 
     expect(volta).toHaveAttribute('href', '/channels');
+  });
+});
+
+// Spec `inbox-channel-catalog-ui`, "Detalhe de canal" (change papeis-no-painel, Q13).
+describe('ChannelDetailPage por papel', () => {
+  beforeEach(() => {
+    vi.mocked(getChannel).mockReset();
+    vi.mocked(listAgents).mockResolvedValue([agent]);
+    vi.mocked(listChannelSessions).mockReset();
+    vi.mocked(listChannelSessions).mockResolvedValue([]);
+  });
+
+  it('Leitor abre o canal em Configuração', async () => {
+    signInAsRole('leitor');
+    vi.mocked(getChannel).mockResolvedValue(wahaChannel);
+    renderPage(`/channels/${wahaChannel.id}`);
+
+    expect(await screen.findByRole('tab', { name: 'Configuração' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.queryByRole('tab', { name: 'Sessões' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /desativar/i })).not.toBeInTheDocument();
+    expect(listChannelSessions).not.toHaveBeenCalled();
+  });
+
+  it('Aba Sessões é a aba padrão para o Operador', async () => {
+    signInAsRole('operador');
+    vi.mocked(getChannel).mockResolvedValue(wahaChannel);
+    renderPage(`/channels/${wahaChannel.id}`);
+
+    expect(await screen.findByRole('tab', { name: 'Sessões' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('link', { name: 'Editar' })).toBeInTheDocument();
+    await waitFor(() => expect(listChannelSessions).toHaveBeenCalled());
   });
 });

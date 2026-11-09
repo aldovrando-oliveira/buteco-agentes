@@ -9,6 +9,7 @@ export const ATIVO: UserSummary = {
   nome: 'Ana Souza',
   email: 'ana@exemplo.test',
   estado: 'ativo',
+  papel: 'admin',
   formasDeEntrada: ['senha'],
   duasEtapas: true,
   ultimoAcesso: '2026-11-06T21:40:00Z', // ontem, 18:40 em São Paulo, com o agora de NOW
@@ -31,6 +32,7 @@ export const CONVIDADA: UserSummary = {
   nome: 'Joana Prado',
   email: 'joana@exemplo.test',
   estado: 'convidado',
+  papel: 'leitor',
   formasDeEntrada: [],
   duasEtapas: false,
   ultimoAcesso: null,
@@ -62,6 +64,7 @@ export const RAFAEL: UserDetail = {
   nome: 'Rafael Duarte',
   email: 'rafael.duarte@empresa.com',
   estado: 'ativo',
+  papel: 'operador',
   formasDeEntrada: ['senha'],
   duasEtapas: true,
   ultimoAcesso: '2026-11-06T21:40:00Z', // ontem, 18:40 em São Paulo
@@ -88,6 +91,7 @@ export const BRUNO: UserDetail = {
 export const PROPRIO: UserDetail = {
   ...RAFAEL,
   id: PROPRIO_ID,
+  papel: 'admin',
   nome: 'Aldovrando Oliveira',
   email: 'aldovrando@empresa.com',
   convidadoPor: null,

@@ -6,12 +6,12 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { theme } from '../../../theme';
 
 /** Um cartão ou a página de Minha conta, com o QueryClient de teste e o router. */
-export function renderAccount(ui: ReactNode, path = '/account') {
+export function renderAccount(ui: ReactNode, path = '/account', state?: unknown) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const result = render(
     <MantineProvider theme={theme}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[path]}>
+        <MemoryRouter initialEntries={[state === undefined ? path : { pathname: path, state }]}>
           <Routes>
             <Route path="/account" element={ui} />
             <Route path="*" element={<p>fora de Minha conta</p>} />

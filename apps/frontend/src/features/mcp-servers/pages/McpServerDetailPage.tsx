@@ -20,8 +20,14 @@ import {
 } from '../components/ConnectionTestResultAlert';
 import { agentsUsingServer } from '../utils/agentUsage';
 import { ApiError } from '../api/mcpServersApi';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { notifyFailure } from '../../../utils/notifyFailure';
+import { usePermissoes } from '../../../auth/session';
 
 export function McpServerDetailPage() {
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, error } = useMcpServerQuery(id!);
   // Só para derivar o uso: quem usa o servidor, quais tools estão
@@ -43,9 +49,8 @@ export function McpServerDetailPage() {
           message: `"${mcpServer.name}" foi ativado com sucesso.`,
         });
       },
-      onError: () => {
-        notifications.show({
-          color: 'red',
+      onError: (error) => {
+        notifyFailure(error, {
           title: 'Erro ao ativar servidor MCP',
           message: 'Não foi possível ativar o servidor MCP. Tente novamente.',
         });
@@ -63,10 +68,9 @@ export function McpServerDetailPage() {
           message: `"${mcpServer.name}" foi desativado com sucesso.`,
         });
       },
-      onError: () => {
+      onError: (error) => {
         closeConfirm();
-        notifications.show({
-          color: 'red',
+        notifyFailure(error, {
           title: 'Erro ao desativar servidor MCP',
           message: 'Não foi possível desativar o servidor MCP. Tente novamente.',
         });
@@ -108,6 +112,9 @@ export function McpServerDetailPage() {
     return <Alert color="red">Servidor MCP não encontrado.</Alert>;
   }
 
+  // O `403` da consulta principal é o papel (spec `panel-roles`, "O 403 na carga e na ação").
+  if (is403(error)) return <AccessDenied />;
+
   if (error || !data) {
     return <Alert color="red">Não foi possível carregar o servidor MCP.</Alert>;
   }
@@ -127,32 +134,34 @@ export function McpServerDetailPage() {
         }
         description={data.description ?? undefined}
         actions={
-          <>
-            <Button component={Link} to={`/mcp-servers/${data.id}/edit`} variant="default">
-              Editar
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleTestConnection}
-              loading={testMutation.isPending}
-            >
-              Testar conexão
-            </Button>
-            {data.isActive ? (
-              <Button color="red" variant="outline" onClick={openConfirm}>
-                Desativar
+          pode.escrever && (
+            <>
+              <Button component={Link} to={`/mcp-servers/${data.id}/edit`} variant="default">
+                Editar
               </Button>
-            ) : (
               <Button
-                color="green"
                 variant="outline"
-                onClick={handleActivate}
-                loading={activateMutation.isPending}
+                onClick={handleTestConnection}
+                loading={testMutation.isPending}
               >
-                Ativar
+                Testar conexão
               </Button>
-            )}
-          </>
+              {data.isActive ? (
+                <Button color="red" variant="outline" onClick={openConfirm}>
+                  Desativar
+                </Button>
+              ) : (
+                <Button
+                  color="green"
+                  variant="outline"
+                  onClick={handleActivate}
+                  loading={activateMutation.isPending}
+                >
+                  Ativar
+                </Button>
+              )}
+            </>
+          )
         }
       />
 

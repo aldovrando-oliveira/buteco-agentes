@@ -61,6 +61,10 @@ import {
 } from '../api/useKnowledgeDocuments';
 import { agentsConsultingBase } from '../utils/agentUsage';
 import type { KnowledgeDocumentSummary } from '../types/knowledgeDocument';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { notifyFailure } from '../../../utils/notifyFailure';
+import { usePermissoes } from '../../../auth/session';
 
 // A BARRA DE ABAS NASCE AQUI, e o gatilho registrado pela 5a-1 (D3) era este:
 // uma barra com uma aba só afirmaria uma estrutura que a tela não tinha, então
@@ -136,6 +140,8 @@ function syncRequestView(
 }
 
 export function KnowledgeBaseDetailPage() {
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = parseTab(searchParams.get('tab'));
@@ -310,9 +316,8 @@ export function KnowledgeBaseDetailPage() {
           message: `"${document.title}" voltou para a fila de indexação.`,
         });
       },
-      onError: () => {
-        notifications.show({
-          color: 'red',
+      onError: (error) => {
+        notifyFailure(error, {
           title: 'Erro ao reindexar',
           message: 'Não foi possível reindexar o documento. Tente novamente.',
         });
@@ -332,9 +337,8 @@ export function KnowledgeBaseDetailPage() {
         });
         setDocumentToDelete(null);
       },
-      onError: () => {
-        notifications.show({
-          color: 'red',
+      onError: (error) => {
+        notifyFailure(error, {
           title: 'Erro ao excluir documento',
           message: 'Não foi possível excluir o documento. Tente novamente.',
         });
@@ -352,9 +356,8 @@ export function KnowledgeBaseDetailPage() {
           message: `"${knowledgeBase.name}" foi ativada com sucesso.`,
         });
       },
-      onError: () => {
-        notifications.show({
-          color: 'red',
+      onError: (error) => {
+        notifyFailure(error, {
           title: 'Erro ao ativar base',
           message: 'Não foi possível ativar a base de conhecimento. Tente novamente.',
         });
@@ -372,10 +375,9 @@ export function KnowledgeBaseDetailPage() {
           message: `"${knowledgeBase.name}" foi desativada com sucesso.`,
         });
       },
-      onError: () => {
+      onError: (error) => {
         closeConfirm();
-        notifications.show({
-          color: 'red',
+        notifyFailure(error, {
           title: 'Erro ao desativar base',
           message: 'Não foi possível desativar a base de conhecimento. Tente novamente.',
         });
@@ -447,6 +449,9 @@ export function KnowledgeBaseDetailPage() {
     );
   }
 
+  // O `403` da consulta principal é o papel (spec `panel-roles`, "O 403 na carga e na ação").
+  if (is403(error)) return <AccessDenied />;
+
   if (error || !data) {
     return <Alert color="red">Não foi possível carregar a base de conhecimento.</Alert>;
   }
@@ -468,25 +473,26 @@ export function KnowledgeBaseDetailPage() {
           </Badge>
         }
         actions={
-          <>
-            <Button component={Link} to={`/knowledge-bases/${data.id}/edit`} variant="default">
-              Editar
-            </Button>
-            {data.isActive ? (
-              <Button color="red" variant="outline" onClick={openConfirm}>
-                Desativar
+          pode.escrever && (
+            <>
+              <Button component={Link} to={`/knowledge-bases/${data.id}/edit`} variant="default">
+                Editar
               </Button>
-            ) : (
-              <Button
-                color="green"
-                variant="outline"
-                onClick={handleActivate}
-                loading={activateMutation.isPending}
-              >
-                Ativar
-              </Button>
-            )}
-            {/* EXCLUIR SÓ COM A BASE INATIVA (design.md da change
+              {data.isActive ? (
+                <Button color="red" variant="outline" onClick={openConfirm}>
+                  Desativar
+                </Button>
+              ) : (
+                <Button
+                  color="green"
+                  variant="outline"
+                  onClick={handleActivate}
+                  loading={activateMutation.isPending}
+                >
+                  Ativar
+                </Button>
+              )}
+              {/* EXCLUIR SÓ COM A BASE INATIVA (design.md da change
                 exclusao-base-painel, D1): a rota recusa base ativa com 409.
                 Ativa, o botão fica indisponível e EXPLICA — `data-disabled` e
                 não `disabled`, porque o nativo tira o foco e a explicação ficaria
@@ -494,35 +500,36 @@ export function KnowledgeBaseDetailPage() {
                 `events.focus` é falso por padrão no Mantine 9 (tasks.md, 1.3).
                 O nome acessível difere do texto porque as linhas de documento
                 já têm botões "Excluir". */}
-            <Tooltip
-              label="Só uma base inativa pode ser excluída. Desative a base antes; a desativação pode ser desfeita, a exclusão não."
-              disabled={!data.isActive}
-              events={{ hover: true, focus: true, touch: false }}
-              multiline
-              w={280}
-            >
-              {/* `outline`, como o "Desativar": o vermelho cheio fica para a
+              <Tooltip
+                label="Só uma base inativa pode ser excluída. Desative a base antes; a desativação pode ser desfeita, a exclusão não."
+                disabled={!data.isActive}
+                events={{ hover: true, focus: true, touch: false }}
+                multiline
+                w={280}
+              >
+                {/* `outline`, como o "Desativar": o vermelho cheio fica para a
                   confirmação. Cheio, o botão era o mais pesado do cabeçalho
                   (conferência visual, R1-1). */}
-              <Button
-                color="red"
-                variant="outline"
-                aria-label="Excluir a base"
-                data-disabled={data.isActive || undefined}
-                aria-disabled={data.isActive || undefined}
-                onClick={(event) => {
-                  if (data.isActive) {
-                    event.preventDefault();
-                    return;
-                  }
-                  setDeleteBaseFailure(null);
-                  setDeleteBaseOpened(true);
-                }}
-              >
-                Excluir
-              </Button>
-            </Tooltip>
-          </>
+                <Button
+                  color="red"
+                  variant="outline"
+                  aria-label="Excluir a base"
+                  data-disabled={data.isActive || undefined}
+                  aria-disabled={data.isActive || undefined}
+                  onClick={(event) => {
+                    if (data.isActive) {
+                      event.preventDefault();
+                      return;
+                    }
+                    setDeleteBaseFailure(null);
+                    setDeleteBaseOpened(true);
+                  }}
+                >
+                  Excluir
+                </Button>
+              </Tooltip>
+            </>
+          )
         }
       />
 
@@ -540,6 +547,7 @@ export function KnowledgeBaseDetailPage() {
           syncAvailable={syncAvailable}
           request={requestView}
           onSync={() => void handleSync()}
+          canSync={pode.usarConectores}
         />
       )}
 
@@ -591,6 +599,7 @@ export function KnowledgeBaseDetailPage() {
                 isLoading={documentsQuery.isLoading}
                 error={documentsQuery.error}
                 readOnly
+                canWrite={pode.escrever}
                 onReindex={handleReindexDocument}
                 reindexingId={reindexDocument.isPending ? reindexDocument.variables : null}
               />
@@ -608,6 +617,7 @@ export function KnowledgeBaseDetailPage() {
               isLoading={documentsQuery.isLoading}
               error={documentsQuery.error}
               readOnly={false}
+              canWrite={pode.escrever}
               onAdd={handleAddDocument}
               onUpdate={handleUpdateDocument}
               onDelete={setDocumentToDelete}

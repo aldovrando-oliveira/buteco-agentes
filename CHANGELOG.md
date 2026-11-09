@@ -327,6 +327,19 @@ o versionamento pretende seguir
     da #211. Se o `apps/api` estiver fora, a tela mostra "Indisponível" e tenta de novo
     sozinha enquanto o erro durar;
   - Editar usuário e o "Editar" na linha chegam com a #183.
+- **O painel com os papéis** (#185, M2 · 3 de 6). Vai para produção junto com a #184.
+  - o convite pede o papel (Admin, Operador ou Leitor), com a descrição de cada um; Usuários
+    tem a coluna Papel;
+  - Editar usuário tem o cartão "Dados e papel": promover a Admin pede a sua senha, o último
+    Admin não é rebaixado, e rebaixar a si mesmo pede confirmação e leva a Minha conta;
+  - o menu e as telas seguem o papel: a seção "Acesso" (Usuários e Identidade) é só do Admin;
+    o Leitor não vê os botões de escrita, o histórico de conversas nem o "Sincronizar agora",
+    e abre o canal em Configuração;
+  - a página que o papel não abre mostra "Você não tem acesso a esta página.", e a ação que o
+    servidor recusa mostra "Você não tem permissão para esta ação.", com o prazo de até 15
+    minutos para um papel novo chegar a todo o painel;
+  - o rodapé mostra o papel no lugar do e-mail; Minha conta mostra o papel e, para quem não é
+    Admin, diz para pedir a um Admin a mudança do nome ou do e-mail.
 - **Comando de emergência para o link de redefinição de senha** (#257, M2 · 2 de 6), para o
   último Admin que perdeu a senha:
   - `docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --no-deps api password-reset-link --email <e-mail>`
@@ -338,7 +351,7 @@ o versionamento pretende seguir
     roteiro o link é credencial completa por 24 h**: não cole em chat, ticket nem e-mail
     (`docs/deployment.md`).
 - **Papéis Admin, Operador e Leitor** (#184, M2 · 1 de 6). **Não vai para produção sem a
-  #185**, que leva as telas.
+  #185**, que leva as telas (acima).
   - cada usuário tem um papel, gravado e levado no token; os três apps que recebem o token
     do painel (`apps/api`, `apps/inbox`, `apps/connectors`) o conferem por rota, por uma
     tabela fechada em cada um, conferida no boot;
@@ -1026,6 +1039,11 @@ o versionamento pretende seguir
   rebaixamento vale na requisição seguinte em Usuários, convites, redefinições e Identidade, e
   em até 15 min 30 s no resto; a promoção, na renovação seguinte. `POST /users/invitations`
   exige `papel`. A verificação em 2 etapas continua obrigatória para todos os papéis.
+- **O painel trata o `403`** (#185). Numa recusa do servidor, o painel renova a sessão uma vez,
+  sem repetir o pedido, para o menu e as telas refletirem o papel novo; a consulta não repete o
+  `403`. O `403` do serviço de conectores deixou de ser descrito como configuração da
+  instalação: é o papel. O cartão "Senha e recuperação" de Usuários deixou de dizer que a
+  verificação em 2 etapas é ligada por cada pessoa (obrigatória desde a #220).
 - **O login exige a verificação em 2 etapas** (#220). O `POST /auth/session` não responde
   mais `204`: a senha certa responde `200` com `{"segundoPasso":"totp"}` ou
   `{"segundoPasso":"cadastro"}`. O authorize só emite código com a sessão completa de quem

@@ -330,11 +330,12 @@ no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
 (ciclo de sincronização) e o build arg `VITE_CONNECTORS_BASE_URL=""` do
 `frontend`, que só existe junto com o bloco `/connectors` do `nginx.conf`.
 
-### Papéis Admin, Operador e Leitor (#184)
+### Papéis Admin, Operador e Leitor (#184, #185)
 
-**A #184 entra no `main` e não vai para produção sem a #185** (decisão do dono, 08/11/2026). Com
-ela, o `papel` passa a ser obrigatório no convite, e o "Convidar" do painel de antes da #185, que
-não o envia, recebe `400`. As duas vão juntas.
+**A #184 (backend) e a #185 (painel) vão juntas para produção** (decisão do dono, 08/11/2026).
+Com a #184, o `papel` passa a ser obrigatório no convite, e o "Convidar" do painel de antes da
+#185, que não o envia, recebe `400`; a #185 é o painel que escolhe o papel, esconde o que o papel
+não pode fazer e trata o `403`.
 
 **O que muda:**
 
@@ -349,7 +350,13 @@ não o envia, recebe `400`. As duas vão juntas.
 - **o rebaixamento** vale na requisição seguinte em Usuários, convites, redefinições e Identidade, e
   em até 15 min 30 s no resto (a vida do access token já emitido). A promoção chega na renovação
   seguinte do painel;
-- a verificação em 2 etapas continua obrigatória para todos os papéis.
+- a verificação em 2 etapas continua obrigatória para todos os papéis;
+- **no painel (#185):** a seção "Acesso" (Usuários e Identidade) só aparece para o Admin; o
+  Leitor não vê os botões de escrita, o histórico de conversas nem o "Sincronizar agora", e abre
+  o canal em Configuração; a URL de uma página que o papel não abre mostra "Você não tem acesso a
+  esta página."; o rodapé mostra o papel na segunda linha, no lugar do e-mail. Quando o servidor
+  recusa com `403`, o painel renova a sessão uma vez (sem repetir o pedido), e o menu se atualiza
+  com o papel novo.
 
 **Antes do deploy (o dono):**
 
@@ -360,9 +367,9 @@ não o envia, recebe `400`. As duas vão juntas.
      sh -c 'pg_dump -U "$POSTGRES_USER" -Fc buteco_agents' > buteco_agents-antes-184.dump
    ```
 
-2. as imagens do `api`, do `inbox` e do `connectors` sobem juntas. Um `inbox` ou um `connectors` de
-   antes continua aceitando o token do painel sem olhar o papel, o que é mais permissivo, e não
-   quebra nada.
+2. as imagens do `api`, do `inbox`, do `connectors` **e do `frontend`** sobem juntas. Um `inbox` ou
+   um `connectors` de antes continua aceitando o token do painel sem olhar o papel, o que é mais
+   permissivo, e não quebra nada; um `frontend` de antes deixa o "Convidar" com `400`.
 
 **Deploy:** o `migrator` aplica a `AddUserRole` antes do `api`, como sempre, e depois:
 
@@ -379,12 +386,20 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod exec postgres \
 
 - só `admin` na resposta;
 - entrar no painel: o primeiro pedido de cada sessão aberta antes do deploy recebe `401` e o painel
-  renova sozinho, sem voltar à tela de login (o token de antes não tem papel);
-- em Usuários (ou em `GET /users`), cada usuário com `papel` `admin`.
+  renova sozinho, sem voltar à tela de login (o token de antes não tem papel); o rodapé passa a
+  dizer "Admin";
+- em Usuários, a coluna Papel com "Admin" em todos;
+- convidar alguém como **Leitor** (o "Convidar" pede o papel) e responder `201`; entrar com esse
+  convite: o menu não tem "Acesso", a lista de agentes não tem "Novo agente", e `/users` digitado
+  mostra "Você não tem acesso a esta página.". Depois, desativar ou cancelar esse usuário de teste.
 
-**Depois do deploy, o dono rebaixa quem não deve ser Admin.** Com a #185 no ar, pelo painel, em
-Editar usuário. Sem ela (só se a #184 tiver ido sozinha), pela API, com o access token de um Admin
-(no navegador, as ferramentas do desenvolvedor → Application → Local Storage → `buteco.sessao` →
+**Depois do deploy, o dono rebaixa quem não deve ser Admin, em Editar usuário** (o cartão "Dados
+e papel": escolher o papel e "Salvar alterações"; promover a Admin pede a sua senha). O rebaixado
+perde Usuários e Identidade na hora, e o resto do painel muda em até 15 minutos, quando a sessão
+dele renovar.
+
+**Alternativa, pela API** (só se a tela estiver indisponível), com o access token de um Admin (no
+navegador, as ferramentas do desenvolvedor → Application → Local Storage → `buteco.sessao` →
 `accessToken`, que vale 15 min):
 
 ```
@@ -403,8 +418,15 @@ curl -s -X PUT -H "Authorization: Bearer $T" -H 'Content-Type: application/json'
 - **o convite pendente** que não deve ser Admin: cancele (`POST /users/{id}/invitation/cancel`, ou
   em Usuários) e convide de novo com o papel certo. O link antigo deixa de valer.
 
-**Voltar atrás:** a imagem anterior do `api`, do `inbox` e do `connectors`, **sem** rodar o `Down`
-da migration (ele apaga a coluna e com ela os papéis).
+**Voltar atrás:** a imagem anterior do `api`, do `inbox`, do `connectors` **e do `frontend`**,
+juntas, **sem** rodar o `Down` da migration (ele apaga a coluna e com ela os papéis).
+
+- **Só o `frontend`** (a #184 fica): seguro para os dados, porque nada se grava diferente; o
+  "Convidar" volta a dar `400`, e o Operador e o Leitor voltam a ver todos os botões, recebendo o
+  erro genérico da tela em cada um. Serve como recuo curto, se o defeito for só de tela.
+- **Só o backend** (o `frontend` da #185 fica): **não faça.** A imagem anterior não emite o papel no
+  token, e o painel da #185 trata o papel desconhecido como Leitor: ninguém gere usuários pela
+  tela durante o recuo, embora o servidor deixasse. O recuo do backend leva o `frontend` junto.
 
 **Antes do recuo**, porque a imagem anterior não tem papéis e devolve o poder de Admin a todo
 usuário ativo:

@@ -95,4 +95,29 @@ describe('espera entre tentativas', () => {
       1_000, 2_000, 4_000, 30_000,
     ]);
   });
+
+  it('Consulta com 403 não repete', async () => {
+    const client = createAppQueryClient();
+    const queryFn = vi.fn().mockRejectedValue(new FakeApiError(403));
+    const observer = new QueryObserver(client, { queryKey: ['proibida'], queryFn });
+    const unsubscribe = observer.subscribe(() => {});
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    expect(observer.getCurrentResult().status).toBe('error');
+    unsubscribe();
+  });
+
+  it('consulta com 500 continua repetindo 3 vezes', async () => {
+    const client = createAppQueryClient();
+    const queryFn = vi.fn().mockRejectedValue(new FakeApiError(500));
+    const observer = new QueryObserver(client, { queryKey: ['quebrada'], queryFn });
+    const unsubscribe = observer.subscribe(() => {});
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(queryFn).toHaveBeenCalledTimes(4);
+    unsubscribe();
+  });
 });

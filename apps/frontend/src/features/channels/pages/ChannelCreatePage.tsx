@@ -7,6 +7,7 @@ import { useAgentsQuery } from '../../agents/api/useAgents';
 import { useCreateChannelMutation } from '../api/useChannels';
 import { ChannelForm, type ChannelFormSubmitValues } from '../components/ChannelForm';
 import { ApiError } from '../api/channelsApi';
+import { notifyFailure } from '../../../utils/notifyFailure';
 
 interface ParsedFieldErrors {
   fieldErrors?: Record<string, string>;
@@ -68,8 +69,7 @@ export function ChannelCreatePage() {
             });
             return;
           }
-          notifications.show({
-            color: 'red',
+          notifyFailure(error, {
             title: 'Erro ao cadastrar canal',
             message: 'Não foi possível cadastrar o canal. Tente novamente.',
           });

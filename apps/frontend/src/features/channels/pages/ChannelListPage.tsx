@@ -5,11 +5,16 @@ import { useChannelsQuery } from '../api/useChannels';
 import { useAgentsQuery } from '../../agents/api/useAgents';
 import { ChannelTable } from '../components/ChannelTable';
 import { matchesSearch } from '../../../utils/searchText';
+import { AccessDenied } from '../../../components/feedback/AccessDenied';
+import { is403 } from '../../../utils/failureNotice';
+import { usePermissoes } from '../../../auth/session';
 
 const channelTypeLabels: Record<string, string> = { waha: 'WAHA', telegram: 'Telegram' };
 
 export function ChannelListPage() {
-  const { data, isLoading, isError } = useChannelsQuery();
+  // O que o papel da sessão pode (spec `panel-roles`; change papeis-no-painel, D2).
+  const pode = usePermissoes();
+  const { data, isLoading, isError, error } = useChannelsQuery();
   const agentsQuery = useAgentsQuery();
   const loading = isLoading || agentsQuery.isLoading;
   const [search, setSearch] = useState('');
@@ -42,9 +47,11 @@ export function ChannelListPage() {
             </Text>
           )}
         </Stack>
-        <Button component={Link} to="/channels/new">
-          Novo canal
-        </Button>
+        {pode.escrever && (
+          <Button component={Link} to="/channels/new">
+            Novo canal
+          </Button>
+        )}
       </Group>
 
       {hasChannels && (
@@ -64,7 +71,13 @@ export function ChannelListPage() {
         </Group>
       )}
 
-      {isError && <Alert color="red">Não foi possível carregar os canais.</Alert>}
+      {/* O `403` é o papel (spec `panel-roles`). */}
+      {isError &&
+        (is403(error) ? (
+          <AccessDenied />
+        ) : (
+          <Alert color="red">Não foi possível carregar os canais.</Alert>
+        ))}
 
       {!loading && !isError && !hasChannels && (
         <Text c="dimmed">Nenhum canal cadastrado ainda.</Text>

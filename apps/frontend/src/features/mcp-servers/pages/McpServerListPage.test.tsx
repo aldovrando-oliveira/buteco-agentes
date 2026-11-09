@@ -10,6 +10,7 @@ import { listMcpServers } from '../api/mcpServersApi';
 import { listAgents } from '../../agents/api/agentsApi';
 import type { McpServer } from '../types/mcpServer';
 import type { Agent } from '../../agents/types/agent';
+import { signInAsRole } from '../../../test/authFakes';
 
 vi.mock('../../agents/api/agentsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../agents/api/agentsApi')>();
@@ -212,5 +213,22 @@ describe('McpServerListPage', () => {
     // isto, a busca deixaria de ser alcançável por quem usa leitor de tela.
     expect(screen.getByLabelText('Buscar por nome ou url')).toBeInTheDocument();
     expect(screen.queryByText('Buscar')).not.toBeInTheDocument();
+  });
+});
+
+// O que cada papel vê (spec `panel-roles`; change papeis-no-painel).
+describe('McpServerListPage por papel', () => {
+  it('o Leitor não vê "Novo servidor MCP", e o Operador vê', async () => {
+    signInAsRole('leitor');
+    vi.mocked(listMcpServers).mockResolvedValue([mcpServer]);
+    const { unmount } = renderPage();
+
+    expect(await screen.findByText(mcpServer.name)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Novo servidor MCP' })).not.toBeInTheDocument();
+    unmount();
+
+    signInAsRole('operador');
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'Novo servidor MCP' })).toBeInTheDocument();
   });
 });
