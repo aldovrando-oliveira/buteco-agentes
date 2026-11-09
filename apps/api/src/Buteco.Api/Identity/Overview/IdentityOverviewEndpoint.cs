@@ -8,9 +8,10 @@ namespace Buteco.Api.Identity.Overview;
 /// <c>GET /identity</c>: o emissor e as chaves de assinatura para a tela Identidade (#211;
 /// design.md da change leitura-identidade-emissor, D1 a D7).
 /// <list type="bullet">
-/// <item><b>Acesso:</b> na M1, todo usuário real e ativo (<see cref="CurrentUser"/>). Token de
-/// serviço já recebe <c>403</c> da política de fallback, e o token sem usuário recebe da
-/// <see cref="CurrentUser"/>. Na M2, só Admin (#184).</item>
+/// <item><b>Acesso:</b> só Admin (design.md da change papeis-no-token, D1): o <c>role</c> do token
+/// pela tabela de papéis, e o papel gravado pela <see cref="CurrentUser.FindAdminAsync"/>. Token de
+/// serviço recebe <c>403</c> da política de fallback, e o token sem usuário ou de quem não é Admin,
+/// da <see cref="CurrentUser"/>.</item>
 /// <item><b>Endereços:</b> do issuer configurado, como o discovery os monta
 /// (<see cref="DiscoveryEndpointsFromIssuerHandler"/>), nunca do <c>Host</c> da requisição.</item>
 /// <item><b>Durações:</b> de <see cref="IdentityTokenLifetimes"/> e da
@@ -40,7 +41,7 @@ public static class IdentityOverviewEndpoint
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
             return CurrentUser.Forbidden();
         }

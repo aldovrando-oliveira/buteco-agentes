@@ -39,6 +39,14 @@ namespace Buteco.Api.Identity.Flow;
 /// </para>
 ///
 /// <para>
+/// <b>Na troca do código e em toda renovação aceitas, troca o papel (<c>role</c>) pelo gravado</b>
+/// (design.md da change papeis-no-token, D3), com os dois destinos, access e id token, gravados de
+/// novo pelo mesmo motivo do nome e do e-mail. É o que faz um papel mudado valer na renovação
+/// seguinte, e o que dá papel ao refresh emitido antes da change, cujo principal não o tem. O
+/// prazo do resto (até 15 min 30 s) é o do access token já emitido.
+/// </para>
+///
+/// <para>
 /// <b>Token de usuário é o que traz o claim do stamp</b>, que só o authorize põe
 /// (<see cref="UserPrincipalFactory"/>). O código e o refresh são cifrados e assinados pelo
 /// emissor, então ninguém fabrica um sem ele. Um refresh de cliente (<c>client_credentials</c>
@@ -75,12 +83,20 @@ public sealed class UserGrantTokenHandler(AppDbContext dbContext, TimeProvider t
             return;
         }
 
+        RefreshRoleClaim(principal!, user);
+
         if (context.Request.IsRefreshTokenGrantType())
         {
             RefreshProfileClaims(principal!, user);
             user.RecordAccess(timeProvider.GetUtcNow());
             await dbContext.SaveChangesAsync(context.CancellationToken);
         }
+    }
+
+    private static void RefreshRoleClaim(ClaimsPrincipal principal, User user)
+    {
+        principal.SetClaim(Claims.Role, UserRoleText.Write(user.Role));
+        principal.FindFirst(Claims.Role)!.SetDestinations(Destinations.AccessToken, Destinations.IdentityToken);
     }
 
     private static void RefreshProfileClaims(ClaimsPrincipal principal, User user)

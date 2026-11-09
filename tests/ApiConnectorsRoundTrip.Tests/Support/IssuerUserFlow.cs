@@ -38,12 +38,21 @@ public static class IssuerUserFlow
     /// concluir não serve: cada tentativa antes dele é uma falha de e-mail sem conta, e a
     /// quinta bloqueia o e-mail por 5 minutos (D4).
     /// </param>
-    public static async Task<string> AccessTokenAsync(string issuerDatabase, HttpClient api, Func<Task> warmUp, string publicBaseUrl, string password, string scope)
+    public static async Task<string> AccessTokenAsync(string issuerDatabase, HttpClient api, Func<Task> warmUp, string publicBaseUrl, string password, string scope, string? email = null) =>
+        (await TokensAsync(issuerDatabase, api, warmUp, publicBaseUrl, password, scope, email)).AccessToken;
+
+    /// <summary>
+    /// Os tokens do fluxo real, com o refresh quando o escopo pede <c>offline_access</c>. Sem
+    /// <paramref name="email"/>, o Admin do bootstrap; com ele, outro usuário daquele banco, que cadastra
+    /// a própria verificação no primeiro login (change papeis-no-token, 9.1).
+    /// </summary>
+    public static async Task<Tokens> TokensAsync(string issuerDatabase, HttpClient api, Func<Task> warmUp, string publicBaseUrl, string password, string scope, string? email = null)
     {
         await warmUp();
+        email ??= BootstrapAdminEmail;
         var redirectUri = new Uri(new Uri(publicBaseUrl), "/entrar/retorno").AbsoluteUri;
         var origin = new Uri(publicBaseUrl).GetLeftPart(UriPartial.Authority);
-        var state = Enrollments.GetOrAdd(issuerDatabase, _ => new HostState());
+        var state = Enrollments.GetOrAdd($"{issuerDatabase}|{email}", _ => new HostState());
 
         await state.Gate.WaitAsync();
         string cookie;
@@ -51,10 +60,10 @@ public static class IssuerUserFlow
         {
             if (state.RecoveryCodes.Count is > 0 and <= 2)
             {
-                await RegenerateRecoveryCodesAsync(api, origin, redirectUri, password, state);
+                await RegenerateRecoveryCodesAsync(api, origin, redirectUri, email, password, state);
             }
 
-            cookie = await CompleteSessionAsync(api, origin, password, state);
+            cookie = await CompleteSessionAsync(api, origin, email, password, state);
         }
         finally
         {
@@ -64,14 +73,63 @@ public static class IssuerUserFlow
         return await TokenAsync(api, cookie, redirectUri, scope);
     }
 
+    public sealed record Tokens(string AccessToken, string? RefreshToken);
+
+    /// <summary>A renovação pelo <c>/connect/token</c>, como o painel faz.</summary>
+    public static async Task<Tokens> RefreshAsync(HttpClient api, string refreshToken)
+    {
+        var token = await api.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "refresh_token",
+            ["client_id"] = "buteco-painel",
+            ["refresh_token"] = refreshToken,
+        }));
+        var body = await token.Content.ReadAsStringAsync();
+        if (token.StatusCode != HttpStatusCode.OK)
+        {
+            throw new InvalidOperationException($"Renovação falhou: {(int)token.StatusCode} {body}");
+        }
+
+        var root = JsonDocument.Parse(body).RootElement;
+        return new Tokens(root.GetProperty("access_token").GetString()!, root.TryGetProperty("refresh_token", out var refresh) ? refresh.GetString() : null);
+    }
+
+    /// <summary>
+    /// Convida <paramref name="email"/> com <paramref name="papel"/> (<c>admin</c>, <c>operador</c>,
+    /// <c>leitor</c>) pelo token de um Admin, e aceita o convite com <paramref name="newPassword"/>, pelas
+    /// rotas reais (change papeis-no-token, 9.1). O login seguinte é o <see cref="TokensAsync"/> com o e-mail.
+    /// </summary>
+    public static async Task InviteAndAcceptAsync(HttpClient api, string publicBaseUrl, string adminAccessToken, string adminPassword, string email, string papel, string newPassword)
+    {
+        var origin = new Uri(publicBaseUrl).GetLeftPart(UriPartial.Authority);
+        var invite = new HttpRequestMessage(HttpMethod.Post, "/users/invitations")
+        {
+            Content = JsonContent.Create(new { nome = "Pessoa do acordo", email, papel, senha = adminPassword }),
+        };
+        invite.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminAccessToken);
+        var created = await api.SendAsync(invite);
+        var createdBody = await created.Content.ReadAsStringAsync();
+        if (created.StatusCode != HttpStatusCode.Created)
+        {
+            throw new InvalidOperationException($"Convite falhou: {(int)created.StatusCode} {createdBody}");
+        }
+
+        var link = JsonDocument.Parse(createdBody).RootElement.GetProperty("link").GetString()!;
+        var accept = await PostAsync(api, "/auth/invitation/accept", origin, null, new { token = link[(link.IndexOf('#') + 1)..], senha = newPassword });
+        if (accept.StatusCode != HttpStatusCode.NoContent)
+        {
+            throw new InvalidOperationException($"Aceite falhou: {(int)accept.StatusCode} {await accept.Content.ReadAsStringAsync()}");
+        }
+    }
+
     /// <summary>
     /// Os códigos de recuperação acabam depois de 10 logins no mesmo banco (um teste de acordo faz
     /// mais que isso). Com 2 ou menos, um login a mais com o escopo <c>buteco-api</c> e
     /// <c>POST /account/two-factor/recovery-codes</c> com um deles trazem 10 novos.
     /// </summary>
-    private static async Task RegenerateRecoveryCodesAsync(HttpClient api, string origin, string redirectUri, string password, HostState state)
+    private static async Task RegenerateRecoveryCodesAsync(HttpClient api, string origin, string redirectUri, string email, string password, HostState state)
     {
-        var accessToken = await TokenAsync(api, await CompleteSessionAsync(api, origin, password, state), redirectUri, "openid buteco-api");
+        var accessToken = (await TokenAsync(api, await CompleteSessionAsync(api, origin, email, password, state), redirectUri, "openid buteco-api")).AccessToken;
         var request = new HttpRequestMessage(HttpMethod.Post, "/account/two-factor/recovery-codes")
         {
             Content = JsonContent.Create(new { codigo = state.RecoveryCodes.Dequeue() }),
@@ -92,7 +150,7 @@ public static class IssuerUserFlow
     }
 
     /// <summary>Authorize com PKCE e troca do código, com o cookie da sessão completa.</summary>
-    private static async Task<string> TokenAsync(HttpClient api, string cookie, string redirectUri, string scope)
+    private static async Task<Tokens> TokenAsync(HttpClient api, string cookie, string redirectUri, string scope)
     {
         var verifier = Base64Url(RandomNumberGenerator.GetBytes(32));
         var challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
@@ -131,7 +189,8 @@ public static class IssuerUserFlow
             throw new InvalidOperationException($"Troca do código falhou: {(int)token.StatusCode} {body}");
         }
 
-        return JsonDocument.Parse(body).RootElement.GetProperty("access_token").GetString()!;
+        var root = JsonDocument.Parse(body).RootElement;
+        return new Tokens(root.GetProperty("access_token").GetString()!, root.TryGetProperty("refresh_token", out var refresh) ? refresh.GetString() : null);
     }
 
     private sealed class HostState
@@ -147,9 +206,9 @@ public static class IssuerUserFlow
     /// Senha e o segundo passo: o cadastro no primeiro login do host (<c>"cadastro"</c>), ou um
     /// código de recuperação guardado nos seguintes (<c>"totp"</c>). Devolve o cookie da sessão completa.
     /// </summary>
-    private static async Task<string> CompleteSessionAsync(HttpClient api, string origin, string password, HostState state)
+    private static async Task<string> CompleteSessionAsync(HttpClient api, string origin, string email, string password, HostState state)
     {
-        var login = await PostAsync(api, "/auth/session", origin, null, new { email = BootstrapAdminEmail, senha = password });
+        var login = await PostAsync(api, "/auth/session", origin, null, new { email, senha = password });
         var loginBody = await login.Content.ReadAsStringAsync();
         if (login.StatusCode != HttpStatusCode.OK)
         {
@@ -162,7 +221,7 @@ public static class IssuerUserFlow
         {
             if (!state.RecoveryCodes.TryDequeue(out var recovery))
             {
-                throw new InvalidOperationException("O Admin do bootstrap já tem a verificação, e não há código de recuperação guardado para este banco.");
+                throw new InvalidOperationException($"{email} já tem a verificação, e não há código de recuperação guardado para este banco.");
             }
 
             var second = await PostAsync(api, "/auth/session/second-factor", origin, pending, new { codigo = recovery });

@@ -77,7 +77,23 @@ script run in the panel's origin, bypasses the CSP, leaks a token or code
 through a URL or referrer, or keeps a session alive past sign-out beyond that
 window is in scope.
 
-**Two-step verification (TOTP).** A second factor is mandatory for every user
+**Roles.** Every local user is Admin, Operator or Reader. The role travels in the
+`role` claim of the access and ID tokens and is checked per route in `apps/api`,
+`apps/inbox` and `apps/connectors`, by a closed table in each app that is checked at
+startup against the mapped routes (a route with no declared role or service subject
+fails the boot). A panel token with no known role is refused with `401`; service
+tokens carry no role and stay on their own route lists, and the panel token is refused
+on service routes. User management, invitations, password and two-step resets and the
+identity page are Admin-only and also check the role stored in the database on every
+request, so a demotion takes effect there on the next request; elsewhere it takes up to
+15 minutes 30 seconds (the access token already issued). Role changes and
+deactivations run under one advisory lock, re-reading the caller as an active Admin and
+counting active Admins inside it: the last active Admin cannot be demoted or
+deactivated, and promoting someone to Admin requires the caller's password. Anything
+that lets a role reach a route outside its row, or leaves the installation without an
+active Admin, is in scope.
+
+**Two-step verification (TOTP).** A second factor is mandatory for every user, of every role
 (RFC 6238, HMAC-SHA1, 6 digits, 30-second steps, one step of tolerance each way).
 Someone without it enrolls during login, after the correct password and before any
 session: the pending session cookie (HttpOnly, SameSite=Strict, bound to the user and
@@ -93,8 +109,8 @@ recovery codes (80 bits each) are stored only as SHA-256 hashes and are single-u
 Wrong codes count toward the same per-email lockout as wrong passwords, and a
 correct password does not reset that count while the code is pending. Recovery-code
 regeneration requires a valid code, and a person cannot remove their own
-verification. Any user can reset another user's verification, which also
-invalidates that user's sessions; this is accepted while there are no roles. Whoever
+verification. Only an Admin can reset another user's verification (including another
+Admin's), which also invalidates that user's sessions. Whoever
 runs the stack can reset a user's verification with the `two-factor-reset` command
 of the `apps/api` binary, which has no HTTP route. Until each person's first login
 after the second factor became mandatory, someone who knows that person's password

@@ -464,6 +464,28 @@ public sealed class RoundTripFixture : IAsyncLifetime
             OperatorPassword,
             "openid buteco-api");
 
+    // O access token do buteco-servico-inbox, por client_credentials no /connect/token real: quem
+    // chama POST /agents/{id}/a2a em produção é o apps/inbox. O token do painel recebe 403 nas rotas
+    // de serviço desde a change papeis-no-token (Q8f).
+    public async Task<string> InboxServiceAccessTokenAsync()
+    {
+        await WarmUpIssuerAsync();
+        var response = await ApiFactory.CreateClient().PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "client_credentials",
+            ["client_id"] = "buteco-servico-inbox",
+            ["client_secret"] = InboxServiceClientSecret,
+            ["scope"] = "buteco-api",
+        }));
+        var body = await response.Content.ReadAsStringAsync();
+        if (response.StatusCode != System.Net.HttpStatusCode.OK)
+        {
+            throw new InvalidOperationException($"Token do buteco-servico-inbox falhou: {(int)response.StatusCode} {body}");
+        }
+
+        return System.Text.Json.JsonDocument.Parse(body).RootElement.GetProperty("access_token").GetString()!;
+    }
+
     // O access token de usuário do fluxo real com outro escopo, por exemplo o do
     // apps/inbox ("openid buteco-inbox"), para as rotas de canal.
     public Task<string> UserAccessTokenAsync(string scope) =>

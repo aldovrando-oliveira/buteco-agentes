@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Buteco.Api.Auth;
+using Buteco.Api.Identity.Clients;
 using Buteco.Api.Identity.Keys;
+using Buteco.Api.Users;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -40,6 +42,9 @@ public static class IssuerTokenAuthentication
     /// </summary>
     public const string AuthorizationIdClaim = "oi_au_id";
 
+    /// <summary>O papel do token do painel (design.md da change papeis-no-token, D3), no texto de <see cref="UserRoleText"/>.</summary>
+    public const string RoleClaim = "role";
+
     public static IServiceCollection AddIssuerTokenAuthentication(this IServiceCollection services)
     {
         services
@@ -71,8 +76,19 @@ public static class IssuerTokenAuthentication
         return services;
     }
 
+    // O token do painel sem role válido FALHA a autenticação (design.md da change papeis-no-token,
+    // D3, Q12), e o 401 sai pelo desafio do JwtBearer, sem corpo problem+json: é o que faz o painel
+    // renovar e repetir, e a renovação traz o papel gravado. Com 403, os access tokens de antes do
+    // deploy ficariam até 15 min sem acesso.
     private static Task MapPrincipalByClient(TokenValidatedContext context)
     {
+        if (context.Principal?.FindFirst(ClientIdClaim)?.Value == IdentityClients.PanelClientId &&
+            UserRoleText.TryRead(context.Principal.FindFirst(RoleClaim)?.Value) is null)
+        {
+            context.Fail("O token do painel não traz um papel conhecido.");
+            return Task.CompletedTask;
+        }
+
         context.Principal = MapPrincipal(context.Principal);
         return Task.CompletedTask;
     }
@@ -80,14 +96,22 @@ public static class IssuerTokenAuthentication
     // O principal é reconstruído. NameIdentifier só pela tabela de clientes; o sub nunca
     // vira subject. Cliente ausente ou fora da tabela autentica sem NameIdentifier, e o
     // ServiceScopeAuthorizationHandler responde 403. O sub e o oi_au_id vão como estão, para
-    // as rotas que agem sobre a própria pessoa e a própria sessão (CurrentUser, Minha conta).
+    // as rotas que agem sobre a própria pessoa e a própria sessão (CurrentUser, Minha conta). O role
+    // vai só para o token do painel: os clientes de serviço são autorizados pela tabela de subjects,
+    // e um role no token deles não vale nada (papeis-no-token, D2).
     public static ClaimsPrincipal MapPrincipal(ClaimsPrincipal? validated)
     {
         var clientId = validated?.FindFirst(ClientIdClaim)?.Value;
         var subject = validated?.FindFirst(SubjectClaim)?.Value;
         var authorizationId = validated?.FindFirst(AuthorizationIdClaim)?.Value;
+        var role = validated?.FindFirst(RoleClaim)?.Value;
 
         var claims = new List<Claim>();
+        if (clientId == IdentityClients.PanelClientId && role is not null)
+        {
+            claims.Add(new Claim(RoleClaim, role));
+        }
+
         if (clientId is not null && IssuerClientSubjects.Table.TryGetValue(clientId, out var mappedSubject))
         {
             claims.Add(new Claim(ClaimTypes.NameIdentifier, mappedSubject));

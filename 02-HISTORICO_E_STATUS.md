@@ -8741,18 +8741,25 @@ M1 Autenticação com provedor próprio            acompanhamento #194
   17 #220  2 etapas obrigatórias para todo usuário     ← #183
 M2 Diferentes acessos                            acompanhamento #195
   18 #184  papéis Admin, Operador, Leitor              ← #180 #208 #217
-  19 #185  painel: papéis, menu, 403                   ← #183 #184
-  20 #186  aplicações externas com credencial          ← #179 #184
-  21 #187  agentes liberados por aplicação             ← #186
-  22 #188  painel de aplicações externas               ← #185 #186 #187
+  19 #257  comando password-reset-link                 ← #184
+  20 #185  painel: papéis, menu, 403                   ← #183 #184
+  21 #186  aplicações externas com credencial          ← #179 #184
+  22 #187  agentes liberados por aplicação             ← #186
+  23 #188  painel de aplicações externas               ← #185 #186 #187
 M3 Autenticação com Google                       acompanhamento #196
-  23 #189  provedores federados e Google               ← #181 #184
-  24 #190  painel: login com provedor e recusas        ← #185 #189
+  24 #189  provedores federados e Google               ← #181 #184
+  25 #190  painel: login com provedor e recusas        ← #185 #189
 M4 Autenticação corporativa                      acompanhamento #197
-  25 #191  provedor OIDC genérico                      ← #189
-  26 #192  aplicações federadas (troca de token)       ← #187 #191
-  27 #193  painel da M4                                ← #188 #190 #192
+  26 #191  provedor OIDC genérico                      ← #189
+  27 #192  aplicações federadas (troca de token)       ← #187 #191
+  28 #193  painel da M4                                ← #188 #190 #192
 ```
+
+*(Atualizada em 09/11/2026, pela `papeis-no-token`: a M2 passou de 5 para 6 itens. A **#257**, o
+comando de emergência para o link de redefinição de senha, entrou logo depois da #184, numa change
+própria (decisão do dono, 08/11/2026, Q10 do design da #184): com os papéis, só o Admin gera o link,
+e numa instalação com um Admin só, o Admin que perde a senha fica sem saída. A #184 e a #185 vão
+juntas para produção (Q9).)*
 
 *(Atualizada em 05/11/2026, pela `entrada-publica-painel`: a M1 passou de 15 para 17 itens. A #183 foi dividida por decisão do dono, a partir do inventário das telas ([comentário da #183](https://github.com/aldovrando-oliveira/buteco-agentes/issues/183#issuecomment-6649327956)), em três PRs: a **#245**, a entrada pública; a **#246**, Minha conta; e a própria **#183**, Usuários, Editar usuário e Identidade. A #247, sem milestone, troca o reconhecimento do "expirou" por texto por um campo de tipo.)*
 
@@ -18614,3 +18621,68 @@ O dono valida quadro a quadro depois que todas as issues da entrega estiverem em
 - **#257** (backlog, sem item na #194): o comando irmão `password-reset-link`, para o último Admin que perdeu a senha. É o risco em aberto da M1.
 - **#184:** a obrigatoriedade vale para todo usuário; o "Opcional para Operador" do `entrega=completa` volta com os papéis.
 - **#194:** o desenvolvimento da M1 terminou (18 de 18); a issue fica aberta até a homologação.
+
+## `papeis-no-token` — Papéis Admin, Operador e Leitor (#184)
+
+**Change proposta e implementada em 08–09/11/2026**, na branch `feat/184-papeis-no-token`, num worktree próprio, a partir de `66ee635` (merge do PR #258, a #220). Entrega M2 · 1 de 6. **Não vai para produção sem a #185** (decisão do dono, Q9): com ela, o `papel` é obrigatório no convite, e o "Convidar" do painel de hoje recebe `400`. Sem tela nesta change.
+
+- **O que entra no `apps/api`:**
+  - `users.role` (`admin`, `operator`, `reader`; no JSON, `papel` com `admin`, `operador`, `leitor`), com `CHECK` e `DEFAULT 'reader'` só no SQL; a migration `AddUserRole` dá `admin` a todo usuário que já existe;
+  - o claim `role` no access token e no id token, posto no authorize e trocado pelo gravado na troca do código e em toda renovação;
+  - **a tabela de papéis por rota** (`RoleRoutes`, 57 entradas) ao lado da de subjects de serviço; o `operator` deixa de passar em tudo; as rotas de serviço (`a2a`, `/sync`) não estão nela; **a checagem de boot nos três sentidos** (rota sem declaração, entrada sem rota, lista vazia);
+  - o token do painel sem `role` conhecido recebe `401` sem corpo; as rotas de Admin relêem o papel gravado (`CurrentUser.FindAdminAsync`);
+  - `PUT /users/{id}/role`, sob o `BUTECOD1`, com a releitura de quem chama Admin ativo e a contagem dos Admins dentro do lock; a desativação passa a reler Admin; promover pede a senha de quem chama;
+  - o convite com `papel` obrigatório; `papel` na lista, no detalhe e em `GET /account`.
+- **`apps/inbox` e `apps/connectors`:** o `role` no principal só do painel, o `401` sem papel, a tabela de papéis e a checagem de boot (nova no `apps/inbox`); no `apps/connectors`, a lista do `operator` sai da tabela de papéis.
+- **`tests/`:** o `IssuerUserFlow` entra com outro e-mail, renova e convida; o critério (a) da #184 no rt-connectors (o Leitor recebe `403` nas pastas); o token sem papel renovado no rt-inbox.
+- **Capacidades:** `route-roles` (nova), `route-authentication`, `connectors-api`, `issuer-token-validation`, `issuer-user-login`, `local-users`, `user-management`, `user-access-links`, `user-account`, `two-factor-totp`, `identity-issuer-overview`.
+
+**Decisões do dono** (08/11/2026; detalhe no design): **Q1**, o papel no token com o banco nas rotas de Admin (imediato ali, até 15 min 30 s no resto); **Q2**, a verificação em 2 etapas continua obrigatória para todos (o "Opcional para Operador" do protótipo vira registro, convenção 17); **Q3** não se aplica; **Q4**, rebaixar a si mesmo com outro Admin; **Q5**, a senha na promoção; **Q6**, Admin redefine a senha e as 2 etapas de outro Admin; **Q7**, sem `PUT /account` (sem consumidor); **Q8**, as rotas fora da matriz como recomendadas; **Q9**, `papel` obrigatório e deploy junto da #185; **Q10**, a #257 na M2 logo depois desta; **Q11**, `role` em inglês e `papel` em português; **Q12**, `401` sem corpo para o token sem papel.
+
+### Premissas que caíram (convenção 9)
+
+O registro completo está no `tasks.md` da change. Todas seguidas e registradas: nenhuma mudou comportamento ou contrato além do decidido, nem reduziu cobertura.
+1. **"136 sítios de teste" eram 6:** a contagem do design casava também `SignedInUser.CreateAsync(`.
+2. **O guarda da matriz como o design o descrevia era circular:** lia a expectativa da própria tabela, e os dois guardas da 3.3 passaram verdes com o defeito. Os três apps ganharam a matriz escrita no teste, à parte da de produção; a spec (`route-roles`) e o D11 foram corrigidos. Virou a sexta forma da convenção 15.
+3. **"Contagem fora do lock" não reprova a corrida de dois Admins rebaixando um ao outro** (a segunda escrita cai na releitura de quem chama): o caso que a contagem protege é o dos dois últimos Admins rebaixando a si mesmos, que entrou.
+4. **A corrida desativar × rebaixar não reprovou o defeito em 10 rodadas:** o guarda que conta força a ordem, segurando o `BUTECOD1` numa conexão própria e esperando a escrita em `pg_locks`. Entrou na convenção 15, como ocorrência da quinta forma.
+5. **Chamadores de rota de serviço com o token do painel que a lista do topo não previa:** além dos 11 casos de A2A do `apps/api`, um 12º (`AgentCardEndpointTests.GetExtendedAgentCard_ViaJsonRpc_RemainsUnsupported`, que fez a rodada 1 do api reprovar) e 10 casos de `tests/` (o SyncCycle do rt-connectors e 9 do rt-inbox, pelos apoios que consultam a task). Passaram ao token do serviço que chama essas rotas em produção, com as mesmas asserções, e foram acrescentados por nome à lista do topo do `tasks.md`, ligados a "Rotas só de serviço recusam o token do painel".
+6. **O `role` vazando para um cliente de serviço não muda nenhuma resposta:** o `apps/inbox` e o `apps/connectors` ganharam o `MapPrincipal` público, e o guarda afirma o principal.
+7. **O refresh de antes da change, sem `role`, não se produz pelo fluxo:** o caso de unidade entrega ao handler o principal sem o claim; no acordo, só a renovação desfeita não reprova (o refresh nasce do authorize, com `role`), e contam a 2.1 inteira desfeita e o inbox aceitando o token sem papel.
+8. **`IProperty.GetDefaultValue()` devolve o padrão do tipo** (o teste lê a anotação relacional); **e o default no modelo, sozinho, não faz o EF omitir o papel do `INSERT`** com o enum começando em 1: o guarda do `INSERT` usa o defeito completo, `Admin = 0` mais o default.
+9. **O guarda da 6.1 dizia "o Operador na redefinição de senha":** um Operador real é barrado antes, pelo papel do token na tabela. Quem pega o defeito "a rota volta a `FindAsync`" é o Admin rebaixado com o token de antes.
+10. **A documentação de desenvolvimento** ensinava o A2A com o token do painel (`docs/development.md`, `docs/a2a-integration.md`): passou ao `client_credentials` do `buteco-servico-inbox`.
+
+**Guardas descartados e refeitos** (convenção 15): o primeiro da 1.3 (só o `AppDbContext` mutado reprovou os 5 casos pelo motivo errado, `PendingModelChangesWarning`; refeito no modelo e no snapshot juntos, pelo `guarda-184-multi.sh`); os dois da 3.3 (verdes com o defeito, circulares; refeitos com a matriz à parte); o da 7.2 (a corrida, verde em 10 rodadas; refeito forçando a ordem); o primeiro da 8.1 (a mutação não compilou, `CS8518`; refeito); o "só a renovação" da 9.3 (verde, premissa 7; os dois que contam são outros). Valem 29, todos vistos reprovar contra o defeito nomeado, com a volta pela cópia e o sha conferido.
+
+### O incidente do Podman (09/11/2026)
+
+- **O que aconteceu:** durante o apply, a suíte inteira do `apps/api` rodou em segundo plano ao mesmo tempo que a do `apps/inbox` e builds dos apps. A VM do Podman (6 CPUs, **6 GiB**) foi a ~600% de CPU, e o socket parou de responder por mais de 10 min (`podman ps` e `podman machine ssh` sem resposta).
+- **O efeito:** o OOM matou o `buteco-agents_postgres_1` e o `buteco-agents_rabbitmq_1` do compose de desenvolvimento (`Exited (137)`); o run do `apps/api` deu 138 reprovações de infraestrutura (timeouts do Npgsql e do Testcontainers) e foi **descartado**; a parada do run deixou **13 contêineres de teste órfãos** (o Ryuk está desligado nesta máquina).
+- **A recuperação:** a VM voltou sozinha depois de ~10 min; o postgres e o rabbitmq foram religados (`podman start`, os dois `healthy`, os volumes intactos); os 13 contêineres foram removidos pelo rótulo `org.testcontainers.session-id` da sessão, e os de outras sessões ficaram.
+- **A regra, daqui em diante: uma suíte por vez**, nunca suíte junto de outra suíte nem de build. O `suite-184.sh` e os `guarda-184*.sh` (fora do repositório, em `~/.cache/buteco-agents/bin/`) tomam um lock num arquivo comum (`~/.cache/buteco-agents/suites.lock`, `flock(2)` pelo `zsystem flock` do zsh, porque o macOS não tem o binário) e recusam com saída 75 enquanto outro o tem. A cópia do script de cada issue leva o mesmo bloco. Testado: com o lock tomado por outro processo, a suíte e os dois guardas saíram 75 sem rodar nem mutar nada; solto, uma suíte real rodou (connectors, APROVADA) e bloqueou uma segunda (saída 75). A primeira versão do bloco, sem o arquivo do lock (o `zsystem flock` não o cria), recusava todo run com a mensagem de "outra suíte rodando": o bloco passou a criá-lo.
+
+### O que a implementação mediu
+
+| suíte | baseline `66ee635` (`184/baseline-aprovada/`) | change (`184/change-aprovada/`) | por nome |
+|---|---|---|---|
+| `apps/api` | 1318/1319 + 1 ignorado, CPU mín. 62 | r1 **reprovou pela premissa do token do painel no A2A** (`AgentCardEndpointTests.GetExtendedAgentCard_ViaJsonRpc_RemainsUnsupported`, `403`; o script a marcou inconclusiva pela CPU em 62, mas a reprovação era real); corrigido o chamador, **r2 APROVADA**, 1546/1547 + 1 ignorado, CPU mín. 62 | sai 1 (renomeado, da lista do topo); entram 228 resultados, mais o renomeado |
+| `apps/inbox` | 317/317, CPU mín. 100 | **APROVADA**, 361/361, CPU mín. 100 | entram 44 |
+| `apps/connectors` | 322/323 + 1 ignorado, CPU mín. 100 | **APROVADA**, 338/339 + 1 ignorado, CPU mín. 100 | entram 16 |
+| `rt-inbox` | 14/14 (r3), CPU mín. 100 | **APROVADA**, 15/15, CPU mín. 100 | entra 1 |
+| `rt-connectors` | 10/10, CPU mín. 100 | **APROVADA**, 11/11, CPU mín. 100 | entra 1 |
+
+- **A baseline do rt-inbox** reprovou duas vezes com a CPU em 100 (válidas), no `Source3_…` e no `MessageReceived_TriggersFullRoundTrip_PushNotificationReceivedWithCorrectPayload`, que espera o TaskId na mesma linha: a #176 ([comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/176#issuecomment-6730761280)). A r3 passou.
+- **Guardas (convenção 15):** 29 vistos reprovar contra o defeito nomeado, com a volta pela cópia e o sha conferido, em `~/.cache/buteco-agents/184-guardas/`; descartados e refeitos: um que reprovou pelo motivo errado (`PendingModelChangesWarning`), um que não compilou, e os três que passaram verdes (os dois circulares da 3.3 e a corrida da 7.2), com o guarda refeito em cada caso. Para defeito em mais de um arquivo, o `guarda-184-multi.sh`.
+- **Build:** os mesmos avisos da baseline nos cinco projetos de teste, em número e em texto.
+- **A migration num banco descartável** copiado do de desenvolvimento (`createdb -T template0` e `pg_dump`): `role` não existia; depois, `admin|10`; o api da change sobre a cópia, com um login real, o `papel` `admin` em tudo; um Leitor pelo convite com `403` em `GET /users` e nas pastas do connectors local.
+- **A volta atrás** com a imagem de `66ee635` sobre o banco migrado: sobe, entra, lê, e o convite sai `reader` pelo default; o token com `role` passa nela, e **um Leitor volta a ter o poder de Admin durante o recuo** (a imagem não tem papéis). A nota de "Voltar atrás" do `docs/deployment.md` ganhou o passo de antes do recuo (decisão do dono, 09/11/2026): listar os ativos que não são Admin, desativar pela rota quem não pode ter o acesso de Admin durante o recuo, e reativá-los depois da volta para a frente, com o papel que já estava gravado. O contêiner, a imagem e o banco descartável foram removidos.
+- **Tamanho (convenção 18)**, por `git diff --numstat 66ee635` mais os arquivos novos, só código: **produção +943 / −77** contra ~905 (**+4 %**), 33 % de comentário contra ~40 %; **testes +1.813 / −28** e **duplos +265 / −39** (+66 % nos duplos, nascidos dos chamadores de rota de serviço que a projeção não contou); total de teste **+2.078 / −67** contra ~2.500 (**−17 %**); **59 casos** contra ~53; gerado +1.366.
+
+- **Convenções:** a 15 ganhou a sexta forma (o guarda circular, cuja expectativa sai do artefato que o defeito muda) e a ocorrência da quinta forma em corrida (forçar a ordem segurando o lock). A seção "Autenticação" do `01` ganhou o item "Papéis" e os prazos da mudança de papel, ao lado do prazo do access token depois da desativação.
+
+### Para as próximas
+
+- **#257**, logo depois desta, numa change própria: o comando `password-reset-link`, porque com os papéis só o Admin gera o link de redefinição.
+- **#185:** o painel lê o papel do id token (`role`: `admin`/`operator`/`reader`) e das respostas (`papel`: `admin`/`operador`/`leitor`), com um mapeamento só ([comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/185#issuecomment-6731022783)); o texto de Minha conta para quem não é Admin; o `403`.
+- **A homologação da M1** continua pendente, e a #184 só vai para produção com a #185.

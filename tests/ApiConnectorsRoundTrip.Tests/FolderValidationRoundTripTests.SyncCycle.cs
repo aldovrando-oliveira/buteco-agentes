@@ -101,7 +101,9 @@ public partial class FolderValidationRoundTripTests
         Assert.Equal(eventsAfterCreate + 1, events.Count);
         Assert.Equal("A.md", events[0].GetProperty("documentTitle").GetString());
         Assert.Equal(3, fixture.Indexing.Published.Count(message => ids.Contains(message.KnowledgeDocumentId)));
-        var refs = await (await RoundTripFixture.OperatorClientAsync(api)).GetFromJsonAsync<JsonElement>($"/sync/knowledge-bases/{knowledgeBaseId}/documents");
+        // As referências pela rota de sincronização, com o token de quem a chama em produção: o
+        // painel recebe 403 nas rotas de serviço desde a change papeis-no-token (Q8f).
+        var refs = await (await RoundTripFixture.ConnectorsServiceClientAsync(api)).GetFromJsonAsync<JsonElement>($"/sync/knowledge-bases/{knowledgeBaseId}/documents");
         Assert.All(refs.EnumerateArray(), reference => Assert.Equal("v2", reference.GetProperty("externalVersion").GetString()));
 
         // 2b. B renomeado no Drive, mesmo texto: é mudança de título (D13; cenário

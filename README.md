@@ -173,8 +173,9 @@ Known gaps, tracked deliberately:
 - **WAHA webhooks are not authenticated.** An explicitly classified risk,
   accepted before any deployment served real traffic and now under
   reassessment — Telegram webhooks are verified. See [SECURITY.md](SECURITY.md).
-- **Single operator, no RBAC.** Authentication is one operator configured
-  through environment variables, with no user table.
+- **Three coarse roles, no per-resource permissions.** Local users are Admin,
+  Operator or Reader, checked per route in the three apps that accept the panel token;
+  permissions per agent or knowledge base are out of scope.
 
 ---
 

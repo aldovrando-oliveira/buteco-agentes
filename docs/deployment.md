@@ -330,6 +330,109 @@ no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
 (ciclo de sincronização) e o build arg `VITE_CONNECTORS_BASE_URL=""` do
 `frontend`, que só existe junto com o bloco `/connectors` do `nginx.conf`.
 
+### Papéis Admin, Operador e Leitor (#184)
+
+**A #184 entra no `main` e não vai para produção sem a #185** (decisão do dono, 08/11/2026). Com
+ela, o `papel` passa a ser obrigatório no convite, e o "Convidar" do painel de antes da #185, que
+não o envia, recebe `400`. As duas vão juntas.
+
+**O que muda:**
+
+- cada usuário tem um papel: **Admin** (gere usuários, convites e a identidade, e tudo o que o
+  Operador faz), **Operador** (gere agentes, MCP, conhecimento, canais e conectores, e vê o
+  histórico de conversas) e **Leitor** (lê agentes, MCP, conhecimento, canais e o Insights; não vê
+  o histórico de conversas nem usa os conectores);
+- a migration `AddUserRole` dá **Admin a todo usuário que já existe**, o do bootstrap e os convites
+  pendentes inclusive: ninguém perde acesso no deploy;
+- o papel vai no token, e os três apps (`api`, `inbox`, `connectors`) o conferem por rota. As
+  rotas de sincronização e o A2A ficam só dos serviços;
+- **o rebaixamento** vale na requisição seguinte em Usuários, convites, redefinições e Identidade, e
+  em até 15 min 30 s no resto (a vida do access token já emitido). A promoção chega na renovação
+  seguinte do painel;
+- a verificação em 2 etapas continua obrigatória para todos os papéis.
+
+**Antes do deploy (o dono):**
+
+1. backup do banco do `api`:
+
+   ```
+   docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres \
+     sh -c 'pg_dump -U "$POSTGRES_USER" -Fc buteco_agents' > buteco_agents-antes-184.dump
+   ```
+
+2. as imagens do `api`, do `inbox` e do `connectors` sobem juntas. Um `inbox` ou um `connectors` de
+   antes continua aceitando o token do painel sem olhar o papel, o que é mais permissivo, e não
+   quebra nada.
+
+**Deploy:** o `migrator` aplica a `AddUserRole` antes do `api`, como sempre, e depois:
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api inbox connectors frontend
+```
+
+**Conferir:**
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec postgres \
+  sh -c 'psql -U "$POSTGRES_USER" -d buteco_agents -c "SELECT role, count(*) FROM users GROUP BY role"'
+```
+
+- só `admin` na resposta;
+- entrar no painel: o primeiro pedido de cada sessão aberta antes do deploy recebe `401` e o painel
+  renova sozinho, sem voltar à tela de login (o token de antes não tem papel);
+- em Usuários (ou em `GET /users`), cada usuário com `papel` `admin`.
+
+**Depois do deploy, o dono rebaixa quem não deve ser Admin.** Com a #185 no ar, pelo painel, em
+Editar usuário. Sem ela (só se a #184 tiver ido sozinha), pela API, com o access token de um Admin
+(no navegador, as ferramentas do desenvolvedor → Application → Local Storage → `buteco.sessao` →
+`accessToken`, que vale 15 min):
+
+```
+D=https://agentes.exemplo.com
+T='<access token do Admin>'
+# Rebaixar não pede senha. Papéis no corpo: admin, operador, leitor.
+curl -s -X PUT -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+  -d '{"papel":"operador"}' $D/users/<id do usuário>/role
+# Promover a Admin pede a senha de quem chama:
+curl -s -X PUT -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+  -d '{"papel":"admin","senha":"<a sua senha>"}' $D/users/<id>/role
+```
+
+- `409` "A instalação precisa de pelo menos um Admin ativo." é o último Admin: não dá para rebaixá-lo;
+- rebaixar a si mesmo é permitido enquanto houver outro Admin ativo;
+- **o convite pendente** que não deve ser Admin: cancele (`POST /users/{id}/invitation/cancel`, ou
+  em Usuários) e convide de novo com o papel certo. O link antigo deixa de valer.
+
+**Voltar atrás:** a imagem anterior do `api`, do `inbox` e do `connectors`, **sem** rodar o `Down`
+da migration (ele apaga a coluna e com ela os papéis).
+
+**Antes do recuo**, porque a imagem anterior não tem papéis e devolve o poder de Admin a todo
+usuário ativo:
+
+1. liste os ativos que não são Admin:
+
+   ```
+   docker compose -f docker-compose.prod.yml --env-file .env.prod exec postgres \
+     sh -c "psql -U \"\$POSTGRES_USER\" -d buteco_agents -c \"SELECT id, email, role FROM users WHERE role <> 'admin' AND status = 'active'\""
+   ```
+
+2. desative, pela rota de desativação (Editar usuário, ou `POST /users/{id}/deactivate` com o
+   access token de um Admin), quem não pode ter o acesso de Admin durante o recuo. A desativação
+   encerra as sessões da pessoa;
+3. **depois da volta para a frente**, reative cada um (`POST /users/{id}/activate`): a pessoa entra
+   de novo com a mesma senha e volta com o papel que já estava gravado.
+
+Durante o recuo:
+
+- a imagem anterior ignora a coluna `role`: o EF só lê as colunas do modelo dela;
+- ela insere em `users` (convite, bootstrap) sem a coluna, e o banco põe o `DEFAULT 'reader'`: quem
+  for convidado durante o recuo sai **Leitor**, e o dono o corrige pela rota acima quando voltar
+  para a frente;
+- os tokens com `role` passam na imagem anterior, que ignora o claim;
+- **a imagem anterior não tem papéis**: durante o recuo, todo usuário ativo volta a ter o poder de
+  Admin (um Leitor chama `GET /users` e recebe `200`), como na M1. Os papéis gravados voltam a valer
+  quando a imagem da #184 voltar.
+
 ### Remoção do token antigo e da chave compartilhada (#182)
 
 Último passo da troca do token de serviço (#234, #235, #236 e #182). Os três apps deixam de aceitar o token antigo, assinado com a chave que compartilhavam, e passam a aceitar só o access token do emissor. Desde a #235 nenhum serviço o manda, e desde a #217 nenhuma rota o emite.

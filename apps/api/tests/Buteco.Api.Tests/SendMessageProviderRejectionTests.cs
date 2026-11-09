@@ -16,6 +16,10 @@ public class SendMessageProviderRejectionTests(AgentProviderRejectionFixture fix
 {
     private readonly HttpClient _client = fixture.CreateClient();
 
+    // Quem chama o protocolo A2A em produção é o apps/inbox; o painel recebe 403 nas rotas de
+    // serviço desde a change papeis-no-token (Q8f).
+    private readonly HttpClient _inbox = TestAuthentication.InboxServiceClient(fixture);
+
     [Fact]
     public async Task SendMessage_ForAgentWithoutProviderOrModel_RejectsTaskWithoutPublishing()
     {
@@ -31,7 +35,7 @@ public class SendMessageProviderRejectionTests(AgentProviderRejectionFixture fix
         Assert.Empty(fixture.TaskJobPublisher.PublishedMessages);
 
         var getPayload = new { jsonrpc = "2.0", id = 2, method = "GetTask", @params = new { id = taskId } };
-        var getResponse = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", getPayload);
+        var getResponse = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", getPayload);
         var getBody = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.False(getBody.TryGetProperty("error", out _));
@@ -233,7 +237,7 @@ public class SendMessageProviderRejectionTests(AgentProviderRejectionFixture fix
             },
         };
 
-        var response = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
+        var response = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         return await response.Content.ReadFromJsonAsync<JsonElement>();

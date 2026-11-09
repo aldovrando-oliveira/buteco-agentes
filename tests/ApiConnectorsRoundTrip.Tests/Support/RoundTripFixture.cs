@@ -251,6 +251,34 @@ public sealed class RoundTripFixture : IAsyncLifetime
         return client;
     }
 
+    /// <summary>
+    /// Um cliente do <c>apps/api</c> com o token do <c>buteco-servico-connectors</c>, por
+    /// <c>client_credentials</c> no <c>/connect/token</c> real: quem chama as rotas de
+    /// <c>/sync/knowledge-bases</c> em produção. O token do painel recebe <c>403</c> nelas desde a change
+    /// papeis-no-token (Q8f).
+    /// </summary>
+    public static async Task<HttpClient> ConnectorsServiceClientAsync(WebApplicationFactory<ApiProgram> api)
+    {
+        await WarmUpIssuerAsync(api);
+        var response = await api.CreateClient().PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "client_credentials",
+            ["client_id"] = "buteco-servico-connectors",
+            ["client_secret"] = ConnectorsServiceClientSecret,
+            ["scope"] = "buteco-api",
+        }));
+        var body = await response.Content.ReadAsStringAsync();
+        if (response.StatusCode != System.Net.HttpStatusCode.OK)
+        {
+            throw new InvalidOperationException($"Token do buteco-servico-connectors falhou: {(int)response.StatusCode} {body}");
+        }
+
+        var client = api.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", System.Text.Json.JsonDocument.Parse(body).RootElement.GetProperty("access_token").GetString());
+        return client;
+    }
+
     private static readonly ConditionalWeakTable<WebApplicationFactory<ApiProgram>, Task<string>> UserAccessTokens = new();
 
     private static readonly ConditionalWeakTable<WebApplicationFactory<ApiProgram>, Task<string>> ConnectorsUserAccessTokens = new();

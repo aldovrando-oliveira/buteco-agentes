@@ -21,7 +21,8 @@ namespace Buteco.Api.Users.TwoFactor;
 /// desabilita o botão nesse estado.</item>
 /// </list>
 ///
-/// Na M1, sem papéis, qualquer usuário redefine a de outro (#184 restringe).
+/// Só o Admin redefine, pelo papel gravado (<see cref="CurrentUser.FindAdminAsync"/>; design.md da
+/// change papeis-no-token, D3), e o papel do alvo não restringe: um Admin redefine a de outro Admin.
 /// </summary>
 public static class UserTwoFactorResetEndpoint
 {
@@ -39,7 +40,7 @@ public static class UserTwoFactorResetEndpoint
     private static async Task<IResult> ResetAsync(
         Guid id, HttpContext httpContext, AppDbContext dbContext, TwoFactorReset reset, CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
         {
             return CurrentUser.Forbidden();
         }

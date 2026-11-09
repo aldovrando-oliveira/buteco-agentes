@@ -6,9 +6,7 @@ As rotas HTTP do `apps/connectors` sob `/connectors`, o formato de fio delas, o
 status de cada falha e quem pode chamar cada uma: uma tabela explícita de subjects em
 que o operador não passa em tudo e qualquer subject fora dela recebe `403`, conferida
 no boot nos dois sentidos.
-
 ## Requirements
-
 ### Requirement: Rotas sob o prefixo /connectors
 `apps/connectors` SHALL servir as rotas abaixo, todas sob `/connectors`, com JSON em
 `camelCase` e enum como string:
@@ -70,11 +68,11 @@ recebido do `apps/api` NÃO SHALL ser repassado com o mesmo status.
 
 ### Requirement: Autorização por tabela explícita de subjects
 Toda rota não anônima SHALL exigir que o subject do token esteja numa tabela
-explícita e que a rota esteja na lista desse subject:
+explícita e que a rota esteja na lista desse subject. Para o subject `operator` (o token do painel), a lista SHALL ser a da tabela de papéis (`route-roles`), e o token SHALL passar só se o `role` dele estiver na entrada da rota:
 
 | subject | rotas |
 |---|---|
-| `operator` | `GET /connectors/providers`, `GET /connectors/providers/{providerKey}/folders`, `POST /connectors/knowledge-bases/{knowledgeBaseId}/sync` |
+| `operator` | `GET /connectors/providers`, `GET /connectors/providers/{providerKey}/folders`, `POST /connectors/knowledge-bases/{knowledgeBaseId}/sync`, todas para os papéis `admin` e `operator`; o papel `reader` SHALL receber `403` nas três |
 | `service:api` | `GET /connectors/providers/{providerKey}/folder` |
 
 Subject fora da tabela, inclusive `service:inbox` e `service:connectors`, SHALL
@@ -88,7 +86,7 @@ implícito a todas as rotas.
 - **THEN** todas as respostas são `403`
 
 #### Scenario: Operador em rota exclusiva do apps/api
-- **WHEN** um token de `operator` chama `GET /connectors/providers/google-drive/folder?id=x`
+- **WHEN** um token do painel com `role` `admin` chama `GET /connectors/providers/google-drive/folder?id=x`
 - **THEN** a resposta é `403`
 
 #### Scenario: apps/api em rota do operador
@@ -98,14 +96,18 @@ implícito a todas as rotas.
 - **THEN** as três respostas são `403`
 
 #### Scenario: Subjects nas próprias rotas
-- **WHEN** `operator` chama as três rotas dele e `service:api` chama a dele
+- **WHEN** um token do painel com `role` `admin`, e outro com `role` `operator`, chamam as três rotas do painel, e `service:api` chama a dele
 - **THEN** nenhuma das respostas é `401` nem `403`
+
+#### Scenario: Leitor nas rotas do painel
+- **WHEN** um token do painel com `role` `reader` chama as três rotas do painel
+- **THEN** as três respostas são `403`, e nenhum ciclo de sincronização é disparado
 
 ### Requirement: Tabela de subjects conferida no boot nos dois sentidos
 No boot, depois de todos os `Map*`, o sistema SHALL conferir que toda entrada
-(método, padrão de rota) da tabela corresponde a um endpoint mapeado, comparando
-pelo `RoutePattern.RawText`, e que todo endpoint mapeado que exige autenticação
-aparece na lista de pelo menos um subject. Qualquer divergência SHALL derrubar o
+(método, padrão de rota) da tabela de subjects e da tabela de papéis corresponde a um endpoint mapeado, comparando
+pelo `RoutePattern.RawText`, que todo endpoint mapeado que exige autenticação
+aparece na lista de pelo menos um subject ou na tabela de papéis, e que nenhuma entrada da tabela de papéis tem lista de papéis vazia. Qualquer divergência SHALL derrubar o
 processo com mensagem que nomeia a entrada ou o endpoint.
 
 #### Scenario: Entrada da tabela sem rota
@@ -114,9 +116,10 @@ processo com mensagem que nomeia a entrada ou o endpoint.
 - **THEN** a inicialização falha nomeando o subject, o método e o padrão
 
 #### Scenario: Rota autenticada sem dono
-- **WHEN** um endpoint autenticado é mapeado sem constar em nenhuma lista
+- **WHEN** um endpoint autenticado é mapeado sem constar em nenhuma lista nem na tabela de papéis
 - **THEN** a inicialização falha nomeando o padrão do endpoint
 
 #### Scenario: Composição real
 - **WHEN** o host de produção é construído
 - **THEN** a checagem passa sem divergência
+

@@ -8,12 +8,16 @@ namespace Buteco.Api.Users.Management;
 /// coluna do protótipo já existe; a M3 acrescenta os provedores. O convidado (design.md da change
 /// convites-redefinicao-senha, D10) não tem senha, e traz <c>Convite</c> com o vencimento; o
 /// <c>Vencido</c> sai do relógio do servidor, para a tela não afirmar pelo relógio do navegador.
+/// <c>Papel</c> é o gravado, em <c>admin</c>, <c>operador</c> ou <c>leitor</c>
+/// (<see cref="UserRoleText.WriteWire"/>; design.md da change papeis-no-token, D3), também no
+/// convidado, com o papel do convite.
 /// </summary>
 public sealed record UserSummary(
     Guid Id,
     string Nome,
     string Email,
     string Estado,
+    string Papel,
     IReadOnlyList<string> FormasDeEntrada,
     bool DuasEtapas,
     DateTimeOffset? UltimoAcesso,
@@ -33,6 +37,7 @@ public sealed record UserSummary(
         user.Name,
         user.Email,
         StateOf(user.Status),
+        UserRoleText.WriteWire(user.Role),
         SignInFormsOf(user.PasswordHash is not null),
         user.IsTwoFactorEnabled,
         user.LastAccessAt,
@@ -72,6 +77,7 @@ public sealed record UserDetail(
     string Nome,
     string Email,
     string Estado,
+    string Papel,
     IReadOnlyList<string> FormasDeEntrada,
     bool DuasEtapas,
     DateTimeOffset? UltimoAcesso,
@@ -85,7 +91,7 @@ public sealed record UserDetail(
     {
         var summary = UserSummary.From(user, now);
         return new(
-            summary.Id, summary.Nome, summary.Email, summary.Estado, summary.FormasDeEntrada, summary.DuasEtapas,
+            summary.Id, summary.Nome, summary.Email, summary.Estado, summary.Papel, summary.FormasDeEntrada, summary.DuasEtapas,
             summary.UltimoAcesso, summary.CriadoEm, summary.Convite, user.DeactivatedAt, invitedBy,
             new UserSessionsSummary(sessions.Ativas, sessions.UltimaAtividade));
     }

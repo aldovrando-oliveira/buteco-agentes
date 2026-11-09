@@ -18,7 +18,7 @@ public class UserAccessLinkTests
 
     private static User ActiveWithResetLink()
     {
-        var user = User.Create("ativa@exemplo.test", "Ativa", "$argon2id$qualquer", Now);
+        var user = User.Create("ativa@exemplo.test", "Ativa", "$argon2id$qualquer", Now, UserRole.Admin);
         user.IssueAccessLink(AccessLinkPurpose.PasswordReset, [1, 2, 3], Now.AddHours(24));
         return user;
     }
@@ -35,7 +35,7 @@ public class UserAccessLinkTests
     {
         var inviter = Guid.NewGuid();
 
-        var user = User.CreateInvitation("  Convidada@Exemplo.test ", "  Convidada  ", inviter, Now);
+        var user = User.CreateInvitation("  Convidada@Exemplo.test ", "  Convidada  ", inviter, Now, UserRole.Admin);
 
         Assert.Equal(UserStatus.Invited, user.Status);
         Assert.True(user.IsInvited);

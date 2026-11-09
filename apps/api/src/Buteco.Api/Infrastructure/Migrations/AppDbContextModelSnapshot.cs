@@ -922,6 +922,11 @@ namespace Buteco.Api.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("password_hash_is_bootstrap_legacy");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("role");
+
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
                         .HasColumnType("text")

@@ -1,18 +1,23 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Buteco.Api.Identity.Validation;
+using Buteco.Api.Users;
 using Microsoft.AspNetCore.Routing;
 
 namespace Buteco.Api.Auth;
 
-// Requisito adicional aplicado a toda requisição autenticada. Uma tabela
-// explícita de subjects (design.md da change catalogo-base-sincronizada, D6):
-// "operator" passa em tudo; cada subject de serviço conhecido passa só nas
-// rotas da sua lista; QUALQUER outro subject recebe 403, mesmo com um token
-// estruturalmente válido.
+// Requisito adicional aplicado a toda requisição autenticada. Duas tabelas
+// explícitas: a de subjects de serviço (design.md da change catalogo-base-sincronizada,
+// D6), em que cada subject de serviço conhecido passa só nas rotas da sua lista, e a
+// de papéis (RoleRoutes; design.md da change papeis-no-token, D2), em que o token do
+// painel (subject "operator") passa só nas rotas do papel dele. QUALQUER outro subject
+// recebe 403, mesmo com um token estruturalmente válido.
 //
 // Até a #102 a regra era o inverso — "quem não é service:inbox passa" —, e
 // um token assinado com a chave compartilhada para um subject novo teria o
-// acesso inteiro do operador. A recusa por padrão é o que fecha isso.
+// acesso inteiro do operador. A recusa por padrão é o que fecha isso. Até a #184,
+// "operator" passava em tudo, inclusive nas rotas de serviço; agora o papel decide,
+// e as rotas de serviço não estão na tabela de papéis (Q8f).
 public sealed class ServiceScopeRequirement : IAuthorizationRequirement;
 
 public sealed class ServiceScopeAuthorizationHandler : AuthorizationHandler<ServiceScopeRequirement>
@@ -63,7 +68,7 @@ public sealed class ServiceScopeAuthorizationHandler : AuthorizationHandler<Serv
         var subject = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (subject == OperatorSubject)
         {
-            context.Succeed(requirement);
+            AuthorizeByRole(context, requirement);
             return Task.CompletedTask;
         }
 
@@ -89,5 +94,23 @@ public sealed class ServiceScopeAuthorizationHandler : AuthorizationHandler<Serv
         }
 
         return Task.CompletedTask;
+    }
+
+    // O token do painel chega aqui sempre com um papel conhecido: sem ele, a autenticação já
+    // falhou com 401 (IssuerTokenAuthentication). Sem endpoint (rota inexistente), passa, para a
+    // resposta continuar 404 e não virar 403.
+    private static void AuthorizeByRole(AuthorizationHandlerContext context, ServiceScopeRequirement requirement)
+    {
+        if (UserRoleText.TryRead(context.User.FindFirst(IssuerTokenAuthentication.RoleClaim)?.Value) is not { } role ||
+            context.Resource is not HttpContext httpContext)
+        {
+            return;
+        }
+
+        if (httpContext.GetEndpoint() is not RouteEndpoint endpoint ||
+            RoleRoutes.Allows(httpContext.Request.Method, endpoint.RoutePattern.RawText ?? string.Empty, role))
+        {
+            context.Succeed(requirement);
+        }
     }
 }

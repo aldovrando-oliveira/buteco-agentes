@@ -168,7 +168,8 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
 
     private async Task<JsonElement> GetRawStatusAsync(Guid agentId, string taskId)
     {
-        var token = await fixture.UserAccessTokenAsync();
+        // Quem chama o A2A em produção é o apps/inbox (change papeis-no-token, Q8f).
+        var token = await fixture.InboxServiceAccessTokenAsync();
         var client = fixture.ApiFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var payload = new { jsonrpc = "2.0", id = 1, method = "GetTask", @params = new { id = taskId } };
@@ -282,7 +283,8 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
 
     private async Task<string> GetTaskStateAsync(Guid agentId, string taskId)
     {
-        var token = await fixture.UserAccessTokenAsync();
+        // Quem chama o A2A em produção é o apps/inbox (change papeis-no-token, Q8f).
+        var token = await fixture.InboxServiceAccessTokenAsync();
         var client = fixture.ApiFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var payload = new { jsonrpc = "2.0", id = 1, method = "GetTask", @params = new { id = taskId } };

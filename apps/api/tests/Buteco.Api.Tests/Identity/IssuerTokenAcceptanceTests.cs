@@ -171,4 +171,21 @@ public class IssuerTokenAcceptanceTests(IssuerTokenAcceptanceTests.Fixture facto
         Assert.NotEqual("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());
     }
+
+    // O token do painel sem papel recebe o mesmo 401 de token recusado, sem corpo problem+json
+    // (design.md da change papeis-no-token, D3, Q12, com a condição do dono): é o que faz o
+    // sessionFetch renovar e repetir, e a renovação traz o papel gravado. Os access tokens de antes
+    // do deploy não têm papel; com 403, cada pessoa ficaria até 15 min sem acesso.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("superuser")]
+    public async Task PanelTokenWithoutRole_401_HasNoProblemBody_ThePanelRenewsOnThis(string? role)
+    {
+        var response = await GetAgentsAsync(TestIssuerTokens.Panel(factory.Services, role));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("Bearer", Assert.Single(response.Headers.WwwAuthenticate).Scheme);
+        Assert.NotEqual("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
 }

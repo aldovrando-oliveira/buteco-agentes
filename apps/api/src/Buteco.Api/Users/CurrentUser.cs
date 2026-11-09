@@ -27,6 +27,16 @@ public static class CurrentUser
         return user is { IsActive: true } ? user : null;
     }
 
+    /// <summary>
+    /// Quem chama uma rota de Admin (design.md da change papeis-no-token, D3; spec <c>route-roles</c>,
+    /// "Prazos da mudança de papel"): o usuário de <see cref="FindAsync"/>, com o papel <b>gravado</b>
+    /// <see cref="UserRole.Admin"/>. O token já passou pela tabela de papéis com <c>role</c> <c>admin</c>,
+    /// mas ele vale até 15 min; a releitura do banco faz o rebaixamento valer aqui na requisição
+    /// seguinte. Sem consulta a mais: é a mesma leitura do usuário que a rota já fazia.
+    /// </summary>
+    public static async Task<User?> FindAdminAsync(ClaimsPrincipal principal, AppDbContext dbContext, CancellationToken cancellationToken) =>
+        await FindAsync(principal, dbContext, cancellationToken) is { Role: UserRole.Admin } user ? user : null;
+
     public static IResult Forbidden() =>
         TypedResults.Problem(title: ForbiddenMessage, statusCode: StatusCodes.Status403Forbidden);
 }

@@ -21,7 +21,9 @@ public static class ConnectorsSubjectRouteValidation
         this IEndpointRouteBuilder app,
         IReadOnlyDictionary<string, IReadOnlyList<(string Method, string Pattern)>> subjectRoutes)
     {
-        var problems = FindProblems(app.DataSources.SelectMany(dataSource => dataSource.Endpoints), subjectRoutes);
+        var problems = FindProblems(app.DataSources.SelectMany(dataSource => dataSource.Endpoints), subjectRoutes)
+            .Concat(FindRoleProblems(RoleRoutes.Table))
+            .ToList();
 
         if (problems.Count > 0)
         {
@@ -70,6 +72,16 @@ public static class ConnectorsSubjectRouteValidation
     }
 
     // Endpoint sem HttpMethodMetadata aceita qualquer método.
+    /// <summary>
+    /// A tabela de papéis do painel (design.md da change papeis-no-token, D2): nenhuma entrada sem
+    /// papel. As entradas dela são a lista do subject <c>operator</c>, e por isso os dois sentidos
+    /// contra os endpoints já valem para ela pelo <see cref="FindProblems"/>.
+    /// </summary>
+    public static IReadOnlyList<string> FindRoleProblems(IReadOnlyDictionary<(string Method, string Pattern), IReadOnlyList<string>> roleRoutes) =>
+        roleRoutes.Where(entry => entry.Value.Count == 0)
+            .Select(entry => $"a tabela de papéis lista {entry.Key.Method} '{entry.Key.Pattern}' sem nenhum papel")
+            .ToList();
+
     private static bool AcceptsMethod(RouteEndpoint endpoint, string method)
     {
         var methods = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods;

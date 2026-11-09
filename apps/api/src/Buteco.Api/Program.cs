@@ -265,6 +265,12 @@ app.ValidateRouteAuthenticationClassification(
 // convenção 8). Também depois de todos os Map*.
 app.ValidateServiceScopeRoutes(ServiceScopeAuthorizationHandler.ServiceRoutes);
 
+// Toda rota autenticada está na tabela de papéis do painel ou na lista de um subject de
+// serviço, e toda entrada das duas tem rota (design.md da change papeis-no-token, D2;
+// convenção 8). Também depois de todos os Map*. Provado pela composição real em
+// RouteDeclarationValidationTests.RealComposition_EveryAuthenticatedRouteIsDeclared.
+app.ValidateRouteDeclarations(RoleRoutes.Table, ServiceScopeAuthorizationHandler.ServiceRoutes);
+
 // Os endpoints do emissor não são RouteEndpoint, e a checagem de rotas anônimas acima
 // não os vê. Esta compara as URIs configuradas no servidor OIDC com a lista esperada,
 // nos dois sentidos, e com as rotas mapeadas (design.md da change emissor-oidc-api,

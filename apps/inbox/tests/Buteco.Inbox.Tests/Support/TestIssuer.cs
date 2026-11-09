@@ -117,9 +117,16 @@ public sealed class TestIssuer
         DateTime? expires = null,
         SecurityKey? key = null,
         string algorithm = SecurityAlgorithms.RsaSha256,
-        string tokenType = IssuerTokenAuthentication.AccessTokenType)
+        string tokenType = IssuerTokenAuthentication.AccessTokenType,
+        string? role = null,
+        bool withoutRole = false)
     {
         audiences ??= [IssuerTokenAudience.Value];
+
+        // O token do painel leva papel (design.md da change papeis-no-token, D3): sem ele, o app
+        // responde 401. O padrão do painel é admin, o poder que todo caso de antes da change supunha;
+        // withoutRole omite o claim. Outro cliente só leva role se o caso o pedir.
+        role ??= clientId == IssuerClientSubjects.PanelClientId && !withoutRole ? PanelRoles.Admin : null;
         var expiresAt = expires ?? DateTime.UtcNow.AddMinutes(30);
         var claims = new Dictionary<string, object>
         {
@@ -129,6 +136,11 @@ public sealed class TestIssuer
         if (clientId is not null)
         {
             claims[IssuerTokenAuthentication.ClientIdClaim] = clientId;
+        }
+
+        if (role is not null && !withoutRole)
+        {
+            claims[PanelRoles.Claim] = role;
         }
 
         return new JsonWebTokenHandler { SetDefaultTimesOnTokenCreation = false }.CreateToken(new SecurityTokenDescriptor

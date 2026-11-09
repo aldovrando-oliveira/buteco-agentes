@@ -99,7 +99,7 @@ public class InvitationCreateTests(InvitationCreateTests.Fixture factory, ITestO
         var caller = await SignedInUser.CreateAsync(factory, "convida-host");
         var request = new HttpRequestMessage(HttpMethod.Post, "/users/invitations")
         {
-            Content = System.Net.Http.Json.JsonContent.Create(new { nome = "Host", email = LocalUserSeed.UniqueEmail("host"), senha = caller.Password }),
+            Content = System.Net.Http.Json.JsonContent.Create(new { nome = "Host", email = LocalUserSeed.UniqueEmail("host"), papel = "admin", senha = caller.Password }),
         };
         request.Headers.Authorization = new("Bearer", caller.AccessToken);
         request.Headers.Host = "evil.example";
@@ -204,7 +204,7 @@ public class InvitationCreateTests(InvitationCreateTests.Fixture factory, ITestO
 
             if (invites && Interlocked.Exchange(ref _fired, 1) == 0)
             {
-                var rival = User.Create(email, "Rival", passwordHash: null, DateTimeOffset.UtcNow);
+                var rival = User.Create(email, "Rival", passwordHash: null, DateTimeOffset.UtcNow, UserRole.Admin);
                 await eventData.Context.Database.ExecuteSqlInterpolatedAsync(
                     $"""
                     INSERT INTO users (id, email, normalized_email, name, status, security_stamp, created_at, password_hash_is_bootstrap_legacy)

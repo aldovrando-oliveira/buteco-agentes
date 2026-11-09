@@ -25,7 +25,8 @@ public static class AccountEndpoints
 {
     public const string GroupPath = "/account";
 
-    public sealed record ProfileResponse(Guid Id, string Nome, string Email, DateTimeOffset CriadoEm, DateTimeOffset? UltimoAcesso, bool DuasEtapas);
+    // Papel: o gravado, e não o do token (design.md da change papeis-no-token, D3).
+    public sealed record ProfileResponse(Guid Id, string Nome, string Email, string Papel, DateTimeOffset CriadoEm, DateTimeOffset? UltimoAcesso, bool DuasEtapas);
 
     public sealed record ChangePasswordRequest(string? SenhaAtual, string? NovaSenha);
 
@@ -44,7 +45,7 @@ public static class AccountEndpoints
             return CurrentUser.Forbidden();
         }
 
-        return TypedResults.Ok(new ProfileResponse(user.Id, user.Name, user.Email, user.CreatedAt, user.LastAccessAt, user.IsTwoFactorEnabled));
+        return TypedResults.Ok(new ProfileResponse(user.Id, user.Name, user.Email, UserRoleText.WriteWire(user.Role), user.CreatedAt, user.LastAccessAt, user.IsTwoFactorEnabled));
     }
 
     private static async Task<IResult> ChangePasswordAsync(

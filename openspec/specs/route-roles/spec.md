@@ -1,0 +1,151 @@
+# route-roles Specification
+
+## Purpose
+Diz quem pode o quê em cada rota que recebe o token do painel, no `apps/api`, no `apps/inbox` e no
+`apps/connectors`: a matriz dos papéis Admin, Operador e Leitor por rota, a checagem de boot que
+exige papel ou subject de serviço em toda rota autenticada, o `401` do token sem papel, as rotas só
+de serviço e os prazos de uma mudança de papel (change `papeis-no-token`, #184; ver
+`openspec/changes/archive/2026-11-09-papeis-no-token/`).
+
+## Requirements
+### Requirement: Matriz de papéis por rota nos três apps
+O `apps/api`, o `apps/inbox` e o `apps/connectors` SHALL autorizar o token do painel (cliente `buteco-painel`, subject `operator`) por uma tabela fechada de papéis por rota (`RoleRoutes`), casada por método e `RoutePattern.RawText`, com os papéis `admin`, `operator` e `reader` (Admin, Operador e Leitor). O token do painel SHALL passar só nas rotas em cuja entrada esteja o `role` dele, e SHALL receber `403` nas outras, sem executar nenhuma lógica de negócio da rota. O subject `operator` SHALL NOT dar acesso implícito a nenhuma rota.
+
+A tabela SHALL ser esta (A = `admin`, O = `operator`, L = `reader`):
+
+| app | rotas | papéis |
+|---|---|---|
+| `apps/api` | leituras de agentes, provedores, MCP (inclusive `GET /mcp-servers/{id}/tools`), bases, documentos, eventos de documento, diagnóstico do índice, resumo de indexação e `/insights/*` | A O L |
+| `apps/api` | escritas de agentes (inclusive vínculos de MCP, delegação e bases), MCP (inclusive `POST /mcp-servers/test` e `POST /mcp-servers/{id}/test`), bases e documentos (inclusive reindexar) | A O |
+| `apps/api` | `/users/*` (inclusive convite, novo link, cancelamento, redefinição de senha, redefinição de 2 etapas e `PUT /users/{id}/role`) e `GET /identity` | A |
+| `apps/api` | `/account/*` | A O L |
+| `apps/inbox` | `GET /channels/`, `GET /channels/{id}`, `GET /sessions/summary`, `GET /messages/summary` | A O L |
+| `apps/inbox` | escritas de `/channels/*`, `GET /channels/{channelId}/sessions`, `GET /sessions/{sessionId}/messages`, `/contacts/*` | A O |
+| `apps/connectors` | `GET /connectors/providers`, `GET /connectors/providers/{providerKey}/folders`, `POST /connectors/knowledge-bases/{knowledgeBaseId}/sync` | A O |
+
+Com token do painel válido e papel válido, a requisição a uma rota inexistente SHALL continuar respondendo `404`.
+
+#### Scenario: Leitor lê e não escreve agentes
+- **WHEN** um token do painel com `role` `reader` chama `GET /agents/` e `POST /agents/` com corpo válido
+- **THEN** a primeira responde `200`, a segunda `403`, e nenhum agente é criado
+
+#### Scenario: Operador fora de Usuários e Identidade
+- **WHEN** um token do painel com `role` `operator`, de um usuário ativo, chama `GET /users` e `GET /identity`
+- **THEN** as duas respostas são `403`
+
+#### Scenario: Leitor fora do histórico de conversas
+- **WHEN** um token do painel com `role` `reader` chama `GET /sessions/{sessionId}/messages` e `GET /channels/{channelId}/sessions` no `apps/inbox`
+- **THEN** as duas respostas são `403`
+
+#### Scenario: Leitor vê os resumos do Insights
+- **WHEN** um token do painel com `role` `reader` chama `GET /sessions/summary` e `GET /messages/summary` no `apps/inbox`, e `GET /insights/system` no `apps/api`
+- **THEN** nenhuma das respostas é `401` nem `403`
+
+#### Scenario: Todo papel em Minha conta
+- **WHEN** um usuário ativo de cada papel chama `GET /account` com o próprio token
+- **THEN** as três respostas são `200`
+
+#### Scenario: Rota inexistente com papel válido
+- **WHEN** um token do painel com `role` `reader` chama `GET /rota-que-nao-existe` no `apps/api`
+- **THEN** a resposta é `404`
+
+### Requirement: Guarda da matriz por app, sobre a tabela real
+Cada app SHALL ter um teste com a matriz desta spec escrita à parte da `RoleRoutes` de produção, que afirma que a tabela de produção tem exatamente as entradas e os papéis dela e, para cada entrada e cada um dos três papéis, chama a rota no host construído com um token do painel daquele papel e afirma o `403` vazio da autorização quando o papel não está na entrada da matriz, e uma resposta que não é o `401` nem o `403` vazios quando está. A expectativa SHALL NOT ser lida da própria `RoleRoutes`, o que faria o guarda circular. O teste SHALL afirmar que a matriz percorrida não é vazia.
+
+#### Scenario: Papel trocado numa linha da tabela
+- **WHEN** uma entrada da `RoleRoutes` tem um papel a mais ou a menos que a matriz desta spec
+- **THEN** o guarda da matriz daquele app reprova nomeando o método, o padrão e o papel
+
+### Requirement: Toda rota autenticada declara papel ou subject de serviço, conferido no boot
+No boot, depois de todos os `Map*`, cada app SHALL conferir, sobre os endpoints do host construído:
+
+- que todo `RouteEndpoint` que exige autenticação está na `RoleRoutes` ou na lista de rotas de algum subject de serviço;
+- que toda entrada da `RoleRoutes` e das listas de subjects de serviço corresponde a um endpoint mapeado, com o método aceito;
+- que nenhuma entrada da `RoleRoutes` tem lista de papéis vazia.
+
+Qualquer divergência SHALL derrubar o boot com uma mensagem que nomeia o método e o padrão. Rota anônima classificada SHALL ficar fora dos dois sentidos.
+
+#### Scenario: Rota autenticada sem declaração
+- **WHEN** um endpoint autenticado é mapeado sem constar na `RoleRoutes` nem em nenhuma lista de subject de serviço
+- **THEN** a inicialização falha nomeando o método e o padrão do endpoint
+
+#### Scenario: Entrada sem rota
+- **WHEN** a `RoleRoutes` lista um padrão que não é mapeado
+- **THEN** a inicialização falha nomeando o método e o padrão da entrada
+
+#### Scenario: Lista de papéis vazia
+- **WHEN** uma entrada da `RoleRoutes` não tem nenhum papel
+- **THEN** a inicialização falha nomeando a entrada
+
+#### Scenario: Composição real dos três apps
+- **WHEN** o host de produção de cada app é construído
+- **THEN** a checagem passa, e a `RoleRoutes` conferida não é vazia
+
+### Requirement: Tokens de serviço seguem as tabelas de subjects, sem papel
+O token de um cliente de serviço (`service:inbox`, `service:connectors`, `service:api`) SHALL ser autorizado só pela lista de rotas do subject dele, e o `role` SHALL NOT ser lido para ele. Uma rota pode estar nas duas tabelas.
+
+#### Scenario: GET /agents/{id} nas duas tabelas
+- **WHEN** um token do `buteco-servico-inbox` e um token do painel com `role` `reader` chamam `GET /agents/{id}` de um agente existente
+- **THEN** as duas respostas são `200`
+
+#### Scenario: Token de serviço com claim role não ganha rota
+- **WHEN** um token do `buteco-servico-connectors` que traz `role` `admin` chama `GET /agents/`
+- **THEN** a resposta é `403`
+
+### Requirement: Rotas só de serviço recusam o token do painel
+`POST /agents/{id}/a2a` e as cinco rotas de `/sync/knowledge-bases/*` do `apps/api`, e `GET /connectors/providers/{providerKey}/folder` do `apps/connectors`, SHALL NOT estar na `RoleRoutes`: o token do painel SHALL receber `403` nelas, com qualquer papel, e os subjects de serviço delas continuam passando.
+
+#### Scenario: Admin nas rotas de serviço
+- **WHEN** um token do painel com `role` `admin` chama `GET /sync/knowledge-bases/`, `PUT /sync/knowledge-bases/{id}/documents` e `POST /agents/{id}/a2a`
+- **THEN** as três respostas são `403`, e nada é gravado
+
+#### Scenario: Os serviços continuam nas suas rotas
+- **WHEN** o token do `buteco-servico-connectors` chama `GET /sync/knowledge-bases/` e o do `buteco-servico-inbox` chama `POST /agents/{id}/a2a`
+- **THEN** nenhuma das respostas é `401` nem `403`
+
+### Requirement: Token do painel sem papel recebe 401 sem corpo
+Nos três apps, um token do painel válido em tudo o mais, mas sem o claim `role` ou com um valor fora de `admin`, `operator` e `reader`, SHALL falhar a autenticação: `401` com `WWW-Authenticate: Bearer`, sem `Content-Type: application/problem+json` e com o corpo vazio, como o `401` de token recusado (`issuer-token-validation`). É o que faz o painel renovar e repetir, em vez de encerrar a sessão.
+
+#### Scenario: Sem role, em cada app
+- **WHEN** um token do `buteco-painel` sem o claim `role` chama `GET /agents/` no `apps/api`, `GET /channels/` no `apps/inbox` e `GET /connectors/providers` no `apps/connectors`
+- **THEN** as três respostas são `401` com `WWW-Authenticate: Bearer`, sem `Content-Type: application/problem+json` e com o corpo vazio
+
+#### Scenario: Valor desconhecido
+- **WHEN** um token do `buteco-painel` com `role` `superuser` chama `GET /agents/`
+- **THEN** a resposta é `401`
+
+#### Scenario: O token de antes do deploy renova e passa
+- **WHEN** no acordo com o emissor real, uma sessão cujo access token não tem `role` chama uma rota do `apps/api`, recebe `401`, renova e repete
+- **THEN** o access token da renovação traz o `role` gravado do usuário, e a repetição é aceita
+
+### Requirement: Prazos da mudança de papel
+O rebaixamento SHALL valer:
+
+- **na requisição seguinte** nas rotas do `apps/api` que identificam a pessoa pela `CurrentUser` (`/users/*`, convite, novo link, cancelamento, redefinição de senha e de 2 etapas, `PUT /users/{id}/role`, `GET /identity`), que exigem o papel `admin` **gravado**, além do papel do token;
+- **em até 15 min 30 s** (vida do access token mais a tolerância de 30 s) nas outras rotas do `apps/api` e no `apps/inbox` e no `apps/connectors`, que leem só o papel do token.
+
+A promoção SHALL chegar na renovação seguinte, quando o token novo traz o papel gravado. Mudar o papel SHALL NOT trocar o carimbo de segurança nem revogar sessões.
+
+#### Scenario: Admin rebaixado perde Usuários na requisição seguinte
+- **WHEN** um Admin é rebaixado a Operador e, com o access token emitido antes, ainda no prazo, chama `GET /users`
+- **THEN** a resposta é `403`
+
+#### Scenario: Até a renovação, o resto segue o token
+- **WHEN** um Operador é rebaixado a Leitor e, com o access token emitido antes, ainda no prazo, chama `POST /agents/` com corpo válido
+- **THEN** a resposta não é `401` nem `403`; e, depois de renovar, a mesma chamada responde `403`
+
+#### Scenario: A promoção chega na renovação
+- **WHEN** um Leitor é promovido a Operador e, sem renovar, chama `POST /agents/`, e depois renova e chama de novo
+- **THEN** a primeira resposta é `403`, e a segunda não é `401` nem `403`
+
+### Requirement: Critério de aceite da #184 no acordo com o emissor real
+O acordo entre o `apps/api` e o `apps/connectors` (`tests/ApiConnectorsRoundTrip.Tests`) SHALL provar, com um usuário Leitor que entra pelo emissor real, que o token dele recebe `403` em `GET /connectors/providers/{providerKey}/folders`, e que o token do Admin do bootstrap não recebe `401` nem `403` na mesma rota.
+
+#### Scenario: Leitor recebe 403 nas pastas
+- **WHEN** um Leitor entra pelo fluxo do emissor real e chama `GET /connectors/providers/{providerKey}/folders` no `apps/connectors`
+- **THEN** a resposta é `403`
+
+#### Scenario: Admin passa nas pastas
+- **WHEN** o Admin do bootstrap entra pelo fluxo do emissor real e chama a mesma rota
+- **THEN** a resposta não é `401` nem `403`
+

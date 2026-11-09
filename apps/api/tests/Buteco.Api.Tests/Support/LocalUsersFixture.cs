@@ -52,15 +52,27 @@ public static class LocalUserSeed
 
     public static string UniqueEmail(string prefix) => $"{prefix}-{Guid.NewGuid():N}@exemplo.test";
 
-    public static async Task<User> CreateUserAsync(IServiceProvider services, string email, string password, string name = "Pessoa de Teste")
+    // O papel padrão é Admin: o poder que todo usuário tinha na M1, e o que os casos de antes da
+    // change papeis-no-token supõem. Quem testa outro papel o diz.
+    public static async Task<User> CreateUserAsync(IServiceProvider services, string email, string password, string name = "Pessoa de Teste", UserRole role = UserRole.Admin)
     {
         using var scope = services.CreateScope();
         var hasher = scope.ServiceProvider.GetRequiredService<PasswordHasher>();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var user = User.Create(email, name, hasher.Hash(password), scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow());
+        var user = User.Create(email, name, hasher.Hash(password), scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(), role);
         db.Users.Add(user);
         await db.SaveChangesAsync();
         return user;
+    }
+
+    /// <summary>Troca o papel direto no banco, sem a rota e sem o lock: o arranjo de quem testa o efeito do papel.</summary>
+    public static async Task SetRoleAsync(IServiceProvider services, Guid userId, UserRole role)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await db.Users.FindAsync(userId);
+        user!.ChangeRole(role);
+        await db.SaveChangesAsync();
     }
 
     public static async Task DeactivateAsync(IServiceProvider services, Guid userId)

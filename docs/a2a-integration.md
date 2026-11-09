@@ -71,10 +71,11 @@ Só três rotas de `apps/api` são anônimas: `/health`, `/auth/login` e o
 [AgentCard](#descoberta-do-agente-via-agentcard), que é público e declara o
 esquema Bearer em `securitySchemes`/`securityRequirements`.
 
-**Hoje não existe emissão de credencial para cliente A2A externo.** Os tokens
-que `apps/api` aceita são o do operador do painel e o de serviço de
-`apps/inbox`, restrito às duas rotas que ele consome. Nenhum dos dois é
-credencial de integração: o do operador dá acesso a todo o painel. É uma
+**Hoje não existe emissão de credencial para cliente A2A externo.** Nesta rota,
+`apps/api` aceita só o token de serviço de `apps/inbox` (`buteco-servico-inbox`, por
+`client_credentials`), restrito às duas rotas que ele consome. Desde a #184, o token do
+painel recebe `403` aqui, com qualquer papel: a rota é de serviço. A credencial de
+aplicação externa é da #186 e da #187. É uma
 limitação consciente, registrada em
 [`auth-login-e-servico`, Decision 6](../openspec/changes/archive/2026-08-22-auth-login-e-servico/design.md),
 a ser revista quando houver um consumidor A2A externo real.

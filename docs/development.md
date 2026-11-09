@@ -192,16 +192,23 @@ curl -X POST http://localhost:5017/agents \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"name":"Atendente","instructions":"Você é um atendente simpático.","provider":"openai","model":"gpt-5.6-sol"}'
 
-# usar o agente via A2A (SendMessage, JSON-RPC)
+# usar o agente via A2A (SendMessage, JSON-RPC). A rota é do apps/inbox, e não do painel:
+# desde a #184 o token do painel recebe 403 nela. O token de serviço do buteco-servico-inbox,
+# com o segredo de desenvolvimento (appsettings.Development.json do apps/api):
+SERVICE_TOKEN=$(curl -s http://localhost:5017/connect/token \
+  --data-urlencode grant_type=client_credentials \
+  --data-urlencode client_id=buteco-servico-inbox \
+  --data-urlencode client_secret=NKJuLg/TwMPOtSsIKhT3L3HSUkWnpLhRnPCf+JD3Xyo= \
+  --data-urlencode scope=buteco-api | jq -r .access_token)
 curl -X POST http://localhost:5017/agents/<id>/a2a \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $SERVICE_TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"role":"ROLE_USER","parts":[{"text":"Olá!"}],"messageId":"<uuid>"}}}'
 
 # consultar o estado da task (GetTask)
 curl -X POST http://localhost:5017/agents/<id>/a2a \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $SERVICE_TOKEN" \
   -d '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"id":"<taskId do SendMessage>"}}'
 ```
 

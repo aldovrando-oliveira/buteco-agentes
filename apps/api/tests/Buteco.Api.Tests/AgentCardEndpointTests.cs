@@ -14,6 +14,10 @@ public class AgentCardEndpointTests(A2ATaskLifecycleFixture fixture) : IClassFix
 {
     private readonly HttpClient _client = fixture.CreateClient();
 
+    // Quem chama o protocolo A2A em produção é o apps/inbox; o painel recebe 403 nas rotas de
+    // serviço desde a change papeis-no-token (Q8f).
+    private readonly HttpClient _inbox = TestAuthentication.InboxServiceClient(fixture);
+
     [Fact]
     public async Task GetAgentCard_ForRecentlyCreatedAgentWithDescribedSkill_ReflectsNameDescriptionAndSkills()
     {
@@ -155,7 +159,7 @@ public class AgentCardEndpointTests(A2ATaskLifecycleFixture fixture) : IClassFix
         var agentId = await CreateAgentAsync();
 
         var payload = new { jsonrpc = "2.0", id = 1, method = "GetExtendedAgentCard", @params = new { } };
-        var response = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
+        var response = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();

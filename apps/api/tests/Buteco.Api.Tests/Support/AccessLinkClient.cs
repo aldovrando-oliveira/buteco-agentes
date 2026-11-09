@@ -10,8 +10,10 @@ namespace Buteco.Api.Tests.Support;
 /// </summary>
 public static class AccessLinkClient
 {
-    public static Task<HttpResponseMessage> InviteAsync(HttpClient client, SignedInUser caller, string? name, string? email, string? password) =>
-        TwoFactorTestClient.SendAsync(client, HttpMethod.Post, "/users/invitations", caller.AccessToken, new { nome = name, email, senha = password });
+    // O papel é obrigatório desde a change papeis-no-token (D5); o padrão é admin, o poder que todo
+    // convidado tinha na M1 e que os casos de antes supõem.
+    public static Task<HttpResponseMessage> InviteAsync(HttpClient client, SignedInUser caller, string? name, string? email, string? password, string? papel = "admin") =>
+        TwoFactorTestClient.SendAsync(client, HttpMethod.Post, "/users/invitations", caller.AccessToken, new { nome = name, email, papel, senha = password });
 
     public static Task<HttpResponseMessage> RenewAsync(HttpClient client, SignedInUser caller, Guid id, string? password) =>
         TwoFactorTestClient.SendAsync(client, HttpMethod.Post, $"/users/{id}/invitation/renew", caller.AccessToken, new { senha = password });

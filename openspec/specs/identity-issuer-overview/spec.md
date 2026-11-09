@@ -3,14 +3,17 @@
 ## Purpose
 
 Diz o que o `GET /identity` do `apps/api` entrega à tela Identidade do painel (#211): o emissor com os endereços que o discovery anuncia e as durações dos tokens, e as chaves de assinatura do anel com estado e datas pela política de rotação, sem nenhum material de chave. Diz também quem pode chamá-lo. As durações vêm das mesmas constantes que o emissor usa.
-
 ## Requirements
 ### Requirement: GET /identity responde ao usuário ativo e recusa quem não é pessoa
-O `apps/api` SHALL expor `GET /identity`. A rota SHALL responder `200` só a um usuário real e ativo, identificado pela `CurrentUser` (o `sub` do access token do emissor é um usuário existente e ativo). SHALL responder `401` sem token. SHALL responder `403` ao token de serviço (`service:inbox`, `service:connectors`), ao token do painel cujo `sub` não é usuário e ao usuário desativado com access token ainda no prazo.
+O `apps/api` SHALL expor `GET /identity`. A rota SHALL responder `200` só a um usuário real, ativo e de papel `admin` gravado, identificado pela `CurrentUser` (o `sub` do access token do emissor é um usuário existente e ativo), com o `role` `admin` no token (`route-roles`). SHALL responder `401` sem token. SHALL responder `403` ao token de serviço (`service:inbox`, `service:connectors`), ao token do painel cujo `sub` não é usuário, ao usuário desativado com access token ainda no prazo e ao usuário de papel `operator` ou `reader`.
 
-#### Scenario: Usuário ativo lê a identidade
-- **WHEN** um usuário ativo, com o access token do fluxo real do emissor, chama `GET /identity`
+#### Scenario: Admin lê a identidade
+- **WHEN** um usuário ativo de papel `admin`, com o access token do fluxo real do emissor, chama `GET /identity`
 - **THEN** a resposta é `200` com os objetos `emissor` e `chavesDeAssinatura`
+
+#### Scenario: Operador e Leitor são recusados
+- **WHEN** um usuário ativo de papel `operator`, e outro de papel `reader`, chamam `GET /identity`
+- **THEN** as duas respostas são `403`
 
 #### Scenario: Sem token
 - **WHEN** `GET /identity` chega sem `Authorization`
@@ -21,7 +24,7 @@ O `apps/api` SHALL expor `GET /identity`. A rota SHALL responder `200` só a um 
 - **THEN** a resposta é `403`
 
 #### Scenario: Token do painel sem usuário é recusado
-- **WHEN** `GET /identity` chega com um token do `buteco-painel` cujo `sub` não é id de usuário
+- **WHEN** `GET /identity` chega com um token do `buteco-painel` com `role` `admin` cujo `sub` não é id de usuário
 - **THEN** a resposta é `403` com o título da `CurrentUser`
 
 #### Scenario: Usuário desativado é recusado
