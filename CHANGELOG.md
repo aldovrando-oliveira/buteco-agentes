@@ -327,6 +327,16 @@ o versionamento pretende seguir
     da #211. Se o `apps/api` estiver fora, a tela mostra "Indisponível" e tenta de novo
     sozinha enquanto o erro durar;
   - Editar usuário e o "Editar" na linha chegam com a #183.
+- **Comando de emergência para o link de redefinição de senha** (#257, M2 · 2 de 6), para o
+  último Admin que perdeu a senha:
+  - `docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --no-deps api password-reset-link --email <e-mail>`
+    imprime o link de 24 h, o mesmo do botão de Editar usuário, uma vez, na saída padrão; o
+    registro vai à saída de erro, sem o link;
+  - só para Admin ativo; o Operador e o Leitor pedem a um Admin, e o convidado recebe um
+    novo link do convite;
+  - com o `two-factor-reset` antes, é o roteiro de quem perdeu a senha e as 2 etapas. **Nesse
+    roteiro o link é credencial completa por 24 h**: não cole em chat, ticket nem e-mail
+    (`docs/deployment.md`).
 - **Papéis Admin, Operador e Leitor** (#184, M2 · 1 de 6). **Não vai para produção sem a
   #185**, que leva as telas.
   - cada usuário tem um papel, gravado e levado no token; os três apps que recebem o token

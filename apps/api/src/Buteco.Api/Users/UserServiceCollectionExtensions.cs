@@ -1,3 +1,4 @@
+using Buteco.Api.Users.AccessLinks;
 using Buteco.Api.Users.Bootstrap;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Passwords;
@@ -23,6 +24,9 @@ public static class UserServiceCollectionExtensions
         services.AddScoped<TwoFactorVerifier>();
         services.AddScoped<TwoFactorEnrollment>();
         services.AddScoped<TwoFactorReset>();
+
+        // A escrita do link de redefinição, comum à rota e ao comando (change comando-password-reset-link, D1).
+        services.AddScoped<PasswordResetLink>();
 
         // As sessões sobre as tabelas do OpenIddict (design.md da change rotas-conta-usuarios, D2 e D4).
         services.AddScoped<UserSessions>();

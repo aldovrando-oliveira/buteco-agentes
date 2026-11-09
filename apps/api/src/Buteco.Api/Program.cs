@@ -45,6 +45,13 @@ if (TwoFactorEmergencyCommand.Matches(args))
     return await TwoFactorEmergencyCommand.RunAsync(args);
 }
 
+// O irmão do lado da senha (design.md da change comando-password-reset-link, D1 a D5): o link de
+// redefinição para o último Admin, pelo mesmo ramo e pelas mesmas regras de processo.
+if (PasswordResetLinkCommand.Matches(args))
+{
+    return await PasswordResetLinkCommand.RunAsync(args);
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHealthChecks();

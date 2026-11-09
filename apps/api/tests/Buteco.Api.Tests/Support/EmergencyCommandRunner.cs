@@ -6,13 +6,22 @@ namespace Buteco.Api.Tests.Support;
 /// Roda o comando de emergência das 2 etapas pelo binário do <c>apps/api</c>, como um processo à
 /// parte: a mesma entrada do <c>Program.cs</c> que o <c>docker compose run … api two-factor-reset</c>
 /// usa (change verificacao-2-etapas-obrigatoria, D6). Devolve o código de saída e tudo que o
-/// processo escreveu.
+/// processo escreveu, junto (<see cref="Result.Output"/>) e separado por canal: o
+/// <c>password-reset-link</c> põe o link só no stdout e o registro no stderr (change
+/// comando-password-reset-link, D3).
 /// </summary>
 public static class EmergencyCommandRunner
 {
-    public sealed record Result(int ExitCode, string Output);
+    public sealed record Result(int ExitCode, string Stdout, string Stderr)
+    {
+        public string Output => Stdout + Stderr;
+    }
 
-    public static async Task<Result> RunAsync(string connectionString, params string[] args)
+    public static Task<Result> RunAsync(string connectionString, params string[] args) =>
+        RunAsync(connectionString, new Dictionary<string, string>(), args);
+
+    /// <summary>Com variáveis de ambiente a mais (<paramref name="environment"/> vence as de base).</summary>
+    public static async Task<Result> RunAsync(string connectionString, IReadOnlyDictionary<string, string> environment, params string[] args)
     {
         var dll = typeof(Program).Assembly.Location;
         var start = new ProcessStartInfo("dotnet")
@@ -31,12 +40,16 @@ public static class EmergencyCommandRunner
         start.Environment["ConnectionStrings__Postgres"] = connectionString;
         start.Environment["DOTNET_ENVIRONMENT"] = "Production";
         start.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        foreach (var (name, value) in environment)
+        {
+            start.Environment[name] = value;
+        }
 
         using var process = Process.Start(start)!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         await process.WaitForExitAsync(timeout.Token);
-        return new Result(process.ExitCode, await stdout + await stderr);
+        return new Result(process.ExitCode, await stdout, await stderr);
     }
 }

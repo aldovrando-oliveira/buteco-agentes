@@ -18686,3 +18686,45 @@ O registro completo está no `tasks.md` da change. Todas seguidas e registradas:
 - **#257**, logo depois desta, numa change própria: o comando `password-reset-link`, porque com os papéis só o Admin gera o link de redefinição.
 - **#185:** o painel lê o papel do id token (`role`: `admin`/`operator`/`reader`) e das respostas (`papel`: `admin`/`operador`/`leitor`), com um mapeamento só ([comentário](https://github.com/aldovrando-oliveira/buteco-agentes/issues/185#issuecomment-6731022783)); o texto de Minha conta para quem não é Admin; o `403`.
 - **A homologação da M1** continua pendente, e a #184 só vai para produção com a #185.
+
+## `comando-password-reset-link` — Comando de emergência para o link de redefinição de senha (#257)
+
+**Change proposta e implementada em 09/11/2026**, na branch `feat/257-password-reset-link`, num worktree próprio, a partir de `0ffe651` (merge do PR #259, a #184). Entrega M2 · 2 de 6. Sem tela, sem migration, sem variável nova.
+
+- **O que entra no `apps/api`:**
+  - `PasswordResetLink.IssueAsync`: a escrita do link (token, hash, propósito, vencimento de 24 h, um `UPDATE` condicionado ao ativo), extraída de `PasswordResetEndpoints.CreateAsync` e usada pela rota e pelo comando. A rota passa a resolver a base do painel **antes** da escrita, sem efeito visível (o boot já exige o issuer);
+  - o comando `password-reset-link --email <e-mail>`, no ramo de `args` do `Program.cs` da #220: host mínimo, sem Kestrel, sem migrations; **só Admin ativo**; saídas `0`, `1`, `2`, `3` (convidado), `4` (não é Admin), `64`, `70` e `78` (base do painel ausente, conferida antes de montar o host e de abrir conexão); o link uma vez, sozinho no stdout; a linha `Warning` (`EventId` 1197) no stderr, sem o link, o token nem o hash.
+- **Documentação:** `docs/deployment.md` (o comando, o cuidado com o link e o driver de log do Docker, e o roteiro do último Admin que perdeu a senha e as 2 etapas, com o aviso em destaque de que o link vira credencial completa por 24 h), `docs/development.md`, `SECURITY.md` e a seção de autenticação do `01`.
+- **Capacidade:** `user-access-links` (o requisito da geração ganha a mesma escrita e a ordem da base; entra o requisito do comando).
+
+**Decisões do dono** (09/11/2026; detalhe no design): **Q1**, extrair só a escrita, com a base resolvida antes; **Q2**, só Admin, `4` para os outros — diferente do `two-factor-reset`, porque cada comando sozinho não dá acesso, e juntos fazem do link uma credencial completa por 24 h; **Q3**, o convidado sai `3`, sem efeito; **Q4**, o link no stdout e o registro no stderr, sem serviço novo no compose (o `logging: none` apagaria também a linha de registro, o único rastro de que o comando rodou); **Q5**, `78` antes do banco; **Q6**, o roteiro: primeiro `two-factor-reset`, depois `password-reset-link`, sem ajuste de código; **Q7**, vale o último link, sem o `BUTECOD1`. No acréscimo antes do apply, o cenário do e-mail com maiúsculas e espaços, com o seu guarda.
+
+**Premissas inexatas do corpo da issue** (convenção 9, sem parada): "SQL à mão não é viável sem código" (é viável, só arriscado: o token não tem formato validado); e "sem o token no log, o link só na saída do comando" (no contêiner, stdout e stderr vão os dois ao driver de log do Docker).
+
+### Premissas que caíram no apply (convenção 9)
+
+Todas seguidas e registradas; nenhuma mudou comportamento ou contrato, nem reduziu cobertura.
+1. **O banco de desenvolvimento não tem a migration da #184** (a coluna `role`). A conferência da 4.4 a aplicou só na cópia descartável, por `dotnet ef database update`; **o `buteco_agents` de desenvolvimento continua sem ela.**
+2. **O `node_modules` do `apps/frontend` do `main` estava desatualizado** (sem o `qrcode.react` da #246): o Vite da conferência rodou do worktree, depois de um `npm ci`, e o `node_modules` foi apagado em seguida.
+3. **O `CREATE DATABASE` pelo `template1` recusa por divergência de collation** (já visto na #220 e na #184): a cópia usou o `template0`.
+4. **O design dizia que o comando leria a configuração por um `ConfigurationBuilder` à parte:** a implementação lê a do próprio host (`builder.Configuration`) antes do `Build()`, com as mesmas fontes. O design foi corrigido; a spec já dizia só "antes de abrir conexão".
+
+**Guarda descartado e refeito** (convenção 15): o primeiro `g2.3b` (a escrita antes da base resolvida) trocou também o texto da mensagem do `78` e reprovou pela asserção do texto, não pelo link morto. Refeito com a mensagem original (`g2.3b-…-r2`), reprovou na linha da asserção "o link anterior continua valendo".
+
+### O que a implementação mediu
+
+| suíte | baseline `0ffe651` (`257-baseline/`) | change (`257-fechamento-r1/`) | por nome |
+|---|---|---|---|
+| `apps/api` | 1546/1546 + 1 ignorado, CPU mín. 55 | **APROVADA**, 1565/1565 + 1 ignorado, CPU mín. 60 | nenhum sai; entram 19 (`PasswordResetLinkCommandTests` 17, `PasswordResetLinkParityTests` 2) |
+
+- **Só a suíte do `apps/api`**: as outras não tocam a geração do link nem o login (justificativa no design, "Suítes"). Uma suíte por vez, com o lock.
+- **Guardas (convenção 15):** 6 vistos reprovar contra o defeito nomeado, com a volta pela cópia e o sha conferido, em `~/.cache/buteco-agents/257-guardas/`: o comando aceitando um não-Admin; a escrita antes da base resolvida (refeito, acima); o link na linha de registro; o `catch` devolvendo `1`; o e-mail sem normalizar; a rota com uma cópia da escrita que troca o stamp (paridade).
+- **Build:** os mesmos 16 avisos distintos da baseline.
+- **A imagem real num banco descartável** (`buteco_257_cmd`, copiado por `pg_dump`): saída `4` (Operador; hash, vencimento e stamp iguais), saída `78` (o link anterior intacto) e o roteiro da Q6 inteiro — `two-factor-reset` `0`, `password-reset-link` `0` com o link só no stdout, o link aberto no Chrome, a senha nova, a etapa do cadastro ("Senha salva. Falta só cadastrar o app autenticador para entrar."), os 10 códigos e o painel (`/inventory`). O banco e a imagem foram apagados.
+- **Tamanho (convenção 18)**, por `git diff --numstat 0ffe651` mais os arquivos novos, só código: **produção +237 / −16** contra ~+180 corrigidos (**+32 %**; o comando tem 170 linhas, 40 de comentário e 21 em branco, e a extração 47, com 19 de comentário: o registro de mecanismo é a maior parte do desvio); **testes +376**, mais **+17 / −4** de duplos (`EmergencyCommandRunner`), +393 / −4 contra ~+470 corrigidos (**−16 %**); docs +102 / −3.
+- **Validação visual:** não se aplica (sem tela).
+
+### Para as próximas
+
+- **#185** (M2 · 3 de 6): as telas dos papéis; a #184 e esta só vão para produção com ela.
+- **O banco de desenvolvimento** precisa da migration da #184 antes da próxima conferência que dependa do papel.

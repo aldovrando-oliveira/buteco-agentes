@@ -542,6 +542,16 @@ verificação": quem troca de celular pede a outro usuário a redefinição, em 
 >
 > Ele apaga a verificação, troca o carimbo de segurança e encerra as sessões, e o próximo
 > login cadastra de novo ([deployment.md](deployment.md#verificação-em-2-etapas-obrigatória-e-o-comando-de-emergência-220)).
+>
+> **Perdeu a senha, sem outro Admin para gerar o link?** O comando irmão imprime o link de
+> redefinição (só para Admin ativo), com a base do painel do `appsettings.Development.json`
+> (`http://localhost:5173`):
+>
+> ```bash
+> cd apps/api/src/Buteco.Api && dotnet run -- password-reset-link --email operador@buteco.local
+> ```
+>
+> Com as duas perdas, rode primeiro o `two-factor-reset` e depois este ([deployment.md](deployment.md#comando-de-emergência-da-senha-password-reset-link-257)).
 
 Um código errado conta no mesmo bloqueio de 5 falhas da senha, também no cadastro.
 
