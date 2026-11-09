@@ -106,6 +106,7 @@ builder.Services.AddIssuerTokenAuthentication(builder.Configuration);
 // Só o subject "operator" passa; qualquer outro recebe 403
 // (inbox-restricao-de-subject, D1/D2). FallbackPolicy porque nenhuma rota
 // declara autorização própria: é ela que governa toda rota sem AllowAnonymous.
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, PanelRoleAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = SubjectAuthorization.BuildFallbackPolicy());
 
@@ -164,6 +165,11 @@ app.ValidateRouteAuthenticationClassification(
     "/health",
     "/webhooks/{channelId:guid}",
     PushNotificationEndpoints.RoutePattern);
+
+// Toda rota autenticada está na tabela de papéis do painel, e toda entrada tem rota (design.md da
+// change papeis-no-token, D2; convenção 8). Também depois de todos os Map*. Provado pela
+// composição real em RoleMatrixTests.RealComposition_EveryAuthenticatedRouteIsDeclared.
+app.ValidateRouteDeclarations(RoleRoutes.Table);
 
 app.Run();
 

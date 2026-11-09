@@ -120,13 +120,42 @@ public static class IssuerTokenAuthentication
 
     // D6: o principal é reconstruído. NameIdentifier só pela tabela de clientes; o sub
     // nunca vira subject. Cliente ausente ou fora da tabela autentica sem
-    // NameIdentifier, e a SubjectAuthorization responde 403.
+    // NameIdentifier, e a autorização responde 403.
+    //
+    // O role vai só para o token do painel (papeis-no-token, D3): os clientes de serviço são
+    // autorizados pela tabela de subjects, e um role no token deles não vale nada. O token do
+    // painel sem role válido FALHA a autenticação, e o 401 sai pelo desafio do JwtBearer, sem
+    // corpo problem+json: é o que faz o painel renovar e repetir, e a renovação traz o papel
+    // (D3, Q12). Com 403, os tokens de antes do deploy ficariam até 15 min sem acesso.
     private static Task MapPrincipalByClient(TokenValidatedContext context)
     {
         var clientId = context.Principal?.FindFirst(ClientIdClaim)?.Value;
-        var subject = context.Principal?.FindFirst(SubjectClaim)?.Value;
+        var role = context.Principal?.FindFirst(PanelRoles.Claim)?.Value;
+
+        if (clientId == IssuerClientSubjects.PanelClientId && !PanelRoles.IsKnown(role))
+        {
+            context.Fail("O token do painel não traz um papel conhecido.");
+            return Task.CompletedTask;
+        }
+
+        context.Principal = MapPrincipal(context.Principal);
+        return Task.CompletedTask;
+    }
+
+    // Público para o teste do mapeamento afirmar o principal, como o do apps/api: um role vazando
+    // para um cliente de serviço não muda nenhuma resposta, e só o principal o mostra.
+    public static ClaimsPrincipal MapPrincipal(ClaimsPrincipal? validated)
+    {
+        var clientId = validated?.FindFirst(ClientIdClaim)?.Value;
+        var subject = validated?.FindFirst(SubjectClaim)?.Value;
+        var role = validated?.FindFirst(PanelRoles.Claim)?.Value;
 
         var claims = new List<Claim>();
+        if (clientId == IssuerClientSubjects.PanelClientId && role is not null)
+        {
+            claims.Add(new Claim(PanelRoles.Claim, role));
+        }
+
         if (clientId is not null && IssuerClientSubjects.Table.TryGetValue(clientId, out var mappedSubject))
         {
             claims.Add(new Claim(ClaimTypes.NameIdentifier, mappedSubject));
@@ -142,8 +171,7 @@ public static class IssuerTokenAuthentication
             claims.Add(new Claim(SubjectClaim, subject));
         }
 
-        context.Principal = new ClaimsPrincipal(new ClaimsIdentity(claims, IssuerSchemeName));
-        return Task.CompletedTask;
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, IssuerSchemeName));
     }
 
     // D4: sem nenhuma chave obtida, o desafio de quem traz Authorization vira 503 com

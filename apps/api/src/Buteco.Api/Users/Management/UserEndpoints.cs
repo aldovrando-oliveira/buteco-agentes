@@ -5,10 +5,11 @@ using Microsoft.EntityFrameworkCore;
 namespace Buteco.Api.Users.Management;
 
 /// <summary>
-/// Usuários, sob <c>/users</c> (design.md da change rotas-conta-usuarios, D1 e D5 a D8). Na M1,
-/// sem papéis, todo usuário real chama todas (<see cref="CurrentUser"/>), e o token de operador
-/// cujo <c>sub</c> não é usuário recebe <c>403</c>. A #184 as restringe ao Admin. A redefinição das 2 etapas, no mesmo
-/// prefixo, é da <c>UserTwoFactorResetEndpoint</c>.
+/// Usuários, sob <c>/users</c> (design.md da change rotas-conta-usuarios, D1 e D5 a D8). Só o Admin
+/// chama, pelo papel gravado (<see cref="CurrentUser.FindAdminAsync"/>; design.md da change
+/// papeis-no-token, D3): o rebaixamento vale aqui na requisição seguinte. O token do painel cujo
+/// <c>sub</c> não é usuário, e o de quem não é Admin, recebem <c>403</c>. A redefinição das 2 etapas,
+/// no mesmo prefixo, é da <c>UserTwoFactorResetEndpoint</c>.
 ///
 /// <list type="bullet">
 /// <item><b>Editar</b> não troca o stamp nem pede senha: o e-mail é o identificador do login,
@@ -36,13 +37,14 @@ public static class UserEndpoints
         group.MapPost("/{id:guid}/deactivate", DeactivateAsync);
         group.MapPost("/{id:guid}/activate", ActivateAsync);
         group.MapPost("/{id:guid}/sessions/revoke", RevokeSessionsAsync);
+        group.MapPut("/{id:guid}/role", UserRoleEndpoint.ChangeAsync);
         return app;
     }
 
     private static async Task<IResult> ListAsync(
         HttpContext httpContext, AppDbContext dbContext, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
             return CurrentUser.Forbidden();
         }
@@ -59,7 +61,7 @@ public static class UserEndpoints
     private static async Task<IResult> GetAsync(
         Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
             return CurrentUser.Forbidden();
         }
@@ -78,7 +80,7 @@ public static class UserEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
             return CurrentUser.Forbidden();
         }
@@ -121,7 +123,7 @@ public static class UserEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
         {
             return CurrentUser.Forbidden();
         }
@@ -134,9 +136,11 @@ public static class UserEndpoints
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         await UserAdministration.LockAsync(dbContext, cancellationToken);
 
-        // Dentro do lock: quem chama pode ter sido desativado por uma desativação que acabou de
-        // confirmar. Sem esta releitura, os dois únicos ativos se desativariam um ao outro.
-        if (!await dbContext.Users.AnyAsync(user => user.Id == caller.Id && user.Status == UserStatus.Active, cancellationToken))
+        // Dentro do lock: quem chama pode ter sido desativado, ou rebaixado, por uma desativação ou
+        // uma mudança de papel que acabou de confirmar (design.md da change papeis-no-token, D6).
+        // Sem esta releitura, os dois únicos Admins se desativariam um ao outro, ou um desativaria
+        // o outro enquanto era rebaixado por ele, e a instalação ficaria sem Admin ativo.
+        if (!await UserAdministration.IsActiveAdminAsync(dbContext, caller.Id, cancellationToken))
         {
             return CurrentUser.Forbidden();
         }
@@ -167,7 +171,7 @@ public static class UserEndpoints
     private static async Task<IResult> ActivateAsync(
         Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
             return CurrentUser.Forbidden();
         }
@@ -196,7 +200,7 @@ public static class UserEndpoints
     private static async Task<IResult> RevokeSessionsAsync(
         Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
             return CurrentUser.Forbidden();
         }
@@ -209,7 +213,7 @@ public static class UserEndpoints
         return TypedResults.Ok(new EndedSessionsResponse(await sessions.EndAllAsync(id, cancellationToken)));
     }
 
-    private static async Task<IResult> DetailAsync(
+    internal static async Task<IResult> DetailAsync(
         User user, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         var invitedBy = user.InvitedBy is { } inviterId

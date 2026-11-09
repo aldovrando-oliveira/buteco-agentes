@@ -15,6 +15,10 @@ public partial class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IC
 {
     private readonly HttpClient _client = fixture.CreateClient();
 
+    // Quem chama o protocolo A2A em produção é o apps/inbox; o painel recebe 403 nas rotas de
+    // serviço desde a change papeis-no-token (Q8f).
+    private readonly HttpClient _inbox = TestAuthentication.InboxServiceClient(fixture);
+
     [Fact]
     public async Task SendMessage_CreatesSubmittedTask_PublishesJobAndIsRetrievableViaGetTask()
     {
@@ -37,7 +41,7 @@ public partial class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IC
             },
         };
 
-        var sendResponse = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", sendPayload);
+        var sendResponse = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", sendPayload);
         Assert.Equal(HttpStatusCode.OK, sendResponse.StatusCode);
 
         var sendBody = await sendResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -59,7 +63,7 @@ public partial class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IC
         Assert.Null(publishedMessage.PushNotificationConfig);
 
         var getPayload = new { jsonrpc = "2.0", id = 2, method = "GetTask", @params = new { id = taskId } };
-        var getResponse = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", getPayload);
+        var getResponse = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", getPayload);
         var getBody = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.False(getBody.TryGetProperty("error", out _));
@@ -97,7 +101,7 @@ public partial class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IC
             },
         };
 
-        var sendResponse = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", sendPayload);
+        var sendResponse = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", sendPayload);
         Assert.Equal(HttpStatusCode.OK, sendResponse.StatusCode);
 
         var sendBody = await sendResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -135,7 +139,7 @@ public partial class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IC
             },
         };
 
-        var response = await _client.PostAsJsonAsync($"/agents/{unknownAgentId}/a2a", payload);
+        var response = await _inbox.PostAsJsonAsync($"/agents/{unknownAgentId}/a2a", payload);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -170,7 +174,7 @@ public partial class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IC
     {
         var agentId = await CreateAgentAsync();
 
-        var first = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", new
+        var first = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", new
         {
             jsonrpc = "2.0",
             id = 1,
@@ -184,7 +188,7 @@ public partial class A2ATaskLifecycleTests(A2ATaskLifecycleFixture fixture) : IC
 
         await MarkTaskCompletedAsync(taskId);
 
-        var continuation = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", new
+        var continuation = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", new
         {
             jsonrpc = "2.0",
             id = 2,

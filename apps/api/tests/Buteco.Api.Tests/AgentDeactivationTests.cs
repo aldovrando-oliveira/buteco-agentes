@@ -33,6 +33,10 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
 {
     private readonly HttpClient _client = fixture.CreateClient();
 
+    // Quem chama o protocolo A2A em produção é o apps/inbox; o painel recebe 403 nas rotas de
+    // serviço desde a change papeis-no-token (Q8f).
+    private readonly HttpClient _inbox = TestAuthentication.InboxServiceClient(fixture);
+
     [Fact]
     public async Task SendMessage_ForInactiveAgent_RejectsTaskWithoutPublishing()
     {
@@ -49,7 +53,7 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
         AssertNothingPublishedFor(agentId);
 
         var getPayload = new { jsonrpc = "2.0", id = 2, method = "GetTask", @params = new { id = taskId } };
-        var getResponse = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", getPayload);
+        var getResponse = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", getPayload);
         var getBody = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.False(getBody.TryGetProperty("error", out _));
@@ -88,7 +92,7 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
             },
         };
 
-        var response = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
+        var response = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -209,7 +213,7 @@ public class AgentDeactivationTests(AgentDeactivationFixture fixture) : IClassFi
             },
         };
 
-        var response = await _client.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
+        var response = await _inbox.PostAsJsonAsync($"/agents/{agentId}/a2a", payload);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         return await response.Content.ReadFromJsonAsync<JsonElement>();

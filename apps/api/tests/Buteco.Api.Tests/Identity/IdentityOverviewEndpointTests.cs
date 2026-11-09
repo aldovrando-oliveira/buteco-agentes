@@ -31,12 +31,26 @@ public class IdentityOverviewEndpointTests(IdentityOverviewEndpointTests.Fixture
 
     // Acesso (D7).
 
+    // Só Admin desde a change papeis-no-token (D1): o usuário que lê é criado Admin, explícito.
     [Fact]
     public async Task ActiveUser_Is200()
     {
-        var user = await SignedInUser.CreateAsync(factory, "identidade-ativo");
+        var user = await SignedInUser.CreateAsync(factory, "identidade-ativo", role: UserRole.Admin);
 
         Assert.Equal(HttpStatusCode.OK, (await GetAsync(user.AccessToken)).StatusCode);
+    }
+
+    // identity-issuer-overview, "Operador e Leitor são recusados": o 403 vazio da tabela de papéis.
+    [Theory]
+    [InlineData(UserRole.Operator)]
+    [InlineData(UserRole.Reader)]
+    public async Task OperatorAndReader_Are403(UserRole role)
+    {
+        var user = await SignedInUser.CreateAsync(factory, "identidade-sem-admin", role: role);
+
+        var response = await GetAsync(user.AccessToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]

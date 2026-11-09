@@ -42,13 +42,9 @@ public sealed class ConnectorsSubjectAuthorizationHandler : AuthorizationHandler
     public static IReadOnlyDictionary<string, IReadOnlyList<(string Method, string Pattern)>> SubjectRoutes { get; } =
         new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>
         {
-            [OperatorSubject] =
-            [
-                ("GET", "/connectors/providers"),
-                ("GET", "/connectors/providers/{providerKey}/folders"),
-                // "Sincronizar agora" (design.md da change ciclo-de-sincronizacao, D9).
-                ("POST", Endpoints.SyncEndpoints.SyncNowPattern),
-            ],
+            // A lista do painel é a da tabela de papéis (papeis-no-token, D2): o papel do token
+            // decide, entre estas, onde ele passa.
+            [OperatorSubject] = [.. RoleRoutes.Table.Keys],
             [ApiSubject] =
             [
                 ("GET", "/connectors/providers/{providerKey}/folder"),
@@ -74,7 +70,8 @@ public sealed class ConnectorsSubjectAuthorizationHandler : AuthorizationHandler
             var pattern = endpoint.RoutePattern.RawText;
 
             if (allowedRoutes.Any(route =>
-                    string.Equals(route.Method, method, StringComparison.OrdinalIgnoreCase) && route.Pattern == pattern))
+                    string.Equals(route.Method, method, StringComparison.OrdinalIgnoreCase) && route.Pattern == pattern) &&
+                (subject != OperatorSubject || RoleAllows(context.User, method, pattern)))
             {
                 context.Succeed(requirement);
             }
@@ -82,4 +79,11 @@ public sealed class ConnectorsSubjectAuthorizationHandler : AuthorizationHandler
 
         return Task.CompletedTask;
     }
+
+    // O token do painel chega aqui sempre com um papel conhecido: sem ele, a autenticação já falhou
+    // com 401 (IssuerTokenAuthentication). O papel tem de estar na entrada da rota.
+    private static bool RoleAllows(ClaimsPrincipal user, string method, string? pattern) =>
+        user.FindFirst(PanelRoles.Claim)?.Value is { } role &&
+        RoleRoutes.Table.TryGetValue((method.ToUpperInvariant(), pattern ?? string.Empty), out var roles) &&
+        roles.Contains(role);
 }

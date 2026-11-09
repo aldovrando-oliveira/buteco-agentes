@@ -702,6 +702,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasConversion(
                     status => UserStatusText.Write(status),
                     value => UserStatusText.Read(value));
+
+            // O papel (design.md da change papeis-no-token, D3 e D4), como texto. SEM HasDefaultValue:
+            // com um valor padrão no modelo, o EF omite do INSERT a propriedade igual ao padrão do CLR
+            // e deixa o banco preencher, e um papel pedido sairia trocado pelo da coluna sem erro. O
+            // DEFAULT 'reader' existe só no SQL da migration AddUserRole, para a imagem anterior.
+            entity.Property(user => user.Role).HasColumnName("role").IsRequired()
+                .HasConversion(
+                    role => UserRoleText.Write(role),
+                    value => UserRoleText.Read(value));
             entity.Property(user => user.PasswordHash).HasColumnName("password_hash").IsRequired(false);
             entity.Property(user => user.PasswordHashIsBootstrapLegacy).HasColumnName("password_hash_is_bootstrap_legacy");
             entity.Property(user => user.SecurityStamp).HasColumnName("security_stamp").IsRequired();

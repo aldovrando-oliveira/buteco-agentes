@@ -10,7 +10,8 @@ namespace Buteco.Api.Users.AccessLinks;
 
 /// <summary>
 /// O convite, sob <c>/users</c> (design.md da change convites-redefinicao-senha, D1, D2, D5 e
-/// D10). Na M1, todo usuário real chama (<see cref="CurrentUser"/>); a #184 restringe ao Admin.
+/// D10). Só o Admin chama, pelo papel gravado (<see cref="CurrentUser.FindAdminAsync"/>; design.md
+/// da change papeis-no-token, D3).
 ///
 /// <list type="bullet">
 /// <item><b>Convidar</b> cria o usuário no estado convidado, sem senha, e devolve o link uma vez.
@@ -32,7 +33,9 @@ public static class InvitationEndpoints
     public const string NotInvitedMessage = "Este usuário não tem convite pendente.";
     public const string AlreadyAcceptedMessage = "O convite já foi aceito.";
 
-    public sealed record InvitationRequest(string? Nome, string? Email, string? Senha);
+    // Papel obrigatório, em admin, operador ou leitor (design.md da change papeis-no-token, D5, Q9):
+    // sem padrão, que seria uma decisão de acesso tomada em silêncio. O aceite mantém o papel.
+    public sealed record InvitationRequest(string? Nome, string? Email, string? Papel, string? Senha);
 
     public sealed record CallerPasswordRequest(string? Senha);
 
@@ -60,7 +63,7 @@ public static class InvitationEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
         {
             return CurrentUser.Forbidden();
         }
@@ -73,6 +76,15 @@ public static class InvitationEndpoints
         if (UserFields.Validate(request.Nome, request.Email, out var name, out var email) is { } errors)
         {
             return TypedResults.ValidationProblem(errors);
+        }
+
+        // Antes da senha: o corpo inválido não conta no bloqueio de quem chama.
+        if (UserRoleText.TryReadWire(request.Papel) is not { } role)
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["papel"] = ["O papel precisa ser admin, operador ou leitor."],
+            });
         }
 
         var normalized = EmailNormalization.Normalize(email);
@@ -89,7 +101,7 @@ public static class InvitationEndpoints
         var now = timeProvider.GetUtcNow();
         var token = AccessLinkToken.New();
         var expiresAt = now + AccessLinkToken.InvitationLifetime;
-        var invited = User.CreateInvitation(email, name, caller.Id, now);
+        var invited = User.CreateInvitation(email, name, caller.Id, now, role);
         invited.IssueAccessLink(AccessLinkPurpose.Invitation, AccessLinkToken.Hash(token), expiresAt);
         dbContext.Users.Add(invited);
         try
@@ -120,7 +132,7 @@ public static class InvitationEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
         {
             return CurrentUser.Forbidden();
         }
@@ -166,7 +178,7 @@ public static class InvitationEndpoints
 
     private static async Task<IResult> CancelAsync(Guid id, HttpContext httpContext, AppDbContext dbContext, CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is null)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
             return CurrentUser.Forbidden();
         }

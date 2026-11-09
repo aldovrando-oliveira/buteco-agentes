@@ -14,6 +14,9 @@ namespace Buteco.Api.Users.AccessLinks;
 /// stamp nem as sessões do alvo: a senha atual vale até a nova ser criada.
 ///
 /// <list type="bullet">
+/// <item><b>só o Admin</b>, pelo papel gravado (<see cref="CurrentUser.FindAdminAsync"/>; design.md da
+/// change papeis-no-token, D3), e o papel do alvo não restringe: um Admin gera a de outro Admin (Q6;
+/// recusar seria contornável por rebaixar, gerar e promover);</item>
 /// <item><b>pede a senha de quem chama</b> (P10, <see cref="CallerPassword"/>): o link é o caminho
 /// de um access token roubado para a senha de outra pessoa;</item>
 /// <item><b>a si mesmo → <c>403</c></b>, antes de conferir a senha (P7): o caminho é Minha conta,
@@ -45,7 +48,7 @@ public static class PasswordResetEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
+        if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
         {
             return CurrentUser.Forbidden();
         }

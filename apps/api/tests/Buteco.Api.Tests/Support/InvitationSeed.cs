@@ -19,7 +19,7 @@ public static class InvitationSeed
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var now = scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow();
-        var user = User.CreateInvitation(email ?? LocalUserSeed.UniqueEmail("convidado"), name, invitedBy, now);
+        var user = User.CreateInvitation(email ?? LocalUserSeed.UniqueEmail("convidado"), name, invitedBy, now, UserRole.Admin);
         var token = AccessLinkToken.New();
         user.IssueAccessLink(AccessLinkPurpose.Invitation, AccessLinkToken.Hash(token), expiresAt ?? now + AccessLinkToken.InvitationLifetime);
         db.Users.Add(user);

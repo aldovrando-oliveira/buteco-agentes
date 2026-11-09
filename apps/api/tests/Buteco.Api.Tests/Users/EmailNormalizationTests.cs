@@ -17,7 +17,7 @@ public class EmailNormalizationTests
     [Fact]
     public void User_KeepsTheTypedEmail_AndTheNormalizedOne()
     {
-        var user = User.Create("  Maria@Empresa.com ", "Maria", passwordHash: null, DateTimeOffset.UtcNow);
+        var user = User.Create("  Maria@Empresa.com ", "Maria", passwordHash: null, DateTimeOffset.UtcNow, UserRole.Admin);
 
         Assert.Equal("Maria@Empresa.com", user.Email);
         Assert.Equal("maria@empresa.com", user.NormalizedEmail);

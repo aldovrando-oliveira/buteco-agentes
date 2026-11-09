@@ -34,7 +34,7 @@ public class AccessLinkCallerTests(AccessLinkCallerTests.Fixture factory) : ICla
         TestAuthentication.AttachPanelToken(client, factory.Services);
         var routes = new (string Path, object? Body)[]
         {
-            ("/users/invitations", new { nome = name, email = LocalUserSeed.UniqueEmail("sem-usuario"), senha = TestAuthentication.KnownOperatorPassword }),
+            ("/users/invitations", new { nome = name, email = LocalUserSeed.UniqueEmail("sem-usuario"), papel = "admin", senha = TestAuthentication.KnownOperatorPassword }),
             ($"/users/{invited.User.Id}/invitation/renew", new { senha = TestAuthentication.KnownOperatorPassword }),
             ($"/users/{invited.User.Id}/invitation/cancel", null),
             ($"/users/{target.Id}/password-reset", new { senha = TestAuthentication.KnownOperatorPassword }),

@@ -35,6 +35,12 @@ public sealed class User
     public UserStatus Status { get; private set; }
 
     /// <summary>
+    /// O papel (design.md da change papeis-no-token, D3). Sem valor padrão: quem cria diz o papel,
+    /// e a coluna tem <c>DEFAULT 'reader'</c> só no SQL, para a imagem anterior numa volta atrás (D4).
+    /// </summary>
+    public UserRole Role { get; private set; }
+
+    /// <summary>
     /// String PHC do Argon2id ou, só com <see cref="PasswordHashIsBootstrapLegacy"/>, o
     /// PBKDF2 de <c>Auth:OperatorPasswordHash</c>. Nula para quem não tem senha (convite
     /// pendente na #181, só federado na M3).
@@ -92,13 +98,14 @@ public sealed class User
 
     public bool IsInvited => Status == UserStatus.Invited;
 
-    public static User Create(string email, string name, string? passwordHash, DateTimeOffset now) => new()
+    public static User Create(string email, string name, string? passwordHash, DateTimeOffset now, UserRole role) => new()
     {
         Id = Guid.CreateVersion7(now),
         Email = email.Trim(),
         NormalizedEmail = EmailNormalization.Normalize(email),
         Name = name,
         Status = UserStatus.Active,
+        Role = Defined(role),
         PasswordHash = passwordHash,
         SecurityStamp = NewSecurityStamp(),
         CreatedAt = now,
@@ -106,12 +113,13 @@ public sealed class User
 
     /// <summary>
     /// O convidado (design.md da change convites-redefinicao-senha, D2): sem senha, no estado
-    /// <see cref="UserStatus.Invited"/>, com quem convidou. O link entra por
+    /// <see cref="UserStatus.Invited"/>, com quem convidou e com o papel do convite, que o aceite
+    /// mantém (design.md da change papeis-no-token, D5). O link entra por
     /// <see cref="IssueAccessLink"/>; o <see cref="CreatedAt"/> é a data do convite.
     /// </summary>
-    public static User CreateInvitation(string email, string name, Guid invitedBy, DateTimeOffset now)
+    public static User CreateInvitation(string email, string name, Guid invitedBy, DateTimeOffset now, UserRole role)
     {
-        var user = Create(email, name.Trim(), passwordHash: null, now);
+        var user = Create(email, name.Trim(), passwordHash: null, now, role);
         user.Status = UserStatus.Invited;
         user.InvitedBy = invitedBy;
         return user;
@@ -120,7 +128,7 @@ public sealed class User
     /// <summary>O primeiro Admin, com o hash PBKDF2 da configuração marcado como legado (D2).</summary>
     public static User CreateBootstrap(string email, string legacyPasswordHash, DateTimeOffset now)
     {
-        var user = Create(email, NameFromEmail(email), legacyPasswordHash, now);
+        var user = Create(email, NameFromEmail(email), legacyPasswordHash, now, UserRole.Admin);
         user.PasswordHashIsBootstrapLegacy = true;
         return user;
     }
@@ -179,6 +187,16 @@ public sealed class User
     }
 
     public void RecordAccess(DateTimeOffset now) => LastAccessAt = now;
+
+    /// <summary>
+    /// Troca o papel sem trocar o stamp nem revogar sessões (design.md da change papeis-no-token,
+    /// D6): a renovação seguinte já sai com o papel novo, e as rotas de Admin o leem do banco a
+    /// cada requisição. Quem chama (<c>PUT /users/{id}/role</c>) confere o último Admin sob o lock.
+    /// </summary>
+    public void ChangeRole(UserRole role) => Role = Defined(role);
+
+    private static UserRole Defined(UserRole role) =>
+        Enum.IsDefined(role) ? role : throw new ArgumentOutOfRangeException(nameof(role), role, "Papel de usuário inválido.");
 
     /// <summary>
     /// Desativa, troca o stamp e apaga o link pendente: o cookie em voo, todo código ou refresh

@@ -865,8 +865,9 @@ próprio token de serviço até a #235. A convenção "sem biblioteca JWT"
 foi revogada em 24/10/2026 pela `emissor-oidc-api`; ver o `01`.)*
 
 - **Usuários locais**, com login por e-mail e senha no emissor; o primeiro Admin
-  vem do bootstrap. Sem RBAC na M1: todo usuário tem o acesso do operador, pela
-  tabela de clientes (`buteco-painel` → `operator`).
+  vem do bootstrap. O token do painel é o subject `operator` (`buteco-painel` →
+  `operator`), e cada usuário tem um papel, **Admin**, **Operador** ou **Leitor**, levado
+  no claim `role` e conferido por rota nos três apps (#184; ver o `01`, "Papéis").
 - **Tokens de serviço**, access tokens do emissor, um cliente por serviço:
   - o `apps/inbox` e o `apps/connectors` pedem o seu em `{Api:BaseUrl}/connect/token`
     (`buteco-servico-inbox`, `buteco-servico-connectors`), com o segredo de cada um,
@@ -879,7 +880,8 @@ foi revogada em 24/10/2026 pela `emissor-oidc-api`; ver o `01`.)*
 - **O subject sai do `client_id`**, por uma tabela fechada por app, e nunca do
   `sub`. No `apps/api`, as rotas de cada subject são **escopadas** por uma tabela
   de subjects (`ServiceScopeAuthorizationHandler`):
-  - `operator` passa em todas as rotas;
+  - `operator` (o token do painel) só nas rotas da tabela de papéis com o papel dele
+    (até a #184, em todas);
   - `service:inbox` (`apps/inbox` → `apps/api`) só nas duas rotas que consome;
   - `service:connectors` só nas cinco rotas de `/sync/knowledge-bases`
     (listagem das bases sincronizadas e das referências dos documentos, upsert e
@@ -1042,9 +1044,9 @@ GET /identity  (Bearer do usuário)
                        saiDaPublicacaoEm
 ```
 
-- **Acesso:** na M1, todo usuário real e ativo (`CurrentUser`). O token de
-  serviço recebe `403` da política de fallback, e o token sem usuário, da
-  `CurrentUser`. A #184 restringe ao Admin.
+- **Acesso:** só Admin (#184), pelo papel do token e pelo gravado
+  (`CurrentUser.FindAdminAsync`). O token de serviço recebe `403` da política de
+  fallback, e o token sem usuário ou de quem não é Admin, da `CurrentUser`.
 - **Estados**, na ordem do quadro: `em-uso` (assina agora; a mesma escolha do
   anel), `proxima` (começa a assinar depois de agora, já no JWKS) e
   `aposentando` (parou de assinar e ainda valida). A chave de cifra e a que já
@@ -1137,7 +1139,7 @@ painel                                      apps/api                      tabela
 ```
 
 - **Rotas**, todas para o usuário real do token (`CurrentUser`); o token de operador
-  cujo `sub` não é usuário recebe `403`. Na M1 todo usuário chama todas; a #184 restringe `/users` ao Admin:
+  cujo `sub` não é usuário recebe `403`. `/account/*` para todo papel; `/users/*` só para o Admin, pelo papel gravado (#184):
   - `GET /account`, `POST /account/password`, `GET /account/sessions`,
     `POST /account/sessions/{id}/revoke`, `POST /account/sessions/revoke-others`;
   - `GET /users`, `GET /users/{id}`, `PUT /users/{id}`, `POST /users/{id}/deactivate`,

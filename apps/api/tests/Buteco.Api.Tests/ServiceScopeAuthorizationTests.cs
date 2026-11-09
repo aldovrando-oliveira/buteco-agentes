@@ -193,8 +193,12 @@ public class ServiceScopeAuthorizationTests(ApiFactoryFixture factory) : IClassF
         Assert.Equal(HttpStatusCode.Forbidden, create.StatusCode);
     }
 
+    // Até a #184, o operator passava em tudo, inclusive nas rotas de sincronização, e este caso
+    // se chamava Operator_KeepsFullAccess_IncludingSyncRoutes. Com a tabela de papéis, as rotas de
+    // serviço são só dos serviços, e o painel, mesmo Admin, recebe 403 nelas (design.md da change
+    // papeis-no-token, Q8f; route-authentication, "Subject desconhecido é recusado em apps/api").
     [Fact]
-    public async Task Operator_KeepsFullAccess_IncludingSyncRoutes()
+    public async Task PanelAdmin_KeepsTheCatalog_ButNotTheSyncRoutes()
     {
         var client = factory.CreateClient();
 
@@ -202,7 +206,7 @@ public class ServiceScopeAuthorizationTests(ApiFactoryFixture factory) : IClassF
         var syncRoute = await client.GetAsync("/sync/knowledge-bases");
 
         Assert.Equal(HttpStatusCode.OK, operatorRoute.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, syncRoute.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, syncRoute.StatusCode);
     }
 
     /// <summary>

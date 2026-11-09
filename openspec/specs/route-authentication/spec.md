@@ -127,20 +127,17 @@ código que não corresponda a nenhuma rota de fato mapeada.
   a entrada sem rota correspondente, e não chega a aceitar requisições
 
 ### Requirement: Subject desconhecido é recusado em apps/api
-`apps/api` SHALL autorizar, entre os tokens válidos, apenas o subject `operator`
-em todas as rotas e cada subject de serviço conhecido (`service:inbox`,
-`service:connectors`) nas rotas da sua lista. Um token válido com qualquer outro
-subject SHALL receber `403 Forbidden` em toda rota que exige autenticação.
+`apps/api` SHALL autorizar, entre os tokens válidos, apenas o subject `operator` (o token do painel), nas rotas em cuja entrada da tabela de papéis esteja o `role` dele (`route-roles`), e cada subject de serviço conhecido (`service:inbox`, `service:connectors`) nas rotas da sua lista. O `operator` SHALL NOT ter acesso implícito a todas as rotas. Um token válido com qualquer outro subject SHALL receber `403 Forbidden` em toda rota que exige autenticação.
 
-#### Scenario: Subject desconhecido recusado em rota do operador
+#### Scenario: Subject desconhecido recusado em rota do painel
 - **WHEN** uma requisição `GET /knowledge-bases` chega com token validamente
   assinado e não expirado com `sub` `service:desconhecido`
 - **THEN** a API responde `403 Forbidden`
 
-#### Scenario: Operador continua com acesso total
-- **WHEN** o operador, autenticado pelo login, chama `GET /knowledge-bases` e
+#### Scenario: O painel não passa nas rotas de sincronização
+- **WHEN** um usuário Admin, autenticado pelo login, chama `GET /knowledge-bases` e
   `GET /sync/knowledge-bases`
-- **THEN** a API responde `200` nas duas
+- **THEN** a API responde `200` na primeira e `403` na segunda
 
 ### Requirement: Lista de rotas dos subjects de serviço conferida no startup
 `apps/api` SHALL verificar, no startup, que cada par de método e padrão de rota
@@ -158,15 +155,15 @@ falhar o boot quando uma entrada não tiver rota correspondente.
 
 ### Requirement: Subject diferente de operator é recusado em apps/inbox
 `apps/inbox` SHALL autorizar, entre os tokens válidos, apenas o subject
-`operator` nas rotas que exigem autenticação. Um token validamente assinado e não
+`operator` nas rotas que exigem autenticação, e só nas rotas em cuja entrada da tabela de papéis esteja o `role` do token (`route-roles`). Um token validamente assinado e não
 expirado com qualquer outro subject, inclusive `service:inbox` e
 `service:connectors`, SHALL receber `403 Forbidden` em toda rota que exige
 autenticação, sem executar nenhuma lógica de negócio da rota. Token ausente,
-malformado, com assinatura inválida ou expirado SHALL continuar recebendo
+malformado, com assinatura inválida, expirado ou do painel sem `role` SHALL continuar recebendo
 `401 Unauthorized`.
 
 #### Scenario: Operador continua com acesso às rotas do operador
-- **WHEN** o operador, autenticado pelo login de `apps/api`, chama
+- **WHEN** um usuário de papel `operator`, autenticado pelo login de `apps/api`, chama
   `GET /channels` em `apps/inbox`
 - **THEN** `apps/inbox` responde `200 OK`
 

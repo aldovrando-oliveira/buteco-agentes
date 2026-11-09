@@ -561,9 +561,9 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
 - **Sem operador único desde a #217.** O `POST /auth/login`, o
   `Auth:OperatorUsername` e o tempo de vida configurável do token de operador saíram. O
   `Auth:OperatorPasswordHash` ficou só para o bootstrap do primeiro Admin
-  ("Usuários locais", abaixo). Os usuários locais ainda não têm papel (RBAC é da
-  M2), e todo usuário tem o acesso do operador, pela tabela de clientes
-  (`buteco-painel` → `operator`).
+  ("Usuários locais", abaixo). O token do painel é o subject `operator`, pela tabela de
+  clientes (`buteco-painel` → `operator`), e o que a pessoa pode é o **papel** dela
+  ("Papéis", abaixo; #184).
 - **Tokens de serviço** (#235): access tokens do emissor do `apps/api`, anexados por
   um `ServiceTokenDelegatingHandler` em cada app.
   - **O `apps/inbox` e o `apps/connectors`** pedem o seu em `{Api:BaseUrl}/connect/token`,
@@ -580,7 +580,8 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
   - **`401` do destino** descarta o token em cache, sem repetir a chamada.
   - O subject sai do `client_id`, pela tabela de clientes do destino, e as rotas de cada
     subject são **escopadas** no `apps/api` por uma tabela de subjects
-  (`ServiceScopeAuthorizationHandler`): `operator` em tudo;
+  (`ServiceScopeAuthorizationHandler`): `operator` (o token do painel) só nas rotas da
+  tabela de papéis com o papel dele ("Papéis", abaixo; até a #184, `operator` em tudo);
   `service:inbox` só nas duas rotas que `apps/inbox` consome;
   `service:connectors` só nas cinco de `/sync/knowledge-bases`; **qualquer
   outro subject recebe `403`**. Até a #102 a regra era "quem não é
@@ -590,9 +591,28 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
   `MapGroup` gera para `MapGet("/")`. A tabela protege contra defeito de
   código; contra roubo de credencial, cada serviço tem a sua, e só o
   `apps/api` assina token (#182, que fechou a #117). O `apps/inbox` aceita só
-  `operator` nas rotas autenticadas, e outro subject recebe `403` (#116); o
-  serviço que precisar de rota dele traz a lista por subject e a checagem de
-  boot, no molde do `apps/api`.
+  `operator` nas rotas autenticadas, com o papel da rota, e outro subject recebe `403`
+  (#116, #184); o serviço que precisar de rota dele traz a lista por subject e a entrada
+  dela na checagem de boot, no molde do `apps/api`.
+- **Papéis** (#184): **Admin**, **Operador** e **Leitor**, gravados em `users.role` (`admin`,
+  `operator`, `reader`; no JSON, `papel` com `admin`, `operador`, `leitor`) e levados no claim
+  `role` do access token e do id token, que o authorize põe e toda renovação troca pelo gravado.
+  - **A matriz por rota** é uma tabela fechada em cada app (`RoleRoutes`, por método e
+    `RawText`), ao lado da tabela de subjects de serviço: Admin gere usuários, convites e a
+    identidade; Admin e Operador gerem agentes, MCP, conhecimento, canais e os conectores, e
+    veem o histórico de conversas; o Leitor lê agentes, MCP, conhecimento, canais e o Insights, e
+    recebe `403` no histórico, nas escritas e nos conectores. As rotas de serviço
+    (`POST /agents/{id}/a2a`, `/sync/knowledge-bases/*`, descrever pasta) não estão na tabela:
+    o painel, com qualquer papel, recebe `403` nelas.
+  - **No boot**, nos três apps (convenção 8): toda rota autenticada está na tabela de papéis ou na
+    lista de um subject de serviço, toda entrada tem rota, e nenhuma entrada tem lista vazia. Os
+    guardas da matriz têm a matriz escrita à parte da tabela de produção: lida dela, a
+    expectativa mudaria junto com o defeito.
+  - **Token do painel sem `role` conhecido recebe `401`**, sem corpo `problem+json`, como o
+    token recusado: o painel renova e repete, e a renovação traz o papel. É o caso dos access
+    tokens emitidos antes da #184. Os tokens de serviço não levam papel, e o `role` deles é
+    descartado.
+  - **Os prazos** estão no item "O access token já emitido", abaixo.
 - **Enforcement por padrão**: toda rota HTTP de `apps/api` e `apps/inbox`
   exige token; as exceções vivem numa allowlist explícita com motivo
   classificado por enum, validada no startup (ver convenção 8).
@@ -710,7 +730,7 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     de 20. Acima disso, `429`. O limite por IP é do proxy de fora.
   - **Sem enumeração.** E-mail sem conta e senha errada respondem igual, com o
     hash fictício. O "Acesso desativado" só aparece para quem acertou a senha.
-- **Verificação em 2 etapas** (#218), **obrigatória para todo usuário** desde a #220:
+- **Verificação em 2 etapas** (#218), **obrigatória para todo usuário, de qualquer papel**, desde a #220 (mantida na #184, Q2):
   - **TOTP pelo RFC 6238, sobre o BCL**, sem pacote: HMAC-SHA1, 6 dígitos, passo de
     30 s, um passo de tolerância para cada lado. O último passo aceito fica em
     `users.two_factor_last_step`, e aceitar um código é um `UPDATE` condicional
@@ -751,8 +771,9 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
   - **a opção do cadastro** (`Identity:TwoFactor:EnrollmentEnabled`) existiu da #218 à
     #220, para a transição até a tela. Sem `amr` no token: ninguém o lê na M1.
 - **Minha conta e Usuários** (#219), para o usuário real do token (`CurrentUser`; o token
-  de operador cujo `sub` não é usuário recebe `403`). Na M1, sem papéis, todo usuário chama todas; a #184 restringe
-  `/users` ao Admin:
+  de operador cujo `sub` não é usuário recebe `403`). `/account/*` atende todo papel; `/users/*`,
+  o convite, as redefinições e `/identity` só o Admin, pelo papel **gravado**
+  (`CurrentUser.FindAdminAsync`, a mesma leitura do usuário que a rota já fazia; #184):
   - **`/account`:** os próprios dados; a troca da senha, com a atual conferida como no
     login e contada no bloqueio por e-mail (durante o bloqueio, `423` sem conferir); a
     lista das sessões vivas, com a do token marcada; encerrar uma; encerrar as outras;
@@ -782,13 +803,19 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     #181; a #181 não envia e-mail, e o gatilho não disparou). A renovação troca no principal o `name` e o `email` pelos gravados, e o id
     token seguinte já sai com eles;
   - **ninguém desativa a si mesmo**, e a desativação roda sob o
-    `pg_advisory_xact_lock` `BUTECOD1`, relendo quem chama dentro dele: dois usuários
-    desativando um ao outro nunca deixam a instalação sem ativo. Reativar não devolve
-    as sessões de antes. As chaves `bigint` de lock do `apps/api` são cinco, conferidas
-    distintas por teste: `BUTECOC1` (catálogo de clientes), `BUTECOD1` (desativação),
+    `pg_advisory_xact_lock` `BUTECOD1`, relendo quem chama **Admin ativo** dentro dele: dois
+    Admins desativando um ao outro nunca deixam a instalação sem Admin ativo. Reativar não
+    devolve as sessões de antes;
+  - **mudar o papel** (`PUT /users/{id}/role`, #184) roda sob o mesmo lock, com a mesma
+    releitura e a **contagem dos Admins ativos dentro dele**: o último Admin não é rebaixado
+    (`409`), nem por si mesmo, que é permitido havendo outro. Promover a Admin pede a senha de
+    quem chama (`CallerPassword`); rebaixar, não. Não troca o stamp nem revoga sessões. As
+    chaves `bigint` de lock do `apps/api` são cinco, conferidas
+    distintas por teste: `BUTECOC1` (catálogo de clientes), `BUTECOD1` (desativação e mudança de papel),
     `BUTECOK1` (chaves do emissor), `BUTECOP1` (limpeza) e `BUTECOU1` (bootstrap).
-- **Convite e redefinição de senha por link** (#181), sem envio de e-mail: o admin gera o
-  link, o vê uma vez e o entrega pelo canal que quiser:
+- **Convite e redefinição de senha por link** (#181), sem envio de e-mail: o Admin gera o
+  link, o vê uma vez e o entrega pelo canal que quiser. O convite leva o `papel`,
+  obrigatório, que o aceite mantém (#184); um Admin gera a redefinição de outro Admin:
   - **o convidado é uma linha de `users`** no estado `invited`, sem senha, com quem
     convidou (`invited_by`). A unicidade do e-mail com convites pendentes é a do índice
     que já existe. Aceitar grava a senha e põe `active` na mesma linha; cancelar a apaga
@@ -837,6 +864,13 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
   desativação**, nos três apps: ele não é gravado e é validado só pelo JWKS, sem
   consulta ao emissor. Isso é **aceito na M1**. A renovação seguinte é recusada.
   A revogação para as aplicações externas é da #186.
+- **Os prazos da mudança de papel** (#184, Q1), pelo mesmo motivo: o **rebaixamento** vale
+  **na requisição seguinte** nas rotas do `apps/api` que leem a pessoa pela `CurrentUser`
+  (`/users/*`, convite, redefinições, `PUT /users/{id}/role`, `/identity`), que exigem o papel
+  gravado, e **em até 15 min 30 s** (o access token mais os 30 s de tolerância) nas outras rotas
+  do `apps/api` e no `apps/inbox` e no `apps/connectors`, que leem só o token. A **promoção**
+  chega na renovação seguinte. Consultar o papel no banco a cada requisição foi descartado: o
+  `apps/inbox` e o `apps/connectors` teriam de chamar o `apps/api` por requisição.
 - **O `apps/api` aceita o próprio token** (#180), com o mesmo desenho da #208:
   - um esquema só, o `JwtBearer`, como padrão (#182);
   - `aud` `buteco-api`;
@@ -1591,6 +1625,22 @@ de propor algo nesta base:
     observável do defeito **coincide às vezes com o efeito do acerto**, o guarda
     comportamental sozinho é insuficiente por construção, e o par determinístico
     é obrigatório.
+
+    **A mesma forma aparece em corrida, e lá o par é forçar a ordem** (`papeis-no-token`,
+    #184): o guarda de "a desativação relê quem chama **Admin** dentro do lock" disparava as
+    duas escritas ao mesmo tempo, e a ordem que expõe o defeito (o rebaixamento confirmando
+    entre a leitura de fora e o lock da desativação) não aconteceu em 10 rodadas: **verde com o
+    defeito**. O guarda que conta segura o lock numa conexão própria, espera a escrita aparecer em
+    `pg_locks` como não concedida, muda o estado e solta o lock: a única ordem possível é a do
+    defeito, e ele reprova sempre.
+
+    **E a sexta forma, achada na mesma change: guarda circular, cuja expectativa sai do artefato
+    que o defeito muda.** O guarda da matriz de papéis percorria a tabela de produção e afirmava,
+    para cada entrada, o que ela mesma dizia. O defeito "papel a mais numa entrada" mudava a
+    tabela e a expectativa juntas, e os dois guardas passaram **verdes com o defeito**. A saída é
+    a expectativa escrita **à parte**, a partir da spec (a matriz no próprio teste), mais um caso
+    que afirma a tabela de produção igual a ela. A régua: se o guarda e o código leem a mesma
+    fonte, o guarda não testa a fonte.
 
 16. **Papel visual que troca de ponta da escala precisa de variável
     declarada por esquema** — `gray[n]` é claro nos dois esquemas e

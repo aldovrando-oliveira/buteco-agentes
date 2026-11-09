@@ -4,6 +4,7 @@ using Buteco.Api.Auth;
 using Buteco.Api.Identity.Clients;
 using Buteco.Api.Identity.Keys;
 using Buteco.Api.Identity.Validation;
+using Buteco.Api.Users;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
@@ -53,11 +54,14 @@ public static class TestIssuerTokens
 
     private static readonly TimeSpan RingLoadTimeout = TimeSpan.FromSeconds(20);
 
-    private static readonly ConditionalWeakTable<IServiceProvider, Dictionary<(string, string), (string Token, DateTimeOffset ExpiresAt)>> Cache = new();
+    private static readonly ConditionalWeakTable<IServiceProvider, Dictionary<(string, string, string?), (string Token, DateTimeOffset ExpiresAt)>> Cache = new();
 
     /// <summary>O token padrão das fixtures: <c>buteco-painel</c>, com <see cref="PanelSubject"/>.</summary>
-    public static string Panel(IServiceProvider services) =>
-        ForClient(services, IdentityClients.PanelClientId, PanelSubject);
+    // O token do painel leva papel (design.md da change papeis-no-token, D3): sem ele, os três apps
+    // respondem 401. O padrão é admin, o poder que todo caso de antes da change supunha; quem testa
+    // outro papel, ou a ausência dele (null), o diz.
+    public static string Panel(IServiceProvider services, string? role = UserRoleText.Admin) =>
+        ForClient(services, IdentityClients.PanelClientId, PanelSubject, role);
 
     /// <summary>
     /// Token do cliente que a <see cref="IssuerClientSubjects"/> de produção mapeia para
@@ -80,7 +84,7 @@ public static class TestIssuerTokens
     /// <summary>
     /// Token de <paramref name="clientId"/> com <c>aud</c> e escopo <c>buteco-api</c>.
     /// </summary>
-    public static string ForClient(IServiceProvider services, string clientId, string subject)
+    public static string ForClient(IServiceProvider services, string clientId, string subject, string? role = null)
     {
         var ring = services.GetRequiredService<IdentityKeyRing>();
         var deadline = DateTime.UtcNow + RingLoadTimeout;
@@ -98,7 +102,7 @@ public static class TestIssuerTokens
         var now = TimeProvider.System.GetUtcNow();
         lock (entries)
         {
-            if (entries.TryGetValue((clientId, subject), out var cached) && now < cached.ExpiresAt - RenewalMargin)
+            if (entries.TryGetValue((clientId, subject, role), out var cached) && now < cached.ExpiresAt - RenewalMargin)
             {
                 return cached.Token;
             }
@@ -106,17 +110,17 @@ public static class TestIssuerTokens
 
         // ConfigureClient é síncrono; a geração vai a outra thread para não depender do
         // contexto de sincronização de quem chama.
-        var generated = Task.Run(() => GenerateAsync(services, clientId, subject)).GetAwaiter().GetResult();
+        var generated = Task.Run(() => GenerateAsync(services, clientId, subject, role)).GetAwaiter().GetResult();
         lock (entries)
         {
-            entries[(clientId, subject)] = generated;
+            entries[(clientId, subject, role)] = generated;
         }
 
         return generated.Token;
     }
 
     private static async Task<(string Token, DateTimeOffset ExpiresAt)> GenerateAsync(
-        IServiceProvider services, string clientId, string subject)
+        IServiceProvider services, string clientId, string subject, string? role)
     {
         await using var scope = services.CreateAsyncScope();
         var factory = scope.ServiceProvider.GetRequiredService<IOpenIddictServerFactory>();
@@ -129,6 +133,10 @@ public static class TestIssuerTokens
         var identity = new ClaimsIdentity(TokenValidationParameters.DefaultAuthenticationType, Claims.Name, Claims.Role);
         identity.SetClaim(Claims.Subject, subject);
         identity.SetClaim(Claims.ClientId, clientId);
+        if (role is not null)
+        {
+            identity.SetClaim(Claims.Role, role);
+        }
 
         var principal = new ClaimsPrincipal(identity)
             .SetCreationDate(now)

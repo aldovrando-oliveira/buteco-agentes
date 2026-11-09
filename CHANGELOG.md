@@ -327,6 +327,20 @@ o versionamento pretende seguir
     da #211. Se o `apps/api` estiver fora, a tela mostra "Indisponível" e tenta de novo
     sozinha enquanto o erro durar;
   - Editar usuário e o "Editar" na linha chegam com a #183.
+- **Papéis Admin, Operador e Leitor** (#184, M2 · 1 de 6). **Não vai para produção sem a
+  #185**, que leva as telas.
+  - cada usuário tem um papel, gravado e levado no token; os três apps que recebem o token
+    do painel (`apps/api`, `apps/inbox`, `apps/connectors`) o conferem por rota, por uma
+    tabela fechada em cada um, conferida no boot;
+  - **Admin** gere usuários, convites e a identidade; **Operador** gere agentes, MCP,
+    conhecimento, canais e conectores, e vê o histórico de conversas; **Leitor** lê
+    agentes, MCP, conhecimento, canais e o Insights;
+  - `PUT /users/{id}/role`: o último Admin ativo não é rebaixado, promover a Admin pede a
+    senha de quem chama, e rebaixar a si mesmo vale enquanto houver outro Admin;
+  - o convite leva o papel, obrigatório; Usuários, o detalhe e Minha conta mostram o
+    `papel`;
+  - todo usuário que já existia vira Admin na migration: ninguém perde acesso no deploy
+    (`docs/deployment.md`, com o roteiro para rebaixar depois).
 - **Verificação em 2 etapas obrigatória para todo usuário** (#220, última issue da M1).
   **A validação visual fica para a homologação da M1.**
   - quem ainda não tem a verificação cadastra um app autenticador **no próprio login**,
@@ -995,6 +1009,13 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **O token do painel deixa de dar acesso a toda rota** (#184). Ele passa só nas rotas do papel
+  da pessoa e recebe `403` nas outras; sem papel (os tokens de antes do deploy), recebe `401`
+  sem corpo, e o painel renova sozinho. As rotas de serviço (`POST /agents/{id}/a2a`,
+  `/sync/knowledge-bases/*`) ficam só dos serviços: o token do painel recebe `403` nelas. O
+  rebaixamento vale na requisição seguinte em Usuários, convites, redefinições e Identidade, e
+  em até 15 min 30 s no resto; a promoção, na renovação seguinte. `POST /users/invitations`
+  exige `papel`. A verificação em 2 etapas continua obrigatória para todos os papéis.
 - **O login exige a verificação em 2 etapas** (#220). O `POST /auth/session` não responde
   mais `204`: a senha certa responde `200` com `{"segundoPasso":"totp"}` ou
   `{"segundoPasso":"cadastro"}`. O authorize só emite código com a sessão completa de quem

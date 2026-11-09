@@ -12,6 +12,9 @@ namespace Buteco.Api.Identity.Flow;
 /// <list type="bullet">
 /// <item><c>sub</c> = id do usuário, no access token e no id token;</item>
 /// <item>e-mail e nome só no id token, que o painel lê;</item>
+/// <item>o papel (<c>role</c>, <see cref="UserRoleText"/>) no access token e no id token
+/// (design.md da change papeis-no-token, D3): os três apps autorizam por ele, e o painel o lê do
+/// id token. Toda renovação o troca pelo gravado (<see cref="UserGrantTokenHandler"/>);</item>
 /// <item>os escopos pedidos e, como <c>aud</c>, os recursos deles;</item>
 /// <item>o <c>security_stamp</c> <b>sem destino</b>: o OpenIddict guarda no código e no
 /// refresh todos os claims (<c>OpenIddictServerHandlers.cs</c> l. 3809 e 4467), e os
@@ -28,13 +31,14 @@ public static class UserPrincipalFactory
         identity.SetClaim(Claims.Subject, user.Id.ToString())
             .SetClaim(Claims.Email, user.Email)
             .SetClaim(Claims.Name, user.Name)
+            .SetClaim(Claims.Role, UserRoleText.Write(user.Role))
             .SetClaim(IssuerSession.SecurityStampClaim, user.SecurityStamp);
 
         identity.SetScopes(scopes);
         identity.SetResources(resources);
         identity.SetDestinations(static claim => claim.Type switch
         {
-            Claims.Subject => [Destinations.AccessToken, Destinations.IdentityToken],
+            Claims.Subject or Claims.Role => [Destinations.AccessToken, Destinations.IdentityToken],
             Claims.Email or Claims.Name => [Destinations.IdentityToken],
             IssuerSession.SecurityStampClaim => [],
             _ => [Destinations.AccessToken],

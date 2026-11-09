@@ -72,6 +72,18 @@ public static class TestAuthentication
     public static void AttachPanelToken(HttpClient client, IServiceProvider services) =>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestIssuerTokens.Panel(services));
 
+    /// <summary>
+    /// Um cliente com o token do <c>service:inbox</c>, que é quem chama <c>POST /agents/{id}/a2a</c> em
+    /// produção. O painel recebe <c>403</c> nas rotas de serviço desde a change papeis-no-token (Q8f).
+    /// </summary>
+    public static HttpClient InboxServiceClient(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> factory)
+    {
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer", TestIssuerTokens.ForSubject(factory.Services, Buteco.Api.Auth.ServiceScopeAuthorizationHandler.InboxSubject));
+        return client;
+    }
+
     public static string ComputeKnownOperatorPasswordHash()
     {
         const int iterations = 100_000;

@@ -22,9 +22,9 @@ public sealed record SignedInUser(User User, string Password, IdentityIssuerUser
 
     public string AuthorizationId => AuthorizationIdOf(Tokens.AccessToken);
 
-    public static async Task<SignedInUser> CreateAsync(LocalUsersFixture factory, string prefix, string password = DefaultPassword, string name = "Pessoa de Teste")
+    public static async Task<SignedInUser> CreateAsync(LocalUsersFixture factory, string prefix, string password = DefaultPassword, string name = "Pessoa de Teste", UserRole role = UserRole.Admin)
     {
-        var user = await LocalUserSeed.CreateUserAsync(factory.Services, LocalUserSeed.UniqueEmail(prefix), password, name);
+        var user = await LocalUserSeed.CreateUserAsync(factory.Services, LocalUserSeed.UniqueEmail(prefix), password, name, role);
         return await SignInAsync(factory, user, password);
     }
 

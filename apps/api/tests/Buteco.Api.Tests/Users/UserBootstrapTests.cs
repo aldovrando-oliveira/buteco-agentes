@@ -42,6 +42,10 @@ public class UserBootstrapTests(UserBootstrapFixture factory) : IClassFixture<Us
         Assert.Equal("admin", user.Name);
         Assert.True(user.IsActive);
 
+        // O primeiro usuário é Admin (design.md da change papeis-no-token, D4; local-users,
+        // "Papel do usuário, gravado sem padrão no código").
+        Assert.Equal(UserRole.Admin, user.Role);
+
         // O outro caso desta classe faz o primeiro login e refaz o hash; antes dele, a
         // linha guarda o PBKDF2 da configuração com o marcador.
         if (user.PasswordHashIsBootstrapLegacy)
