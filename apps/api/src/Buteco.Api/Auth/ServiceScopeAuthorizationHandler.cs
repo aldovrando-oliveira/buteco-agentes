@@ -37,14 +37,6 @@ public sealed class ServiceScopeAuthorizationHandler : AuthorizationHandler<Serv
     public const string ApplicationSubject = "application";
 
     /// <summary>
-    /// O subject cuja lista pode ficar vazia, e só ele, até a #187: a checagem de boot
-    /// (<see cref="RouteDeclarationValidation"/>) recusa lista vazia em qualquer outro.
-    /// <b>Temporário:</b> a #187 acrescenta <c>POST /agents/{id}/a2a</c> à lista de
-    /// <see cref="ApplicationSubject"/> e retira esta exceção no mesmo commit (registrado na #187).
-    /// </summary>
-    public const string SubjectAllowedEmpty = ApplicationSubject;
-
-    /// <summary>
     /// As rotas de cada subject sem papel (os de serviço e a aplicação externa), casadas por método e
     /// <see cref="RoutePattern.RawText"/>. Conferidas no boot contra os
     /// endpoints mapeados (<see cref="ServiceScopeRouteValidation"/>): um padrão
@@ -76,13 +68,16 @@ public sealed class ServiceScopeAuthorizationHandler : AuthorizationHandler<Serv
                 ("POST", "/sync/knowledge-bases/{knowledgeBaseId:guid}/sync-results"),
             ],
 
-            // A aplicação externa (aplicacoes-externas-credencial, D2; Q2, decisão do dono de
-            // 09/11/2026): VAZIA. O token dela autentica e recebe 403 em toda rota, inclusive na A2A,
-            // até a #187 abrir POST /agents/{id}/a2a junto com o filtro por agente, no mesmo deploy.
-            // Assim a rota A2A nunca fica aberta a uma aplicação sem o filtro, em qualquer ordem de
-            // produção das duas. O guarda é ExternalApplicationAuthorizationTests.
-            // ApplicationToken_OnEveryAuthenticatedRoute_ReturnsForbidden, que a #187 muda de asserção.
-            [ApplicationSubject] = [],
+            // A aplicação externa: só a rota A2A (agentes-por-aplicacao, D2.1). Esta lista só abre a
+            // rota; quem decide o que a aplicação alcança nela é o ApplicationA2AFilter (o vínculo com o
+            // agente e as operações, antes do SDK) e o RoutingA2ARequestHandler (só as próprias tasks
+            // no agente da rota). Os dois entraram no mesmo commit que esta linha, que até a #186 era
+            // vazia. O guarda das outras rotas é ExternalApplicationAuthorizationTests.
+            // ApplicationToken_OnEveryAuthenticatedRoute_ExceptTheA2A_ReturnsForbidden.
+            [ApplicationSubject] =
+            [
+                ("POST", "/agents/{id}/a2a"),
+            ],
         };
 
     protected override Task HandleRequirementAsync(

@@ -124,6 +124,15 @@ public class RoleMatrixTests(RoleMatrixTests.Fixture factory) : IClassFixture<Ro
         [("POST", "/applications/{id:guid}/activate")] = "A",
         [("POST", "/applications/{id:guid}/secrets")] = "A",
         [("POST", "/applications/{id:guid}/secrets/{secretId:guid}/revoke")] = "A",
+
+        // Os agentes liberados para cada aplicação, e o card "Aplicações com acesso" do agente
+        // (change agentes-por-aplicacao, D5; Q8): a lista só do Admin, a contagem dos três.
+        [("GET", "/applications/{id:guid}/agents")] = "A",
+        [("POST", "/applications/{id:guid}/agents")] = "A",
+        [("PUT", "/applications/{id:guid}/agents/{agentId:guid}")] = "A",
+        [("DELETE", "/applications/{id:guid}/agents/{agentId:guid}")] = "A",
+        [("GET", "/agents/{id:guid}/applications")] = "A",
+        [("GET", "/agents/{id:guid}/applications/count")] = "A O L",
     };
 
     private static bool ExpectedAllows(string method, string pattern, UserRole role) =>
@@ -191,6 +200,7 @@ public class RoleMatrixTests(RoleMatrixTests.Fixture factory) : IClassFixture<Ro
             .Replace("{id:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
             .Replace("{knowledgeBaseId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
             .Replace("{secretId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
+            .Replace("{agentId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
             .Replace("{id}", Guid.NewGuid().ToString(), StringComparison.Ordinal);
         if (path.Contains('{', StringComparison.Ordinal))
         {

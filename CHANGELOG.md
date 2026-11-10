@@ -327,6 +327,19 @@ o versionamento pretende seguir
     da #211. Se o `apps/api` estiver fora, a tela mostra "Indisponível" e tenta de novo
     sozinha enquanto o erro durar;
   - Editar usuário e o "Editar" na linha chegam com a #183.
+- **Agentes liberados por aplicação externa** (#187, M2 · 5 de 6). Só o backend; a tela é da
+  #188.
+  - o Admin libera agentes para cada aplicação, em `/applications/{id}/agents`, com as operações
+    por agente: enviar mensagem, consultar task e notificação push (não há cancelamento: #264). A
+    aplicação nasce sem agentes;
+  - a aplicação passa a chamar `POST /agents/{id}/a2a`, só nos agentes liberados: agente sem
+    vínculo, inexistente ou aplicação desativada respondem `404` vazio, o mesmo nos três casos e na
+    hora da desativação; método fora das operações liberadas (inclusive `CancelTask`, `ListTasks` e
+    push sem a operação) responde `403` vazio;
+  - cada task guarda a aplicação que a criou: a aplicação só vê as próprias tasks, pela rota do
+    agente delas, e só reusa o `contextId` de uma conversa dela; o resto responde como inexistente;
+  - o detalhe do agente ganha a contagem de aplicações com acesso (todos os papéis) e a lista (só o
+    Admin); a lista de aplicações traz os agentes liberados de cada uma.
 - **Aplicações externas com credencial do Buteco** (#186, M2 · 4 de 6). Só o backend; a tela é
   da #188.
   - o Admin cadastra, em `/applications/*` do `apps/api`, um sistema de fora que chama agentes
@@ -1048,6 +1061,11 @@ o versionamento pretende seguir
 - **O AgentCard declara o esquema OAuth2 do Buteco** (#186). `securitySchemes` troca o `bearer`
   por `oauth2`, com o fluxo `clientCredentials`, o endpoint de token público e o escopo
   `buteco-api`, igual em todo agente; o card continua anônimo.
+- **O token de aplicação externa alcança a rota A2A** (#187). Até a #186 ele recebia `403` em toda
+  rota; agora `POST /agents/{id}/a2a` responde conforme os agentes e as operações liberados, e a
+  checagem de boot recusa lista vazia de subject sem papel sem nenhuma exceção.
+- **O guia A2A descreve o cancelamento como ele é** (#187): o `CancelTask` grava `canceled`, mas o
+  worker sobrescreve a task que já está em `working`; o cancelamento real é a #264.
 - **A checagem de boot da retenção das chaves conta o token de aplicação** (#186), e a das rotas
   recusa lista vazia de subject sem papel, com a exceção temporária da aplicação externa até a #187.
 - **O token do painel deixa de dar acesso a toda rota** (#184). Ele passa só nas rotas do papel

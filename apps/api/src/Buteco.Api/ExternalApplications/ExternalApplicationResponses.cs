@@ -11,9 +11,14 @@ public sealed record ApplicationSummary(
     bool Ativa,
     DateTimeOffset CriadaEm,
     DateTimeOffset? DesativadaEm,
-    DateTimeOffset? UltimoUso)
+    DateTimeOffset? UltimoUso,
+    IReadOnlyList<ApplicationAgentChip> Agentes)
 {
-    public static ApplicationSummary From(ExternalApplication application) => new(
+    /// <summary>
+    /// <paramref name="agents"/>: os agentes liberados para a aplicação, pelo nome (agentes-por-aplicacao,
+    /// Q11), o chip "Agentes liberados" da lista.
+    /// </summary>
+    public static ApplicationSummary From(ExternalApplication application, IReadOnlyList<ApplicationAgentChip> agents) => new(
         application.Id,
         application.Name,
         application.Description,
@@ -21,7 +26,8 @@ public sealed record ApplicationSummary(
         application.IsActive,
         application.CreatedAt,
         application.DeactivatedAt,
-        application.LastUsedAt);
+        application.LastUsedAt,
+        agents);
 }
 
 public sealed record SecretSummary(

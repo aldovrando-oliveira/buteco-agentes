@@ -386,6 +386,85 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres 
 
 Voltar para a frente depois do `down` perde os segredos: as aplicações precisam ser recriadas.
 
+### Agentes liberados por aplicação externa (#187)
+
+**O que muda:**
+
+- o Admin passa a liberar agentes para cada aplicação externa, com as operações por agente
+  (rotas `/applications/{id}/agents` do `api`; a tela é da #188). A aplicação nasce sem agentes;
+- o token de aplicação passa a alcançar `POST /agents/{id}/a2a`, só nos agentes liberados: sem
+  vínculo, a resposta passa de `403` a `404`; operação não liberada, `403`;
+- cada task criada por uma aplicação guarda o dono, e a aplicação só vê as próprias;
+- só o `api` muda. O `workers` e o `inbox` não precisam de imagem nova.
+
+**Antes do deploy (o dono):** backup do banco do `api`, como em toda migration:
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" -Fc buteco_agents' > buteco_agents-antes-187.dump
+```
+
+**Deploy:** o `migrator` aplica a `ExternalApplicationAgents`:
+
+- a tabela nova `external_application_agents`;
+- a coluna anulável `a2a_tasks.application_id`, sem default, que não reescreve a tabela;
+- o índice e a FK dessa coluna. O índice é criado sem `CONCURRENTLY`, e trava as escritas em
+  `a2a_tasks` enquanto é construído, por um tempo proporcional ao tamanho da tabela (não medido em
+  produção; confira o `count(*)` de `a2a_tasks` antes, se quiser saber).
+
+Durante a migration, o `api` e o `workers` antigos continuam de pé (a ordem do §2) e podem esperar
+esse tempo numa gravação de task. Depois:
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api
+```
+
+Sem variável de ambiente nova. A ordem de deploy com a #188 (as telas) é livre: sem as telas,
+nenhum vínculo é criado, e a aplicação só passa de `403` a `404` na A2A.
+
+**Conferir:** com o Admin, `POST /applications/{id}/agents` libera um agente; o `SendMessage` da
+aplicação nele cria a task, e num agente não liberado responde `404`.
+
+**Liberar um agente sem a tela (até a #188).** As telas do vínculo são da #188; até lá, o Admin libera
+pela API, com o access token do painel dele. O token está no cabeçalho `Authorization` de qualquer
+chamada do painel ao `api` (no navegador, em Ferramentas do desenvolvedor → Rede), e vale 15 minutos.
+As rotas exigem o papel Admin gravado; não pedem senha.
+
+```
+TOKEN='<access token do painel do Admin>'
+API=https://[URL_PUBLICA]
+
+# os ids: a aplicação (GET /applications/) e o agente (GET /agents/)
+curl -s "$API/applications/" -H "Authorization: Bearer $TOKEN"
+curl -s "$API/agents/" -H "Authorization: Bearer $TOKEN"
+
+# liberar, com as operações: enviar-mensagem, consultar-task, notificacao-push
+curl -s -X POST "$API/applications/<id-da-aplicacao>/agents" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"agenteId":"<id-do-agente>","operacoes":["enviar-mensagem","consultar-task"]}'
+
+# mudar as operações (a lista inteira) e retirar
+curl -s -X PUT "$API/applications/<id-da-aplicacao>/agents/<id-do-agente>" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"operacoes":["consultar-task"]}'
+curl -s -X DELETE "$API/applications/<id-da-aplicacao>/agents/<id-do-agente>" \
+  -H "Authorization: Bearer $TOKEN"
+
+# conferir
+curl -s "$API/applications/<id-da-aplicacao>/agents" -H "Authorization: Bearer $TOKEN"
+```
+
+A liberação vale na próxima chamada da aplicação, sem token novo. Respostas de erro:
+- `409`: o agente já está liberado (use o `PUT`);
+- `400`: lista de operações vazia ou com valor desconhecido;
+- `404`: a aplicação não existe, ou, no `PUT`/`DELETE`, o agente não está liberado.
+
+**Voltar atrás:** a imagem da #186 tem a lista de rotas da aplicação vazia, e **a aplicação volta a
+receber `403` em toda rota, inclusive na A2A**. O painel e o inbox não mudam. Os vínculos e o dono
+das tasks ficam no banco, sem uso (a imagem anterior não os lê), e voltam a valer num novo deploy da
+#187. Não precisa reverter a migration; se quiser, o `down` da `ExternalApplicationAgents` apaga a
+tabela e a coluna.
+
 ### Papéis Admin, Operador e Leitor (#184, #185)
 
 **A #184 (backend) e a #185 (painel) vão juntas para produção** (decisão do dono, 08/11/2026).

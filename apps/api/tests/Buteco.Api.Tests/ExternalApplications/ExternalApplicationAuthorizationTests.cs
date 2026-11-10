@@ -16,20 +16,20 @@ namespace Buteco.Api.Tests.ExternalApplications;
 
 /// <summary>
 /// O token de aplicação externa no <c>apps/api</c> (spec <c>route-roles</c>, "O token de aplicação externa
-/// é o subject application, sem papel e sem rota até a #187"; <c>route-authentication</c>; change
-/// aplicacoes-externas-credencial, D1 e D2; seção 4 do tasks.md).
+/// é o subject application, sem papel, só na rota A2A"; <c>route-authentication</c>; changes
+/// aplicacoes-externas-credencial, D1 e D2, e agentes-por-aplicacao, D2.1). O que a aplicação alcança
+/// dentro da rota A2A está em <see cref="ApplicationA2ARouteTests"/>.
 /// </summary>
 public partial class ExternalApplicationAuthorizationTests(ExternalApplicationsFixture factory) : IClassFixture<ExternalApplicationsFixture>
 {
-    // (guarda 4.5) "403 em toda rota autenticada" (route-roles). O token real de uma aplicação, emitido pelo
+    // (guarda 2.4 da change agentes-por-aplicacao; era a 4.5 da aplicacoes-externas-credencial) "403 em toda
+    // rota autenticada, exceto a A2A" (route-roles). O token real de uma aplicação, emitido pelo
     // /connect/token, chama cada rota autenticada mapeada no host, em cada método: todas respondem 403, e
-    // nenhuma 401. É o guarda de que a rota A2A não abre antes do filtro por agente. Defeito:
-    // ("POST", "/agents/{id}/a2a") acrescentada à lista de application.
-    //
-    // A #187 MUDA a asserção deste caso: 403 em toda rota EXCETO POST /agents/{id}/a2a, junto com a
-    // retirada da exceção da lista vazia (comentário na #187, 09/11/2026).
+    // nenhuma 401, exceto POST /agents/{id}/a2a, a única da lista de application. Nela, a resposta não é
+    // 403 para uma aplicação com o agente liberado; o que ela alcança ali é do ApplicationA2AFilter.
+    // Defeito: ("GET", "/agents/{id:guid}") acrescentada à lista de application.
     [Fact]
-    public async Task ApplicationToken_OnEveryAuthenticatedRoute_ReturnsForbidden()
+    public async Task ApplicationToken_OnEveryAuthenticatedRoute_ExceptTheA2A_ReturnsForbidden()
     {
         var application = await factory.CreateAsync();
         var client = factory.WithToken(await factory.AccessTokenAsync(application.ClientId, application.Secret));
@@ -38,7 +38,7 @@ public partial class ExternalApplicationAuthorizationTests(ExternalApplicationsF
         Assert.NotEmpty(routes);
         Assert.Contains(("POST", "/agents/{id}/a2a"), routes);
         var wrong = new List<string>();
-        foreach (var (method, pattern) in routes)
+        foreach (var (method, pattern) in routes.Where(route => route != ("POST", "/agents/{id}/a2a")))
         {
             var request = new HttpRequestMessage(new HttpMethod(method), RouteParameter().Replace(pattern, Guid.NewGuid().ToString()));
             if (method is "POST" or "PUT")
@@ -54,11 +54,26 @@ public partial class ExternalApplicationAuthorizationTests(ExternalApplicationsF
         }
 
         Assert.True(wrong.Count == 0, string.Join("; ", wrong));
+
+        var agentId = await AgentAsync("Agente liberado");
+        var admin = await factory.AdminClientAsync();
+        (await admin.PostAsJsonAsync($"/applications/{application.Id}/agents", new { agenteId = agentId, operacoes = new[] { "consultar-task" } }))
+            .EnsureSuccessStatusCode();
+        var a2a = await client.PostAsJsonAsync($"/agents/{agentId}/a2a", new
+        {
+            jsonrpc = "2.0",
+            id = 1,
+            method = "GetTask",
+            @params = new { id = Guid.NewGuid().ToString("N") },
+        });
+        Assert.NotEqual(HttpStatusCode.Forbidden, a2a.StatusCode);
+        Assert.NotEqual(HttpStatusCode.Unauthorized, a2a.StatusCode);
     }
 
-    // "A2A recusada sem publicar job" (route-roles).
+    // "A2A sem vínculo recusada sem publicar job" (route-roles). Até a #186 a resposta era 403, com a lista
+    // de application vazia; desde a agentes-por-aplicacao é o 404 do agente sem vínculo, e continua sem job.
     [Fact]
-    public async Task ApplicationToken_OnTheA2ARoute_IsForbidden_AndPublishesNoJob()
+    public async Task ApplicationToken_WithoutALink_OnTheA2ARoute_IsNotFound_AndPublishesNoJob()
     {
         var admin = await factory.AdminAsync();
         var created = await factory.As(admin).PostAsJsonAsync(
@@ -77,8 +92,17 @@ public partial class ExternalApplicationAuthorizationTests(ExternalApplicationsF
             @params = new { message = new { role = "ROLE_USER", parts = new[] { new { text = "Olá" } }, messageId = Guid.NewGuid().ToString("N") } },
         });
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.DoesNotContain(factory.TaskJobPublisher.PublishedMessages, message => message.AgentId == agentId);
+    }
+
+    private async Task<Guid> AgentAsync(string name)
+    {
+        var created = await (await factory.AdminClientAsync()).PostAsJsonAsync(
+            "/agents/",
+            new { name, instructions = "Responda.", provider = "openai", model = "gpt-5.6-sol" });
+        created.EnsureSuccessStatusCode();
+        return (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
     // (guarda 4.3) "buteco_app forjado num cliente da tabela fechada" (route-roles; Q1). O cliente da tabela

@@ -9,7 +9,7 @@ e ativo — o cadastro/gestão de agentes (`POST /agents`, `GET /providers`,
 ativar/desativar) não é coberto aqui. E `SendMessage`/`GetTask` exigem
 `Authorization: Bearer <token>`, o access token do emissor do Buteco para uma
 **aplicação externa** — ver [Autenticação](#autenticação), que diz como obtê-lo
-e o que ele ainda não alcança.
+e quais agentes e operações ele alcança.
 
 ## Índice
 
@@ -56,11 +56,22 @@ Buteco Agents só dá suporte real a dois métodos: **`SendMessage`** e
 **`GetTask`** — mais o registro de push notification (webhook), que não é
 um método à parte: é um campo opcional dentro do próprio `SendMessage` (ver
 [Push Notification (Webhook)](#push-notification-webhook)). Outros métodos
-do protocolo (streaming, cancelamento, listar tasks, os métodos JSON-RPC
-dedicados de gestão de push notification config — `CreateTaskPushNotificationConfig`
-e afins —, **`GetExtendedAgentCard`**) não fazem parte do contrato
-suportado — não use. Para descobrir metadados do agente, use o endpoint
-HTTP dedicado abaixo, não `GetExtendedAgentCard` via JSON-RPC.
+do protocolo (streaming, listar tasks, os métodos JSON-RPC dedicados de
+gestão de push notification config — `CreateTaskPushNotificationConfig` e
+afins —, **`GetExtendedAgentCard`**) não fazem parte do contrato suportado —
+não use; para a aplicação externa eles respondem `403` (ver
+[O que a aplicação alcança](#o-que-a-aplicação-alcança)). Para descobrir
+metadados do agente, use o endpoint HTTP dedicado abaixo, não
+`GetExtendedAgentCard` via JSON-RPC.
+
+**Cancelamento (`CancelTask`), como é hoje:** a rota o atende para o token de
+serviço do Buteco, e ele grava `TASK_STATE_CANCELED` na task. Mas o
+`apps/workers` não interrompe uma task que já está em `TASK_STATE_WORKING`: ele a
+termina e grava `TASK_STATE_COMPLETED` ou `TASK_STATE_FAILED` por cima do
+`canceled`. Só a task que o worker ainda não pegou fica cancelada de verdade.
+Para a aplicação externa, `CancelTask` responde `403` (não é operação
+liberável). O cancelamento real está na
+[#264](https://github.com/aldovrando-oliveira/buteco-agentes/issues/264).
 
 ### Autenticação
 
@@ -115,14 +126,55 @@ dura 5 minutos**. Peça outro quando ele vencer; não há refresh token.
   sem consulta ao banco, e continua aceito até vencer — **no máximo 5 minutos**
   depois da revogação ou da desativação.
 
-#### O que a aplicação alcança hoje
+#### O que a aplicação alcança
 
-**Nenhum agente, ainda.** Com o token da aplicação, `POST /agents/{id}/a2a`
-responde `403`, assim como toda outra rota do `apps/api`. A liberação de
-agentes por aplicação é a #187: ela abre a rota A2A junto com o filtro por
-agente, e só então a chamada passa para os agentes liberados para a aplicação.
-O token do painel também recebe `403` nesta rota, com qualquer papel (#184): ela
-é de serviço e de aplicação, não do painel.
+**Só os agentes liberados para ela, e em cada um só as operações liberadas.**
+A aplicação nasce sem nenhum agente. O Admin libera agentes para ela, com as
+operações de cada agente, pelas rotas `/applications/{id}/agents` (a tela em
+**Aplicações externas** é da #188; até lá, o roteiro pela API está em
+[deployment.md](deployment.md#agentes-liberados-por-aplicação-externa-187)):
+
+| operação | o que libera |
+| --- | --- |
+| Enviar mensagem | `SendMessage` (criar task, continuar a conversa ou a task) |
+| Consultar task | `GetTask` |
+| Notificação push | `configuration.pushNotificationConfig` dentro do `SendMessage` |
+
+A rota `POST /agents/{id}/a2a` é a única do `apps/api` que o token da aplicação
+alcança; em toda outra, a resposta é `403`. Na rota A2A, **antes** do JSON-RPC:
+
+- **`404`, corpo vazio**: o agente não está liberado para a aplicação, ou não
+  existe, ou a aplicação foi desativada. A resposta é a mesma nos três casos,
+  e não diz se o agente existe. A desativação vale **na hora** para esta rota,
+  mesmo com um token ainda no prazo de 5 minutos;
+- **`403`, corpo vazio**: o método não está entre as operações liberadas para a
+  aplicação naquele agente. Inclui `SendMessage` com `pushNotificationConfig`
+  sem a operação de push (a chamada inteira é recusada, sem criar task), e todo
+  método fora das três operações: `CancelTask`, `ListTasks`, os de streaming, os
+  de push config e `GetExtendedAgentCard`.
+
+Passando, o JSON-RPC segue como no resto deste guia, com três regras a mais:
+
+- **Cada aplicação só vê as próprias tasks**, e só pela rota do agente em que
+  ela foi criada. O `GetTask`, ou o `SendMessage` com `message.taskId`, de uma
+  task de outra aplicação, de uma task do próprio Buteco ou de uma task dela em
+  outro agente responde o mesmo erro de task inexistente (`-32001`).
+- **O `contextId` só vale se for de uma conversa da aplicação naquele agente.**
+  Um `contextId` que não existe e um de outra conversa recebem o mesmo erro,
+  `-32602` "Contexto não encontrado.", sem criar task. Para abrir uma conversa
+  nova, **omita** o `contextId`: o Buteco gera um e o devolve na task.
+- **A notificação push** registrada com a operação liberada é entregue quando a
+  task termina, mesmo que o Admin retire a operação ou o agente depois. A
+  retirada vale para as chamadas seguintes.
+
+Um agente liberado e **inativo** continua liberado: o `SendMessage` termina
+`TASK_STATE_REJECTED`, como para qualquer chamador. A delegação entre agentes
+não depende do que a aplicação tem liberado: o agente dela pode delegar para
+outro agente, e a resposta chega na task dela; a task do agente delegado não é
+alcançável pela aplicação.
+
+O token do painel recebe `403` nesta rota, com qualquer papel (#184): ela é de
+serviço e de aplicação, não do painel.
 
 ## Descoberta do agente via AgentCard
 
@@ -209,8 +261,11 @@ numérico para permanecerem distintas.
 
 JSON-RPC responde **sempre HTTP 200**, mesmo quando a chamada falha — inclusive
 para um `id` de agente que não existe. O sucesso ou erro está no corpo da
-resposta, nunca no status HTTP. A exceção é a falta de token válido, que
-responde `401` antes de chegar ao JSON-RPC (ver [Autenticação](#autenticação)):
+resposta, nunca no status HTTP. As exceções acontecem antes de chegar ao
+JSON-RPC: a falta de token válido, que responde `401` (ver
+[Autenticação](#autenticação)), e, para a aplicação externa, o `404` do agente não
+liberado e o `403` da operação não liberada (ver
+[O que a aplicação alcança](#o-que-a-aplicação-alcança)):
 
 ```json
 // sucesso
@@ -438,8 +493,9 @@ processamento. Envie sempre pelo menos uma part de texto:
 ### `TaskState` (em `status.state`, respostas)
 
 O protocolo A2A define 9 estados possíveis. O Buteco Agents só produz **5**
-deles — os outros existem na SDK mas nunca aparecem em uma resposta deste
-sistema:
+deles por conta própria. `TASK_STATE_CANCELED` aparece só pelo `CancelTask`, que a
+aplicação externa não alcança (ver a linha dele). Os outros existem na SDK mas
+nunca aparecem em uma resposta deste sistema:
 
 | Valor | Produzido pelo Buteco Agents? | Terminal? |
 | --- | --- | --- |
@@ -450,10 +506,10 @@ sistema:
 | `TASK_STATE_REJECTED` | Sim | Sim |
 | `TASK_STATE_INPUT_REQUIRED` | Não | — |
 | `TASK_STATE_AUTH_REQUIRED` | Não | — |
-| `TASK_STATE_CANCELED` | Não | — |
+| `TASK_STATE_CANCELED` | Só pelo `CancelTask` do token de serviço do Buteco (a aplicação externa recebe `403`) | Só se o worker ainda não tinha pegado a task; se ela já estava em `working`, o worker a termina e grava `completed`/`failed` por cima (#264) |
 | `TASK_STATE_UNSPECIFIED` | Não | — |
 
-Trate os 4 estados "não produzidos" como não pertencentes ao contrato: não
+Trate os 3 estados "não produzidos" como não pertencentes ao contrato: não
 construa lógica de cliente para lidar com eles.
 
 ## Estados da Task e como tratar cada um
@@ -552,8 +608,10 @@ Erros vêm no formato JSON-RPC padrão:
 
 ## Recomendações de polling
 
-Não há streaming nem push notification neste endpoint hoje — `GetTask` por
-polling é o único jeito de saber que uma task terminou. Sugestão:
+Não há streaming neste endpoint. Sem [push notification](#push-notification-webhook)
+registrado no `SendMessage`, `GetTask` por polling é o único jeito de saber que
+uma task terminou; com push, ele é o plano B, porque a entrega é best-effort.
+Sugestão:
 
 - Intervalo entre consultas: algo como 1 segundo é razoável para respostas
   de LLM (a resposta raramente sai em menos que isso).
@@ -567,7 +625,8 @@ polling é o único jeito de saber que uma task terminou. Sugestão:
 
 - **Autenticação obrigatória**: a rota A2A e o cadastro de agentes exigem
   Bearer token; só o AgentCard é público. A credencial de um sistema de fora é a
-  da aplicação externa, cadastrada pelo Admin, e até a #187 ela ainda não
-  alcança nenhum agente — ver [Autenticação](#autenticação).
+  da aplicação externa, cadastrada pelo Admin, e ela alcança só os agentes e as
+  operações que o Admin liberou para ela — ver
+  [O que a aplicação alcança](#o-que-a-aplicação-alcança).
 - **Idioma das mensagens de erro**: `error.message` é sempre pt-BR — não
   internacionalizado.

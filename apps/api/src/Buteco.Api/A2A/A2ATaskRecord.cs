@@ -14,12 +14,20 @@ public class A2ATaskRecord
 
     public string Payload { get; private set; } = null!;
 
+    /// <summary>
+    /// A aplicação externa que criou a task, ou nulo para o que é do Buteco (design.md da change
+    /// agentes-por-aplicacao, D3). Gravado só aqui, na criação: <see cref="Update"/> não o recebe, e nenhuma
+    /// transição muda o dono.
+    /// </summary>
+    public Guid? ApplicationId { get; private set; }
+
     private A2ATaskRecord()
     {
     }
 
-    public A2ATaskRecord(string taskId, Guid agentId, string contextId, string state, DateTimeOffset? statusTimestamp, string payload)
+    public A2ATaskRecord(string taskId, Guid agentId, string contextId, string state, DateTimeOffset? statusTimestamp, string payload, Guid? applicationId = null)
     {
+        ApplicationId = applicationId;
         TaskId = taskId;
         AgentId = agentId;
         ContextId = contextId;

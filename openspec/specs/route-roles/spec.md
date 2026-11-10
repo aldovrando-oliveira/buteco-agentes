@@ -18,7 +18,8 @@ A tabela SHALL ser esta (A = `admin`, O = `operator`, L = `reader`):
 | `apps/api` | escritas de agentes (inclusive vínculos de MCP, delegação e bases), MCP (inclusive `POST /mcp-servers/test` e `POST /mcp-servers/{id}/test`), bases e documentos (inclusive reindexar) | A O |
 | `apps/api` | `/users/*` (inclusive convite, novo link, cancelamento, redefinição de senha, redefinição de 2 etapas e `PUT /users/{id}/role`) e `GET /identity` | A |
 | `apps/api` | `/account/*` | A O L |
-| `apps/api` | `/applications/*` (listar, ver, criar, editar, desativar, reativar, gerar e revogar segredo) | A |
+| `apps/api` | `/applications/*` (listar, ver, criar, editar, desativar, reativar, gerar e revogar segredo; listar, liberar, mudar operações e retirar agentes da aplicação) e `GET /agents/{id}/applications` | A |
+| `apps/api` | `GET /agents/{id}/applications/count` | A O L |
 | `apps/inbox` | `GET /channels/`, `GET /channels/{id}`, `GET /sessions/summary`, `GET /messages/summary` | A O L |
 | `apps/inbox` | escritas de `/channels/*`, `GET /channels/{channelId}/sessions`, `GET /sessions/{sessionId}/messages`, `/contacts/*` | A O |
 | `apps/connectors` | `GET /connectors/providers`, `GET /connectors/providers/{providerKey}/folders`, `POST /connectors/knowledge-bases/{knowledgeBaseId}/sync` | A O |
@@ -53,6 +54,14 @@ Com token do painel válido e papel válido, a requisição a uma rota inexisten
 - **WHEN** um token do painel de cada papel chama `GET /applications/`
 - **THEN** o `admin` não recebe `401` nem `403`, e o `operator` e o `reader` recebem `403`
 
+#### Scenario: Aplicações com acesso a um agente, por papel
+- **WHEN** um token do painel de cada papel chama `GET /agents/{id}/applications/count` e `GET /agents/{id}/applications` de um agente existente
+- **THEN** os três papéis não recebem `401` nem `403` na contagem; na lista, o `admin` não recebe `401` nem `403`, e o `operator` e o `reader` recebem `403`
+
+#### Scenario: Só o Admin libera agentes para uma aplicação
+- **WHEN** um token do painel com `role` `operator` chama `POST /applications/{id}/agents` com corpo válido
+- **THEN** a resposta é `403`, e nenhum vínculo é gravado
+
 ### Requirement: Guarda da matriz por app, sobre a tabela real
 Cada app SHALL ter um teste com a matriz desta spec escrita à parte da `RoleRoutes` de produção, que afirma que a tabela de produção tem exatamente as entradas e os papéis dela e, para cada entrada e cada um dos três papéis, chama a rota no host construído com um token do painel daquele papel e afirma o `403` vazio da autorização quando o papel não está na entrada da matriz, e uma resposta que não é o `401` nem o `403` vazios quando está. A expectativa SHALL NOT ser lida da própria `RoleRoutes`, o que faria o guarda circular. O teste SHALL afirmar que a matriz percorrida não é vazia.
 
@@ -66,7 +75,7 @@ No boot, depois de todos os `Map*`, cada app SHALL conferir, sobre os endpoints 
 - que todo `RouteEndpoint` que exige autenticação está na `RoleRoutes` ou na lista de rotas de algum subject de serviço;
 - que toda entrada da `RoleRoutes` e das listas de subjects de serviço corresponde a um endpoint mapeado, com o método aceito;
 - que nenhuma entrada da `RoleRoutes` tem lista de papéis vazia;
-- que nenhum subject sem papel (`ServiceRoutes`) tem lista de rotas vazia, com uma única exceção nomeada, `application`, que fica vazia até a #187 abrir a rota A2A com o filtro por agente e retirar a exceção;
+- que nenhum subject sem papel (`ServiceRoutes`) tem lista de rotas vazia, sem exceção, inclusive `application`;
 - que o subject `application` existe na `ServiceRoutes`.
 
 Qualquer divergência SHALL derrubar o boot com uma mensagem que nomeia o método e o padrão. Rota anônima classificada SHALL ficar fora dos dois sentidos.
@@ -91,9 +100,9 @@ Qualquer divergência SHALL derrubar o boot com uma mensagem que nomeia o métod
 - **WHEN** a checagem roda com uma `ServiceRoutes` em que `service:connectors` tem lista vazia
 - **THEN** a inicialização falha nomeando `service:connectors`
 
-#### Scenario: A lista vazia de application passa, por exceção
-- **WHEN** o host de produção do `apps/api` é construído, com a lista de `application` vazia
-- **THEN** a checagem passa
+#### Scenario: A lista vazia de application derruba o boot
+- **WHEN** a checagem roda com uma `ServiceRoutes` em que `application` tem lista vazia
+- **THEN** a inicialização falha nomeando `application`
 
 #### Scenario: Sem a entrada application
 - **WHEN** a checagem roda com uma `ServiceRoutes` sem a chave `application`
@@ -139,7 +148,7 @@ Nos três apps, um token do painel válido em tudo o mais, mas sem o claim `role
 ### Requirement: Prazos da mudança de papel
 O rebaixamento SHALL valer:
 
-- **na requisição seguinte** nas rotas do `apps/api` que identificam a pessoa pela `CurrentUser` (`/users/*`, convite, novo link, cancelamento, redefinição de senha e de 2 etapas, `PUT /users/{id}/role`, `GET /identity` e `/applications/*`), que exigem o papel `admin` **gravado**, além do papel do token;
+- **na requisição seguinte** nas rotas do `apps/api` que identificam a pessoa pela `CurrentUser` (`/users/*`, convite, novo link, cancelamento, redefinição de senha e de 2 etapas, `PUT /users/{id}/role`, `GET /identity`, `/applications/*` e `GET /agents/{id}/applications`), que exigem o papel `admin` **gravado**, além do papel do token;
 - **em até 15 min 30 s** (vida do access token mais a tolerância de 30 s) nas outras rotas do `apps/api` e no `apps/inbox` e no `apps/connectors`, que leem só o papel do token.
 
 A promoção SHALL chegar na renovação seguinte, quando o token novo traz o papel gravado. Mudar o papel SHALL NOT trocar o carimbo de segurança nem revogar sessões.
@@ -167,16 +176,16 @@ O acordo entre o `apps/api` e o `apps/connectors` (`tests/ApiConnectorsRoundTrip
 - **WHEN** o Admin do bootstrap entra pelo fluxo do emissor real e chama a mesma rota
 - **THEN** a resposta não é `401` nem `403`
 
-### Requirement: O token de aplicação externa é o subject application, sem papel e sem rota até a #187
-No `apps/api`, o token de uma aplicação externa SHALL ter o subject `application` quando o `client_id` dele está fora da tabela fechada de clientes, não começa com `buteco-`, e o token traz o claim `buteco_app`. Um `client_id` da tabela fechada SHALL continuar com o subject da tabela, mesmo que o token traga `buteco_app`. O `role` SHALL NOT ser lido para `application`. O subject `application` SHALL ser autorizado só pela lista dele na `ServiceRoutes`, que nesta entrega é **vazia**: o token de aplicação SHALL receber `403` em toda rota autenticada do `apps/api`, inclusive `POST /agents/{id}/a2a`, sem executar nenhuma lógica de negócio. A #187 acrescenta a rota A2A junto com o filtro por agente.
+### Requirement: O token de aplicação externa é o subject application, sem papel, só na rota A2A
+No `apps/api`, o token de uma aplicação externa SHALL ter o subject `application` quando o `client_id` dele está fora da tabela fechada de clientes, não começa com `buteco-`, e o token traz o claim `buteco_app`. Um `client_id` da tabela fechada SHALL continuar com o subject da tabela, mesmo que o token traga `buteco_app`. O `role` SHALL NOT ser lido para `application`. O subject `application` SHALL ser autorizado só pela lista dele na `ServiceRoutes`, que SHALL ser exatamente `POST /agents/{id}/a2a`: o token de aplicação SHALL receber `403` em toda outra rota autenticada do `apps/api`, sem executar nenhuma lógica de negócio, e, na rota A2A, SHALL passar pela checagem do vínculo e das operações (`a2a-task-lifecycle`).
 
-#### Scenario: 403 em toda rota autenticada
+#### Scenario: 403 em toda rota autenticada, exceto a A2A
 - **WHEN** um token de aplicação válido chama cada rota autenticada mapeada no host do `apps/api`
-- **THEN** todas respondem `403`, e nenhuma responde `401`
+- **THEN** todas respondem `403`, exceto `POST /agents/{id}/a2a`, e nenhuma responde `401`
 
-#### Scenario: A2A recusada sem publicar job
-- **WHEN** um token de aplicação válido chama `POST /agents/{id}/a2a` com um `SendMessage` válido para um agente ativo
-- **THEN** a resposta é `403`, e nenhum job é publicado
+#### Scenario: A2A sem vínculo recusada sem publicar job
+- **WHEN** um token de aplicação válido, de uma aplicação sem nenhum agente liberado, chama `POST /agents/{id}/a2a` com um `SendMessage` válido para um agente ativo
+- **THEN** a resposta é `404`, e nenhum job é publicado
 
 #### Scenario: buteco_app forjado num cliente da tabela fechada
 - **WHEN** um token do `buteco-servico-inbox` traz o claim `buteco_app` e chama `GET /agents/{id}` de um agente existente
