@@ -327,6 +327,19 @@ o versionamento pretende seguir
     da #211. Se o `apps/api` estiver fora, a tela mostra "Indisponível" e tenta de novo
     sozinha enquanto o erro durar;
   - Editar usuário e o "Editar" na linha chegam com a #183.
+- **Aplicações externas com credencial do Buteco** (#186, M2 · 4 de 6). Só o backend; a tela é
+  da #188.
+  - o Admin cadastra, em `/applications/*` do `apps/api`, um sistema de fora que chama agentes
+    pelo A2A: o Buteco gera o client ID (`btc_app_…`) e segredos (`btc_sk_…`), mostrados uma vez e
+    guardados como hash; criar a aplicação e gerar segredo pedem a senha de quem chama;
+  - cada segredo vale 1 ano; gerar outro deixa os anteriores valendo por 7 dias; no máximo 3
+    vivos por aplicação; revogar e desativar recusam o próximo pedido de token na hora; a
+    aplicação é desativada e reativada, nunca excluída, e volta sem segredo;
+  - a aplicação obtém token em `/connect/token` por `client_credentials` com `scope=buteco-api`,
+    e **o token dura 5 minutos**, o prazo que um token já emitido ainda vale depois de revogar;
+  - **até a #187, a aplicação não alcança nenhum agente**: o token dela recebe `403` em toda rota
+    do `apps/api`, inclusive no A2A;
+  - o último uso é gravado na emissão do token, por segredo e por aplicação.
 - **O painel com os papéis** (#185, M2 · 3 de 6). Vai para produção junto com a #184.
   - o convite pede o papel (Admin, Operador ou Leitor), com a descrição de cada um; Usuários
     tem a coluna Papel;
@@ -1032,6 +1045,11 @@ o versionamento pretende seguir
 
 ### Changed
 
+- **O AgentCard declara o esquema OAuth2 do Buteco** (#186). `securitySchemes` troca o `bearer`
+  por `oauth2`, com o fluxo `clientCredentials`, o endpoint de token público e o escopo
+  `buteco-api`, igual em todo agente; o card continua anônimo.
+- **A checagem de boot da retenção das chaves conta o token de aplicação** (#186), e a das rotas
+  recusa lista vazia de subject sem papel, com a exceção temporária da aplicação externa até a #187.
 - **O token do painel deixa de dar acesso a toda rota** (#184). Ele passa só nas rotas do papel
   da pessoa e recebe `403` nas outras; sem papel (os tokens de antes do deploy), recebe `401`
   sem corpo, e o painel renova sozinho. As rotas de serviço (`POST /agents/{id}/a2a`,

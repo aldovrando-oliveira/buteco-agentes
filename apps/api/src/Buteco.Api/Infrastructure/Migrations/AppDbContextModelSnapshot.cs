@@ -413,6 +413,100 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.ToTable("task_executions", (string)null);
                 });
 
+            modelBuilder.Entity("Buteco.Api.ExternalApplications.ExternalApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeactivatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deactivated_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("normalized_name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId")
+                        .IsUnique();
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("external_applications", (string)null);
+                });
+
+            modelBuilder.Entity("Buteco.Api.ExternalApplications.ExternalApplicationSecret", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("application_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<byte[]>("Hash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("hash");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("Suffix")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("suffix");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId");
+
+                    b.HasIndex("Hash")
+                        .IsUnique();
+
+                    b.ToTable("external_application_secrets", (string)null);
+                });
+
             modelBuilder.Entity("Buteco.Api.Identity.Keys.IdentityKey", b =>
                 {
                     b.Property<string>("Kid")
@@ -1259,6 +1353,15 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.HasOne("Buteco.Api.ExecutionMetrics.Entities.TaskExecution", null)
                         .WithMany()
                         .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Api.ExternalApplications.ExternalApplicationSecret", b =>
+                {
+                    b.HasOne("Buteco.Api.ExternalApplications.ExternalApplication", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

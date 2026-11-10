@@ -1,5 +1,6 @@
 using global::A2A.AspNetCore;
 using Buteco.Api.A2A;
+using Buteco.Api.ExternalApplications;
 using Buteco.Api.Agents.Endpoints;
 using Buteco.Api.AgentDelegations.Endpoints;
 using Buteco.Api.AgentKnowledgeBindings.Endpoints;
@@ -164,6 +165,10 @@ builder.Services.AddIdentityIssuer(builder.Configuration);
 // change usuarios-locais-login-emissor, D2 e D4). Sem I/O no registro nem no boot.
 builder.Services.AddLocalUsers(builder.Configuration);
 
+// Aplicações externas (design.md da change aplicacoes-externas-credencial, D3): o gerador do
+// client_id, trocável no teste do prefixo reservado.
+builder.Services.AddSingleton<IExternalApplicationClientIdGenerator, ExternalApplicationClientId>();
+
 var corsOptions = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new CorsOptions();
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy => policy.WithOrigins(corsOptions.AllowedOrigins).AllowAnyHeader().AllowAnyMethod()));
@@ -234,6 +239,7 @@ app.MapAccountEndpoints();
 app.MapAccountSessionEndpoints();
 app.MapUserEndpoints();
 app.MapInvitationEndpoints();
+app.MapExternalApplicationEndpoints();
 app.MapPasswordResetEndpoints();
 app.MapAccessLinkPublicEndpoints();
 app.MapIdentityOverviewEndpoint();

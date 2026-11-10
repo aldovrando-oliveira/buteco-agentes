@@ -54,7 +54,7 @@ public static class TestIssuerTokens
 
     private static readonly TimeSpan RingLoadTimeout = TimeSpan.FromSeconds(20);
 
-    private static readonly ConditionalWeakTable<IServiceProvider, Dictionary<(string, string, string?), (string Token, DateTimeOffset ExpiresAt)>> Cache = new();
+    private static readonly ConditionalWeakTable<IServiceProvider, Dictionary<(string, string, string?, string?), (string Token, DateTimeOffset ExpiresAt)>> Cache = new();
 
     /// <summary>O token padrão das fixtures: <c>buteco-painel</c>, com <see cref="PanelSubject"/>.</summary>
     // O token do painel leva papel (design.md da change papeis-no-token, D3): sem ele, os três apps
@@ -83,8 +83,13 @@ public static class TestIssuerTokens
 
     /// <summary>
     /// Token de <paramref name="clientId"/> com <c>aud</c> e escopo <c>buteco-api</c>.
+    /// <para>
+    /// <paramref name="application"/> põe o claim <c>buteco_app</c>, que em produção só o emissor põe, e só
+    /// para quem está no cadastro de aplicações externas (change aplicacoes-externas-credencial, D1): é como
+    /// os casos forjam o claim num cliente da tabela fechada, ou num cliente fora do cadastro.
+    /// </para>
     /// </summary>
-    public static string ForClient(IServiceProvider services, string clientId, string subject, string? role = null)
+    public static string ForClient(IServiceProvider services, string clientId, string subject, string? role = null, string? application = null)
     {
         var ring = services.GetRequiredService<IdentityKeyRing>();
         var deadline = DateTime.UtcNow + RingLoadTimeout;
@@ -102,7 +107,7 @@ public static class TestIssuerTokens
         var now = TimeProvider.System.GetUtcNow();
         lock (entries)
         {
-            if (entries.TryGetValue((clientId, subject, role), out var cached) && now < cached.ExpiresAt - RenewalMargin)
+            if (entries.TryGetValue((clientId, subject, role, application), out var cached) && now < cached.ExpiresAt - RenewalMargin)
             {
                 return cached.Token;
             }
@@ -110,17 +115,17 @@ public static class TestIssuerTokens
 
         // ConfigureClient é síncrono; a geração vai a outra thread para não depender do
         // contexto de sincronização de quem chama.
-        var generated = Task.Run(() => GenerateAsync(services, clientId, subject, role)).GetAwaiter().GetResult();
+        var generated = Task.Run(() => GenerateAsync(services, clientId, subject, role, application)).GetAwaiter().GetResult();
         lock (entries)
         {
-            entries[(clientId, subject, role)] = generated;
+            entries[(clientId, subject, role, application)] = generated;
         }
 
         return generated.Token;
     }
 
     private static async Task<(string Token, DateTimeOffset ExpiresAt)> GenerateAsync(
-        IServiceProvider services, string clientId, string subject, string? role)
+        IServiceProvider services, string clientId, string subject, string? role, string? application)
     {
         await using var scope = services.CreateAsyncScope();
         var factory = scope.ServiceProvider.GetRequiredService<IOpenIddictServerFactory>();
@@ -136,6 +141,11 @@ public static class TestIssuerTokens
         if (role is not null)
         {
             identity.SetClaim(Claims.Role, role);
+        }
+
+        if (application is not null)
+        {
+            identity.SetClaim(IssuerTokenAuthentication.ApplicationClaim, application);
         }
 
         var principal = new ClaimsPrincipal(identity)

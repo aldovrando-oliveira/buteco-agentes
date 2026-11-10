@@ -23,6 +23,13 @@ public static class IssuerTokenStartupValidation
             .Select(entry => $"cliente '{entry.Key}' aponta para o subject '{entry.Value}', que não existe no apps/api")
             .ToList();
 
+        // O subject da aplicação externa não vem da tabela, mas é destino do mapeamento do mesmo jeito
+        // (design.md da change aplicacoes-externas-credencial, D1).
+        if (!ServiceScopeAuthorizationHandler.ServiceRoutes.ContainsKey(ServiceScopeAuthorizationHandler.ApplicationSubject))
+        {
+            problems.Add($"a aplicação externa aponta para o subject '{ServiceScopeAuthorizationHandler.ApplicationSubject}', que não existe no apps/api");
+        }
+
         if (problems.Count > 0)
         {
             throw new InvalidOperationException($"Tabela de clientes do token do emissor inválida: {string.Join("; ", problems)}.");

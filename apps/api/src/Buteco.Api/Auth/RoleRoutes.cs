@@ -102,6 +102,17 @@ public static class RoleRoutes
             [("POST", "/account/sessions/revoke-others")] = All,
             [("GET", "/account/two-factor/")] = All,
             [("POST", "/account/two-factor/recovery-codes")] = All,
+
+            // Aplicações externas (design.md da change aplicacoes-externas-credencial, D3): só o
+            // Admin, inclusive ler (#184). As rotas exigem também o papel gravado (CurrentUser).
+            [("GET", "/applications/")] = AdminOnly,
+            [("POST", "/applications/")] = AdminOnly,
+            [("GET", "/applications/{id:guid}")] = AdminOnly,
+            [("PUT", "/applications/{id:guid}")] = AdminOnly,
+            [("POST", "/applications/{id:guid}/deactivate")] = AdminOnly,
+            [("POST", "/applications/{id:guid}/activate")] = AdminOnly,
+            [("POST", "/applications/{id:guid}/secrets")] = AdminOnly,
+            [("POST", "/applications/{id:guid}/secrets/{secretId:guid}/revoke")] = AdminOnly,
         };
 
     public static bool Allows(string method, string pattern, UserRole role) =>

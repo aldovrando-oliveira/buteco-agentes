@@ -23,6 +23,24 @@ public static class IdentityTokenLifetimes
     public static readonly TimeSpan AccessToken = TimeSpan.FromMinutes(15);
 
     /// <summary>
+    /// O access token da aplicação externa (design.md da change aplicacoes-externas-credencial, D5;
+    /// Q5). Revogar um segredo ou desativar a aplicação recusa o próximo pedido de token na hora, mas
+    /// o token já emitido continua aceito até o <c>exp</c> em qualquer app, porque a validação é pelo
+    /// JWKS, sem banco (#208). Esta duração é o prazo que a tela confessa: "um token já emitido
+    /// continua valendo por até 5 minutos".
+    /// <list type="bullet">
+    /// <item><b>Posta no principal</b> pelo <c>ClientCredentialsTokenHandler</c>, e não no descritor
+    /// da aplicação (<c>Settings["tkn_lft:act"]</c>): a do principal vence a do descritor e a global
+    /// (<c>OpenIddictServerHandlers.cs</c> l. 3680–3703, tag 7.7.2), sai desta constante, que a
+    /// checagem de boot da retenção das chaves lê sem I/O, e uma linha adulterada no banco não a
+    /// muda.</item>
+    /// <item><b>Introspecção</b>, que cortaria na hora, foi descartada: cada chamada A2A dependeria
+    /// do emissor, contra o modelo da #208.</item>
+    /// </list>
+    /// </summary>
+    public static readonly TimeSpan ApplicationAccessToken = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// O refresh token, rotativo e deslizante: cada uso emite outro com a duração inteira, então
     /// a sessão do painel termina depois deste tempo sem atividade. O OpenIddict 7.7.2 só fixa o
     /// vencimento com <c>DisableSlidingRefreshTokenExpiration</c>

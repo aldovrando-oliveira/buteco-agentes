@@ -7,8 +7,9 @@ endpoint A2A exposto por `apps/api`.
 **Pré-requisito**: você já precisa ter o `id` (GUID) de um agente cadastrado
 e ativo — o cadastro/gestão de agentes (`POST /agents`, `GET /providers`,
 ativar/desativar) não é coberto aqui. E `SendMessage`/`GetTask` exigem
-`Authorization: Bearer <token>` — ver [Autenticação](#autenticação), que diz
-também por que hoje não há credencial para cliente externo.
+`Authorization: Bearer <token>`, o access token do emissor do Buteco para uma
+**aplicação externa** — ver [Autenticação](#autenticação), que diz como obtê-lo
+e o que ele ainda não alcança.
 
 ## Índice
 
@@ -67,18 +68,61 @@ A rota `POST /agents/{id}/a2a` exige `Authorization: Bearer <token>`. Sem
 token válido, a resposta é **HTTP `401`, com corpo vazio**, antes de o
 JSON-RPC ser processado — a única exceção à regra de
 [erro não ser HTTP 4xx/5xx](#a-regra-mais-importante-erro-não-é-http-4xx5xx).
-Só três rotas de `apps/api` são anônimas: `/health`, `/auth/login` e o
-[AgentCard](#descoberta-do-agente-via-agentcard), que é público e declara o
-esquema Bearer em `securitySchemes`/`securityRequirements`.
+Com token válido de quem não pode chamar a rota, a resposta é **`403`, com
+corpo vazio**, também antes do JSON-RPC.
 
-**Hoje não existe emissão de credencial para cliente A2A externo.** Nesta rota,
-`apps/api` aceita só o token de serviço de `apps/inbox` (`buteco-servico-inbox`, por
-`client_credentials`), restrito às duas rotas que ele consome. Desde a #184, o token do
-painel recebe `403` aqui, com qualquer papel: a rota é de serviço. A credencial de
-aplicação externa é da #186 e da #187. É uma
-limitação consciente, registrada em
-[`auth-login-e-servico`, Decision 6](../openspec/changes/archive/2026-08-22-auth-login-e-servico/design.md),
-a ser revista quando houver um consumidor A2A externo real.
+O [AgentCard](#descoberta-do-agente-via-agentcard) é público e declara, em
+`securitySchemes`, o esquema OAuth2 do Buteco: fluxo `clientCredentials`, o
+endpoint de token e o escopo `buteco-api`. As outras rotas anônimas de
+`apps/api` são as sondas de saúde e as do próprio emissor (discovery, JWKS,
+`/connect/*` e as de sessão do painel); não há `POST /auth/login`, que saiu na
+#217.
+
+#### A credencial: aplicação externa
+
+Um **Admin** do painel cadastra a aplicação em **Aplicações externas** (rotas
+`/applications/*` do `apps/api`). O Buteco gera:
+
+- o **client ID**, no formato `btc_app_` + 8 caracteres, que não muda;
+- um **segredo**, `btc_sk_` + 43 caracteres, **mostrado uma vez**: o Buteco
+  guarda só o hash e não consegue mostrá-lo de novo. Se ele se perder, o Admin
+  gera outro.
+
+Cada segredo vale **1 ano**. Gerar um segredo novo deixa os anteriores valendo
+por mais **7 dias**, para a aplicação trocar sem parar; há no máximo **3
+segredos vivos** por aplicação. Revogar um segredo, ou desativar a aplicação,
+recusa o próximo pedido de token na hora.
+
+#### O token
+
+```bash
+curl -X POST https://[URL_PUBLICA]/connect/token \
+  -d grant_type=client_credentials \
+  -d client_id=btc_app_7kq2m9x4 \
+  -d client_secret=$CLIENT_SECRET \
+  -d scope=buteco-api
+```
+
+A resposta traz `access_token` e `expires_in` = `300`: **o token da aplicação
+dura 5 minutos**. Peça outro quando ele vencer; não há refresh token.
+
+- **Mande sempre `scope=buteco-api`.** Sem `scope`, o emissor emite um token
+  sem audiência, e o `apps/api` o recusa com `401` em toda rota.
+- Outro escopo (`buteco-inbox`, `buteco-connectors`) é recusado no pedido, com
+  `invalid_request`: a aplicação só chama o `apps/api`.
+- Segredo errado, revogado ou vencido, e aplicação desativada: `invalid_client`.
+- **Revogar não corta o token já emitido.** Ele é validado pela assinatura,
+  sem consulta ao banco, e continua aceito até vencer — **no máximo 5 minutos**
+  depois da revogação ou da desativação.
+
+#### O que a aplicação alcança hoje
+
+**Nenhum agente, ainda.** Com o token da aplicação, `POST /agents/{id}/a2a`
+responde `403`, assim como toda outra rota do `apps/api`. A liberação de
+agentes por aplicação é a #187: ela abre a rota A2A junto com o filtro por
+agente, e só então a chamada passa para os agentes liberados para a aplicação.
+O token do painel também recebe `403` nesta rota, com qualquer papel (#184): ela
+é de serviço e de aplicação, não do painel.
 
 ## Descoberta do agente via AgentCard
 
@@ -121,23 +165,23 @@ curl http://localhost:5017/agents/<agentId>/.well-known/agent-card.json
   "defaultInputModes": ["text/plain"],
   "defaultOutputModes": ["text/plain"],
   "securitySchemes": {
-    "bearer": {
-      "apiKeySecurityScheme": null,
-      "httpAuthSecurityScheme": {
-        "description": null,
-        "scheme": "Bearer",
-        "bearerFormat": null
-      },
-      "oauth2SecurityScheme": null,
-      "openIdConnectSecurityScheme": null,
-      "mtlsSecurityScheme": null
+    "oauth2": {
+      "oauth2SecurityScheme": {
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "http://localhost:5017/connect/token",
+            "scopes": { "buteco-api": "Chamar agentes pelo A2A" }
+          }
+        },
+        "oauth2MetadataUrl": "http://localhost:5017/.well-known/openid-configuration"
+      }
     }
   },
   "securityRequirements": [
     {
       "schemes": {
-        "bearer": {
-          "list": []
+        "oauth2": {
+          "list": ["buteco-api"]
         }
       }
     }
@@ -146,9 +190,11 @@ curl http://localhost:5017/agents/<agentId>/.well-known/agent-card.json
 ```
 
 O exemplo é resumido: o card real traz também `documentationUrl`, `iconUrl`,
-`provider` e `signatures`. `securitySchemes`/`securityRequirements` estão como o
-card os serializa, `null` inclusive — é a declaração de que `SendMessage`/`GetTask`
-exigem Bearer (ver [Autenticação](#autenticação)).
+`provider` e `signatures`, e os campos nulos de `securitySchemes`.
+`securitySchemes`/`securityRequirements` declaram que `SendMessage`/`GetTask`
+exigem o token do emissor do Buteco, obtido por `client_credentials` com o
+escopo `buteco-api` (ver [Autenticação](#autenticação)). A declaração é a mesma
+em todo agente, e o card não diz quais aplicações têm acesso a ele.
 
 `capabilities.streaming` é sempre `false` — não suportado por este sistema.
 `capabilities.pushNotifications` é sempre `true` — ver
@@ -519,9 +565,9 @@ polling é o único jeito de saber que uma task terminou. Sugestão:
 
 ## Notas operacionais
 
-- **Autenticação obrigatória, sem credencial para terceiros**: a rota A2A e o
-  cadastro de agentes exigem Bearer token; só o AgentCard é público. Hoje não
-  há emissão de credencial para cliente A2A externo — ver
-  [Autenticação](#autenticação).
+- **Autenticação obrigatória**: a rota A2A e o cadastro de agentes exigem
+  Bearer token; só o AgentCard é público. A credencial de um sistema de fora é a
+  da aplicação externa, cadastrada pelo Admin, e até a #187 ela ainda não
+  alcança nenhum agente — ver [Autenticação](#autenticação).
 - **Idioma das mensagens de erro**: `error.message` é sempre pt-BR — não
   internacionalizado.

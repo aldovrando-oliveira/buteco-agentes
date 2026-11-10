@@ -583,7 +583,8 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
   (`ServiceScopeAuthorizationHandler`): `operator` (o token do painel) só nas rotas da
   tabela de papéis com o papel dele ("Papéis", abaixo; até a #184, `operator` em tudo);
   `service:inbox` só nas duas rotas que `apps/inbox` consome;
-  `service:connectors` só nas cinco de `/sync/knowledge-bases`; **qualquer
+  `service:connectors` só nas cinco de `/sync/knowledge-bases`; `application` (a
+  aplicação externa, #186) na lista dele, **vazia até a #187**; **qualquer
   outro subject recebe `403`**. Até a #102 a regra era "quem não é
   `service:inbox` passa", e um subject novo assinado com a chave tinha o
   acesso do operador. A lista de rotas de cada serviço é conferida no boot
@@ -605,7 +606,9 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     (`POST /agents/{id}/a2a`, `/sync/knowledge-bases/*`, descrever pasta) não estão na tabela:
     o painel, com qualquer papel, recebe `403` nelas.
   - **No boot**, nos três apps (convenção 8): toda rota autenticada está na tabela de papéis ou na
-    lista de um subject de serviço, toda entrada tem rota, e nenhuma entrada tem lista vazia. Os
+    lista de um subject de serviço, toda entrada tem rota, e nenhuma entrada tem lista vazia. No
+    `apps/api`, desde a #186, também nenhuma lista de subject sem papel é vazia, com a exceção
+    temporária de `application`, e a chave `application` existe. Os
     guardas da matriz têm a matriz escrita à parte da tabela de produção: lida dela, a
     expectativa mudaria junto com o defeito.
   - **Token do painel sem `role` conhecido recebe `401`**, sem corpo `problem+json`, como o
@@ -613,6 +616,28 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     tokens emitidos antes da #184. Os tokens de serviço não levam papel, e o `role` deles é
     descartado.
   - **Os prazos** estão no item "O access token já emitido", abaixo.
+- **Aplicação externa** (#186; design da change `aplicacoes-externas-credencial`): um sistema de
+  fora que o Admin cadastra em `/applications/*` e que obtém token por `client_credentials` no
+  emissor. É um cliente do OpenIddict com `client_id` `btc_app_…`, gerado, fora do prefixo
+  `buteco-`, só com o escopo `buteco-api` e sem `refresh_token`.
+  - **Os segredos não ficam no OpenIddict**, que guarda um por cliente: ficam em
+    `external_application_secrets`, como SHA-256 (o segredo tem 256 bits gerados pelo Buteco), vários
+    por aplicação (no máximo 3 vivos), 1 ano de validade, 7 dias de sobreposição ao gerar outro. O
+    `ButecoApplicationManager` estende só a conferência do segredo: a aplicação passa pelos
+    segredos dela, e nunca pelo segredo de enchimento que a linha do OpenIddict leva; qualquer outro
+    cliente segue o OpenIddict. Criar a aplicação e gerar segredo pedem a senha de quem chama.
+  - **O token dura 5 min** (`IdentityTokenLifetimes.ApplicationAccessToken`, posto no principal), e
+    é o prazo que "revogar" confessa: revogar o segredo ou desativar a aplicação recusa o próximo
+    pedido de token na hora, e o token já emitido vale até o `exp`, porque a validação é pelo JWKS. A
+    checagem de boot da retenção das chaves conta essa duração. Introspecção foi descartada (cada
+    chamada A2A dependeria do emissor).
+  - **O subject `application`** sai do claim `buteco_app`, que o emissor põe só para quem está no
+    cadastro, e só para `client_id` fora da tabela fechada e do prefixo `buteco-`. Até a #187 a
+    lista de rotas dele é vazia: o token autentica e recebe `403` em tudo, inclusive na A2A. **A
+    exceção da checagem de boot que aceita essa lista vazia é temporária**; a #187 a retira ao abrir
+    `POST /agents/{id}/a2a` com o filtro por agente.
+  - **O último uso** é gravado na emissão do token, no segredo e na aplicação, no máximo uma vez por
+    minuto; nada entra no caminho da chamada A2A.
 - **Enforcement por padrão**: toda rota HTTP de `apps/api` e `apps/inbox`
   exige token; as exceções vivem numa allowlist explícita com motivo
   classificado por enum, validada no startup (ver convenção 8).

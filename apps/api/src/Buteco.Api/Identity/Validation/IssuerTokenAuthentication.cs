@@ -21,8 +21,8 @@ namespace Buteco.Api.Identity.Validation;
 /// validação do <see cref="IdentityKeyRing.Snapshot"/>, que já inclui a anterior em
 /// retenção e a próxima publicada. O <c>IdentityKeyRingGate</c> já responde <c>503</c> até
 /// o anel carregar, e a troca de chave já recarrega o snapshot.</item>
-/// <item><b>O subject sai da tabela de clientes</b> (<see cref="IssuerClientSubjects"/>),
-/// nunca do <c>sub</c>.</item>
+/// <item><b>O subject sai da tabela de clientes</b> (<see cref="IssuerClientSubjects"/>), ou é
+/// <c>application</c> para a aplicação externa (#186), nunca do <c>sub</c>.</item>
 /// </list>
 /// </summary>
 public static class IssuerTokenAuthentication
@@ -44,6 +44,9 @@ public static class IssuerTokenAuthentication
 
     /// <summary>O papel do token do painel (design.md da change papeis-no-token, D3), no texto de <see cref="UserRoleText"/>.</summary>
     public const string RoleClaim = "role";
+
+    /// <summary>O id da aplicação externa, que o emissor põe só para quem está no cadastro (#186).</summary>
+    public const string ApplicationClaim = ClientCredentialsTokenHandler.ApplicationClaim;
 
     public static IServiceCollection AddIssuerTokenAuthentication(this IServiceCollection services)
     {
@@ -93,9 +96,10 @@ public static class IssuerTokenAuthentication
         return Task.CompletedTask;
     }
 
-    // O principal é reconstruído. NameIdentifier só pela tabela de clientes; o sub nunca
-    // vira subject. Cliente ausente ou fora da tabela autentica sem NameIdentifier, e o
-    // ServiceScopeAuthorizationHandler responde 403. O sub e o oi_au_id vão como estão, para
+    // O principal é reconstruído. NameIdentifier pela tabela de clientes, ou "application" para a
+    // aplicação externa (IsExternalApplication, abaixo; até a #186 só havia a tabela); o sub nunca
+    // vira subject. Cliente ausente, ou fora da tabela e sem ser aplicação, autentica sem
+    // NameIdentifier, e o ServiceScopeAuthorizationHandler responde 403. O sub e o oi_au_id vão como estão, para
     // as rotas que agem sobre a própria pessoa e a própria sessão (CurrentUser, Minha conta). O role
     // vai só para o token do painel: os clientes de serviço são autorizados pela tabela de subjects,
     // e um role no token deles não vale nada (papeis-no-token, D2).
@@ -105,6 +109,7 @@ public static class IssuerTokenAuthentication
         var subject = validated?.FindFirst(SubjectClaim)?.Value;
         var authorizationId = validated?.FindFirst(AuthorizationIdClaim)?.Value;
         var role = validated?.FindFirst(RoleClaim)?.Value;
+        var application = validated?.FindFirst(ApplicationClaim)?.Value;
 
         var claims = new List<Claim>();
         if (clientId == IdentityClients.PanelClientId && role is not null)
@@ -115,6 +120,11 @@ public static class IssuerTokenAuthentication
         if (clientId is not null && IssuerClientSubjects.Table.TryGetValue(clientId, out var mappedSubject))
         {
             claims.Add(new Claim(ClaimTypes.NameIdentifier, mappedSubject));
+        }
+        else if (IsExternalApplication(clientId, application))
+        {
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, ServiceScopeAuthorizationHandler.ApplicationSubject));
+            claims.Add(new Claim(ApplicationClaim, application!));
         }
 
         if (clientId is not null)
@@ -134,4 +144,15 @@ public static class IssuerTokenAuthentication
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, IssuerSchemeName));
     }
+
+    // A aplicação externa (design.md da change aplicacoes-externas-credencial, D1). As três condições, e
+    // a ordem importa: a tabela fechada vem ANTES (no MapPrincipal), então um cliente da tabela com o
+    // claim forjado continua com o subject dele. Fora da tabela, o claim precisa vir do emissor (só sai
+    // para quem está no cadastro) e o client_id não pode usar o prefixo reservado. Só pelo prefixo,
+    // sem o claim, viraria aplicação qualquer cliente fora de buteco- (o cliente de teste dos acordos,
+    // um cliente criado à mão no banco). O role não é lido: aplicação não tem papel.
+    private static bool IsExternalApplication(string? clientId, string? application) =>
+        clientId is not null &&
+        !clientId.StartsWith(IdentityClients.ReservedPrefix, StringComparison.Ordinal) &&
+        Guid.TryParse(application, out _);
 }

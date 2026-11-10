@@ -62,7 +62,14 @@ public static class IdentityIssuerServiceCollectionExtensions
         services.AddHostedService<IdentityTokenPruneService>();
 
         services.AddOpenIddict()
-            .AddCore(core => core.UseEntityFrameworkCore().UseDbContext<AppDbContext>())
+            .AddCore(core =>
+            {
+                core.UseEntityFrameworkCore().UseDbContext<AppDbContext>();
+
+                // A aplicação externa autenticada pelos segredos dela (design.md da change
+                // aplicacoes-externas-credencial, D4); os outros clientes seguem o OpenIddict.
+                core.ReplaceApplicationManager(typeof(ButecoApplicationManager<>));
+            })
             .AddServer(server =>
             {
                 server.SetIssuer(issuer);

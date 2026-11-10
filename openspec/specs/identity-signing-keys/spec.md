@@ -7,9 +7,7 @@ parte privada cifrada em repouso, identificadas por `kid`, com rotação automá
 reinício, publicação antecipada no JWKS, retenção depois da troca e exclusão mútua entre
 instâncias. Uma chave gerada a cada boot nunca é aceita. A rota de leitura das chaves
 para a tela Identidade (`GET /identity`, #211) está na `identity-issuer-overview`.
-
 ## Requirements
-
 ### Requirement: Chaves do emissor são persistidas e nunca geradas por boot
 As chaves do emissor SHALL ser gravadas no banco do `apps/api` (tabela `identity_keys`), com:
 
@@ -52,7 +50,7 @@ A chave de assinatura SHALL ser trocada a cada 90 dias, com três janelas:
 
 A troca de qual chave assina SHALL acontecer sem reiniciar o processo, até uma hora depois do instante previsto. Em qualquer instante, exatamente uma chave SHALL assinar.
 
-A janela depois de parar de assinar SHALL cobrir todo token que o emissor valida com as próprias chaves, e não só o access token. O OpenIddict valida o refresh token, o código de autorização e o `id_token_hint` com as mesmas chaves de assinatura. O boot SHALL falhar quando a retenção for menor que a maior das durações configuradas do access token e do refresh token, mais o intervalo da verificação de rotação. SHALL falhar também quando o refresh token não tiver prazo.
+A janela depois de parar de assinar SHALL cobrir todo token que o emissor valida com as próprias chaves, e não só o access token. O OpenIddict valida o refresh token, o código de autorização e o `id_token_hint` com as mesmas chaves de assinatura. O boot SHALL falhar quando a retenção for menor que a maior das durações do access token global, do access token de aplicação externa (constante do código, `oidc-issuer`) e do refresh token, mais o intervalo da verificação de rotação, nomeando a maior. SHALL falhar também quando o refresh token não tiver prazo.
 
 #### Scenario: Próxima chave publicada antes de assinar
 - **WHEN** faltam menos de 7 dias para o fim de assinatura da chave ativa e a verificação de rotação roda
@@ -78,9 +76,14 @@ A janela depois de parar de assinar SHALL cobrir todo token que o emissor valida
 - **WHEN** o app sobe com uma duração de refresh token maior que a retenção menos o intervalo da verificação de rotação
 - **THEN** o boot falha com uma mensagem que cita a retenção e a duração do refresh token
 
+#### Scenario: Duração do token de aplicação acima da retenção derruba o boot
+- **WHEN** a checagem roda com a duração do access token de aplicação maior que a retenção menos o intervalo da verificação de rotação, e as outras durações dentro dela
+- **THEN** o boot falha com uma mensagem que cita a retenção e o access token de aplicação
+
 ### Requirement: Rotação é segura com mais de uma instância
 A criação de chave SHALL acontecer sob um lock do Postgres. Duas instâncias do `apps/api` verificando a rotação ao mesmo tempo contra o mesmo banco SHALL resultar em uma única chave nova.
 
 #### Scenario: Duas verificações concorrentes criam uma chave
 - **WHEN** duas verificações de rotação rodam em paralelo contra um banco sem chave
 - **THEN** a tabela termina com exatamente uma chave de assinatura e uma de cifra
+
