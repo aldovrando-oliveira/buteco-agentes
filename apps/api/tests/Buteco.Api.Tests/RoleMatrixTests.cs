@@ -115,6 +115,15 @@ public class RoleMatrixTests(RoleMatrixTests.Fixture factory) : IClassFixture<Ro
         [("POST", "/account/sessions/revoke-others")] = "A O L",
         [("GET", "/account/two-factor/")] = "A O L",
         [("POST", "/account/two-factor/recovery-codes")] = "A O L",
+        // Aplicações externas (change aplicacoes-externas-credencial, D3): só o Admin, inclusive ler.
+        [("GET", "/applications/")] = "A",
+        [("POST", "/applications/")] = "A",
+        [("GET", "/applications/{id:guid}")] = "A",
+        [("PUT", "/applications/{id:guid}")] = "A",
+        [("POST", "/applications/{id:guid}/deactivate")] = "A",
+        [("POST", "/applications/{id:guid}/activate")] = "A",
+        [("POST", "/applications/{id:guid}/secrets")] = "A",
+        [("POST", "/applications/{id:guid}/secrets/{secretId:guid}/revoke")] = "A",
     };
 
     private static bool ExpectedAllows(string method, string pattern, UserRole role) =>
@@ -181,6 +190,7 @@ public class RoleMatrixTests(RoleMatrixTests.Fixture factory) : IClassFixture<Ro
         var path = pattern
             .Replace("{id:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
             .Replace("{knowledgeBaseId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
+            .Replace("{secretId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
             .Replace("{id}", Guid.NewGuid().ToString(), StringComparison.Ordinal);
         if (path.Contains('{', StringComparison.Ordinal))
         {

@@ -1,5 +1,7 @@
 using global::A2A;
 using Buteco.Api.Auth;
+using Buteco.Api.Identity;
+using Buteco.Api.Identity.Clients;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Options;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -29,6 +31,7 @@ public static class AgentCardEndpoints
         Guid id,
         IServiceScopeFactory scopeFactory,
         IOptions<PublicUrlOptions> publicUrlOptions,
+        IdentityIssuerState issuerState,
         CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
@@ -70,16 +73,17 @@ public static class AgentCardEndpoints
             Skills = AgentSkillMapper.MapSkills(agent.Skills).ToList(),
             DefaultInputModes = ["text/plain"],
             DefaultOutputModes = ["text/plain"],
-            // Descoberta pública, mas o endpoint A2A do agente exige
-            // Bearer token — declarado via o mecanismo nativo da spec A2A
-            // (SecuritySchemes/SecurityRequirements), não por omissão
-            // (design.md, Decision 6).
+            // Descoberta pública, mas o endpoint A2A do agente exige o access token do emissor do
+            // Buteco, obtido por client_credentials — declarado pelo mecanismo nativo da spec A2A
+            // (SecuritySchemes/SecurityRequirements), não por omissão (design.md da change
+            // auth-login-e-servico, Decision 6). Até a #186 era o esquema HTTP "bearer", que não dizia
+            // onde obter o token; desde a change aplicacoes-externas-credencial (D7) é o OAuth2 do
+            // emissor. O issuer é o da url pública, que o boot exige ("Url pública obrigatória"): no
+            // app que atende, ele nunca é nulo. Igual em todo agente, e sem dizer quais aplicações
+            // têm acesso (a credencial é da aplicação, e o card é anônimo).
             SecuritySchemes = new Dictionary<string, SecurityScheme>
             {
-                ["bearer"] = new SecurityScheme
-                {
-                    HttpAuthSecurityScheme = new HttpAuthSecurityScheme { Scheme = "Bearer" },
-                },
+                [OAuth2SchemeName] = OAuth2Scheme(issuerState.Issuer!),
             },
             SecurityRequirements =
             [
@@ -87,7 +91,7 @@ public static class AgentCardEndpoints
                 {
                     Schemes = new Dictionary<string, StringList>
                     {
-                        ["bearer"] = new StringList { List = [] },
+                        [OAuth2SchemeName] = new StringList { List = [IdentityClients.ApiScope] },
                     },
                 },
             ],
@@ -95,4 +99,25 @@ public static class AgentCardEndpoints
 
         return TypedResults.Ok(card);
     }
+
+    public const string OAuth2SchemeName = "oauth2";
+
+    private static SecurityScheme OAuth2Scheme(Uri issuer) => new()
+    {
+        OAuth2SecurityScheme = new OAuth2SecurityScheme
+        {
+            Flows = new OAuthFlows
+            {
+                ClientCredentials = new ClientCredentialsOAuthFlow
+                {
+                    TokenUrl = new Uri(issuer, "connect/token").AbsoluteUri,
+                    Scopes = new Dictionary<string, string>
+                    {
+                        [IdentityClients.ApiScope] = "Chamar agentes pelo A2A",
+                    },
+                },
+            },
+            OAuth2MetadataUrl = new Uri(issuer, ".well-known/openid-configuration").AbsoluteUri,
+        },
+    };
 }

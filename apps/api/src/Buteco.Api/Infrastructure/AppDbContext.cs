@@ -13,6 +13,7 @@ using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeFragments.Entities;
 using Buteco.Api.McpServers.Entities;
 using Buteco.Api.RejectionMetrics.Entities;
+using Buteco.Api.ExternalApplications;
 using Buteco.Api.Users;
 using Buteco.Api.Users.AccessLinks;
 using Buteco.Api.Users.Login;
@@ -66,6 +67,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<LoginThrottle> LoginThrottles => Set<LoginThrottle>();
 
     public DbSet<UserRecoveryCode> UserRecoveryCodes => Set<UserRecoveryCode>();
+
+    public DbSet<ExternalApplication> ExternalApplications => Set<ExternalApplication>();
+
+    public DbSet<ExternalApplicationSecret> ExternalApplicationSecrets => Set<ExternalApplicationSecret>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -771,6 +776,53 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(code => code.UsedAt).HasColumnName("used_at");
             entity.HasOne<User>().WithMany().HasForeignKey(code => code.UserId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(code => new { code.UserId, code.CodeHash }).IsUnique();
+        });
+
+        // Aplicações externas (design.md da change aplicacoes-externas-credencial, D3, D4 e D6). O
+        // cliente do OpenIddict de cada uma fica em openiddict_applications, com o mesmo client_id;
+        // os segredos ficam aqui, porque o OpenIddict guarda um só por cliente. O apps/workers não
+        // espelha: ninguém lá lê.
+        modelBuilder.Entity<ExternalApplication>(entity =>
+        {
+            entity.ToTable("external_applications");
+            entity.HasKey(application => application.Id);
+            entity.Property(application => application.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(application => application.ClientId).HasColumnName("client_id").IsRequired();
+            entity.Property(application => application.Name).HasColumnName("name").IsRequired();
+            entity.Property(application => application.NormalizedName).HasColumnName("normalized_name").IsRequired();
+            entity.Property(application => application.Description).HasColumnName("description");
+            entity.Property(application => application.CreatedAt).HasColumnName("created_at");
+            entity.Property(application => application.DeactivatedAt).HasColumnName("deactivated_at");
+            entity.Property(application => application.LastUsedAt).HasColumnName("last_used_at");
+            entity.Ignore(application => application.IsActive);
+
+            // As duas unicidades são do banco, não de uma consulta antes: a corrida de dois cadastros
+            // com o mesmo nome vira 409 pelo índice (ExternalApplicationFields).
+            entity.HasIndex(application => application.ClientId).IsUnique();
+            entity.HasIndex(application => application.NormalizedName).IsUnique();
+        });
+
+        modelBuilder.Entity<ExternalApplicationSecret>(entity =>
+        {
+            entity.ToTable("external_application_secrets");
+            entity.HasKey(secret => secret.Id);
+            entity.Property(secret => secret.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(secret => secret.ApplicationId).HasColumnName("application_id");
+            entity.Property(secret => secret.Hash).HasColumnName("hash").IsRequired();
+            entity.Property(secret => secret.Suffix).HasColumnName("suffix").IsRequired();
+            entity.Property(secret => secret.CreatedAt).HasColumnName("created_at");
+            entity.Property(secret => secret.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(secret => secret.RevokedAt).HasColumnName("revoked_at");
+            entity.Property(secret => secret.LastUsedAt).HasColumnName("last_used_at");
+
+            // Restrict: a aplicação não é excluída (D3), e um DELETE por engano não leva os segredos
+            // em silêncio.
+            entity.HasOne<ExternalApplication>().WithMany()
+                .HasForeignKey(secret => secret.ApplicationId).OnDelete(DeleteBehavior.Restrict);
+
+            // O emissor acha o segredo pelo hash (D4), sem percorrer os da aplicação.
+            entity.HasIndex(secret => secret.Hash).IsUnique();
+            entity.HasIndex(secret => secret.ApplicationId);
         });
     }
 }

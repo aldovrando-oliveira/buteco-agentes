@@ -6,7 +6,6 @@ Diz quem pode o quê em cada rota que recebe o token do painel, no `apps/api`, n
 exige papel ou subject de serviço em toda rota autenticada, o `401` do token sem papel, as rotas só
 de serviço e os prazos de uma mudança de papel (change `papeis-no-token`, #184; ver
 `openspec/changes/archive/2026-11-09-papeis-no-token/`).
-
 ## Requirements
 ### Requirement: Matriz de papéis por rota nos três apps
 O `apps/api`, o `apps/inbox` e o `apps/connectors` SHALL autorizar o token do painel (cliente `buteco-painel`, subject `operator`) por uma tabela fechada de papéis por rota (`RoleRoutes`), casada por método e `RoutePattern.RawText`, com os papéis `admin`, `operator` e `reader` (Admin, Operador e Leitor). O token do painel SHALL passar só nas rotas em cuja entrada esteja o `role` dele, e SHALL receber `403` nas outras, sem executar nenhuma lógica de negócio da rota. O subject `operator` SHALL NOT dar acesso implícito a nenhuma rota.
@@ -19,6 +18,7 @@ A tabela SHALL ser esta (A = `admin`, O = `operator`, L = `reader`):
 | `apps/api` | escritas de agentes (inclusive vínculos de MCP, delegação e bases), MCP (inclusive `POST /mcp-servers/test` e `POST /mcp-servers/{id}/test`), bases e documentos (inclusive reindexar) | A O |
 | `apps/api` | `/users/*` (inclusive convite, novo link, cancelamento, redefinição de senha, redefinição de 2 etapas e `PUT /users/{id}/role`) e `GET /identity` | A |
 | `apps/api` | `/account/*` | A O L |
+| `apps/api` | `/applications/*` (listar, ver, criar, editar, desativar, reativar, gerar e revogar segredo) | A |
 | `apps/inbox` | `GET /channels/`, `GET /channels/{id}`, `GET /sessions/summary`, `GET /messages/summary` | A O L |
 | `apps/inbox` | escritas de `/channels/*`, `GET /channels/{channelId}/sessions`, `GET /sessions/{sessionId}/messages`, `/contacts/*` | A O |
 | `apps/connectors` | `GET /connectors/providers`, `GET /connectors/providers/{providerKey}/folders`, `POST /connectors/knowledge-bases/{knowledgeBaseId}/sync` | A O |
@@ -49,6 +49,10 @@ Com token do painel válido e papel válido, a requisição a uma rota inexisten
 - **WHEN** um token do painel com `role` `reader` chama `GET /rota-que-nao-existe` no `apps/api`
 - **THEN** a resposta é `404`
 
+#### Scenario: Só o Admin em Aplicações externas
+- **WHEN** um token do painel de cada papel chama `GET /applications/`
+- **THEN** o `admin` não recebe `401` nem `403`, e o `operator` e o `reader` recebem `403`
+
 ### Requirement: Guarda da matriz por app, sobre a tabela real
 Cada app SHALL ter um teste com a matriz desta spec escrita à parte da `RoleRoutes` de produção, que afirma que a tabela de produção tem exatamente as entradas e os papéis dela e, para cada entrada e cada um dos três papéis, chama a rota no host construído com um token do painel daquele papel e afirma o `403` vazio da autorização quando o papel não está na entrada da matriz, e uma resposta que não é o `401` nem o `403` vazios quando está. A expectativa SHALL NOT ser lida da própria `RoleRoutes`, o que faria o guarda circular. O teste SHALL afirmar que a matriz percorrida não é vazia.
 
@@ -61,7 +65,9 @@ No boot, depois de todos os `Map*`, cada app SHALL conferir, sobre os endpoints 
 
 - que todo `RouteEndpoint` que exige autenticação está na `RoleRoutes` ou na lista de rotas de algum subject de serviço;
 - que toda entrada da `RoleRoutes` e das listas de subjects de serviço corresponde a um endpoint mapeado, com o método aceito;
-- que nenhuma entrada da `RoleRoutes` tem lista de papéis vazia.
+- que nenhuma entrada da `RoleRoutes` tem lista de papéis vazia;
+- que nenhum subject sem papel (`ServiceRoutes`) tem lista de rotas vazia, com uma única exceção nomeada, `application`, que fica vazia até a #187 abrir a rota A2A com o filtro por agente e retirar a exceção;
+- que o subject `application` existe na `ServiceRoutes`.
 
 Qualquer divergência SHALL derrubar o boot com uma mensagem que nomeia o método e o padrão. Rota anônima classificada SHALL ficar fora dos dois sentidos.
 
@@ -80,6 +86,18 @@ Qualquer divergência SHALL derrubar o boot com uma mensagem que nomeia o métod
 #### Scenario: Composição real dos três apps
 - **WHEN** o host de produção de cada app é construído
 - **THEN** a checagem passa, e a `RoleRoutes` conferida não é vazia
+
+#### Scenario: Lista vazia de subject de serviço
+- **WHEN** a checagem roda com uma `ServiceRoutes` em que `service:connectors` tem lista vazia
+- **THEN** a inicialização falha nomeando `service:connectors`
+
+#### Scenario: A lista vazia de application passa, por exceção
+- **WHEN** o host de produção do `apps/api` é construído, com a lista de `application` vazia
+- **THEN** a checagem passa
+
+#### Scenario: Sem a entrada application
+- **WHEN** a checagem roda com uma `ServiceRoutes` sem a chave `application`
+- **THEN** a inicialização falha nomeando `application`
 
 ### Requirement: Tokens de serviço seguem as tabelas de subjects, sem papel
 O token de um cliente de serviço (`service:inbox`, `service:connectors`, `service:api`) SHALL ser autorizado só pela lista de rotas do subject dele, e o `role` SHALL NOT ser lido para ele. Uma rota pode estar nas duas tabelas.
@@ -121,7 +139,7 @@ Nos três apps, um token do painel válido em tudo o mais, mas sem o claim `role
 ### Requirement: Prazos da mudança de papel
 O rebaixamento SHALL valer:
 
-- **na requisição seguinte** nas rotas do `apps/api` que identificam a pessoa pela `CurrentUser` (`/users/*`, convite, novo link, cancelamento, redefinição de senha e de 2 etapas, `PUT /users/{id}/role`, `GET /identity`), que exigem o papel `admin` **gravado**, além do papel do token;
+- **na requisição seguinte** nas rotas do `apps/api` que identificam a pessoa pela `CurrentUser` (`/users/*`, convite, novo link, cancelamento, redefinição de senha e de 2 etapas, `PUT /users/{id}/role`, `GET /identity` e `/applications/*`), que exigem o papel `admin` **gravado**, além do papel do token;
 - **em até 15 min 30 s** (vida do access token mais a tolerância de 30 s) nas outras rotas do `apps/api` e no `apps/inbox` e no `apps/connectors`, que leem só o papel do token.
 
 A promoção SHALL chegar na renovação seguinte, quando o token novo traz o papel gravado. Mudar o papel SHALL NOT trocar o carimbo de segurança nem revogar sessões.
@@ -148,4 +166,23 @@ O acordo entre o `apps/api` e o `apps/connectors` (`tests/ApiConnectorsRoundTrip
 #### Scenario: Admin passa nas pastas
 - **WHEN** o Admin do bootstrap entra pelo fluxo do emissor real e chama a mesma rota
 - **THEN** a resposta não é `401` nem `403`
+
+### Requirement: O token de aplicação externa é o subject application, sem papel e sem rota até a #187
+No `apps/api`, o token de uma aplicação externa SHALL ter o subject `application` quando o `client_id` dele está fora da tabela fechada de clientes, não começa com `buteco-`, e o token traz o claim `buteco_app`. Um `client_id` da tabela fechada SHALL continuar com o subject da tabela, mesmo que o token traga `buteco_app`. O `role` SHALL NOT ser lido para `application`. O subject `application` SHALL ser autorizado só pela lista dele na `ServiceRoutes`, que nesta entrega é **vazia**: o token de aplicação SHALL receber `403` em toda rota autenticada do `apps/api`, inclusive `POST /agents/{id}/a2a`, sem executar nenhuma lógica de negócio. A #187 acrescenta a rota A2A junto com o filtro por agente.
+
+#### Scenario: 403 em toda rota autenticada
+- **WHEN** um token de aplicação válido chama cada rota autenticada mapeada no host do `apps/api`
+- **THEN** todas respondem `403`, e nenhuma responde `401`
+
+#### Scenario: A2A recusada sem publicar job
+- **WHEN** um token de aplicação válido chama `POST /agents/{id}/a2a` com um `SendMessage` válido para um agente ativo
+- **THEN** a resposta é `403`, e nenhum job é publicado
+
+#### Scenario: buteco_app forjado num cliente da tabela fechada
+- **WHEN** um token do `buteco-servico-inbox` traz o claim `buteco_app` e chama `GET /agents/{id}` de um agente existente
+- **THEN** o subject é `service:inbox` e a resposta é `200`
+
+#### Scenario: Cliente fora do prefixo sem buteco_app
+- **WHEN** um token do emissor com `aud` `buteco-api` e `client_id` `teste-sem-cadastro`, sem `buteco_app`, chama `GET /agents/`
+- **THEN** a resposta é `403`
 

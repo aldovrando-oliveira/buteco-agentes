@@ -330,6 +330,62 @@ no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
 (ciclo de sincronização) e o build arg `VITE_CONNECTORS_BASE_URL=""` do
 `frontend`, que só existe junto com o bloco `/connectors` do `nginx.conf`.
 
+### Aplicações externas com credencial do Buteco (#186)
+
+**O que muda:**
+
+- o Admin passa a cadastrar **aplicações externas** (rotas `/applications/*` do `api`; a tela é da
+  #188): cada uma recebe um client ID `btc_app_…` e segredos `btc_sk_…`, mostrados uma vez;
+- a aplicação obtém token em `/connect/token` por `client_credentials`, com `scope=buteco-api`, e o
+  token dura **5 minutos**; revogar o segredo ou desativar a aplicação recusa o próximo pedido de
+  token na hora, e o token já emitido vale até vencer;
+- **a aplicação ainda não alcança nenhum agente**: o token recebe `403` em toda rota do `api`,
+  inclusive no A2A, até a #187 liberar agentes por aplicação;
+- o AgentCard de cada agente passa a declarar o esquema OAuth2 do Buteco no lugar do `bearer`;
+- só o `api` muda. O `inbox` e o `connectors` não aceitam o token da aplicação (a audience dele é só
+  `buteco-api`), e não precisam de imagem nova.
+
+**Antes do deploy (o dono):** backup do banco do `api`, como em toda migration:
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" -Fc buteco_agents' > buteco_agents-antes-186.dump
+```
+
+**Deploy:** o `migrator` aplica a `ExternalApplications` (duas tabelas novas,
+`external_applications` e `external_application_secrets`; nenhuma tabela existente muda) antes do
+`api`, e depois:
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api
+```
+
+Sem variável de ambiente nova.
+
+**O que o OpenIddict passa a guardar:** uma linha em `openiddict_applications` por aplicação
+criada, com o `client_id` `btc_app_…`, as permissões do endpoint de token, do `client_credentials` e
+do escopo `buteco-api`, e um **segredo de enchimento** que ninguém conhece (o OpenIddict exige um
+segredo em cliente confidencial; quem confere os segredos da aplicação é o `api`). Nenhuma linha em
+`openiddict_tokens` nem em `openiddict_authorizations`.
+
+**Conferir:** com o Admin, `POST /applications/` cria a aplicação e devolve o segredo; o pedido de
+token com ele responde `expires_in` `300`; e o AgentCard de um agente traz `securitySchemes.oauth2`
+com o `tokenUrl` da url pública.
+
+**Voltar atrás:** a imagem anterior do `api` não conhece os segredos das aplicações e confere o
+segredo de enchimento, que ninguém conhece: **toda aplicação recebe `invalid_client`**, e os tokens
+já emitidos vencem em até 5 minutos. O painel e os clientes de serviço não mudam. A volta falha
+fechada e não precisa de passo manual. As tabelas novas ficam (a imagem anterior não as lê); para
+apagá-las, o `down` da migration `ExternalApplications`. As linhas das aplicações em
+`openiddict_applications` ficam órfãs e inofensivas; para limpá-las:
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres \
+  sh -c 'psql -U "$POSTGRES_USER" buteco_agents -c "DELETE FROM openiddict_applications WHERE \"ClientId\" LIKE '"'"'btc\_app\_%'"'"';"'
+```
+
+Voltar para a frente depois do `down` perde os segredos: as aplicações precisam ser recriadas.
+
 ### Papéis Admin, Operador e Leitor (#184, #185)
 
 **A #184 (backend) e a #185 (painel) vão juntas para produção** (decisão do dono, 08/11/2026).

@@ -224,6 +224,37 @@ public class IdentityIssuerStartupValidationTests
         Assert.Contains("refresh token (14.00:30:00)", message, StringComparison.Ordinal);
     }
 
+    // (guarda 6.2) "Duração do token de aplicação acima da retenção derruba o boot" (spec
+    // identity-signing-keys, modificada pela change aplicacoes-externas-credencial, D5). A constante de
+    // produção (5 min) não permite montar o caso pelo host; a checagem é a mesma que o boot chama, com as
+    // durações passadas. Defeito: a duração de aplicação fora do max.
+    [Fact]
+    public void AnApplicationTokenOutlivingTheKeyRetention_FailsNamingIt()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => Buteco.Api.Identity.IdentityIssuerStartupValidation.ValidateKeyRetention(
+            retention: TimeSpan.FromDays(15),
+            checkInterval: TimeSpan.FromHours(1),
+            accessToken: TimeSpan.FromMinutes(15),
+            applicationAccessToken: TimeSpan.FromDays(15),
+            refreshToken: TimeSpan.FromDays(14)));
+
+        Assert.Contains("Retenção das chaves do emissor (15.00:00:00) menor que a duração do access token de aplicação (15.00:00:00)", exception.Message, StringComparison.Ordinal);
+    }
+
+    // E a composição real passa, com os 5 min da aplicação no max (o caso de baixo, com o refresh de 15 d,
+    // continua nomeando o refresh, que segue o maior).
+    [Fact]
+    public void TheApplicationTokenLifetime_IsCoveredByTheRealRetention()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(5), Buteco.Api.Identity.IdentityTokenLifetimes.ApplicationAccessToken);
+        Buteco.Api.Identity.IdentityIssuerStartupValidation.ValidateKeyRetention(
+            Buteco.Api.Identity.Keys.IdentityKeyRotationPolicy.Retention,
+            Buteco.Api.Identity.Keys.IdentityKeyRotationPolicy.CheckInterval,
+            Buteco.Api.Identity.IdentityTokenLifetimes.AccessToken,
+            Buteco.Api.Identity.IdentityTokenLifetimes.ApplicationAccessToken,
+            Buteco.Api.Identity.IdentityTokenLifetimes.RefreshToken);
+    }
+
     [Fact]
     public void RealComposition_WithRefreshTokensOutlivingTheKeyRetention_FailsNamingTheRefreshToken()
     {

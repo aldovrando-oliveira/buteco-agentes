@@ -18889,3 +18889,54 @@ Ao fim, os dois bancos foram apagados (`dropdb`), os processos encerrados e os s
    - o corpo esperado de "POST /users/invitations leva o corpo do contrato" ganhou `papel` (mais estrito);
    - arranjo de sessão e de papel em oito arquivos (no `tasks.md`, "Registro do apply").
 5. **O Prettier:** o `main` tem 157 arquivos fora do formato. Só os 57 arquivos tocados que já estavam formatados no `main` foram formatados, e os guardas desses arquivos foram refeitos.
+
+## `aplicacoes-externas-credencial` — Aplicações externas com credencial do Buteco (#186)
+
+**Change proposta e implementada em 09/11/2026**, na branch `feat/186-aplicacoes-externas`, num worktree próprio, a partir de `71046f6` (merge do PR #262, a #185). Entrega M2 · 4 de 6. Só o `apps/api` muda; a tela é da #188, e qual agente cada aplicação alcança é da #187.
+
+- **O que entra no `apps/api`:**
+  - **o cadastro** em `/applications/*`, só do Admin com o papel gravado: listar (busca por nome ou client ID, filtro por estado), ver, criar, editar nome e descrição, desativar (revogando os segredos vivos na mesma transação) e reativar (sem segredo); sem exclusão;
+  - **o client ID** `btc_app_` + 8 de 32 símbolos, gerado, imutável, com a recusa do prefixo `buteco-` no ponto de gravar;
+  - **os segredos** `btc_sk_` + 43, em `external_application_secrets` (SHA-256, sufixo de 4), fora do `ClientSecret` do OpenIddict: 1 ano de validade, 7 dias de sobreposição, no máximo 3 vivos, revogação; criar e gerar pedem a senha de quem chama;
+  - **o `ButecoApplicationManager`**, que estende só a conferência do segredo: a aplicação pelos segredos dela, nunca pelo segredo de enchimento da linha do OpenIddict; os outros clientes pelo OpenIddict;
+  - **a emissão:** o claim `buteco_app` só para quem está no cadastro, e o access token de **5 min** posto no principal (`IdentityTokenLifetimes.ApplicationAccessToken`); o painel continua com 15;
+  - **o subject `application`** no `apps/api`, com a lista de rotas **vazia** até a #187 (o token recebe `403` em tudo, inclusive no A2A); a checagem de boot recusa lista vazia de subject sem papel, com a exceção temporária de `application`, registrada na [#187](https://github.com/aldovrando-oliveira/buteco-agentes/issues/187#issuecomment-6751534670);
+  - **a retenção das chaves** no boot conta a duração do token de aplicação;
+  - **o AgentCard** com `oauth2`/`clientCredentials` no lugar do `bearer`;
+  - **o último uso** gravado na emissão do token, no máximo uma vez por minuto.
+- **Migration** `ExternalApplications` (duas tabelas novas, só acréscimo). Sem variável nova.
+- **Documentação:** `docs/a2a-integration.md` (a credencial, o token, o pedido sem `scope`, os 5 min, o que ainda não alcança; as rotas anônimas corrigidas), `docs/deployment.md` ("Aplicações externas com credencial do Buteco (#186)", com a volta atrás e o `DELETE` das linhas órfãs, conferido no banco descartável), a seção de autenticação do `01` e o `CHANGELOG.md`.
+- **Capacidades:** nova `external-applications`; modificadas `oidc-issuer`, `route-roles`, `route-authentication`, `a2a-agent-card` e `identity-signing-keys`.
+- **Protótipo:** canvas `H7dPBZafiSkdKd1hqesPZ6`, versão `1794258468-0769` (a "versão 60"), corrigida pelo dono a partir da lista do (h) do design. Os estados sem quadro ficam para o design da #188; o contrato deles está nas specs.
+
+**Decisões do dono** (09/11/2026): Q1 a Q15 como recomendadas, com os guardas do D9 (o claim `buteco_app`, o gerente, as durações e a desativação numa transação). Q4: o `docs/a2a-integration.md` explica o pedido sem `scope`. A exceção da lista vazia de `application` sai na #187.
+
+### Premissas (convenção 9)
+
+Do corpo e dos comentários da issue, nenhuma de parada: o "token do operador de 30 minutos" (não existe desde a #217, e o do painel recebe `403` no A2A desde a #184); "retenção (24 h) ≥ access + 1 h" (são 15 dias e `max(access, refresh) + CheckInterval` desde a #180); "1 h hoje" (15 min desde a #180); o comentário falso do `ClientCredentialsTokenHandler` (l. 19) e as rotas anônimas do `docs/a2a-integration.md` (l. 70–72), corrigidos; e o `scope=a2a`, o `message/send` e o "Revogar corta na hora" do quadro, corrigidos na versão 60.
+
+**Caiu no apply (premissa 7), seguida e registrada:** o design previa um AgentCard com `bearer` "sem `Identity:Issuer`, emissor desligado". No `apps/api` o issuer é a `PublicUrl:BaseUrl` normalizada, obrigatória no boot desde a #180; `Identity:Issuer` é a configuração do `apps/inbox` e do `apps/connectors`. O estado não existe num app no ar: a frase e o cenário saíram da delta `a2a-agent-card` (só `oauth2`/`clientCredentials`), o código não tem o ramo, e nenhum caso o cobria (o "Emissor desligado" do tasks.md nunca foi escrito).
+
+**Outras divergências do apply** (design, D10): a senha de "gerar segredo" é conferida fora da transação, porque o `LoginThrottleStore` grava pelo mesmo `AppDbContext`; o guarda do enchimento regrava o `ClientSecret` pelo próprio OpenIddict, sem ponto de teste em produção; a checagem da retenção virou método público, para o guarda; os testes que geram segredo avançam o relógio do host 1 s (o OpenIddict não põe `nbf`).
+
+### O que a implementação mediu
+
+| suíte | baseline `71046f6` (`baseline-186/`) | change | CPU mín. |
+|---|---|---|---|
+| `apps/api` | 1565 + 1 ignorado, APROVADA, CPU mín. 58 | 1ª rodada (`186-fechamento/`): 400 reprovações por timeout, **INCONCLUSIVA** (CPU 23); **2ª rodada (`186-fechamento-api2/`): 1640 + 1 ignorado, APROVADA** | 62 |
+| `rt-inbox` | 15/15, APROVADA | 15/15, APROVADA | 97 |
+| `rt-connectors` | 11/11, APROVADA | 12/12, APROVADA | 100 |
+
+- **Os 18 casos novos que reprovaram na rodada inconclusiva** (as classes `ExternalApplicationAuthorizationTests` e `ExternalApplicationIssuerTests` inteiras, com a fixture em timeout) passaram todos na rodada válida.
+- **Comparação por nome** (`186-fechamento-final/nomes.txt`, 1.668 resultados, GUID normalizado, multiconjunto): saem só os dois casos de `AgentCardSecuritySchemeTests` renomeados (lista do topo do `tasks.md`); entram 78, todos aprovados: `ExternalApplicationEndpointsTests` 21, `ExternalApplicationIssuerTests` 13, `ExternalApplicationSecretTests` 7, `ExternalApplicationAuthorizationTests` 5, `RouteDeclarationValidationTests` 3, `IdentityIssuerStartupValidationTests` 2, `AgentCardSecuritySchemeTests` 2 (os renomeados), `RoleMatrixTests` 24 (as linhas novas da matriz) e `ExternalApplicationRoundTripTests` 1 (`rt-connectors`).
+- **Guardas (convenção 15):** 13 guardas em 17 rodadas, todas reprovadas contra o defeito nomeado, pela asserção e não por compilação, com a volta pela cópia e o sha conferido, em `~/.cache/buteco-agents/186-guardas/` (lista no `tasks.md`, seção 9).
+- **Build:** nenhum aviso novo (a change tem 3 a menos, os do caso do AgentCard reescrito).
+- **As conferências 1 a 8**, com o `apps/api` local num banco descartável copiado do de desenvolvimento por `pg_dump` (pelo `template0`, pela collation) e migrado, o Admin pelo comando `password-reset-link` e pelo login real com o cadastro das 2 etapas, e o `curl` pelo `conferencia-186.py`: a criação devolve o client ID e o segredo; o token tem `exp − iat` = 300, `aud` `buteco-api`, `buteco_app` e nenhum `role`; o A2A e o `GET /agents/` com ele respondem `403`; sem `scope`, o token sai sem `aud` e o `apps/api` responde `401`, e `scope=buteco-inbox` recebe `invalid_request`; o segundo segredo deixa o primeiro com validade de exatamente 7 dias; o segundo revogado recebe `invalid_client` e o primeiro continua emitindo; a desativação recusa o primeiro, e a reativação volta com os dois `revogado`; o AgentCard declara `oauth2`/`clientCredentials` com o `tokenUrl` público. **A volta atrás**, a imagem de `71046f6` sobre o banco migrado: a aplicação recebe `invalid_client` com um segredo vivo, o painel entra pelo login real e lê `/agents/`, e os dois clientes de serviço obtêm token. O banco, o contêiner e a imagem foram apagados.
+- **Tamanho (convenção 18)**, por `git diff --numstat 71046f6` mais os arquivos novos, só código: **produção +1.298 / −33, 20 arquivos**, contra ~1.160 (**+12 %**), 25 % de comentário contra ~35 %; **testes +1.148 / −8, 9 arquivos**, contra ~1.900 (**−40 %**); **duplos +221 / −6** (`ExternalApplicationsFixture` e o claim opcional do `TestIssuerTokens`), contra ~200 (**+10 %**); **51 casos novos** (52 resultados, mais as 24 linhas da matriz), contra ~55; docs +162 / −35; gerado +1.657. O desvio de teste é o custo por caso: ~22 linhas contra os ~35 da #184, porque a fixture concentra os passos repetidos (Admin, criação, token, payload).
+- **Validação visual:** não se aplica (sem tela).
+
+### Para as próximas
+
+- **#187** (M2 · 5 de 6): retira a exceção da lista vazia de `application`, abre `POST /agents/{id}/a2a` com o filtro por agente e muda a asserção de `ApplicationToken_OnEveryAuthenticatedRoute_ReturnsForbidden` (comentário na issue).
+- **#188**: as telas, contra a versão 60, com os estados sem quadro desenhados no design dela.
+- **Nove contêineres Postgres do Testcontainers ficaram órfãos** na VM do Podman, deixados pela rodada inconclusiva da `api` (sessão `c569eac5…`, criados entre 19:25 e 19:28 de 09/11/2026): a suíte roda com o Ryuk desligado (`TESTCONTAINERS_RYUK_DISABLED=true`), e as fixtures que estouraram o tempo não os removeram. A remoção foi negada pelo classificador de permissões nesta sessão e **ficou com o dono** (ex.: `podman rm -f $(podman ps -aq --filter label=org.testcontainers=true)`), antes da próxima suíte, porque ocupam memória da VM.

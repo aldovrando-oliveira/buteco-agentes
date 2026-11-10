@@ -16,8 +16,13 @@ namespace Buteco.Api.Tests;
 /// </summary>
 public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>
 {
+    // Sem nenhum serviço, mas com a chave da aplicação externa, que a checagem exige desde a change
+    // aplicacoes-externas-credencial (D1): sem ela, todo caso ganharia um problema que não é o dele.
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<(string Method, string Pattern)>> NoServices =
-        new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>();
+        new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>
+        {
+            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [],
+        };
 
     private static IReadOnlyDictionary<(string Method, string Pattern), IReadOnlyList<UserRole>> Roles(
         params ((string Method, string Pattern) Route, UserRole[] Roles)[] entries) =>
@@ -70,11 +75,55 @@ public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClass
         var services = new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>
         {
             ["service:teste"] = [("GET", "/sync/coisas")],
+            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [],
         };
 
         var exception = Record.Exception(() => app.ValidateRouteDeclarations(Roles(), services));
 
         Assert.Null(exception);
+    }
+
+    // "Lista vazia de subject de serviço" (spec route-roles; 4.8 do tasks.md da change
+    // aplicacoes-externas-credencial). Uma lista esvaziada por engano deixaria o serviço com 403 em tudo.
+    [Fact]
+    public void AnEmptyServiceRouteList_Throws_NamingTheSubject()
+    {
+        var app = WebApplication.CreateBuilder().Build();
+        var services = new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>
+        {
+            [ServiceScopeAuthorizationHandler.ConnectorsSubject] = [],
+            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [],
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() => app.ValidateRouteDeclarations(Roles(), services));
+
+        Assert.Contains("'service:connectors' tem a lista de rotas vazia", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("'application' tem a lista", exception.Message, StringComparison.Ordinal);
+    }
+
+    // "A lista vazia de application passa, por exceção" (spec route-roles): a exceção temporária até a
+    // #187, que a retira junto com a abertura da rota A2A.
+    [Fact]
+    public void TheApplicationSubject_MayHaveAnEmptyList_UntilIssue187()
+    {
+        Assert.Empty(ServiceScopeAuthorizationHandler.ServiceRoutes[ServiceScopeAuthorizationHandler.ApplicationSubject]);
+        var app = WebApplication.CreateBuilder().Build();
+
+        var exception = Record.Exception(() => app.ValidateRouteDeclarations(Roles(), NoServices));
+
+        Assert.Null(exception);
+    }
+
+    // "Sem a entrada application" (spec route-roles).
+    [Fact]
+    public void WithoutTheApplicationSubject_Throws_NamingIt()
+    {
+        var app = WebApplication.CreateBuilder().Build();
+        var services = new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => app.ValidateRouteDeclarations(Roles(), services));
+
+        Assert.Contains("o subject 'application'", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

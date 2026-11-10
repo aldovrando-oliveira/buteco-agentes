@@ -14,7 +14,12 @@ namespace Buteco.Api.Auth;
 /// responderia <c>403</c> a todo mundo, em silêncio;</item>
 /// <item>toda entrada das duas tabelas tem rota mapeada com o método. Sem isso, uma rota renomeada
 /// deixaria a entrada antiga viva e a nova sem papel;</item>
-/// <item>nenhuma entrada da <see cref="RoleRoutes"/> tem lista de papéis vazia.</item>
+/// <item>nenhuma entrada da <see cref="RoleRoutes"/> tem lista de papéis vazia;</item>
+/// <item>nenhum subject sem papel tem lista de rotas vazia, com uma exceção nomeada,
+/// <see cref="ServiceScopeAuthorizationHandler.SubjectAllowedEmpty"/> (a aplicação externa, até a #187), e
+/// o subject <see cref="ServiceScopeAuthorizationHandler.ApplicationSubject"/> existe (design.md da change
+/// aplicacoes-externas-credencial, D1). Uma lista esvaziada por engano deixaria o serviço recebendo
+/// <c>403</c> em tudo, e sem a chave da aplicação o token dela não teria a lista que a autoriza.</item>
 /// </list>
 /// Forma sobre o host construído, como <see cref="ServiceScopeRouteValidation"/>: chamada depois de
 /// todos os <c>app.Map*</c> e antes de <c>app.Run()</c>.
@@ -81,6 +86,19 @@ public static class RouteDeclarationValidation
             {
                 problems.Add($"a tabela de papéis lista {method} '{pattern}', que não corresponde a nenhum endpoint mapeado");
             }
+        }
+
+        foreach (var (subject, routes) in serviceRoutes)
+        {
+            if (routes.Count == 0 && subject != ServiceScopeAuthorizationHandler.SubjectAllowedEmpty)
+            {
+                problems.Add($"o subject '{subject}' tem a lista de rotas vazia");
+            }
+        }
+
+        if (!serviceRoutes.ContainsKey(ServiceScopeAuthorizationHandler.ApplicationSubject))
+        {
+            problems.Add($"o subject '{ServiceScopeAuthorizationHandler.ApplicationSubject}', da aplicação externa, não está na lista de subjects");
         }
 
         problems.AddRange(ServiceScopeRouteValidation.FindUnmappedRoutes(endpoints, serviceRoutes));

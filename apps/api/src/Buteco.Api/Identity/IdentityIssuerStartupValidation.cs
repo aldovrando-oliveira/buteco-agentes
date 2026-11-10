@@ -61,9 +61,11 @@ public static class IdentityIssuerStartupValidation
         ValidateServiceClientSecrets(identityOptions.ServiceClients, signingKey, twoFactorKey, mcpKey);
 
         // A retenção cobre o token mais longo que o emissor valida com as próprias chaves: o
-        // refresh também é validado por elas (usuarios-locais-login-emissor, D3.7). Só as
-        // durações globais: uma duração por aplicação (#186) não aparece aqui. Refresh sem
-        // prazo (nulo) não cabe em retenção nenhuma.
+        // refresh também é validado por elas (usuarios-locais-login-emissor, D3.7), e o access token
+        // da aplicação externa tem duração própria (aplicacoes-externas-credencial, D5). Até a #186
+        // eram só as durações globais; a da aplicação entra porque é uma constante do código, posta
+        // no principal, e não um valor por aplicação no banco, que esta checagem não veria sem I/O.
+        // Refresh sem prazo (nulo) não cabe em retenção nenhuma.
         var composed = ComposeWithoutKeys(host.Services);
         var accessTokenLifetime = composed.AccessTokenLifetime ?? TimeSpan.Zero;
         var checkInterval = host.Services.GetRequiredService<IdentityKeyRotationSchedule>().CheckInterval;
@@ -73,16 +75,8 @@ public static class IdentityIssuerStartupValidation
                 $"Refresh token sem prazo: nenhuma retenção das chaves do emissor ({IdentityKeyRotationPolicy.Retention}) o cobre.");
         }
 
-        var (longestName, longest) = refreshLifetime >= accessTokenLifetime
-            ? ("refresh token", refreshLifetime)
-            : ("access token", accessTokenLifetime);
-        if (IdentityKeyRotationPolicy.Retention < longest + checkInterval)
-        {
-            throw new InvalidOperationException(
-                $"Retenção das chaves do emissor ({IdentityKeyRotationPolicy.Retention}) menor que a duração do {longestName} " +
-                $"({longest}) mais o intervalo da verificação de rotação ({checkInterval}): um token assinado pela chave " +
-                "anterior deixaria de validar antes de expirar.");
-        }
+        ValidateKeyRetention(
+            IdentityKeyRotationPolicy.Retention, checkInterval, accessTokenLifetime, IdentityTokenLifetimes.ApplicationAccessToken, refreshLifetime);
 
         // A linha de um refresh token resgatado precisa existir enquanto ele estiver no
         // prazo, ou a detecção de reuso para de valer em silêncio. Hoje passa (14 dias dos
@@ -99,6 +93,37 @@ public static class IdentityIssuerStartupValidation
 
         logger.LogInformation("Emissor OIDC ligado, issuer {Issuer}.", state.Issuer);
     }
+
+    /// <summary>
+    /// A maior das três durações que a retenção das chaves precisa cobrir, com o nome dela para a
+    /// mensagem. Pública para o caso da 6.2 do tasks.md montar a checagem com a duração de aplicação
+    /// acima da retenção, que a constante de produção não permite.
+    /// </summary>
+    public static (string Name, TimeSpan Lifetime) Longest(TimeSpan accessToken, TimeSpan applicationAccessToken, TimeSpan refreshToken) =>
+        new[]
+        {
+            ("refresh token", refreshToken),
+            ("access token", accessToken),
+            ("access token de aplicação", applicationAccessToken),
+        }.MaxBy(candidate => candidate.Item2);
+
+    /// <summary>
+    /// A conferência da retenção contra as três durações, separada para o mesmo caso. Lança com a
+    /// mensagem do boot.
+    /// </summary>
+    public static void ValidateKeyRetention(TimeSpan retention, TimeSpan checkInterval, TimeSpan accessToken, TimeSpan applicationAccessToken, TimeSpan refreshToken)
+    {
+        var (longestName, longest) = Longest(accessToken, applicationAccessToken, refreshToken);
+        if (retention < longest + checkInterval)
+        {
+            throw new InvalidOperationException(RetentionMessage(retention, longestName, longest, checkInterval));
+        }
+    }
+
+    private static string RetentionMessage(TimeSpan retention, string longestName, TimeSpan longest, TimeSpan checkInterval) =>
+        $"Retenção das chaves do emissor ({retention}) menor que a duração do {longestName} " +
+        $"({longest}) mais o intervalo da verificação de rotação ({checkInterval}): um token assinado pela chave " +
+        "anterior deixaria de validar antes de expirar.";
 
     /// <summary>
     /// A nova forma da convenção 8, para endpoint que não é <c>RouteEndpoint</c> (F5).
