@@ -17,12 +17,23 @@ namespace Buteco.Api.Tests;
 public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>
 {
     // Sem nenhum serviço, mas com a chave da aplicação externa, que a checagem exige desde a change
-    // aplicacoes-externas-credencial (D1): sem ela, todo caso ganharia um problema que não é o dele.
+    // aplicacoes-externas-credencial (D1): sem ela, todo caso ganharia um problema que não é o dele. Desde
+    // a agentes-por-aplicacao (D2.1) a lista dela não pode ser vazia: cada caso mapeia a rota dela no
+    // próprio host (MapApplicationRoute), e a entrada não vira um problema a mais.
+    private const string ApplicationRoute = "/aplicacao/a2a";
+
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<(string Method, string Pattern)>> NoServices =
         new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>
         {
-            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [],
+            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [("POST", ApplicationRoute)],
         };
+
+    private static WebApplication HostWithTheApplicationRoute()
+    {
+        var app = WebApplication.CreateBuilder().Build();
+        app.MapPost(ApplicationRoute, () => "ok");
+        return app;
+    }
 
     private static IReadOnlyDictionary<(string Method, string Pattern), IReadOnlyList<UserRole>> Roles(
         params ((string Method, string Pattern) Route, UserRole[] Roles)[] entries) =>
@@ -31,7 +42,7 @@ public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClass
     [Fact]
     public void AnAuthenticatedRouteWithoutDeclaration_Throws_NamingMethodAndPattern()
     {
-        var app = WebApplication.CreateBuilder().Build();
+        var app = HostWithTheApplicationRoute();
         app.MapGet("/coisas", () => "ok");
         app.MapPost("/coisas", () => "ok");
 
@@ -45,7 +56,7 @@ public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClass
     [Fact]
     public void ARoleEntryWithoutRoute_Throws_NamingTheEntry()
     {
-        var app = WebApplication.CreateBuilder().Build();
+        var app = HostWithTheApplicationRoute();
         app.MapGet("/coisas", () => "ok");
 
         var exception = Assert.Throws<InvalidOperationException>(() => app.ValidateRouteDeclarations(
@@ -57,7 +68,7 @@ public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClass
     [Fact]
     public void AnEmptyRoleList_Throws_NamingTheEntry()
     {
-        var app = WebApplication.CreateBuilder().Build();
+        var app = HostWithTheApplicationRoute();
         app.MapGet("/coisas", () => "ok");
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
@@ -69,13 +80,13 @@ public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClass
     [Fact]
     public void AServiceRoute_CountsAsDeclared_AndAnAnonymousRouteStaysOutOfBothSenses()
     {
-        var app = WebApplication.CreateBuilder().Build();
+        var app = HostWithTheApplicationRoute();
         app.MapGet("/sync/coisas", () => "ok");
         app.MapGet("/aberta", () => "ok").AllowAnonymous();
         var services = new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>
         {
             ["service:teste"] = [("GET", "/sync/coisas")],
-            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [],
+            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [("POST", ApplicationRoute)],
         };
 
         var exception = Record.Exception(() => app.ValidateRouteDeclarations(Roles(), services));
@@ -88,11 +99,11 @@ public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClass
     [Fact]
     public void AnEmptyServiceRouteList_Throws_NamingTheSubject()
     {
-        var app = WebApplication.CreateBuilder().Build();
+        var app = HostWithTheApplicationRoute();
         var services = new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>
         {
             [ServiceScopeAuthorizationHandler.ConnectorsSubject] = [],
-            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [],
+            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [("POST", ApplicationRoute)],
         };
 
         var exception = Assert.Throws<InvalidOperationException>(() => app.ValidateRouteDeclarations(Roles(), services));
@@ -101,17 +112,22 @@ public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClass
         Assert.DoesNotContain("'application' tem a lista", exception.Message, StringComparison.Ordinal);
     }
 
-    // "A lista vazia de application passa, por exceção" (spec route-roles): a exceção temporária até a
-    // #187, que a retira junto com a abertura da rota A2A.
+    // (guarda 2.3) "A lista vazia de application derruba o boot" (spec route-roles; change
+    // agentes-por-aplicacao, D2.1). A exceção que a #186 deixou até a rota A2A abrir saiu: uma lista de
+    // application esvaziada por engano tiraria a A2A de toda aplicação, em silêncio. Defeito: a exceção do
+    // application de volta no if da checagem.
     [Fact]
-    public void TheApplicationSubject_MayHaveAnEmptyList_UntilIssue187()
+    public void TheApplicationSubject_WithAnEmptyList_Throws_NamingIt()
     {
-        Assert.Empty(ServiceScopeAuthorizationHandler.ServiceRoutes[ServiceScopeAuthorizationHandler.ApplicationSubject]);
         var app = WebApplication.CreateBuilder().Build();
+        var services = new Dictionary<string, IReadOnlyList<(string Method, string Pattern)>>
+        {
+            [ServiceScopeAuthorizationHandler.ApplicationSubject] = [],
+        };
 
-        var exception = Record.Exception(() => app.ValidateRouteDeclarations(Roles(), NoServices));
+        var exception = Assert.Throws<InvalidOperationException>(() => app.ValidateRouteDeclarations(Roles(), services));
 
-        Assert.Null(exception);
+        Assert.Contains("'application' tem a lista de rotas vazia", exception.Message, StringComparison.Ordinal);
     }
 
     // "Sem a entrada application" (spec route-roles).

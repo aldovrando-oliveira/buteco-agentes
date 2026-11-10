@@ -13,6 +13,7 @@ using InboxChannel = InboxAssembly::Buteco.Inbox.Channels.Entities.Channel;
 using InboxInboundMessageOrchestrator = InboxAssembly::Buteco.Inbox.Orchestration.IInboundMessageOrchestrator;
 using InboxMessageContentType = InboxAssembly::Buteco.Inbox.Messages.Entities.MessageContentType;
 using InboxPendingDispatch = InboxAssembly::Buteco.Inbox.Orchestration.Entities.PendingDispatch;
+using ApiAppDbContext = ApiAssembly::Buteco.Api.Infrastructure.AppDbContext;
 
 namespace InboxOrchestratorRoundTrip.Tests;
 
@@ -136,6 +137,51 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
 
         Assert.NotNull(rawMessageInstant);
         Assert.Equal(receivedAt, DateTimeOffset.Parse(rawMessageInstant));
+    }
+
+    /// <summary>
+    /// A change agentes-por-aplicacao (7.1 do tasks.md): com a tabela de vínculos e a coluna do dono
+    /// presentes, a mensagem do canal percorre inbox → api → worker como antes, e a task que o
+    /// <c>service:inbox</c> cria fica sem dono (<c>a2a_tasks.application_id</c> nulo). O filtro da
+    /// aplicação externa não se aplica ao inbox, e o dono só se grava para o subject <c>application</c>.
+    /// </summary>
+    [Fact]
+    public async Task MessageReceived_TriggersFullRoundTrip_TheInboxTaskHasNoOwner()
+    {
+        var agentId = await CreateAgentAsync();
+        var (channelId, externalId) = await CreateChannelAsync(agentId);
+
+        using (var scope = fixture.InboxFactory.Services.CreateScope())
+        {
+            var orchestrator = scope.ServiceProvider.GetRequiredService<InboxInboundMessageOrchestrator>();
+            await orchestrator.ReceiveMessageAsync(
+                channelId,
+                externalId,
+                "Tem lugar amanhã?",
+                InboxMessageContentType.Text,
+                Guid.NewGuid().ToString(),
+                displayName: null,
+                DateTimeOffset.UtcNow,
+                new Dictionary<string, string>(),
+                CancellationToken.None);
+        }
+
+        var taskId = await PollUntilAsync(
+            () => GetPendingDispatchTaskIdAsync(channelId, externalId),
+            id => id is not null,
+            TimeSpan.FromSeconds(10));
+        Assert.NotNull(taskId);
+        await PollUntilAsync(
+            () => HasPendingDispatchAsync(channelId, externalId),
+            hasPending => !hasPending,
+            TimeSpan.FromSeconds(20));
+
+        var (state, _) = await GetTaskFromApiAsync(agentId, taskId!);
+        Assert.Equal("TASK_STATE_COMPLETED", state);
+        using var apiScope = fixture.ApiFactory.Services.CreateScope();
+        var owner = await apiScope.ServiceProvider.GetRequiredService<ApiAppDbContext>().A2ATasks.AsNoTracking()
+            .Where(task => task.TaskId == taskId).Select(task => task.ApplicationId).SingleAsync();
+        Assert.Null(owner);
     }
 
     /// <summary>

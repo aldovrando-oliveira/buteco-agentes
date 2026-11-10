@@ -113,6 +113,17 @@ public static class RoleRoutes
             [("POST", "/applications/{id:guid}/activate")] = AdminOnly,
             [("POST", "/applications/{id:guid}/secrets")] = AdminOnly,
             [("POST", "/applications/{id:guid}/secrets/{secretId:guid}/revoke")] = AdminOnly,
+
+            // Os agentes liberados para cada aplicação (agentes-por-aplicacao, D5): só o Admin, com o
+            // papel gravado, como o resto de /applications. No agente, o card "Aplicações com acesso"
+            // em duas rotas (Q8): a lista, com os nomes, só do Admin (e do papel gravado); a contagem,
+            // só números, dos três papéis.
+            [("GET", "/applications/{id:guid}/agents")] = AdminOnly,
+            [("POST", "/applications/{id:guid}/agents")] = AdminOnly,
+            [("PUT", "/applications/{id:guid}/agents/{agentId:guid}")] = AdminOnly,
+            [("DELETE", "/applications/{id:guid}/agents/{agentId:guid}")] = AdminOnly,
+            [("GET", "/agents/{id:guid}/applications")] = AdminOnly,
+            [("GET", "/agents/{id:guid}/applications/count")] = All,
         };
 
     public static bool Allows(string method, string pattern, UserRole role) =>

@@ -8,8 +8,9 @@ namespace Buteco.Api.ExternalApplications;
 /// <c>ClientSecret</c> do OpenIddict, que guarda um segredo só por cliente (D4).
 ///
 /// <para>
-/// <b>Desativada, nunca excluída.</b> A aplicação é a autora das tasks e das métricas que a #187 vai
-/// registrar, e a lista continua mostrando a desativada, que pode ser reativada.
+/// <b>Desativada, nunca excluída.</b> A aplicação é a dona das tasks que criou
+/// (<c>a2a_tasks.application_id</c>, change agentes-por-aplicacao, D3), com a FK em <c>Restrict</c>, e a
+/// lista continua mostrando a desativada, que pode ser reativada com os agentes liberados de antes.
 /// </para>
 /// </summary>
 public sealed class ExternalApplication

@@ -127,7 +127,7 @@ código que não corresponda a nenhuma rota de fato mapeada.
   a entrada sem rota correspondente, e não chega a aceitar requisições
 
 ### Requirement: Subject desconhecido é recusado em apps/api
-`apps/api` SHALL autorizar, entre os tokens válidos, apenas o subject `operator` (o token do painel), nas rotas em cuja entrada da tabela de papéis esteja o `role` dele (`route-roles`), cada subject de serviço conhecido (`service:inbox`, `service:connectors`) nas rotas da sua lista, e o subject `application` da aplicação externa nas rotas da lista dele (`route-roles`; vazia até a #187). O `operator` SHALL NOT ter acesso implícito a todas as rotas. Um token válido com qualquer outro subject SHALL receber `403 Forbidden` em toda rota que exige autenticação.
+`apps/api` SHALL autorizar, entre os tokens válidos, apenas o subject `operator` (o token do painel), nas rotas em cuja entrada da tabela de papéis esteja o `role` dele (`route-roles`), cada subject de serviço conhecido (`service:inbox`, `service:connectors`) nas rotas da sua lista, e o subject `application` da aplicação externa nas rotas da lista dele (`route-roles`: só `POST /agents/{id}/a2a`, com a checagem do vínculo de `a2a-task-lifecycle`). O `operator` SHALL NOT ter acesso implícito a todas as rotas. Um token válido com qualquer outro subject SHALL receber `403 Forbidden` em toda rota que exige autenticação.
 
 #### Scenario: Subject desconhecido recusado em rota do painel
 - **WHEN** uma requisição `GET /knowledge-bases` chega com token validamente

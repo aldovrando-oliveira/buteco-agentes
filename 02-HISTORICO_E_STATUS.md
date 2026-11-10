@@ -18940,3 +18940,64 @@ Do corpo e dos comentários da issue, nenhuma de parada: o "token do operador de
 - **#187** (M2 · 5 de 6): retira a exceção da lista vazia de `application`, abre `POST /agents/{id}/a2a` com o filtro por agente e muda a asserção de `ApplicationToken_OnEveryAuthenticatedRoute_ReturnsForbidden` (comentário na issue).
 - **#188**: as telas, contra a versão 60, com os estados sem quadro desenhados no design dela.
 - **Nove contêineres Postgres do Testcontainers ficaram órfãos** na VM do Podman, deixados pela rodada inconclusiva da `api` (sessão `c569eac5…`, criados entre 19:25 e 19:28 de 09/11/2026): a suíte roda com o Ryuk desligado (`TESTCONTAINERS_RYUK_DISABLED=true`), e as fixtures que estouraram o tempo não os removeram. A remoção foi negada pelo classificador de permissões nesta sessão e **ficou com o dono** (ex.: `podman rm -f $(podman ps -aq --filter label=org.testcontainers=true)`), antes da próxima suíte, porque ocupam memória da VM.
+
+## `agentes-por-aplicacao` — Agentes liberados por aplicação externa (#187)
+
+**Change proposta e implementada em 09–10/11/2026**, na branch `feat/187-agentes-por-aplicacao`, num worktree próprio, a partir de `5e23548` (merge do PR #263, a #186). Entrega M2 · 5 de 6. Só o `apps/api` muda; a tela é da #188.
+
+- **O que entra no `apps/api`:**
+  - **o vínculo aplicação × agente** (`external_application_agents`), com as operações por agente: `enviar-mensagem`, `consultar-task` e `notificacao-push`. Sem cancelamento (decisão do dono, Q1): o `CancelTask` grava `canceled` e o `apps/workers` o sobrescreve quando a task já está em `working`; o cancelamento real é a [#264](https://github.com/aldovrando-oliveira/buteco-agentes/issues/264). A aplicação nasce sem agentes, e o vínculo sobrevive a desativar e reativar a aplicação ou o agente;
+  - **a rota A2A aberta para `application`**, com a exceção da lista vazia retirada da checagem de boot;
+  - **o `ApplicationA2AFilter`**, antes do SDK e só para `application`: sem vínculo, agente inexistente ou aplicação desativada (na hora, com o token no prazo) → `404` vazio, o mesmo nos três casos; método fora das operações (inclusive `CancelTask`, `ListTasks` e push sem a operação) → `403` vazio. O corpo é lido com os tipos e as opções do próprio SDK;
+  - **o dono da task** (`a2a_tasks.application_id`), gravado só na criação, e o filtro por dono **e** agente no `GetTask` e na continuação (`-32001`, igual à inexistente), e no `contextId` (só o de uma conversa da aplicação no mesmo agente; o resto, `-32602` "Contexto não encontrado."). O inbox, a filha da delegação e as tasks de antes ficam sem dono, e o inbox não passa por filtro nenhum;
+  - **as rotas do Admin** (`GET`/`POST /applications/{id}/agents`, `PUT`/`DELETE …/{agentId}`) e o card do agente em duas rotas (`GET /agents/{id}/applications/count` para os três papéis, `GET /agents/{id}/applications` só para o Admin); a lista de aplicações traz `agentes` (Q11).
+- **Migration** `ExternalApplicationAgents` (a tabela nova e a coluna anulável, com o índice criado sem `CONCURRENTLY`; nota no `docs/deployment.md`). Sem variável nova.
+- **Documentação:** `docs/a2a-integration.md` ("O que a aplicação alcança", as exceções ao "erro não é HTTP 4xx", o cancelamento como é hoje, `TASK_STATE_CANCELED`, o push nas recomendações de polling), `docs/deployment.md` ("Agentes liberados por aplicação externa (#187)"), a autenticação do `01` e o `CHANGELOG.md`.
+- **Capacidades:** nova `external-application-agents`; modificadas `route-roles`, `route-authentication`, `a2a-task-lifecycle`, `a2a-push-notifications` e `external-applications`.
+- **Protótipo:** canvas `H7dPBZafiSkdKd1hqesPZ6`, versão 63 (`1794271196-4a59`), corrigida pelo dono a partir da lista (f) do design: três operações, o texto do agente inativo, o card do agente por papel. A aba Atividade é da #199.
+
+**Decisões do dono** (09/11/2026): Q1 ("Cancelar task" fora, #264, só a doc muda), Q5 com ajuste (o contexto inexistente e o alheio com a mesma resposta), Q2 com o guarda do parse, e as outras como recomendadas. O guarda 3.5b (push sem a operação) foi pedido antes do apply.
+
+### Premissas (convenção 9)
+
+Do corpo e dos comentários da issue: os nomes `message/send`/`tasks/get`/`tasks/cancel` (A2A 0.3); **`tasks/cancel` como operação** (parada, decidida pelo dono: Q1); o push filtrado por task (não existe: os métodos de push config respondem `-32003`); "checagem no handler" (é um filtro antes do SDK); o comentário de 09/11 citava só um dos dois guardas da #186 que mudam de asserção. No código e na doc: "não há push neste endpoint" (`docs/a2a-integration.md`), `TASK_STATE_CANCELED` "nunca produzido", e "`ListTasksAsync` sem consumidor" (`PostgresTaskStore`), corrigidos.
+
+**Caiu no apply, seguido e registrado** (design, D7; `tasks.md`):
+- a Q11 aceita não tinha entrado na delta (os chips da lista): entrou como cenário e tarefa no início do apply;
+- o defeito do guarda 1.4 (o banco do teste vem da migration, não da configuração);
+- a 5.2 dividida entre o `rt-crossapp` e o `apps/api`;
+- a substituição de `{agentId:guid}` no guarda da matriz;
+- **um caso fora da lista do topo mudou de valor esperado**: `ServiceScopeAuthorizationTests.ProductionServiceRouteLists_MatchTheBuiltHostEndpoints` somava 7 rotas nas listas sem papel e agora soma 8 (a A2A de `application`). A asserção continua exata; não saiu, não mudou de nome, não afrouxou. Achado pela 1ª rodada da `api`.
+
+### O que a implementação mediu
+
+| suíte | baseline `5e23548` (`baseline-187/`) | change | CPU mín. |
+|---|---|---|---|
+| `apps/api` | 1640 + 1 ignorado, APROVADA, CPU mín. 51 | 1ª rodada (`187-fechamento/`): **reprovada pelo `ProductionServiceRouteLists_MatchTheBuiltHostEndpoints` (7 → 8), corrigida** (o caso que a change mudou, como na #184 e na #185); **2ª rodada (`187-fechamento-api2/`): 1685 + 1 ignorado, APROVADA** | 60 |
+| `rt-inbox` | 15/15, APROVADA (CPU 90) | 16/16, APROVADA | 100 |
+| `rt-crossapp` | 4/4, APROVADA | 6/6, APROVADA | 100 |
+| `rt-connectors` | 12/12, APROVADA | 12/12, APROVADA | 100 |
+
+- **Comparação por nome** (`187-fechamento-final/nomes.txt`, 1.720 resultados, GUID normalizado, multiconjunto): saem só os 3 da lista do topo (`ApplicationToken_OnEveryAuthenticatedRoute_ReturnsForbidden` e `ApplicationToken_OnTheA2ARoute_IsForbidden_AndPublishesNoJob`, renomeados, e `TheApplicationSubject_MayHaveAnEmptyList_UntilIssue187`); entram 51, todos aprovados: `ApplicationA2ARouteTests` 16, `ExternalApplicationAgentEndpointsTests` 11, `ExternalApplicationAuthorizationTests` 2 (os renomeados), `RouteDeclarationValidationTests` 1, `RoleMatrixTests` 18 (as 6 linhas novas × 3 papéis), `TaskOwnerCompatibilityTests` 2 (`rt-crossapp`) e `RoundTripTests` 1 (`rt-inbox`).
+- **Guardas (convenção 15):** 16 guardas em 21 rodadas (os de duas rodadas, 3.2, 3.4, 4.4, 4.7 e 6.5, cada rodada separada), todas reprovadas pela asserção, nenhuma por compilação, com a volta pela cópia e o sha conferido, em `~/.cache/buteco-agents/187-guardas/` (lista no `tasks.md`, seção 9).
+- **Build:** nenhum aviso novo (18 distintos na baseline e na change).
+- **As conferências 1 a 9**, com o `apps/api` e o `apps/workers` do worktree e o RabbitMQ de desenvolvimento, num banco descartável copiado do de desenvolvimento por `pg_dump` (pelo `template0`) e migrado (o de desenvolvimento estava em `20261102`, sem as migrations da #184 e da #186; não foi tocado), o Admin pelo `password-reset-link` e pelo login real, o Operador e o Leitor pelo papel e pelo link de redefinição do Admin, e o `curl` pelo `conferencia-187.py`:
+  1. A e B criadas; o agente "Atendente Ambiente Software" liberado para A com enviar e consultar;
+  2. com o token de A: o `SendMessage` cria a task com o dono gravado; o `GetTask` acompanha até `TASK_STATE_COMPLETED` (o worker local executou); `CancelTask`, `ListTasks` e o `SendMessage` com push → `403` vazio, sem task nova (46 antes e depois);
+  3. com o token de B, sem vínculo: `404`, igual ao de um agente inexistente (status, `Content-Type`, `Content-Length` e corpo);
+  4. com o agente liberado para B: a task de A → `-32001`, igual à de um id inexistente, trocado o id;
+  5. o `contextId` da task de A reusado por B e um inventado → o mesmo `-32602` "Contexto não encontrado.", byte a byte;
+  6. A desativada: `404` na hora, com o token ainda valendo 293 s;
+  7. o card: `{"total":2,"ativas":1}` para os três papéis; a lista para o Admin (B ativa, depois A desativada) e `403` para o Operador e o Leitor;
+  8. uma task do inbox (token real do `buteco-servico-inbox`) foi do `submitted` ao `completed` pelo worker local, com o dono nulo. O `rt-inbox` cobre o caminho inbox → api → worker com os três apps; a conferência acrescenta o LLM real;
+  9. **a volta atrás**, a imagem de `5e23548` (`podman build`) sobre o banco migrado: a rota nova responde `404` (é a imagem antiga), e a aplicação B, com o agente liberado no banco, recebe `403` na A2A, em `GET /agents/` e em `GET /applications/`; o Admin entra pelo login real e lê `/agents/` e `/applications/`; o inbox obtém token e cria task.
+
+  O banco, o contêiner e a imagem foram apagados. **Efeito colateral no RabbitMQ de desenvolvimento:** o `apps/workers` local, ao subir, consumiu e descartou **19 mensagens antigas** da fila de desenvolvimento, de 19 agentes diferentes, nenhum deles na cópia ("Agente … não encontrado para a task …", contadas no log do workers da conferência). **Nas próximas conferências com o workers local, a fila é conferida antes de subi-lo, e o que há nela vai para o registro.**
+- **Tamanho (convenção 18)**, por `git diff --numstat 5e23548` mais os arquivos novos, só código: **produção +779 / −33, 16 arquivos**, contra ~830 (**−6 %**), 15 % de comentário contra ~35 %; **testes +1.049 / −31, 9 arquivos**, contra ~1.550 (**−32 %**); **duplos: nenhum arquivo novo de apoio** (a fixture da #186 bastou), contra ~120; os passos dentro das duas classes novas somam 154 linhas, contadas em testes; **30 métodos novos e 3 renomeados** (51 resultados, com as 18 linhas da matriz), contra ~44 casos; docs +146 / −30; gerado +1.671. Como na #186, o custo por caso ficou abaixo dos ~35 da #184 (~30), porque a fixture concentra os passos.
+- **Validação visual:** não se aplica (sem tela).
+
+### Para as próximas
+
+- **#188**: as telas, contra a versão 63, com os estados sem quadro desenhados no design dela (o contrato está nas specs desta change).
+- **#264**: o cancelamento real; com ele, a quarta operação liberável.
+- **#199** (aguardando gatilho): a aba Atividade e as recusas, que não têm fonte (as recusas do filtro não são gravadas).

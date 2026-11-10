@@ -240,6 +240,7 @@ app.MapAccountSessionEndpoints();
 app.MapUserEndpoints();
 app.MapInvitationEndpoints();
 app.MapExternalApplicationEndpoints();
+app.MapExternalApplicationAgentEndpoints();
 app.MapPasswordResetEndpoints();
 app.MapAccessLinkPublicEndpoints();
 app.MapIdentityOverviewEndpoint();
@@ -255,7 +256,10 @@ app.MapKnowledgeDocumentEndpoints();
 app.MapKnowledgeSyncEndpoints();
 app.MapKnowledgeIndexEndpoints();
 app.MapInsightsEndpoints();
-app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a");
+// O filtro da aplicação externa vai no grupo que o MapA2A devolve: roda antes do processador JSON-RPC do
+// SDK, só para o subject application (agentes-por-aplicacao, D2).
+app.MapA2A(app.Services.GetRequiredService<RoutingA2ARequestHandler>(), "/agents/{id}/a2a")
+    .AddEndpointFilter(new ApplicationA2AFilter(app.Services.GetRequiredService<IServiceScopeFactory>()));
 app.MapAgentCardEndpoint();
 
 // Falha o startup se alguma rota não estiver classificada como

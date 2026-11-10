@@ -102,7 +102,18 @@ public static class ExternalApplicationEndpoints
             .ThenBy(application => application.Id)
             .ToListAsync(cancellationToken);
 
-        return TypedResults.Ok(applications.Select(ApplicationSummary.From).ToList());
+        // Os agentes liberados de cada aplicação da página, numa consulta (agentes-por-aplicacao, Q11).
+        var ids = applications.Select(application => application.Id).ToList();
+        var chips = (await dbContext.ExternalApplicationAgents
+                .AsNoTracking()
+                .Where(link => ids.Contains(link.ApplicationId))
+                .Join(dbContext.Agents, link => link.AgentId, agent => agent.Id, (link, agent) => new { link.ApplicationId, agent.Id, agent.Name })
+                .OrderBy(row => row.Name)
+                .ThenBy(row => row.Id)
+                .ToListAsync(cancellationToken))
+            .ToLookup(row => row.ApplicationId, row => new ApplicationAgentChip(row.Id, row.Name));
+
+        return TypedResults.Ok(applications.Select(application => ApplicationSummary.From(application, chips[application.Id].ToList())).ToList());
     }
 
     private static async Task<IResult> CreateAsync(

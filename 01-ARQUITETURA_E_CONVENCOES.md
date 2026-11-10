@@ -584,7 +584,8 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
   tabela de papéis com o papel dele ("Papéis", abaixo; até a #184, `operator` em tudo);
   `service:inbox` só nas duas rotas que `apps/inbox` consome;
   `service:connectors` só nas cinco de `/sync/knowledge-bases`; `application` (a
-  aplicação externa, #186) na lista dele, **vazia até a #187**; **qualquer
+  aplicação externa, #186) só em `POST /agents/{id}/a2a` (#187), com o vínculo e as operações
+  conferidos antes do SDK (abaixo); **qualquer
   outro subject recebe `403`**. Até a #102 a regra era "quem não é
   `service:inbox` passa", e um subject novo assinado com a chave tinha o
   acesso do operador. A lista de rotas de cada serviço é conferida no boot
@@ -607,8 +608,8 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     o painel, com qualquer papel, recebe `403` nelas.
   - **No boot**, nos três apps (convenção 8): toda rota autenticada está na tabela de papéis ou na
     lista de um subject de serviço, toda entrada tem rota, e nenhuma entrada tem lista vazia. No
-    `apps/api`, desde a #186, também nenhuma lista de subject sem papel é vazia, com a exceção
-    temporária de `application`, e a chave `application` existe. Os
+    `apps/api`, desde a #186, também nenhuma lista de subject sem papel é vazia (a exceção
+    temporária de `application` saiu na #187), e a chave `application` existe. Os
     guardas da matriz têm a matriz escrita à parte da tabela de produção: lida dela, a
     expectativa mudaria junto com o defeito.
   - **Token do painel sem `role` conhecido recebe `401`**, sem corpo `problem+json`, como o
@@ -632,10 +633,22 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     checagem de boot da retenção das chaves conta essa duração. Introspecção foi descartada (cada
     chamada A2A dependeria do emissor).
   - **O subject `application`** sai do claim `buteco_app`, que o emissor põe só para quem está no
-    cadastro, e só para `client_id` fora da tabela fechada e do prefixo `buteco-`. Até a #187 a
-    lista de rotas dele é vazia: o token autentica e recebe `403` em tudo, inclusive na A2A. **A
-    exceção da checagem de boot que aceita essa lista vazia é temporária**; a #187 a retira ao abrir
-    `POST /agents/{id}/a2a` com o filtro por agente.
+    cadastro, e só para `client_id` fora da tabela fechada e do prefixo `buteco-`. A lista de rotas
+    dele é só `POST /agents/{id}/a2a` (#187; até a #186 era vazia): em toda outra rota, `403`.
+  - **O vínculo aplicação × agente** (#187; design da change `agentes-por-aplicacao`): o Admin libera
+    agentes por aplicação em `/applications/{id}/agents`, com as operações por agente (enviar
+    mensagem, consultar task, notificação push; não há cancelamento, #264). A aplicação nasce sem
+    agentes. O `ApplicationA2AFilter`, um filtro de endpoint no grupo que o `MapA2A` devolve, roda
+    **antes do SDK**, só para `application`: sem vínculo, agente inexistente ou aplicação desativada
+    → `404` vazio, o mesmo nos três casos; método fora das operações liberadas (inclusive push sem a
+    operação) → `403` vazio. Ele lê o corpo com os tipos e as opções do próprio SDK, para o que
+    autoriza ser o que o SDK executa. A desativação corta a A2A na hora, mesmo com o token no prazo.
+  - **O dono da task** é `a2a_tasks.application_id`, gravado só na criação pelo `PostgresTaskStore`
+    do `apps/api` (pelo `TaskOwnerScope`, que o `RoutingA2ARequestHandler` põe no `SendMessage` da
+    aplicação). Nulo é do Buteco: o inbox, a task filha da delegação (o `apps/workers` não conhece a
+    coluna) e as tasks anteriores à #187. A aplicação só alcança as próprias tasks, pela rota do
+    agente delas, e só reusa o `contextId` de uma conversa dela naquele agente; o resto responde como
+    inexistente. O `service:inbox` não passa por nada disso.
   - **O último uso** é gravado na emissão do token, no segredo e na aplicação, no máximo uma vez por
     minuto; nada entra no caminho da chamada A2A.
 - **Enforcement por padrão**: toda rota HTTP de `apps/api` e `apps/inbox`

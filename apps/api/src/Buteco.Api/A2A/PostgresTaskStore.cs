@@ -29,7 +29,10 @@ public sealed class PostgresTaskStore(IServiceScopeFactory scopeFactory, Guid ag
 
         if (record is null)
         {
-            dbContext.A2ATasks.Add(new A2ATaskRecord(taskId, agentId, task.ContextId, task.Status.State.ToString(), task.Status.Timestamp, payload));
+            // O dono só na inserção (agentes-por-aplicacao, D3): nulo para o inbox, que não põe dono, e
+            // nenhuma transição o muda — o Update abaixo não o recebe.
+            dbContext.A2ATasks.Add(new A2ATaskRecord(
+                taskId, agentId, task.ContextId, task.Status.State.ToString(), task.Status.Timestamp, payload, TaskOwnerScope.Current));
         }
         else
         {
@@ -57,9 +60,12 @@ public sealed class PostgresTaskStore(IServiceScopeFactory scopeFactory, Guid ag
         // Nota: esta consulta não filtra por AgentId (só ContextId/Status),
         // apesar de A2ATaskRecord.AgentId existir. Mesma lacuna corrigida na
         // cópia de apps/workers (ver design.md da change
-        // apps-workers-historico-conversa, Decisão 2) — não urgente aqui
-        // porque ListTasksAsync não tem nenhum consumidor em apps/api hoje,
-        // mas vale corrigir junto se isso mudar.
+        // apps-workers-historico-conversa, Decisão 2). O método é alcançável
+        // pelo JSON-RPC (ListTasks) por qualquer chamador autorizado na rota
+        // A2A: hoje só o service:inbox, que não o chama. Para a aplicação
+        // externa ele é fechado, com 403, antes do SDK (ApplicationA2AFilter;
+        // change agentes-por-aplicacao, D1), porque listaria tasks de todo
+        // mundo. Se ganhar consumidor, o filtro por agente vem junto.
         var query = dbContext.A2ATasks.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrEmpty(request.ContextId))

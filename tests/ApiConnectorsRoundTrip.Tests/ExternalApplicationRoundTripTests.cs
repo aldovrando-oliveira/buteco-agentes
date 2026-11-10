@@ -19,8 +19,9 @@ namespace ApiConnectorsRoundTrip.Tests;
 /// <list type="bullet">
 /// <item>o <c>apps/connectors</c> recusa o token com <c>401</c>: a aplicação só recebe a audience
 /// <c>buteco-api</c>, e o <c>apps/connectors</c> não muda nada para isso;</item>
-/// <item>o <c>apps/api</c> o reconhece como <c>application</c> e responde <c>403</c>, não <c>401</c>: o
-/// token vale, e a lista de rotas da aplicação é vazia até a #187.</item>
+/// <item>o <c>apps/api</c> o reconhece como <c>application</c> e responde <c>403</c>, não <c>401</c>, em
+/// <c>GET /agents/</c>: o token vale, e a lista de rotas da aplicação tem só <c>POST /agents/{id}/a2a</c>
+/// (change agentes-por-aplicacao, D2.1).</item>
 /// </list>
 /// </summary>
 public class ExternalApplicationRoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripFixture>

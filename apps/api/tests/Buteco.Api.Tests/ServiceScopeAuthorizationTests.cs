@@ -219,7 +219,9 @@ public class ServiceScopeAuthorizationTests(ApiFactoryFixture factory) : IClassF
     {
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints;
 
-        Assert.Equal(7, ServiceScopeAuthorizationHandler.ServiceRoutes.Values.Sum(routes => routes.Count));
+        // 2 do service:inbox, 5 do service:connectors e 1 da aplicação externa (POST /agents/{id}/a2a,
+        // change agentes-por-aplicacao, D2.1; até a #186 a lista dela era vazia e a soma era 7).
+        Assert.Equal(8, ServiceScopeAuthorizationHandler.ServiceRoutes.Values.Sum(routes => routes.Count));
         Assert.Empty(ServiceScopeRouteValidation.FindUnmappedRoutes(endpoints, ServiceScopeAuthorizationHandler.ServiceRoutes));
     }
 

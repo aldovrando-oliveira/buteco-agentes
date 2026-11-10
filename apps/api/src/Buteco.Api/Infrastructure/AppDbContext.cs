@@ -72,6 +72,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<ExternalApplicationSecret> ExternalApplicationSecrets => Set<ExternalApplicationSecret>();
 
+    public DbSet<ExternalApplicationAgent> ExternalApplicationAgents => Set<ExternalApplicationAgent>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // A extensão nasce na migração de apps/api porque é apps/api quem
@@ -137,6 +139,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(task => task.ContextId);
             entity.HasIndex(task => task.State);
             entity.HasOne<Agent>().WithMany().HasForeignKey(task => task.AgentId);
+
+            // O dono da task (design.md da change agentes-por-aplicacao, D3): a aplicação externa que a
+            // criou, ou nulo para o que é do Buteco (o inbox, a delegação e as tasks de antes da change).
+            // Só este app mapeia a coluna; o apps/workers grava as transições e a task filha sem
+            // conhecê-la, e o EF dele não a escreve. Restrict: a aplicação não se exclui (D3 da #186).
+            entity.Property(task => task.ApplicationId).HasColumnName("application_id");
+            entity.HasOne<ExternalApplication>().WithMany()
+                .HasForeignKey(task => task.ApplicationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(task => task.ApplicationId);
         });
 
         modelBuilder.Entity<McpServer>(entity =>
@@ -823,6 +834,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // O emissor acha o segredo pelo hash (D4), sem percorrer os da aplicação.
             entity.HasIndex(secret => secret.Hash).IsUnique();
             entity.HasIndex(secret => secret.ApplicationId);
+        });
+
+        // Os agentes liberados para cada aplicação (design.md da change agentes-por-aplicacao, D5). Um
+        // vínculo por par; a lista de operações nunca vazia, também no banco, para um UPDATE por fora da
+        // rota não deixar um vínculo que libera nada e parece liberar. Restrict para a aplicação, que não
+        // se exclui; Cascade para o agente, como a2a_tasks, para o dia em que houver exclusão de agente.
+        modelBuilder.Entity<ExternalApplicationAgent>(entity =>
+        {
+            entity.ToTable("external_application_agents", table =>
+                table.HasCheckConstraint("CK_external_application_agents_operations", "cardinality(operations) > 0"));
+            entity.HasKey(link => new { link.ApplicationId, link.AgentId });
+            entity.Property(link => link.ApplicationId).HasColumnName("application_id");
+            entity.Property(link => link.AgentId).HasColumnName("agent_id");
+            entity.Property(link => link.Operations).HasColumnName("operations").HasColumnType("text[]").IsRequired();
+            entity.Property(link => link.GrantedAt).HasColumnName("granted_at");
+            entity.Property(link => link.UpdatedAt).HasColumnName("updated_at");
+            entity.HasOne<ExternalApplication>().WithMany()
+                .HasForeignKey(link => link.ApplicationId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Agent>().WithMany()
+                .HasForeignKey(link => link.AgentId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(link => link.AgentId);
         });
     }
 }
