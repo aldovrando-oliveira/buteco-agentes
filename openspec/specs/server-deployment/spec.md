@@ -199,9 +199,23 @@ dos apps e ausente da configuração do nginx SHALL ser tratado como defeito, n�
 como omissão deliberada: o fallback de SPA responde `200` com HTML, e o
 consumidor recebe sucesso com conteúdo inválido em vez de erro.
 
-Rotas de sondagem de saúde (`/health`) SHALL ser exceção explícita — os
-healthchecks executam dentro de cada container contra o próprio processo e não
-atravessam o nginx.
+As exceções SHALL ser explícitas, nomeadas e com o motivo de cada uma:
+- `/health`, nos três apps: os healthchecks executam dentro de cada container
+  contra o próprio processo e não atravessam o nginx;
+- `/sync`, no `apps/api`: só o `apps/connectors` a chama, pela rede interna do
+  compose, e ela SHALL NOT ser alcançável pelo domínio público;
+- os endpoints do emissor OIDC do `apps/api` que têm bloco exato próprio
+  (`/.well-known/openid-configuration`, `/.well-known/jwks`,
+  `/connect/authorize` e `/connect/logout`): `/.well-known/` é prefixo de uso
+  geral na web e não entra inteiro, e o authorize e o logout são navegação de
+  browser por definição, sem o desvio de navegação.
+
+A cobertura SHALL ser conferida por um teste na suíte de cada app que o nginx
+roteia, sobre os endpoints do host construído do próprio app (a composição real,
+não uma lista mantida à mão), comparados com a configuração do nginx lida do
+repositório, nos dois sentidos: prefixo servido sem bloco reprova, e prefixo de
+bloco que o app não serve reprova. Exceção que deixou de valer (a rota saiu, ou o
+bloco exato saiu) também reprova. A mensagem SHALL nomear o prefixo.
 
 Todo bloco de prefixo de API SHALL aplicar o mesmo desvio de navegação real
 (`Sec-Fetch-Mode: navigate` cai no shell do SPA), inclusive quando o prefixo não é
@@ -233,8 +247,8 @@ suficiente para detectar a omissão.
 - **WHEN** uma requisição sem `Sec-Fetch-Mode: navigate` (fetch/XHR
   disparado pela própria SPA já carregada) chega ao nginx do stack com
   path iniciando em `/agents`, `/providers`, `/mcp-servers`,
-  `/knowledge-bases`, `/knowledge-index`, `/insights`, `/auth`, `/account` ou
-  `/users`
+  `/knowledge-bases`, `/knowledge-index`, `/insights`, `/auth`, `/account`,
+  `/users`, `/identity`, `/applications` ou `/connect`
 - **THEN** ela é encaminhada para o container de `apps/api`; requisições
   no mesmo formato com path iniciando em `/channels`, `/contacts`,
   `/sessions`, `/messages`, `/webhooks` ou `/internal` são encaminhadas para o
@@ -295,12 +309,43 @@ suficiente para detectar a omissão.
   recebe `200` com `text/html`; e um path que apenas começa com o literal sem o
   separador, como `/accountxyz` ou `/usersxyz`, **não** é encaminhado
 
-#### Scenario: Prefixo servido por um app e ausente do nginx é detectado
-- **WHEN** os prefixos de rota de primeiro nível servidos por `apps/api`,
-  `apps/inbox` e `apps/connectors` são enumerados e comparados com os blocos de
-  roteamento do nginx
-- **THEN** todo prefixo servido, exceto `/health`, corresponde a um bloco que o
-  encaminha para o app que o serve
+#### Scenario: Lista de aplicações externas alcança apps/api pelo nginx
+- **WHEN** a SPA já carregada faz `GET /applications/` (fetch, sem
+  `Sec-Fetch-Mode: navigate`) contra o domínio público do stack
+- **THEN** o nginx encaminha a requisição para `apps/api`, que responde pela
+  própria rota (`401` sem token, JSON com token de Admin). A requisição **não**
+  cai no fallback de SPA nem recebe `200` com `text/html`; e um path que apenas
+  começa com o literal sem o separador, como `/applicationsxyz`, **não** é
+  encaminhado
+
+#### Scenario: Navegação real em /applications entrega o shell do SPA
+- **WHEN** o browser faz uma navegação real (`Sec-Fetch-Mode: navigate`) em
+  `/applications` ou em um path abaixo dele, como `/applications/{id}`
+- **THEN** o nginx responde com `index.html` e `Cache-Control: no-store`, sem
+  encaminhar a requisição para `apps/api`
+
+#### Scenario: Prefixo servido por um app e ausente do nginx reprova a suíte do app
+- **WHEN** um app que o nginx roteia (`apps/api`, `apps/inbox` ou
+  `apps/connectors`) serve uma rota cujo primeiro segmento não está em nenhum
+  bloco de regex que encaminha para ele, e o segmento não é exceção nomeada
+- **THEN** o teste de cobertura da suíte desse app reprova, nomeando o prefixo
+
+#### Scenario: Prefixo do nginx que o app não serve reprova a suíte do app
+- **WHEN** um bloco de regex que encaminha para um app lista um prefixo que
+  nenhuma rota do host construído desse app tem como primeiro segmento
+- **THEN** o teste de cobertura da suíte desse app reprova, nomeando o prefixo
+
+#### Scenario: Exceção que deixou de valer reprova
+- **WHEN** uma exceção nomeada no teste não corresponde mais a nada (a rota
+  `/health` ou `/sync` saiu do app, ou o bloco exato de um endpoint do emissor
+  saiu do nginx), ou um bloco exato que encaminha para o app não está entre as
+  exceções nomeadas
+- **THEN** o teste de cobertura reprova, nomeando a exceção ou o bloco
+
+#### Scenario: Bloco de prefixo de API sem o desvio de navegação reprova
+- **WHEN** um bloco de regex que encaminha para um app não tem o desvio de
+  navegação (`Sec-Fetch-Mode: navigate` reescrito para `/index.html`)
+- **THEN** o teste de cobertura da suíte desse app reprova, nomeando o bloco
 
 ### Requirement: Shell do SPA não é armazenado em cache, e os assets continuam cacheáveis
 O nginx do stack SHALL entregar o shell do SPA (`index.html`) com

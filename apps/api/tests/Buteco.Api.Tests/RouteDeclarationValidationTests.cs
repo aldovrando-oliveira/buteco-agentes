@@ -14,7 +14,8 @@ namespace Buteco.Api.Tests;
 /// sem host, e a composição real pela fixture, que é o único caso que pega a chamada removida do
 /// <c>Program.cs</c> junto com uma entrada a menos (convenção 8, segunda forma).
 /// </summary>
-public class RouteDeclarationValidationTests(ApiFactoryFixture factory) : IClassFixture<ApiFactoryFixture>
+[Collection(ApiHostCompositionCollection.Name)]
+public class RouteDeclarationValidationTests(ApiFactoryFixture factory)
 {
     // Sem nenhum serviço, mas com a chave da aplicação externa, que a checagem exige desde a change
     // aplicacoes-externas-credencial (D1): sem ela, todo caso ganharia um problema que não é o dele. Desde

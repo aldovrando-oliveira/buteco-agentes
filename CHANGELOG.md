@@ -1396,6 +1396,13 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **A lista de Aplicações externas carrega atrás do nginx do stack** (#268): o bloco do `api` no
+  `nginx.conf` do painel não tinha `applications`, e o `GET /applications/` recebia o `index.html`
+  com `200` no lugar do JSON. A regex ganha o prefixo, e um teste em cada app (`api`, `inbox`,
+  `connectors`) compara as rotas do host construído com os blocos do nginx, nos dois sentidos, com
+  as exceções nomeadas (`/health`, `/sync` e os blocos exatos do emissor). Rota nova sem prefixo
+  reprova na suíte de quem a criou.
+
 - **Senha ou código errado não desloga mais** (#246): as rotas que conferem a senha ou o
   código de quem chama respondem `401`, como o token recusado, e o painel renovava,
   repetia o pedido com a mesma senha (duas falhas no bloqueio) e, no segundo `401`,
