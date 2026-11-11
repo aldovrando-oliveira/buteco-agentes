@@ -1396,6 +1396,12 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **O filtro de estado das Aplicações externas no padrão das outras listas** (#270): a lista
+  suspensa com o rótulo "Estado" vira o controle segmentado "Todas | Ativas | Desativadas", na
+  linha da busca e sem rótulo visível ("Estado" fica como nome acessível), como nas listas de
+  agentes e de bases e no quadro `AplicacoesLista` corrigido (versão 69). A linha da busca e do
+  filtro some na lista vazia e continua na busca sem resultado. A busca no servidor não muda.
+
 - **A lista de Aplicações externas carrega atrás do nginx do stack** (#268): o bloco do `api` no
   `nginx.conf` do painel não tinha `applications`, e o `GET /applications/` recebia o `index.html`
   com `200` no lugar do JSON. A regex ganha o prefixo, e um teste em cada app (`api`, `inbox`,
