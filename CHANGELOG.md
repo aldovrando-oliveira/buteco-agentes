@@ -327,8 +327,25 @@ o versionamento pretende seguir
     da #211. Se o `apps/api` estiver fora, a tela mostra "Indisponível" e tenta de novo
     sozinha enquanto o erro durar;
   - Editar usuário e o "Editar" na linha chegam com a #183.
-- **Agentes liberados por aplicação externa** (#187, M2 · 5 de 6). Só o backend; a tela é da
-  #188.
+- **O painel das aplicações externas** (#188, M2 · 6 de 6). Só o `apps/frontend`; as rotas são
+  as da #186 e da #187. **A validação visual fica para a homologação da M2.**
+  - "Aplicações externas" na seção Acesso, entre Usuários e Identidade, só para o Admin, com
+    `/applications`, `/applications/new`, `/applications/:id` e `/applications/:id/edit` na guarda
+    de rota;
+  - a lista, com busca por nome ou client ID e filtro de estado no servidor, os agentes liberados,
+    o estado e o último uso;
+  - criar a aplicação com a senha de quem chama, e o cartão "Aplicação criada", sem modal, com o
+    client ID, o segredo e o endpoint de token: o segredo aparece uma vez e fica só na memória da
+    tela (nada em cache do TanStack Query, endereço, `sessionStorage` ou `localStorage`), e "Ir
+    para a aplicação" só depois de "Guardei o segredo";
+  - o detalhe com as abas Agentes e Credencial e conexão: gerar segredo com a senha (no máximo 3
+    vivos), revogar com a confirmação na linha, desativar e reativar; liberar um agente dentro do
+    cartão, editar as operações na linha e remover com a confirmação na linha;
+  - editar nome e descrição, sem senha;
+  - no detalhe do agente, o card "Aplicações com acesso": a lista para o Admin, só a contagem para
+    Operador e Leitor, e a frase "afeta N aplicações ativas" no modal de desativar.
+- **Agentes liberados por aplicação externa** (#187, M2 · 5 de 6). Só o backend; a tela veio
+  na #188.
   - o Admin libera agentes para cada aplicação, em `/applications/{id}/agents`, com as operações
     por agente: enviar mensagem, consultar task e notificação push (não há cancelamento: #264). A
     aplicação nasce sem agentes;
@@ -340,8 +357,8 @@ o versionamento pretende seguir
     agente delas, e só reusa o `contextId` de uma conversa dela; o resto responde como inexistente;
   - o detalhe do agente ganha a contagem de aplicações com acesso (todos os papéis) e a lista (só o
     Admin); a lista de aplicações traz os agentes liberados de cada uma.
-- **Aplicações externas com credencial do Buteco** (#186, M2 · 4 de 6). Só o backend; a tela é
-  da #188.
+- **Aplicações externas com credencial do Buteco** (#186, M2 · 4 de 6). Só o backend; a tela
+  veio na #188.
   - o Admin cadastra, em `/applications/*` do `apps/api`, um sistema de fora que chama agentes
     pelo A2A: o Buteco gera o client ID (`btc_app_…`) e segredos (`btc_sk_…`), mostrados uma vez e
     guardados como hash; criar a aplicação e gerar segredo pedem a senha de quem chama;

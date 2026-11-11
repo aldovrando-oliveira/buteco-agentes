@@ -5,6 +5,10 @@ import { ProtectedRoute } from './ProtectedRoute';
 import { RequirePapel } from './RequirePapel';
 import { ADMIN_E_OPERADOR, SO_ADMIN } from './routeRoles';
 import { EntrarPage } from '../features/auth/pages/EntrarPage';
+import { ApplicationsListPage } from '../features/applications/pages/ApplicationsListPage';
+import { ApplicationCreatePage } from '../features/applications/pages/ApplicationCreatePage';
+import { ApplicationDetailPage } from '../features/applications/pages/ApplicationDetailPage';
+import { ApplicationEditPage } from '../features/applications/pages/ApplicationEditPage';
 import { EntrarRetornoPage } from '../features/auth/pages/EntrarRetornoPage';
 import { ConvitePage, RedefinirSenhaPage } from '../features/auth/pages/AccessLinkPage';
 import { AgentListPage } from '../features/agents/pages/AgentListPage';
@@ -72,6 +76,11 @@ export const appRoutes: RouteObject[] = createRoutesFromElements(
           <Route path="users" element={<UsersPage />} />
           <Route path="users/:id" element={<UserDetailPage />} />
           <Route path="identity" element={<IdentityPage />} />
+          {/* Aplicações externas, só do Admin, como `/applications/*` no apps/api (#186). */}
+          <Route path="applications" element={<ApplicationsListPage />} />
+          <Route path="applications/new" element={<ApplicationCreatePage />} />
+          <Route path="applications/:id" element={<ApplicationDetailPage />} />
+          <Route path="applications/:id/edit" element={<ApplicationEditPage />} />
         </Route>
         <Route path="agents">
           <Route index element={<AgentListPage />} />

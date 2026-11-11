@@ -18,6 +18,10 @@ const TABELA: Array<{ rota: string; entram: PapelDeTeste[] }> = [
   { rota: '/users', entram: ['admin'] },
   { rota: '/users/u-rafael', entram: ['admin'] },
   { rota: '/identity', entram: ['admin'] },
+  { rota: '/applications', entram: ['admin'] },
+  { rota: '/applications/new', entram: ['admin'] },
+  { rota: '/applications/a1', entram: ['admin'] },
+  { rota: '/applications/a1/edit', entram: ['admin'] },
   { rota: '/agents/new', entram: ['admin', 'operador'] },
   { rota: '/agents/a1/edit', entram: ['admin', 'operador'] },
   { rota: '/mcp-servers/new', entram: ['admin', 'operador'] },
@@ -111,6 +115,28 @@ describe('guarda de rota por papel', () => {
     renderAt('/identity');
 
     await vi.waitFor(() => expect(urls.some((u) => u.endsWith('/identity'))).toBe(true));
+    expect(screen.queryByText('Você não tem acesso a esta página.')).not.toBeInTheDocument();
+  });
+
+  // Spec `panel-roles`, "Operador e Leitor numa aplicação externa" (change
+  // aplicacoes-externas-painel). GUARDA (tasks.md 2.4): reprova com as rotas de `/applications`
+  // declaradas fora do `<RequirePapel papeis={SO_ADMIN} />`.
+  it.each([
+    ['operador', '/applications/a1'],
+    ['leitor', '/applications/new'],
+  ] as const)('Operador e Leitor numa aplicação externa: %s em %s', async (papel, rota) => {
+    signInAsRole(papel);
+    renderAt(rota);
+
+    expect(await screen.findByText('Você não tem acesso a esta página.')).toBeInTheDocument();
+    expect(urls.filter((u) => u.includes('/applications'))).toEqual([]);
+  });
+
+  it('Admin nas aplicações externas', async () => {
+    signInAsRole('admin');
+    renderAt('/applications');
+
+    await vi.waitFor(() => expect(urls.some((u) => u.includes('/applications/'))).toBe(true));
     expect(screen.queryByText('Você não tem acesso a esta página.')).not.toBeInTheDocument();
   });
 

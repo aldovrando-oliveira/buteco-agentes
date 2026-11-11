@@ -1,4 +1,6 @@
 import { Alert, Badge, Button, Group, Loader, Modal, Stack, Tabs, Text } from '@mantine/core';
+import { AfetaN, AgentApplicationsCard } from '../../applications/components/AgentApplicationsCard';
+import { useAgentApplications } from '../../applications/useAgentApplications';
 import { DetailHeader } from '../../../components/layout/DetailHeader';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
@@ -94,6 +96,9 @@ export function AgentDetailPage() {
   const activateMutation = useActivateAgentMutation();
   const deactivateMutation = useDeactivateAgentMutation();
   const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
+  // O card "Aplicações com acesso" e a frase do modal de desativar leem o mesmo N (spec
+  // `agent-catalog-ui`; change aplicacoes-externas-painel, D7).
+  const aplicacoes = useAgentApplications(id!);
 
   // O ESCRITOR MEXE SÓ NA CHAVE QUE LHE PERTENCE.
   //
@@ -270,7 +275,7 @@ export function AgentDetailPage() {
         </Tabs.List>
 
         <Tabs.Panel value={OVERVIEW_TAB} pt="md">
-          <AgentOverviewTab agent={data} />
+          <AgentOverviewTab agent={data} applicationsCard={<AgentApplicationsCard estado={aplicacoes} />} />
         </Tabs.Panel>
 
         <Tabs.Panel value={TOOLS_TAB} pt="md">
@@ -344,6 +349,11 @@ export function AgentDetailPage() {
           Mensagens enviadas a este agente enquanto ele estiver inativo serão rejeitadas. Tem
           certeza que deseja desativar "{data.name}"?
         </Text>
+        {aplicacoes.ativas !== null && aplicacoes.ativas > 0 && (
+          <Text size="sm" mt="sm">
+            <AfetaN n={aplicacoes.ativas} />
+          </Text>
+        )}
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={closeConfirm}>
             Cancelar

@@ -47,7 +47,7 @@ As rotas abaixo SHALL mostrar a tela de acesso negado, sem montar a página e se
 
 | rotas | papéis |
 |---|---|
-| `/users`, `/users/:id`, `/identity` | Admin |
+| `/users`, `/users/:id`, `/identity`, `/applications`, `/applications/new`, `/applications/:id`, `/applications/:id/edit` | Admin |
 | `/agents/new`, `/agents/:id/edit`, `/mcp-servers/new`, `/mcp-servers/:id/edit`, `/knowledge-bases/new`, `/knowledge-bases/:id/edit`, `/channels/new`, `/channels/:id/edit`, `/channels/:id/sessions/:sessionId` | Admin, Operador |
 
 As outras rotas autenticadas SHALL abrir para os três papéis. A guarda SHALL NOT substituir a recusa do servidor: com o papel do id token na coluna, a página carrega, e o `403` do servidor segue "O 403 na carga e na ação".
@@ -67,6 +67,14 @@ As outras rotas autenticadas SHALL abrir para os três papéis. A guarda SHALL N
 #### Scenario: Admin em Identidade
 - **WHEN** a sessão de um Admin abre `/identity`
 - **THEN** a página Identidade carrega
+
+#### Scenario: Operador e Leitor numa aplicação externa
+- **WHEN** a sessão de um Operador abre `/applications/a1`, e depois a de um Leitor abre `/applications/new`
+- **THEN** as duas mostram "Você não tem acesso a esta página.", e nenhuma chamada a `/applications/` é feita
+
+#### Scenario: Admin nas aplicações externas
+- **WHEN** a sessão de um Admin abre `/applications`
+- **THEN** a lista de aplicações carrega
 
 ### Requirement: Tela de acesso negado
 A tela de acesso negado SHALL ser um componente só, no lugar do conteúdo da página e dentro da casca (menu e rodapé visíveis), como o quadro `AcessoNegado` (`estado=pagina`), com `role="alert"`:
