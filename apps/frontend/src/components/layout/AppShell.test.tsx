@@ -132,6 +132,7 @@ describe('AppShell', () => {
       'Canais',
       'Insights',
       'Usuários',
+      'Aplicações externas',
       'Identidade',
     ]) {
       const link = screen.getByRole('link', { name: label });
@@ -141,8 +142,9 @@ describe('AppShell', () => {
       expect(icon).toHaveAttribute('aria-hidden', 'true');
     }
 
-    // 8 desde a seção Acesso (Usuários e Identidade; change usuarios-convites-identidade-painel).
-    expect(container.querySelectorAll('a svg')).toHaveLength(8);
+    // 9 desde "Aplicações externas" na seção Acesso (change aplicacoes-externas-painel; eram 8
+    // desde Usuários e Identidade, change usuarios-convites-identidade-painel).
+    expect(container.querySelectorAll('a svg')).toHaveLength(9);
   });
 
   it.each([
@@ -303,19 +305,21 @@ describe('AppShell', () => {
   // O bloco do nome leva a Minha conta (spec `frontend-app-shell`; design.md da change
   // minha-conta-painel, D1), sem item de menu.
   describe('seção Acesso', () => {
-    it('depois de Insights vêm o rótulo Acesso e os links Usuários e Identidade', () => {
+    it('depois de Insights vêm o rótulo Acesso e os links Usuários, Aplicações externas e Identidade', () => {
       renderAppShell();
 
       const nav = screen.getByRole('navigation');
       const textos = Array.from(nav.querySelectorAll('a, p')).map((el) => el.textContent?.trim());
       const insights = textos.indexOf('Insights');
-      expect(textos.slice(insights, insights + 4)).toEqual([
+      expect(textos.slice(insights, insights + 5)).toEqual([
         'Insights',
         'Acesso',
         'Usuários',
+        'Aplicações externas',
         'Identidade',
       ]);
       expect(screen.getByRole('link', { name: 'Usuários' })).toHaveAttribute('href', '/users');
+      expect(screen.getByRole('link', { name: 'Aplicações externas' })).toHaveAttribute('href', '/applications');
       expect(screen.getByRole('link', { name: 'Identidade' })).toHaveAttribute('href', '/identity');
     });
 
@@ -331,12 +335,16 @@ describe('AppShell', () => {
 
       expect(screen.getByRole('link', { name: 'Usuários' })).toHaveAttribute('data-active', 'true');
       expect(screen.getByRole('link', { name: 'Identidade' })).not.toHaveAttribute('data-active');
+      expect(screen.getByRole('link', { name: 'Aplicações externas' })).not.toHaveAttribute('data-active');
     });
 
-    it('o menu não tem Aplicações externas', () => {
-      renderAppShell();
+    // Sai "o menu não tem Aplicações externas" (o requisito mudou nesta change; tasks.md, topo).
+    it('Aplicações externas ativo no detalhe de uma aplicação', () => {
+      renderAppShell('/applications/a1');
 
-      expect(screen.queryByText('Aplicações externas')).not.toBeInTheDocument();
+      const link = screen.getByRole('link', { name: 'Aplicações externas' });
+      expect(link).toHaveAttribute('data-active', 'true');
+      expect(link).toHaveAttribute('href', '/applications');
     });
 
     // Spec `frontend-app-shell`, "Seção Acesso na navegação", e `panel-roles` (change
@@ -348,6 +356,7 @@ describe('AppShell', () => {
       expect(screen.queryByText('Acesso')).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Usuários' })).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Identidade' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Aplicações externas' })).not.toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Inventário' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Insights' })).toBeInTheDocument();
     });

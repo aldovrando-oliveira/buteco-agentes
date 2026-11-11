@@ -4,10 +4,16 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AgentA2ACard } from './AgentA2ACard';
 import { AgentSkillsCard } from './AgentSkillsCard';
+import type { ReactNode } from 'react';
 import type { Agent } from '../types/agent';
 
 interface AgentOverviewTabProps {
   agent: Agent;
+  /**
+   * O card "Aplicações com acesso" (change aplicacoes-externas-painel, D7), abaixo de "Protocolo
+   * A2A". Vem pronto da página, que tem o QueryClient: este componente continua só de apresentação.
+   */
+  applicationsCard?: ReactNode;
 }
 
 function DefinitionRow({ label, value }: { label: string; value: string }) {
@@ -28,7 +34,7 @@ function DefinitionRow({ label, value }: { label: string; value: string }) {
 // da página, e o resumo textual de servidores MCP saiu porque a aba de
 // ferramentas mostra a mesma informação com mais precisão (Decision 7 do
 // design.md da change frontend-agente-detalhe-abas).
-export function AgentOverviewTab({ agent }: AgentOverviewTabProps) {
+export function AgentOverviewTab({ agent, applicationsCard }: AgentOverviewTabProps) {
   const needsReconfiguration = agent.provider === null || agent.model === null;
 
   return (
@@ -77,6 +83,8 @@ export function AgentOverviewTab({ agent }: AgentOverviewTabProps) {
           <AgentSkillsCard skills={agent.skills} />
 
           <AgentA2ACard a2a={agent.a2a} isActive={agent.isActive} />
+
+          {applicationsCard}
 
           <SectionedCard title="Datas">
             <Stack gap="sm" px="md" py="sm">

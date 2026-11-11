@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -17,6 +17,7 @@ import type { KnowledgeBase } from '../../knowledge-bases/types/knowledgeBase';
 import type { Agent } from '../types/agent';
 import type { McpServer } from '../../mcp-servers/types/mcpServer';
 import { signInAsRole } from '../../../test/authFakes';
+import { countAgentApplications, listAgentApplications } from '../../applications/api/applicationsApi';
 
 vi.mock('../api/agentsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/agentsApi')>();
@@ -43,6 +44,17 @@ vi.mock('../../knowledge-bases/api/knowledgeBasesApi', async (importOriginal) =>
 vi.mock('../../insights/api/insightsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../insights/api/insightsApi')>();
   return { ...actual, getAgentInsights: vi.fn() };
+});
+
+// O card "Aplicações com acesso" (change aplicacoes-externas-painel): só arranjo, para as rotas
+// do card não irem à rede; nenhum caso deste arquivo muda de asserção (tasks.md, 0.3).
+vi.mock('../../applications/api/applicationsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../applications/api/applicationsApi')>();
+  return {
+    ...actual,
+    countAgentApplications: vi.fn(async () => ({ total: 0, ativas: 0 })),
+    listAgentApplications: vi.fn(async () => []),
+  };
 });
 
 vi.mock('@mantine/notifications', async (importOriginal) => {
@@ -873,5 +885,80 @@ describe('AgentDetailPage por papel', () => {
     expect(await screen.findByRole('link', { name: 'Editar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /desativar/i })).toBeInTheDocument();
     expect(await screen.findByRole('checkbox', { name: mcpServer.name })).toBeEnabled();
+  });
+});
+
+// O card "Aplicações com acesso" e a frase do modal de desativar (specs
+// `panel-external-application-agents` e `agent-catalog-ui`; change aplicacoes-externas-painel, D7).
+describe('AgentDetailPage — aplicações com acesso', () => {
+  beforeEach(() => {
+    vi.mocked(getAgent).mockReset();
+    vi.mocked(getAgent).mockResolvedValue(activeAgent);
+    vi.mocked(listAgents).mockResolvedValue([activeAgent]);
+    vi.mocked(countAgentApplications).mockClear();
+    vi.mocked(listAgentApplications).mockClear();
+  });
+
+  afterEach(() => {
+    vi.mocked(countAgentApplications).mockResolvedValue({ total: 0, ativas: 0 });
+    vi.mocked(listAgentApplications).mockResolvedValue([]);
+  });
+
+  it('o card fica na Visão geral, logo abaixo de "Protocolo A2A"', async () => {
+    renderPage(activeAgent.id);
+
+    const card = await screen.findByTestId('agent-applications-card');
+    const a2a = screen.getByTestId('agent-a2a-card');
+    expect(a2a.nextElementSibling).toBe(card);
+    expect(within(card).getByText('Aplicações com acesso')).toBeInTheDocument();
+  });
+
+  it('O diálogo diz quantas aplicações ativas são afetadas', async () => {
+    signInAsRole('operador');
+    vi.mocked(countAgentApplications).mockResolvedValue({ total: 3, ativas: 2 });
+    const user = userEvent.setup();
+    renderPage(activeAgent.id);
+    await screen.findByText(/Usado por/);
+
+    await user.click(await screen.findByRole('button', { name: /^desativar$/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByRole('heading', { name: 'Confirmar desativação' })).toBeInTheDocument();
+    expect(within(dialog).getByText(/Mensagens enviadas a este agente enquanto ele estiver inativo serão rejeitadas/)).toBeInTheDocument();
+    expect(dialog).toHaveTextContent(
+      'Desativar este agente afeta 2 aplicações ativas: as tasks que elas abrirem nele passam a terminar recusadas.',
+    );
+    expect(listAgentApplications).not.toHaveBeenCalled();
+  });
+
+  it('Sem aplicação ativa, o diálogo de hoje', async () => {
+    signInAsRole('operador');
+    vi.mocked(countAgentApplications).mockResolvedValue({ total: 1, ativas: 0 });
+    const user = userEvent.setup();
+    renderPage(activeAgent.id);
+    await screen.findByText(/todas desativadas|desativada\./);
+
+    await user.click(await screen.findByRole('button', { name: /^desativar$/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(dialog).not.toHaveTextContent('Desativar este agente afeta');
+    expect(within(dialog).getByText(/Mensagens enviadas a este agente/)).toBeInTheDocument();
+  });
+
+  it('o Admin: o N do modal vem da lista', async () => {
+    vi.mocked(listAgentApplications).mockResolvedValue([
+      { id: 'a1', nome: 'Portal', ativa: true, operacoes: ['enviar-mensagem'], ultimoUso: null },
+      { id: 'a2', nome: 'CRM', ativa: false, operacoes: ['enviar-mensagem'], ultimoUso: null },
+    ]);
+    const user = userEvent.setup();
+    renderPage(activeAgent.id);
+    await screen.findByRole('link', { name: 'Portal' });
+
+    await user.click(await screen.findByRole('button', { name: /^desativar$/i }));
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent(
+      'Desativar este agente afeta 1 aplicação ativa: as tasks que ela abrir nele passam a terminar recusadas.',
+    );
+    expect(countAgentApplications).not.toHaveBeenCalled();
   });
 });

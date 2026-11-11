@@ -18,6 +18,7 @@ import {
   LogOut,
   MessagesSquare,
   Moon,
+  Plug,
   Server,
   Shield,
   Sun,
@@ -49,11 +50,12 @@ const navItems = [
 ];
 
 // A seção "Acesso" do protótipo de autenticação, depois de Insights, só para o Admin (spec
-// `frontend-app-shell`; design.md da change papeis-no-painel, D2). "Aplicações externas" chega
-// com a #188: o item só existe quando a página existe (design.md da change
-// usuarios-convites-identidade-painel, D1).
+// `frontend-app-shell`; design.md da change papeis-no-painel, D2). "Aplicações externas" entra
+// entre Usuários e Identidade, como os quadros da #188, com o plugue do protótipo (design.md da
+// change aplicacoes-externas-painel, D1).
 const accessItems = [
   { to: '/users', label: 'Usuários', icon: Users },
+  { to: '/applications', label: 'Aplicações externas', icon: Plug },
   { to: '/identity', label: 'Identidade', icon: Shield },
 ];
 

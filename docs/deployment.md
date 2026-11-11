@@ -334,8 +334,9 @@ no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
 
 **O que muda:**
 
-- o Admin passa a cadastrar **aplicações externas** (rotas `/applications/*` do `api`; a tela é da
-  #188): cada uma recebe um client ID `btc_app_…` e segredos `btc_sk_…`, mostrados uma vez;
+- o Admin passa a cadastrar **aplicações externas** (rotas `/applications/*` do `api`; a tela veio na
+  #188, ver "Telas das aplicações externas"): cada uma recebe um client ID `btc_app_…` e segredos
+  `btc_sk_…`, mostrados uma vez;
 - a aplicação obtém token em `/connect/token` por `client_credentials`, com `scope=buteco-api`, e o
   token dura **5 minutos**; revogar o segredo ou desativar a aplicação recusa o próximo pedido de
   token na hora, e o token já emitido vale até vencer;
@@ -391,7 +392,7 @@ Voltar para a frente depois do `down` perde os segredos: as aplicações precisa
 **O que muda:**
 
 - o Admin passa a liberar agentes para cada aplicação externa, com as operações por agente
-  (rotas `/applications/{id}/agents` do `api`; a tela é da #188). A aplicação nasce sem agentes;
+  (rotas `/applications/{id}/agents` do `api`; a tela veio na #188). A aplicação nasce sem agentes;
 - o token de aplicação passa a alcançar `POST /agents/{id}/a2a`, só nos agentes liberados: sem
   vínculo, a resposta passa de `403` a `404`; operação não liberada, `403`;
 - cada task criada por uma aplicação guarda o dono, e a aplicação só vê as próprias;
@@ -425,8 +426,9 @@ nenhum vínculo é criado, e a aplicação só passa de `403` a `404` na A2A.
 **Conferir:** com o Admin, `POST /applications/{id}/agents` libera um agente; o `SendMessage` da
 aplicação nele cria a task, e num agente não liberado responde `404`.
 
-**Liberar um agente sem a tela (até a #188).** As telas do vínculo são da #188; até lá, o Admin libera
-pela API, com o access token do painel dele. O token está no cabeçalho `Authorization` de qualquer
+**Liberar um agente sem a tela (alternativa).** Desde a #188, o caminho principal é a aba Agentes do
+detalhe da aplicação no painel. O roteiro abaixo fica como alternativa (painel fora do ar, automação):
+o Admin libera pela API, com o access token do painel dele. O token está no cabeçalho `Authorization` de qualquer
 chamada do painel ao `api` (no navegador, em Ferramentas do desenvolvedor → Rede), e vale 15 minutos.
 As rotas exigem o papel Admin gravado; não pedem senha.
 
@@ -464,6 +466,37 @@ receber `403` em toda rota, inclusive na A2A**. O painel e o inbox não mudam. O
 das tasks ficam no banco, sem uso (a imagem anterior não os lê), e voltam a valer num novo deploy da
 #187. Não precisa reverter a migration; se quiser, o `down` da `ExternalApplicationAgents` apaga a
 tabela e a coluna.
+
+### Telas das aplicações externas (#188)
+
+**O que muda:** o painel ganha "Aplicações externas" na seção Acesso, só para o Admin: a lista, a
+criação com a senha e o segredo mostrado uma vez, o detalhe com as abas Agentes e Credencial e
+conexão (gerar, rotacionar e revogar segredos; liberar, editar e retirar agentes), a edição de nome e
+descrição, e a desativação. No detalhe de cada agente, o card "Aplicações com acesso": a lista para o
+Admin, só a contagem para Operador e Leitor. **Só o `frontend` muda**: nenhuma rota nem resposta do
+`api` (as da #186 e da #187 servem tudo), sem migration e sem variável nova.
+
+**Deploy:** só a imagem do `frontend`. A #186 e a #187 podem estar no ar antes; se forem juntas, a
+ordem de sempre (o `migrator`, o `api`, depois o `frontend`):
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d frontend
+```
+
+**Conferir:** como Admin, o item "Aplicações externas" entre Usuários e Identidade; criar uma
+aplicação mostra o cartão "Aplicação criada" com o client ID, o segredo e o endpoint, e "Ir para a
+aplicação" só depois de marcar "Guardei o segredo"; liberar um agente na aba Agentes; o card do
+agente lista a aplicação. Como Operador ou Leitor, o menu sem a seção Acesso, `/applications`
+digitado mostra "Você não tem acesso a esta página.", e o card do agente mostra só "Usado por N
+aplicações externas ativas (M no total).".
+
+**Voltar atrás:**
+- **só o `frontend`:** seguro. Nada se grava diferente; aplicações, segredos e vínculos ficam no banco
+  e continuam valendo. O Admin volta ao roteiro por `curl` ("Liberar um agente sem a tela") e o card
+  do agente some;
+- **o backend (#186/#187) com o `frontend` da #188 no ar:** o menu aparece e as rotas não existem — a
+  lista mostra o erro de carga e o card do agente, o erro do card. Por isso o recuo do backend leva o
+  `frontend` junto, como na #185.
 
 ### Papéis Admin, Operador e Leitor (#184, #185)
 

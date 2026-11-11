@@ -19001,3 +19001,76 @@ Do corpo e dos comentários da issue: os nomes `message/send`/`tasks/get`/`tasks
 - **#188**: as telas, contra a versão 63, com os estados sem quadro desenhados no design dela (o contrato está nas specs desta change).
 - **#264**: o cancelamento real; com ele, a quarta operação liberável.
 - **#199** (aguardando gatilho): a aba Atividade e as recusas, que não têm fonte (as recusas do filtro não são gravadas).
+
+## `aplicacoes-externas-painel` — O painel das aplicações externas (#188)
+
+**Change proposta e implementada em 09–10/11/2026**, na branch `feat/188-aplicacoes-no-painel`, num worktree próprio, a partir de `2b93837` (merge do PR #265, a #187). Entrega M2 · 6 de 6. Só o `apps/frontend` muda; as rotas são as da #186 e da #187.
+
+- **O que entra no `apps/frontend`** (`src/features/applications/`):
+  - "Aplicações externas" na seção Acesso, entre Usuários e Identidade, só para o Admin; `/applications`, `/applications/new`, `/applications/:id` e `/applications/:id/edit` na guarda de rota da #185;
+  - a lista, com busca e filtro de estado no servidor (`?busca`, `?estado`), os agentes liberados, o estado e o último uso ("há 3 min");
+  - a criação com a senha de quem chama e o cartão "Aplicação criada" no lugar do formulário, sem modal; o segredo vive só no estado do componente (nem `useMutation`, nem `setQueryData`, nem `state` de navegação, nem storage);
+  - o detalhe: desativar com confirmação acima das abas, reativar sem confirmação; a aba Credencial e conexão (gerar segredo com a senha, no máximo 3 vivos, revogar com confirmação na linha) e a aba Agentes (adicionar dentro do cartão, editar na linha, remover com confirmação na linha; o `404` do `DELETE` é sucesso);
+  - editar nome e descrição em página própria, sem senha;
+  - o card "Aplicações com acesso" na Visão geral do agente (lista para o Admin, só a contagem para Operador e Leitor) e a frase "afeta N aplicações ativas" no modal de desativar.
+- **Documentação:** `docs/deployment.md` ("Telas das aplicações externas (#188)"; o roteiro por `curl` da #187 vira alternativa) e o `CHANGELOG.md`.
+- **Capacidades:** novas `panel-external-applications` e `panel-external-application-agents`; modificadas `frontend-app-shell`, `panel-roles`, `agent-catalog-ui` e `external-applications` (só a frase do detalhe, ver premissas).
+- **Protótipo:** canvas `H7dPBZafiSkdKd1hqesPZ6`, versões 65 e 66, com todos os estados desenhados pelo dono a partir do design (g); o quadro novo `AplicacaoEditar`.
+
+**Decisões do dono** (09–10/11/2026): Q1 a Q18 como recomendadas; as quatro divergências de texto da versão 65 (o `title` do `409` do servidor, o modal de hoje, o N do `Retry-After`, o "por até 7 dias" só com segredo vivo, corrigido no quadro na versão 66).
+
+### Premissas (convenção 9)
+
+Do corpo e dos comentários da issue: "client ID, segredo e endpoint mostrados uma vez" (só o segredo); o "padrão sem modais" (o painel tem nove modais de gestão; vale para as telas novas); "Usado por N aplicações externas" (o quadro diz "ativas (M no total)"); o comentário de 24/10 01:40, desfeito pelo das 01:57. Do design da #186: o prazo de 5 min na confirmação de desativar (falso desde a Q6 da #187).
+
+**Caiu no apply, seguido e registrado** (design, D10):
+- **o detalhe não traz `agentes`**: a spec viva `external-applications` dizia "os campos da lista", e o `ApplicationDetail` do `apps/api` não os traz desde a #187. A tela quebrava no navegador ("Cannot read properties of undefined (reading 'length')"), e a suíte não pegava porque a fixture seguia a spec. Corrigido no painel (o contador pela lista dos agentes), na fixture (no formato do fio; com o código antigo, 46 casos reprovaram com o mesmo erro) e na spec (delta `MODIFIED`). Nenhum código do backend muda;
+- o "há N min" novo (`formatAgo`), o singular "1 aplicação externa, desativada" (aceito pelo dono, já no quadro), o `Textarea` sem `autosize` (quebra no jsdom), e o Prettier depois da primeira rodada dos guardas (as onze rodadas foram refeitas);
+- o pronome do rodapé no singular ("1 aplicação ativa: as tasks que *elas* abrirem"), visto na conferência: o dono corrigiu o quadro na versão 68 ("…as tasks que ela abrir nele…"), e a tela, a spec e os casos do singular seguem;
+- **fora da change:** o `password-reset-link` local só funcionou com `DOTNET_ENVIRONMENT`, `ASPNETCORE_ENVIRONMENT`, `Identity__PanelBaseUrl` e `PublicUrl__BaseUrl` na linha de comando (`docs/development.md` l. 551 diz que basta o `dotnet run --`): [#266](https://github.com/aldovrando-oliveira/buteco-agentes/issues/266), no Backlog; o doc não muda aqui.
+
+**A lição do detalhe sem `agentes`:** a fixture do detalhe seguia a frase da spec ("os campos da lista", escrita na #186, antes de a #187 pôr `agentes` na lista), e não a resposta real do `apps/api`; por isso **46 casos passavam com o defeito** que o navegador mostrou na primeira abertura. Fixture de tela se escreve a partir de uma resposta real, e não da spec. **Conferência de todas as fixtures novas** contra o `apps/api` local (banco descartável, 10/11/2026; `~/.cache/buteco-agents/bin/fixtures-188.py`): a lista, o detalhe, a criação e o segredo gerado, os segredos do detalhe, os vínculos (`GET`, `POST`, `PUT`), a contagem, a lista do card, o catálogo `GET /agents/`, o `204` e o `404` do `DELETE` e o `404` do detalhe têm o **mesmo formato** dos tipos e das fixtures (o detalhe já sem `agentes`). Diferenças só de valor, postas nas fixtures: o `descricao: null` do agente sem descrição, e as datas com microssegundos e `+00:00` no lugar de `Z`. As telas montadas com as respostas reais (lista, detalhe nas duas abas, card) não quebraram (4/4, num teste temporário apagado depois); com as fixtures novas, 116/116.
+
+### O que a implementação mediu
+
+| rodada | resultado | duração | CPU mín. | veredito |
+|---|---|---|---|---|
+| baseline `2b93837` (`188-baseline/`) | 2493/2493, 190 arquivos | 219 s | 60 | APROVADA |
+| r1 (`188-fechamento/`), workers padrão | 2601/2628: 27 timeouts de 15 s, todos em arquivos não tocados (cadastro de agente, de canal, de base, formulário do MCP) | 680 s | 23 | INCONCLUSIVA |
+| r2 (`188-fechamento-r2-4workers/`), `MAXWORKERS=4` | 2627/2628: 1 timeout em `KnowledgeBaseCreatePage.sync.test.tsx` (não tocado; sozinho, 35/35 em 111 s) | ~700 s | 23 | INCONCLUSIVA |
+| r3 (`188-fechamento-r3-4workers/`), `MAXWORKERS=4` | 2627/2628: 1 falha em `McpServerEditPage.test.tsx` (não tocado; sozinho, 12/12) | ~700 s | 23 (99 de 116 amostras) | INCONCLUSIVA |
+| **r4 (`188-fechamento-r4-4workers/`), `MAXWORKERS=4`, árvore final** | **2628/2628, 199 arquivos** | 179s | **100 (37 amostras)** | **APROVADA** |
+
+As três primeiras rodadas pegaram o Mac em limite térmico (`CPU_Speed_Limit` 23) com a máquina sem outra carga (a VM do Podman ociosa); a falha mudou de arquivo a cada uma, sempre em arquivo que a change não toca, sempre por tempo, e pela regra assimétrica nenhuma contou. **A r4, com a máquina fria, foi aprovada com a CPU em 100 do começo ao fim**, sobre a árvore final (com a correção do detalhe, as fixtures no formato real e o singular da versão 68).
+
+- **Comparação por arquivo + nome** (r4, a aprovada, contra a baseline; r2, r3 e r4 têm os mesmos nomes): saem só os 2 do topo do `tasks.md` (`o menu não tem Aplicações externas` e o nome antigo de `depois de Insights…`); entram 137: `applicationsApi.test.ts` 17, `applicationsTexts.test.ts` 11, `ApplicationsListPage` 8, `ApplicationCreatePage` 19, `ApplicationDetailPage` 12, `ApplicationEditPage` 5, `ApplicationCredentialTab` 17, `ApplicationAgentsTab` 17, `AgentApplicationsCard` 10, `RequirePapel` 15, `AppShell` 2 (o nome novo e "Aplicações externas ativo…"), `AgentDetailPage` 4. Os 49 casos do `AgentDetailPage` continuam com o mesmo nome e a mesma asserção (só o `vi.mock`).
+- **Guardas (convenção 15):** 10 guardas em 11 rodadas (o 4.5 em duas, `useMutation` e `setQueryData`), todos reprovados pela asserção, com a volta pela cópia e o sha conferido; rodados duas vezes (antes e depois do Prettier), em `~/.cache/buteco-agents/188-guardas/` (`registro.md`).
+- **Conferência no navegador**, com o `apps/api` do worktree num banco descartável copiado do de desenvolvimento e migrado até `ExternalApplicationAgents`, e o Vite (sem workers, sem RabbitMQ):
+  1. Admin pelo `password-reset-link` e pelo login real (2 etapas); Operador e Leitor pelo convite com papel;
+  2. a lista vazia; criar com a senha → o cartão "Aplicação criada", sem modal, "Ir para a aplicação" desabilitado; `btc_sk_` ausente do `sessionStorage`, do `localStorage` e do `history.state` depois de criar e depois de gerar;
+  3. o voltar do navegador mostra o formulário vazio, sem o segredo;
+  4. **o detalhe quebrou** (o achado acima), corrigido, e a conferência seguiu;
+  5. o segundo e o terceiro segredo (o anterior "Substituído" até 17/11/2026), e com 3 vivos "Gerar novo segredo" desabilitado com a dica;
+  6. "Revogar agora" com a faixa na linha; o único vivo com "Ela fica sem segredo válido…"; depois, "Nenhum segredo válido…";
+  7. liberar o agente (enviar e consultar), editar a linha (push), gravado como `{enviar-mensagem,consultar-task,notificacao-push}`;
+  8. o card do agente com a aplicação ativa (lista, rodapé "afeta 1 aplicação ativa") e desativada (o selo, sem rodapé); desativar e reativar (o aviso de reativada);
+  9. Operador e Leitor: o card com "Usado por 1 aplicação externa ativa (1 no total).", sem links, e só `GET …/applications/count` na rede; `/applications` digitado mostra o acesso negado, sem chamada à API;
+  10. remover o agente com a confirmação na linha (o vínculo some do banco).
+
+  O banco foi apagado, o `apps/api` e o Vite parados. **Fila do RabbitMQ:** o workers não foi usado. **Efeito colateral:** o `localStorage` do `localhost:5173` tinha uma sessão antiga (de 185, "Olga Operadora"), removida para entrar como Admin; e a sessão de teste foi removida no fim.
+- **Tamanho (convenção 18)**, por `git diff --numstat 2b93837` mais os novos, só `apps/frontend/src`: **produção +2.708 / −5, 20 arquivos**, contra ~1.620 (**+67 %**), ~5 % de comentário (128 linhas); **testes +1.945 / −8, 12 arquivos**, contra ~2.150 (**−10 %**); **duplos +284, 2 arquivos**, contra ~200 (**+42 %**); **137 casos novos** contra ~106 (**+29 %**); docs +59 / −9. **Os dois motivos do +67 % da produção:** (1) o Prettier (largura 100) quebra em várias linhas as props do Mantine — cada `<Button size=… variant=… onClick=…>` com mais de duas props vira 5 a 8 linhas, e as âncoras da #185 e da #217 não foram formatadas assim; (2) as duas abas, com 585 (`ApplicationAgentsTab`) e 421 (`ApplicationCredentialTab`) linhas contra ~330 e ~300 projetadas, concentram a máquina de estados de "uma ação por vez" (adicionar, editar, remover e confirmar na mesma tabela; gerar, segredo novo e revogar no mesmo cartão), que a projeção contou como um item só. **Para a próxima projeção de tela (convenção 18):** medir a âncora depois do Prettier (ou projetar em linhas formatadas), e contar à parte cada tabela com edição na linha e confirmação na linha (~250–300 linhas cada, pela #188), em vez de por operação.
+- **Validação visual:** na homologação, sem prender o PR (`tasks.md`, 10.3), contra a versão 68, nos dois esquemas de cor:
+  - menu: "Aplicações externas" entre "Usuários" e "Identidade", ativo em `/applications` e no detalhe; ausente para Operador e Leitor;
+  - `AplicacoesLista` (`carga`): `lista` (com "Nenhum" no "Chatbot do site"), `uma`, `vazia`, `busca-sem-resultado` ("erp" com Ativas), `carregando`, `erro`;
+  - `AplicacaoNova` (`estado`): `formulario`, `nome-vazio`, `nome-longo`, `descricao-longa`, `nome-repetido`, `senha-vazia`, `senha-errada`, `bloqueado` (com o N do `Retry-After`), `enviando`;
+  - `AplicacaoCredencial`: `copiado` = `nenhum`, `client`, `segredo`, `endpoint`; `guardei` falso e verdadeiro;
+  - `AplicacaoDetalhe`, `aplicacao`: `ativa`, `confirmar-desativar`, `desativada`, `reativada`, `carregando`, `erro`, `nao-encontrada`;
+  - `AplicacaoDetalhe`, `agentesExtra`: `agente-inativo`, `confirmar-remover`, `adicionar-ja-liberado` (com o `title` do servidor), `adicionar-agente-sumiu`, `sem-agente-disponivel`, `editar-vinculo-retirado`, `carregando`, `erro`; e `aplicacao=desativada` com o aviso na aba;
+  - `AplicacaoDetalhe`, `credencial`: `lista`, `gerar-senha` (com "por até 7 dias"), `gerar-senha-errada`, `gerar-bloqueado`, `gerar-409-limite`, `segredo-novo`, `limite`, `confirmar-revogar`, `confirmar-revogar-agora`, `revogar-unico-vivo`, `sem-segredo-vivo`; e com `aplicacao=desativada` (todos revogados, a dica) e `aplicacao=reativada` (sem segredo vivo);
+  - `AplicacaoDetalhe`, `estadoAgentes`: `lista`, `adicionando`, `editando`, e `recemCriada`; `AplicacaoDetalheAdicionar` e `AplicacaoDetalheEditar`;
+  - `AplicacaoEditar` (`estado`): `formulario`, `nome-vazio`, `nome-repetido`, `salvando`;
+  - `AgenteDetalhe`, `aplicacoes` × `papel`: `lista`, `uma` (o rodapé no singular, "…as tasks que ela abrir nele…"), `nenhuma`, `so-desativadas` (e o singular "Usado por 1 aplicação externa, desativada."), `carregando`, `erro`, cada um com `admin`, `operador` e `leitor`; o card abaixo de "Protocolo A2A"; `modalDesativar` com o título e o texto de hoje e a frase "afeta N", no plural e no singular.
+
+### Para as próximas
+
+- A #266 (o `password-reset-link` local).
