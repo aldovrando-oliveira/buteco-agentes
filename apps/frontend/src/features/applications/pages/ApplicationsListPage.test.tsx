@@ -5,7 +5,7 @@ import { CHATBOT, CRM, NOW, PORTAL, fakeApplicationsApi, problem } from '../test
 import { renderApplications } from '../test/renderApplications';
 
 // Spec `panel-external-applications`, "Lista de aplicações externas" (quadro `AplicacoesLista`,
-// `carga`, versão 66; o filtro de estado e a linha dos controles, versão 69, #270).
+// `carga`, versão 66; o filtro de estado e a linha dos controles, versão 69, #270 e #272).
 
 const LISTA = 'GET /applications/';
 
@@ -188,6 +188,70 @@ describe('ApplicationsListPage', () => {
 
     expect(await screen.findByRole('link', { name: 'Portal do Parceiro' })).toBeInTheDocument();
     expect(api.calls(LISTA)).toHaveLength(2);
+  });
+
+  it('a primeira carga não mostra a busca nem o filtro', async () => {
+    fakeApplicationsApi({ [LISTA]: () => new Promise(() => {}) });
+
+    renderApplications('/applications');
+
+    expect(
+      await screen.findByRole('status', { name: 'Carregando aplicações' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('searchbox', { name: 'Buscar aplicação' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'Estado' })).not.toBeInTheDocument();
+  });
+
+  it('o erro da primeira carga não mostra a busca nem o filtro, até a lista chegar', async () => {
+    fakeApplicationsApi({
+      [LISTA]: [problem(500, 'Erro.'), { status: 200, body: [PORTAL] }],
+    });
+    const user = userEvent.setup();
+    renderApplications('/applications');
+
+    expect(await screen.findByText('Não foi possível carregar as aplicações.')).toBeInTheDocument();
+    expect(screen.queryByRole('searchbox', { name: 'Buscar aplicação' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'Estado' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+
+    expect(await screen.findByRole('link', { name: 'Portal do Parceiro' })).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Buscar aplicação' })).toBeInTheDocument();
+    expect(filtroDeEstado()).toBeInTheDocument();
+  });
+
+  it('na busca seguinte, a busca e o filtro continuam na tela enquanto a nova lista carrega', async () => {
+    const api = fakeApplicationsApi({ [LISTA]: { status: 200, body: [PORTAL, CHATBOT] } });
+    const user = userEvent.setup();
+    renderApplications('/applications');
+    await screen.findByRole('link', { name: 'Chatbot do site' });
+
+    api.on(LISTA, () => new Promise(() => {}));
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar aplicação' }), 'portal');
+    await waitFor(() =>
+      expect(pedidosDaLista(api).at(-1)!.searchParams.get('busca')).toBe('portal'),
+    );
+    await user.click(opcaoDeEstado('Ativas'));
+    await waitFor(() =>
+      expect(pedidosDaLista(api).at(-1)!.searchParams.get('estado')).toBe('ativas'),
+    );
+
+    expect(screen.getByRole('searchbox', { name: 'Buscar aplicação' })).toHaveValue('portal');
+    expect(opcaoDeEstado('Ativas')).toBeChecked();
+  });
+
+  it('o erro de uma busca seguinte mantém a busca e o filtro na tela', async () => {
+    const api = fakeApplicationsApi({ [LISTA]: { status: 200, body: [PORTAL] } });
+    const user = userEvent.setup();
+    renderApplications('/applications');
+    await screen.findByRole('link', { name: 'Portal do Parceiro' });
+
+    api.on(LISTA, problem(500, 'Erro.'));
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar aplicação' }), 'erp');
+
+    expect(await screen.findByText('Não foi possível carregar as aplicações.')).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Buscar aplicação' })).toHaveValue('erp');
+    expect(filtroDeEstado()).toBeInTheDocument();
   });
 
   it('o 403 da carga mostra a tela de acesso negado', async () => {

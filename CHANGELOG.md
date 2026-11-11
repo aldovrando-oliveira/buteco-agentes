@@ -1396,6 +1396,11 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **A busca e o filtro das Aplicações externas não piscam mais na primeira carga** (#272): a
+  linha da busca e do filtro só aparece depois da primeira resposta com dados, como nas listas de
+  agentes e de bases. Numa instalação sem aplicação, ela aparecia durante a carga e sumia com a
+  lista vazia. Nas buscas seguintes, ela continua na tela durante a carga e no erro.
+
 - **O filtro de estado das Aplicações externas no padrão das outras listas** (#270): a lista
   suspensa com o rótulo "Estado" vira o controle segmentado "Todas | Ativas | Desativadas", na
   linha da busca e sem rótulo visível ("Estado" fica como nome acessível), como nas listas de
