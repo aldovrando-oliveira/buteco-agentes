@@ -5,9 +5,13 @@ import { CHATBOT, CRM, NOW, PORTAL, fakeApplicationsApi, problem } from '../test
 import { renderApplications } from '../test/renderApplications';
 
 // Spec `panel-external-applications`, "Lista de aplicações externas" (quadro `AplicacoesLista`,
-// `carga`, versão 66).
+// `carga`, versão 66; o filtro de estado e a linha dos controles, versão 69, #270).
 
 const LISTA = 'GET /applications/';
+
+/** O filtro de estado: o controle segmentado, achado pelo papel e pelo nome acessível. */
+const filtroDeEstado = () => screen.getByRole('radiogroup', { name: 'Estado' });
+const opcaoDeEstado = (nome: string) => within(filtroDeEstado()).getByRole('radio', { name: nome });
 
 function pedidosDaLista(api: ReturnType<typeof fakeApplicationsApi>) {
   return api.fetch.mock.calls
@@ -75,7 +79,7 @@ describe('ApplicationsListPage', () => {
     await screen.findByRole('link', { name: 'Portal do Parceiro' });
 
     await user.type(screen.getByRole('searchbox', { name: 'Buscar aplicação' }), 'erp');
-    await user.selectOptions(screen.getByLabelText('Estado'), 'ativas');
+    await user.click(opcaoDeEstado('Ativas'));
 
     await waitFor(() => {
       const ultimo = pedidosDaLista(api).at(-1)!;
@@ -104,9 +108,26 @@ describe('ApplicationsListPage', () => {
     expect(screen.queryByRole('status', { name: 'Carregando aplicações' })).not.toBeInTheDocument();
   });
 
+  it('O filtro de estado é o controle segmentado', async () => {
+    fakeApplicationsApi({ [LISTA]: { status: 200, body: [PORTAL] } });
+
+    renderApplications('/applications');
+    await screen.findByRole('link', { name: 'Portal do Parceiro' });
+
+    expect(
+      within(filtroDeEstado())
+        .getAllByRole('radio')
+        .map((opcao) => opcao.getAttribute('value')),
+    ).toEqual(['todas', 'ativas', 'desativadas']);
+    expect(opcaoDeEstado('Todas')).toBeChecked();
+    expect(opcaoDeEstado('Ativas')).not.toBeChecked();
+    expect(opcaoDeEstado('Desativadas')).not.toBeChecked();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
   it('Vazia e sem resultado são estados diferentes', async () => {
-    const api = fakeApplicationsApi({ [LISTA]: { status: 200, body: [] } });
-    const user = userEvent.setup();
+    fakeApplicationsApi({ [LISTA]: { status: 200, body: [] } });
+
     renderApplications('/applications');
 
     expect(await screen.findByText('Nenhuma aplicação externa cadastrada.')).toBeInTheDocument();
@@ -114,20 +135,34 @@ describe('ApplicationsListPage', () => {
       screen.getByText('Cadastre uma aplicação para um sistema de fora chamar agentes pelo A2A.'),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Nova aplicação' })).toHaveLength(2);
+    // Na lista vazia, a linha dos controles some, como nas listas de agentes e de bases.
+    expect(screen.queryByRole('searchbox', { name: 'Buscar aplicação' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'Estado' })).not.toBeInTheDocument();
+  });
 
+  it('A busca sem resultado mantém a busca e o filtro, e Limpar busca volta a Todas', async () => {
+    const api = fakeApplicationsApi({ [LISTA]: { status: 200, body: [PORTAL] } });
+    const user = userEvent.setup();
+    renderApplications('/applications');
+    await screen.findByRole('link', { name: 'Portal do Parceiro' });
+
+    api.on(LISTA, { status: 200, body: [] });
     await user.type(screen.getByRole('searchbox', { name: 'Buscar aplicação' }), 'erp');
-    await user.selectOptions(screen.getByLabelText('Estado'), 'ativas');
+    await user.click(opcaoDeEstado('Ativas'));
 
     expect(
       await screen.findByText('Nenhuma aplicação encontrada para "erp" entre as ativas.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Nenhuma aplicação externa cadastrada.')).not.toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Buscar aplicação' })).toHaveValue('erp');
+    expect(opcaoDeEstado('Ativas')).toBeChecked();
 
+    api.on(LISTA, { status: 200, body: [PORTAL] });
     await user.click(screen.getByRole('button', { name: 'Limpar busca' }));
 
     expect(screen.getByRole('searchbox', { name: 'Buscar aplicação' })).toHaveValue('');
-    expect(screen.getByLabelText('Estado')).toHaveValue('todas');
-    expect(await screen.findByText('Nenhuma aplicação externa cadastrada.')).toBeInTheDocument();
+    expect(opcaoDeEstado('Todas')).toBeChecked();
+    expect(await screen.findByRole('link', { name: 'Portal do Parceiro' })).toBeInTheDocument();
     expect(pedidosDaLista(api).length).toBeGreaterThan(1);
   });
 

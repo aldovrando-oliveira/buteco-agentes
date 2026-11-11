@@ -6,8 +6,8 @@ import {
   Box,
   Button,
   Group,
-  NativeSelect,
   Paper,
+  SegmentedControl,
   Skeleton,
   Stack,
   Table,
@@ -57,6 +57,9 @@ export function ApplicationsListPage() {
 
   const filtrando = buscaEnviada.trim() !== '' || estado !== 'todas';
   const apps = query.data ?? [];
+  // O estado `vazia`: nenhuma aplicação, sem busca e com Todas. Só nele a linha dos controles some;
+  // na busca sem resultado ela fica, para o Admin corrigir a busca.
+  const vazia = query.isSuccess && apps.length === 0 && !filtrando;
   const limpar = () => {
     setBusca('');
     setEstado('todas');
@@ -76,24 +79,27 @@ export function ApplicationsListPage() {
         </Button>
       </Group>
 
-      <Group gap="sm" wrap="wrap">
-        <TextInput
-          type="search"
-          aria-label="Buscar aplicação"
-          placeholder="Buscar por nome ou client ID"
-          value={busca}
-          onChange={(event) => setBusca(event.currentTarget.value)}
-          w={360}
-          maw="100%"
-        />
-        <Group gap={8} wrap="nowrap">
-          <Text size="sm" c="dimmed" component="label" htmlFor="filtro-estado">
-            Estado
-          </Text>
-          <NativeSelect
-            id="filtro-estado"
+      {!vazia && (
+        <Group gap="sm" wrap="nowrap">
+          {/* O padrão das listas de agentes e de bases: a busca e o controle segmentado na mesma
+              linha, sem rótulo visível ("Estado" é o nome acessível do controle), e a linha some
+              na lista vazia (quadro `AplicacoesLista`, versão 69; #270). */}
+          <TextInput
+            type="search"
+            aria-label="Buscar aplicação"
+            placeholder="Buscar por nome ou client ID"
+            value={busca}
+            onChange={(event) => setBusca(event.currentTarget.value)}
+            maw={340}
+            style={{ flex: 1 }}
+          />
+          <SegmentedControl
+            aria-label="Estado"
+            size="xs"
+            withItemsBorders={false}
+            style={{ border: '1px solid var(--mantine-color-default-border)', flexShrink: 0 }}
             value={estado}
-            onChange={(event) => setEstado(event.currentTarget.value as EstadoFiltro)}
+            onChange={(value) => setEstado(value as EstadoFiltro)}
             data={[
               { value: 'todas', label: 'Todas' },
               { value: 'ativas', label: 'Ativas' },
@@ -101,7 +107,7 @@ export function ApplicationsListPage() {
             ]}
           />
         </Group>
-      </Group>
+      )}
 
       {query.isPending ? (
         <Paper withBorder radius="md" p="md" role="status" aria-label="Carregando aplicações">
@@ -120,7 +126,7 @@ export function ApplicationsListPage() {
             </Button>
           </Group>
         </Alert>
-      ) : apps.length === 0 && !filtrando ? (
+      ) : vazia ? (
         <Paper withBorder radius="md" px="lg" py={40}>
           <Stack gap={8} align="center" ta="center">
             <Text fw={600} fz="md">

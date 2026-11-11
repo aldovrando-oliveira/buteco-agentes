@@ -19107,3 +19107,26 @@ As três primeiras rodadas pegaram o Mac em limite térmico (`CPU_Speed_Limit` 2
 ### Para as próximas
 
 - Rota nova com primeiro segmento novo, em qualquer dos três apps, reprova na própria suíte até o prefixo entrar no `nginx.conf`, ou até virar exceção nomeada, com o motivo, no `NginxRouteCoverageTests` do app.
+
+## `filtro-aplicacoes-segmentado` — O filtro de estado das Aplicações externas no controle segmentado (#270)
+
+**Change proposta e implementada em 11/11/2026**, na branch `fix/270-filtro-aplicacoes`, num worktree próprio, a partir de `15dec2e` (merge do PR #269, a #268). Defeito de entrega da M2, achado na homologação: na lista de Aplicações externas (#188), o filtro de estado era uma lista suspensa (`NativeSelect`) com o rótulo visível "Estado", e a busca tinha largura fixa (`w={360}`), fora do padrão do `AgentListPage` e do `KnowledgeBaseListPage`. A origem foi o protótipo: o quadro `AplicacoesLista` desenhava a lista suspensa, e foi corrigido na versão 69.
+
+- **A lista:** o `SegmentedControl` com as props do `AgentListPage` (`size="xs"`, `withItemsBorders={false}`, a borda `var(--mantine-color-default-border)`), os rótulos "Todas", "Ativas" e "Desativadas" e `aria-label="Estado"`; a busca com `maw={340}` e `flex: 1`, na mesma linha (`Group gap="sm" wrap="nowrap"`). A busca no servidor (300 ms) e o `?estado=` não mudam.
+- **A linha dos controles some só na `vazia`** (nenhuma aplicação, sem busca e com Todas) e continua na busca sem resultado. Diferença deliberada contra as outras listas, que a escondem também na carga e no erro: a instrução e o quadro nomeiam só a `vazia` (design D2).
+- **O contrato da spec** ("vazia" e "busca sem resultado" são estados diferentes) segue igual: os textos, as condições e o "Limpar busca" não mudam. Muda o caminho: a `vazia` não tem mais busca, e o cenário da busca sem resultado parte de uma lista com aplicações. Capacidade modificada: `panel-external-applications`.
+- **As outras listas (item 3 do pedido):** nenhuma usa lista suspensa como filtro de estado. Os outros `Select` e `NativeSelect` do `apps/frontend` são campos de formulário (Provedor, Modelo, Tipo de origem, Papel, Agente, Agente responsável, Tipo de canal); a tabela está no design D3.
+
+### O que a implementação mediu
+
+| suíte | baseline `15dec2e` (`270-baseline/`) | fechamento (`270-fechamento/`) | veredito |
+|---|---|---|---|
+| `frontend` | 2628 em 199 arquivos, 154 s, CPU mín. 62 | 2630 em 199 arquivos, 161 s, CPU mín. 60 | APROVADA |
+
+- **Comparação por arquivo + nome** (`frontend.json`): nenhum caso da baseline sumiu nem mudou de resultado. Novos, os dois da lista do topo do `tasks.md`: `O filtro de estado é o controle segmentado` e `A busca sem resultado mantém a busca e o filtro, e Limpar busca volta a Todas`. Mudaram de asserção, sem mudar de nome, `A busca vai ao servidor` (o filtro pelo `radio`) e `Vazia e sem resultado são estados diferentes` (só a `vazia`, sem os controles).
+- **Os guardas (convenção 15),** pelo `guarda-270.sh`, cada um reprovando e o arquivo voltando com o sha igual (`~/.cache/buteco-agents/270-guardas/`): de volta ao `NativeSelect` com o rótulo "Estado" → 3 reprovados, todos por `radiogroup` "Estado" ausente; a linha dos controles na `vazia` → reprova `Vazia e sem resultado…` na busca presente; a linha escondida também na busca sem resultado → reprova o caso novo, sem a busca.
+- **O ambiente:** a baseline esperou o load cair (o Spotlight indexava os dois worktrees novos, load ~11) e começou com 2,49; o fechamento, com 4,19. A CPU caiu nas duas, como sempre na suíte do `frontend`; verdes, contam pela regra assimétrica.
+
+### Para as próximas
+
+- A conferência visual fica para a homologação: a lista com o filtro em "Todas", "Ativas" e "Desativadas", a busca sem resultado e a vazia, nos dois esquemas de cor.
