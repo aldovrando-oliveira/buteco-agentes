@@ -21,6 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- O leitor do nginx.conf, comum aos três apps que o nginx roteia (change nginx-prefixo-applications, D3). -->
+    <Compile Include="..\..\..\..\tests\Shared\NginxRouting.cs" Link="Support\NginxRouting.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Buteco.Connectors\Buteco.Connectors.csproj" />
   </ItemGroup>
 

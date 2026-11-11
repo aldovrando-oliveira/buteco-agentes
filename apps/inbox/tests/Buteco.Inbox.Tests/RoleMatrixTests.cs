@@ -18,7 +18,8 @@ namespace Buteco.Inbox.Tests;
 /// O <c>403</c> da autorização sai com o corpo vazio; a resposta da própria rota (um id que não
 /// existe), com corpo ou outro status.
 /// </summary>
-public partial class RoleMatrixTests(InboxFactoryFixture factory) : IClassFixture<InboxFactoryFixture>
+[Collection(InboxHostCompositionCollection.Name)]
+public partial class RoleMatrixTests(InboxFactoryFixture factory)
 {
     private static readonly Dictionary<(string Method, string Pattern), string> Expected = new()
     {

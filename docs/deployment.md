@@ -498,6 +498,31 @@ aplicações externas ativas (M no total).".
   lista mostra o erro de carga e o card do agente, o erro do card. Por isso o recuo do backend leva o
   `frontend` junto, como na #185.
 
+### O nginx do painel encaminha `/applications` ao `api` (#268)
+
+**O que muda:** a regex do bloco do `api` no `apps/frontend/deploy/nginx.conf` ganha `applications`.
+Sem ela, o `GET /applications/` do painel caía no fallback do SPA e recebia o `index.html` (`200`,
+`text/html`), e a lista de Aplicações externas não carregava: o defeito da homologação da M2. A #186
+criou as rotas sem o prefixo no nginx, e a #188 fez a tela. A navegação real em `/applications/*`
+continua no shell do SPA, pelo desvio de navegação que o bloco já tinha. Desde esta change, um teste
+na suíte de cada app (`api`, `inbox`, `connectors`) compara as rotas do host com os blocos do
+nginx, e uma rota nova sem prefixo reprova ali, e não na homologação.
+
+**Deploy:** só a imagem do `frontend`, a qualquer momento depois da #188. O `api` já serve
+`/applications`. **Na homologação, ela substitui a correção manual** (o `sed` que acrescentou
+`applications` à regex dentro do contêiner): a imagem nova traz a mesma regex, sem passo extra.
+
+```
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d frontend
+```
+
+**Conferir:** como Admin, "Aplicações externas" carrega a lista. Pelo `curl`, com o token do painel,
+`GET /applications/` responde `application/json`; sem token, `401` do `api`; com
+`Sec-Fetch-Mode: navigate`, o `index.html` com `Cache-Control: no-store`.
+
+**Voltar atrás:** a imagem anterior do `frontend`, que traz o defeito de volta (a lista recebe HTML).
+Nada se grava diferente.
+
 ### Papéis Admin, Operador e Leitor (#184, #185)
 
 **A #184 (backend) e a #185 (painel) vão juntas para produção** (decisão do dono, 08/11/2026).

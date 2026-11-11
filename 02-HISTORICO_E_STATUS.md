@@ -19074,3 +19074,36 @@ As três primeiras rodadas pegaram o Mac em limite térmico (`CPU_Speed_Limit` 2
 ### Para as próximas
 
 - A #266 (o `password-reset-link` local).
+
+## `nginx-prefixo-applications` — O nginx do painel encaminha `/applications` ao `apps/api` (#268)
+
+**Change proposta e implementada em 10–11/11/2026**, na branch `fix/268-nginx-applications`, num worktree próprio, a partir de `8013521` (merge do PR #267, a #188). Defeito de entrega da M2, achado na homologação: a lista de Aplicações externas recebia o `index.html` (`200`, `text/html`) no `GET /applications/`, porque a regex do bloco do `apps/api` no `apps/frontend/deploy/nginx.conf` não tinha `applications`. A #186 (PR #263) criou o grupo `/applications` sem o prefixo, e a #188 (PR #267) fez a tela. O dono corrigiu o contêiner da homologação à mão (`sed`); a imagem nova substitui essa correção.
+
+- **A correção:** `applications` na regex do bloco do `apps/api`, que já tinha o desvio de navegação (`/applications/*` também é rota de página do painel).
+- **O guarda que faltou:** um `NginxRouteCoverageTests` na suíte de cada app que o nginx roteia (`apps/api`, `apps/inbox`, `apps/connectors`). Ele lê os primeiros segmentos dos `RouteEndpoint` do host construído e os compara, nos dois sentidos, com os blocos do `nginx.conf` que encaminham para o app, lido do repositório. O leitor e a comparação são um arquivo só, `tests/Shared/NginxRouting.cs`, compilado nos três projetos de teste por `<Compile Include … Link>`. As exceções ficam nomeadas no teste, cada uma com o motivo: `health` (os três), `sync` (`apps/api`, só pela rede do compose) e os quatro blocos exatos do emissor (`/.well-known/openid-configuration`, `/.well-known/jwks`, `/connect/authorize`, `/connect/logout`). Reprova também: exceção que deixou de valer ou que ganhou bloco, bloco exato fora da lista, URI do emissor que não chega ao `apps/api`, bloco sem o desvio de navegação, prefixo em dois blocos, upstream desconhecido e bloco fora da forma que o leitor entende.
+- **O comentário do topo do `nginx.conf`** cita os testes como o guarda, e as exceções; os `grep` ficam como explicação de onde os prefixos vêm.
+- **Nenhum código de produção dos três apps muda** (conferido no diff). Capacidade modificada: `server-deployment`.
+- **Documentação:** `docs/deployment.md` ("O nginx do painel encaminha `/applications` ao `api` (#268)") e o `CHANGELOG.md`.
+
+**Decisão do dono na revisão (11/11/2026):** o teste do `apps/api` e o do `apps/inbox` entram numa collection com a classe que já lia a composição do host (`RouteDeclarationValidationTests` e `RoleMatrixTests`), em vez de um `IClassFixture` próprio, que subiria um Postgres a mais em cada suíte (design D2). As duas classes trocam o `IClassFixture` pelo `[Collection]` e mais nada: os mesmos nomes, os mesmos resultados.
+
+### O que a implementação mediu
+
+| suíte | baseline `8013521` (`268-baseline/`) | fechamento (`268-fechamento/`) | veredito |
+|---|---|---|---|
+| `api` | 1685 + 1 ignorado, 342 s, CPU mín. 65 | 1696 + 1 ignorado, 327 s, CPU mín. 55 | APROVADA |
+| `inbox` | 361, 58 s, CPU mín. 100 | 362, 44 s, CPU mín. 100 | APROVADA |
+| `connectors` | 338 + 1 ignorado, 19 s, CPU mín. 100 | 339 + 1 ignorado, 17 s, CPU mín. 100 | APROVADA |
+| `frontend` | 2628 em 199 arquivos, 159 s, CPU mín. 67 | 2628 em 199 arquivos, 155 s, CPU mín. 62 | APROVADA |
+
+- **Comparação por nome** (`compare-trx.py` e `frontend.json` por arquivo + nome): nenhum caso de antes sem par (nome, resultado) nas quatro. Novos: no `apps/api`, o `NginxRouteCoverageTests` e os 10 do `NginxRoutingReaderTests`; no `apps/inbox` e no `apps/connectors`, o `NginxRouteCoverageTests` de cada um. A `frontend` tem exatamente os mesmos 2628.
+- **O custo da fixture:** com a collection, nenhuma suíte sobe contêiner a mais. A duração com a CPU em 100 do começo ao fim, que é a do `apps/inbox`, ficou em 44 s contra 58 s, dentro do ruído. A do `apps/api` caiu de 342 s para 327 s, mas as duas rodadas tiveram a CPU caindo (65 e 55), e o número não mede nada.
+- **O guarda contra o defeito real (2.2):** o teste do `apps/api` na árvore com o `nginx.conf` do `main` reprovou com uma linha só, `prefixo servido pelo apps/api sem bloco no nginx: 'applications' (cai no fallback do SPA, 200 com HTML).`, o que confirma a tabela do design: nenhum outro prefixo faltava. Com a correção, 19/19.
+- **Os guardas por mutação (convenção 15),** 13 rodadas, cada uma reprovando e nomeando o item, com a árvore voltando pela cópia e o sha conferido (`~/.cache/buteco-agents/268-guardas/4/resumo.txt`): `ghost` na regex do `apps/api` e na do `apps/connectors`; `sync`, `= /.well-known/jwks` e `health` (inbox) fora das listas de exceção; `sync` exposto na regex; `contacts` fora da regex do `apps/inbox`; o desvio de navegação fora do bloco do `apps/connectors`; `agents` repetido no bloco do `apps/inbox` (o teste do `apps/api` acusa o repetido, o do `apps/inbox` o repetido e o não servido); um `location = /connect/introspect` fora da lista; o upstream `conectores`; e o bloco do `apps/inbox` sem o `(/|$)`, que faz o leitor falhar nomeando o padrão.
+- **Conferência com o nginx de verdade** (`~/.cache/buteco-agents/268-conferencia/`): `podman build` do `apps/frontend/Dockerfile` na árvore da change e na da baseline, e `nginx -t` nas duas (`syntax is ok`, `test is successful`). O `apps/api` local, num banco descartável copiado do de desenvolvimento por `pg_dump` e migrado, com um Admin pelo `password-reset-link` e pelo login real das 2 etapas; um contêiner `api` encaminhando a 8080 ao host, e o `resolver` trocado só dentro do contêiner do frontend (o contorno da #212). **Imagem da change:** `GET /applications/` com token → `200 application/json`, `[]`; sem token → `401`; com `Sec-Fetch-Mode: navigate` → `200 text/html`, `Cache-Control: no-store`; `/applications/{id}` navegando e `/applicationsxyz` → o `index.html`; `GET /agents/` com token → JSON (controle). **Imagem da baseline:** o mesmo `GET /applications/`, com e sem token, → `200 text/html`, o defeito da homologação. O banco, os contêineres, a rede e as imagens foram apagados; o `postgres_1` foi parado de novo. **Fila do RabbitMQ:** o broker ficou parado o tempo todo. O `apps/api` só conecta ao publicar, e com o broker de pé a varredura de pedidos de indexação do banco copiado publicaria na fila de dev sem workers para consumir.
+- **De novo a #266:** o `password-reset-link` local saiu com `78` (url do painel ausente) até receber `DOTNET_ENVIRONMENT=Development`, porque o comando monta o host com `Host.CreateApplicationBuilder()`, que não lê o `ASPNETCORE_ENVIRONMENT` do perfil. É a #266, já no Backlog; nada muda aqui.
+- **O ambiente:** a baseline rodou logo depois de um reboot do Mac, com o Spotlight reindexando e a VM do Podman parada (subida de novo antes da rodada); por isso as quedas de CPU nas suítes do `apps/api` e da `frontend`, que, verdes, contam pela regra assimétrica.
+
+### Para as próximas
+
+- Rota nova com primeiro segmento novo, em qualquer dos três apps, reprova na própria suíte até o prefixo entrar no `nginx.conf`, ou até virar exceção nomeada, com o motivo, no `NginxRouteCoverageTests` do app.
