@@ -19130,3 +19130,22 @@ As três primeiras rodadas pegaram o Mac em limite térmico (`CPU_Speed_Limit` 2
 ### Para as próximas
 
 - A conferência visual fica para a homologação: a lista com o filtro em "Todas", "Ativas" e "Desativadas", a busca sem resultado e a vazia, nos dois esquemas de cor.
+
+## `filtro-aplicacoes-carga` — A linha da busca e do filtro das Aplicações externas fora da primeira carga (#272)
+
+**Change proposta e implementada em 11/11/2026**, na branch `fix/272-filtro-aplicacoes-carga`, num worktree próprio, a partir de `9f8580f` (merge do PR #271, a #270). O PR #271 foi mergeado antes de um ajuste que o dono tinha pedido, e o ajuste virou esta correção. A #270 tinha registrado no design (D2) que a linha da busca e do filtro só sumia na `vazia`, enquanto Agentes e Bases a escondem também na carga e no erro. Numa instalação sem aplicação, a linha aparecia na primeira carga e sumia em seguida.
+
+- **A regra:** a linha só aparece depois da primeira resposta com dados; nunca na primeira carga, no erro dela nem na `vazia`. Daí em diante, fica nas buscas e trocas de filtro seguintes, inclusive durante a carga e no erro, porque a busca vai ao servidor e não pode sumir enquanto a pessoa digita.
+- **Como a tela distingue a primeira carga** (design D1): a página chama o `useQuery` direto, com `keepPreviousData`, sem hook próprio. Um estado `jaCarregou` vira `true` na primeira renderização com `isSuccess` e não volta. O `isPending` ou o `data !== undefined` sozinhos não bastam: o erro de uma busca seguinte também fica sem `data` (o placeholder só vale enquanto a chave nova está `pending`), e a linha sumiria com o texto digitado. O guarda 2.3 confere isso.
+- Capacidade modificada: `panel-external-applications` (quando a linha aparece, as linhas `carregando` e `erro` da tabela, e dois cenários).
+
+### O que a implementação mediu
+
+| suíte | baseline `9f8580f` (`272-baseline/`) | fechamento (`272-fechamento/`) | veredito |
+|---|---|---|---|
+| `frontend` | 2630 em 199 arquivos, 225 s, CPU mín. 53 | 2634 em 199 arquivos, 177 s, CPU mín. 58 | APROVADA |
+
+- **Comparação por arquivo + nome:** nenhum caso da baseline sumiu nem mudou de resultado. Os 4 novos, no `ApplicationsListPage.test.tsx`: a primeira carga, o erro da primeira carga, a busca seguinte durante a carga e o erro de uma busca seguinte. Nenhum caso existente mudou de asserção.
+- **A suíte do fechamento rodou depois do Prettier**, do `eslint` e do `tsc -b`, sobre a árvore do commit (a #270 tinha rodado antes do Prettier e só repetido o arquivo isolado).
+- **A baseline teve sobreposição:** uma rodada isolada do arquivo de teste (14 casos, ~6 s) rodou fora do lock enquanto a baseline corria. Verde, conta pela regra assimétrica; a duração (225 s) e a CPU mínima (53) carregam a sobreposição.
+- **Os guardas (convenção 15),** pelo `guarda-272.sh`, cada um reprovando e o arquivo voltando com o sha igual (`~/.cache/buteco-agents/272-guardas/`): a linha visível na primeira carga (o comportamento da #270) reprova os casos da primeira carga e do erro dela; a linha escondida em toda carga (`!isFetching`) reprova o da busca seguinte e o da busca sem resultado da #270; a condição só por `data !== undefined` reprova o do erro de uma busca seguinte.

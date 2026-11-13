@@ -52,14 +52,22 @@ export function ApplicationsListPage() {
     queryFn: () => listApplications(filtro),
     placeholderData: keepPreviousData,
   });
+  // A linha da busca e do filtro só aparece depois da primeira resposta com dados, como nas listas
+  // de agentes e de bases: nunca na primeira carga nem no erro dela (#272). Depois disso, ela fica
+  // nas buscas seguintes, inclusive enquanto a nova carrega (o `keepPreviousData` mantém a lista
+  // anterior) e se a nova falhar, porque a busca vai ao servidor e não pode sumir enquanto a pessoa
+  // digita. O `isPending` sozinho não basta: o erro de uma busca seguinte também fica sem `data`.
+  const [jaCarregou, setJaCarregou] = useState(false);
+  if (query.isSuccess && !jaCarregou) setJaCarregou(true);
 
   if (query.isError && is403(query.error)) return <AccessDenied />;
 
   const filtrando = buscaEnviada.trim() !== '' || estado !== 'todas';
   const apps = query.data ?? [];
-  // O estado `vazia`: nenhuma aplicação, sem busca e com Todas. Só nele a linha dos controles some;
+  // O estado `vazia`: nenhuma aplicação, sem busca e com Todas. Nele a linha dos controles some;
   // na busca sem resultado ela fica, para o Admin corrigir a busca.
   const vazia = query.isSuccess && apps.length === 0 && !filtrando;
+  const mostrarControles = (jaCarregou || query.isSuccess) && !vazia;
   const limpar = () => {
     setBusca('');
     setEstado('todas');
@@ -79,11 +87,12 @@ export function ApplicationsListPage() {
         </Button>
       </Group>
 
-      {!vazia && (
+      {mostrarControles && (
         <Group gap="sm" wrap="nowrap">
           {/* O padrão das listas de agentes e de bases: a busca e o controle segmentado na mesma
               linha, sem rótulo visível ("Estado" é o nome acessível do controle), e a linha some
-              na lista vazia (quadro `AplicacoesLista`, versão 69; #270). */}
+              na primeira carga, no erro dela e na lista vazia (quadro `AplicacoesLista`, versão 69;
+              #270, #272). */}
           <TextInput
             type="search"
             aria-label="Buscar aplicação"
