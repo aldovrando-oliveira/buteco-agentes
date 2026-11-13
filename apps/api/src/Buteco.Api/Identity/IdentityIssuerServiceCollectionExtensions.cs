@@ -1,10 +1,13 @@
 using Buteco.Api.Identity.Clients;
+using Buteco.Api.Identity.Federated;
 using Buteco.Api.Identity.Flow;
 using Buteco.Api.Identity.Keys;
 using Buteco.Api.Identity.Storage;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Options;
 using Microsoft.Extensions.Options;
+using OpenIddict.Client;
+using OpenIddict.Client.AspNetCore;
 using OpenIddict.Server;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 using static OpenIddict.Server.OpenIddictServerEvents;
@@ -37,6 +40,13 @@ public static class IdentityIssuerServiceCollectionExtensions
 
         services.Configure<IdentityIssuerOptions>(configuration.GetSection(IdentityIssuerOptions.SectionName));
 
+        // Os provedores federados (design.md da change provedores-federados-google, D2): lidos aqui,
+        // sem lançar, porque as registrações do cliente precisam deles antes do Build(); a checagem é
+        // ValidateFederatedProvidersConfiguration, depois dele. Registrado antes do retorno sem issuer:
+        // as rotas de usuários e de Minha conta o recebem por injeção.
+        var federated = FederatedProviderCatalog.Read(configuration);
+        services.AddSingleton(federated);
+
         if (string.IsNullOrWhiteSpace(baseUrl) || !IdentityIssuerState.TryParseIssuer(baseUrl, out var issuer))
         {
             services.AddSingleton(new IdentityIssuerState(Issuer: null));
@@ -61,7 +71,17 @@ public static class IdentityIssuerServiceCollectionExtensions
         services.AddSingleton(new IdentityTokenPruneSchedule());
         services.AddHostedService<IdentityTokenPruneService>();
 
-        services.AddOpenIddict()
+        services.AddMemoryCache();
+        services.AddSingleton<FederatedRefusalCookie>();
+        var panelBase = Uri.TryCreate(configuration[$"{IdentityIssuerOptions.SectionName}:{nameof(IdentityIssuerOptions.PanelBaseUrl)}"], UriKind.Absolute, out var panel)
+            ? panel
+            : issuer;
+        var panelRoot = new Uri(panelBase.GetLeftPart(UriPartial.Authority) + "/");
+        var federatedRedirectUri = new Uri(panelRoot, FederatedLogin.CallbackPath.TrimStart('/'));
+        services.AddSingleton(new FederatedRedirect(panelRoot, federatedRedirectUri));
+
+        var openIddict = services.AddOpenIddict();
+        openIddict
             .AddCore(core =>
             {
                 core.UseEntityFrameworkCore().UseDbContext<AppDbContext>();
@@ -134,6 +154,70 @@ public static class IdentityIssuerServiceCollectionExtensions
                     .EnableAuthorizationEndpointPassthrough()
                     .EnableEndSessionEndpointPassthrough();
             });
+
+        // O cliente OIDC só existe com provedor configurado: sem nenhum, o login fica só com senha,
+        // exatamente como antes da change (spec federated-providers), e nenhum handler do cliente entra
+        // no caminho das requisições.
+        if (federated.Providers.Count == 0)
+        {
+            return services;
+        }
+
+        services.AddSingleton<IConfigureOptions<OpenIddictClientOptions>, IdentityKeyRingClientOptionsConfigurer>();
+        services.AddSingleton<IOptionsChangeTokenSource<OpenIddictClientOptions>, IdentityKeyRingClientChangeTokenSource>();
+
+        openIddict.AddClient(client =>
+            {
+                // O apps/api como cliente OIDC dos provedores federados, atrás do emissor (design.md da
+                // change provedores-federados-google, D1 e D4): authorization code com PKCE e nonce; o
+                // state token de 10 min, de uso único pela entrada em openiddict_tokens; o retorno em
+                // passthrough, para a rota decidir. As credenciais vêm do anel
+                // (IdentityKeyRingClientOptionsConfigurer).
+                client.AllowAuthorizationCodeFlow();
+                client.SetRedirectionEndpointUris(Relative(FederatedLogin.CallbackPath));
+                client.SetStateTokenLifetime(FederatedLogin.FlowLifetime);
+
+                // Sem esquema encaminhado por provedor: o apps/api registra só o JwtBearer como padrão,
+                // e nenhum provedor vira esquema de autenticação de rota. Com o passthrough dos erros, toda
+                // falha do retorno (correlação, state, código, id token, error do provedor) chega à rota,
+                // que responde a recusa falha em vez da página de erro do OpenIddict; o cliente só tem o
+                // endpoint do retorno, e o passthrough não alcança mais nada.
+                client.UseAspNetCore()
+                    .DisableTransportSecurityRequirement()
+                    .DisableAutomaticAuthenticationSchemeForwarding()
+                    .EnableRedirectionEndpointPassthrough()
+                    .EnableErrorPassthrough();
+
+                client.UseSystemNetHttp();
+
+                // A URI do retorno pela base do painel, e não pelo host da requisição (registro do apply).
+                client.AddEventHandler(FederatedRequestUriHandler.Descriptor);
+
+                var web = client.UseWebProviders();
+                foreach (var provider in federated.Providers)
+                {
+                    // Só o tipo Google na M3: o issuer, os escopos e o prompt são fixos do tipo.
+                    web.AddGoogle(google => google
+                        .SetProviderName(provider.Key)
+                        .SetRegistrationId(provider.Key)
+                        .SetClientId(provider.ClientId)
+                        .SetClientSecret(provider.ClientSecret)
+                        .SetRedirectUri(federatedRedirectUri)
+                        .AddScopes([.. FederatedProviderTypes.GoogleScopes])
+                        .SetPrompt(FederatedProviderTypes.GooglePrompt));
+                }
+            });
+
+        // O cookie do fluxo (D4): Lax, só no caminho do retorno, Secure fora de Development, como o
+        // buteco-sessao. O ambiente só existe no contêiner, e o registro não o recebe.
+        services.AddOptions<OpenIddictClientAspNetCoreOptions>().Configure<IHostEnvironment>((options, environment) =>
+        {
+            options.CookieBuilder.Name = FederatedLogin.FlowCookieName;
+            options.CookieBuilder.SameSite = SameSiteMode.Lax;
+            options.CookieBuilder.Path = FederatedLogin.CallbackPath;
+            options.CookieBuilder.HttpOnly = true;
+            options.CookieBuilder.SecurePolicy = environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+        });
 
         return services;
     }

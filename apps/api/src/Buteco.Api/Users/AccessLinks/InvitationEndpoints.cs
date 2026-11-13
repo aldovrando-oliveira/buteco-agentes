@@ -3,6 +3,7 @@ using Buteco.Api.Infrastructure;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Management;
 using Buteco.Api.Users.Passwords;
+using Buteco.Api.Users.TwoFactor;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -35,9 +36,9 @@ public static class InvitationEndpoints
 
     // Papel obrigatório, em admin, operador ou leitor (design.md da change papeis-no-token, D5, Q9):
     // sem padrão, que seria uma decisão de acesso tomada em silêncio. O aceite mantém o papel.
-    public sealed record InvitationRequest(string? Nome, string? Email, string? Papel, string? Senha);
+    public sealed record InvitationRequest(string? Nome, string? Email, string? Papel, string? Senha, string? Codigo = null);
 
-    public sealed record CallerPasswordRequest(string? Senha);
+    public sealed record CallerPasswordRequest(string? Senha, string? Codigo = null);
 
     public sealed record InvitationCreatedResponse(UserSummary Usuario, string Link, DateTimeOffset ExpiraEm);
 
@@ -58,6 +59,7 @@ public static class InvitationEndpoints
         AppDbContext dbContext,
         LoginThrottleStore throttle,
         PasswordHasher hasher,
+        TwoFactorVerifier verifier,
         IdentityIssuerState issuer,
         IOptions<IdentityIssuerOptions> options,
         TimeProvider timeProvider,
@@ -93,7 +95,7 @@ public static class InvitationEndpoints
             return UserFields.EmailInUse();
         }
 
-        if (await CallerPassword.RejectAsync(caller, request.Senha, hasher, throttle, cancellationToken) is { } rejected)
+        if (await CallerPassword.RejectAsync(caller, request.Senha, request.Codigo, hasher, verifier, throttle, cancellationToken) is { } rejected)
         {
             return rejected;
         }
@@ -127,6 +129,7 @@ public static class InvitationEndpoints
         AppDbContext dbContext,
         LoginThrottleStore throttle,
         PasswordHasher hasher,
+        TwoFactorVerifier verifier,
         IdentityIssuerState issuer,
         IOptions<IdentityIssuerOptions> options,
         TimeProvider timeProvider,
@@ -153,7 +156,7 @@ public static class InvitationEndpoints
             return NotInvited();
         }
 
-        if (await CallerPassword.RejectAsync(caller, request?.Senha, hasher, throttle, cancellationToken) is { } rejected)
+        if (await CallerPassword.RejectAsync(caller, request?.Senha, request?.Codigo, hasher, verifier, throttle, cancellationToken) is { } rejected)
         {
             return rejected;
         }

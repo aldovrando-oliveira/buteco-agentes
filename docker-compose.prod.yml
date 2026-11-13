@@ -89,6 +89,15 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+    # Os provedores federados (#189): a chave é de quem instala, e não há nome fixo a interpolar
+    # aqui. O arquivo, ao lado do .env.prod e fora do repositório (permissão 600), traz
+    # Identity__FederatedProviders__<chave>__Type, __ClientId, __HostedDomain e __ClientSecret só
+    # para o api; sem ele, nenhum provedor. O `required: false` exige Docker Compose 2.24.0 ou mais
+    # novo; numa versão anterior, o arquivo reprova no parse, sem subir nada (deployment.md,
+    # "Provedores federados (#189)", tem a alternativa). Exemplo: federated-providers.env.example.
+    env_file:
+      - path: ./federated-providers.env
+        required: false
     environment:
       # A MESMA variável entregue a workers, e é isso que faz os dois processos
       # concordarem sobre que dia é hoje. apps/api a lê como CONFIGURAÇÃO do

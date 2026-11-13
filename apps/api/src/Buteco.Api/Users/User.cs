@@ -290,6 +290,12 @@ public sealed class User
         return at > 0 ? trimmed[..at] : trimmed;
     }
 
+    /// <summary>
+    /// Só o stamp novo (design.md da change provedores-federados-google, D6): a desconexão de um
+    /// provedor pelo Admin derruba o cookie em voo e toda renovação de antes, sem tocar em mais nada.
+    /// </summary>
+    public void RenewSecurityStamp() => SecurityStamp = NewSecurityStamp();
+
     /// <summary>Um stamp novo; o consumo do link de redefinição grava por <c>UPDATE</c> condicional, fora da entidade.</summary>
     internal static string NewSecurityStamp() =>
         Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));

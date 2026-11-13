@@ -88,11 +88,13 @@ public static class RoleRoutes
             [("POST", "/users/{id:guid}/sessions/revoke")] = AdminOnly,
             [("PUT", "/users/{id:guid}/role")] = AdminOnly,
             [("POST", "/users/{id:guid}/two-factor/reset")] = AdminOnly,
+            [("DELETE", "/users/{id:guid}/federated/{chave}")] = AdminOnly,
             [("POST", "/users/invitations")] = AdminOnly,
             [("POST", "/users/{id:guid}/invitation/renew")] = AdminOnly,
             [("POST", "/users/{id:guid}/invitation/cancel")] = AdminOnly,
             [("POST", "/users/{id:guid}/password-reset")] = AdminOnly,
             [("GET", "/identity")] = AdminOnly,
+            [("GET", "/identity/federated-providers")] = AdminOnly,
 
             // Minha conta: a própria pessoa, todo papel (#219).
             [("GET", "/account/")] = All,
@@ -102,6 +104,8 @@ public static class RoleRoutes
             [("POST", "/account/sessions/revoke-others")] = All,
             [("GET", "/account/two-factor/")] = All,
             [("POST", "/account/two-factor/recovery-codes")] = All,
+            [("POST", "/account/federated/{chave}/connect")] = All,
+            [("DELETE", "/account/federated/{chave}")] = All,
 
             // Aplicações externas (design.md da change aplicacoes-externas-credencial, D3): só o
             // Admin, inclusive ler (#184). As rotas exigem também o papel gravado (CurrentUser).

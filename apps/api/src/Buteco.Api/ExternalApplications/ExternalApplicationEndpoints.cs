@@ -5,6 +5,7 @@ using Buteco.Api.Users;
 using Buteco.Api.Users.AccessLinks;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Passwords;
+using Buteco.Api.Users.TwoFactor;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -40,11 +41,11 @@ public static class ExternalApplicationEndpoints
 {
     public const string GroupPath = "/applications";
 
-    public sealed record CreateApplicationRequest(string? Nome, string? Descricao, string? Senha);
+    public sealed record CreateApplicationRequest(string? Nome, string? Descricao, string? Senha, string? Codigo = null);
 
     public sealed record UpdateApplicationRequest(string? Nome, string? Descricao);
 
-    public sealed record GenerateSecretRequest(string? Senha);
+    public sealed record GenerateSecretRequest(string? Senha, string? Codigo = null);
 
     private const int ClientIdAttempts = 3;
 
@@ -122,6 +123,7 @@ public static class ExternalApplicationEndpoints
         AppDbContext dbContext,
         LoginThrottleStore throttle,
         PasswordHasher hasher,
+        TwoFactorVerifier verifier,
         IOpenIddictApplicationManager applications,
         IExternalApplicationClientIdGenerator clientIds,
         IdentityIssuerState issuer,
@@ -150,7 +152,7 @@ public static class ExternalApplicationEndpoints
             return ExternalApplicationFields.NameInUse();
         }
 
-        if (await CallerPassword.RejectAsync(caller, request.Senha, hasher, throttle, cancellationToken) is { } rejected)
+        if (await CallerPassword.RejectAsync(caller, request.Senha, request.Codigo, hasher, verifier, throttle, cancellationToken) is { } rejected)
         {
             return rejected;
         }
@@ -324,6 +326,7 @@ public static class ExternalApplicationEndpoints
         AppDbContext dbContext,
         LoginThrottleStore throttle,
         PasswordHasher hasher,
+        TwoFactorVerifier verifier,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
@@ -345,7 +348,7 @@ public static class ExternalApplicationEndpoints
             return refused;
         }
 
-        if (await CallerPassword.RejectAsync(caller, request.Senha, hasher, throttle, cancellationToken) is { } rejected)
+        if (await CallerPassword.RejectAsync(caller, request.Senha, request.Codigo, hasher, verifier, throttle, cancellationToken) is { } rejected)
         {
             return rejected;
         }

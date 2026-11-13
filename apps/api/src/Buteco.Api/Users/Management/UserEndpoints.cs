@@ -1,4 +1,6 @@
+using Buteco.Api.Identity.Federated;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Users.Federated;
 using Buteco.Api.Users.Sessions;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,7 +44,7 @@ public static class UserEndpoints
     }
 
     private static async Task<IResult> ListAsync(
-        HttpContext httpContext, AppDbContext dbContext, TimeProvider timeProvider, CancellationToken cancellationToken)
+        HttpContext httpContext, AppDbContext dbContext, FederatedProviderCatalog catalog, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
@@ -54,12 +56,16 @@ public static class UserEndpoints
             .ThenBy(user => user.Id)
             .ToListAsync(cancellationToken);
 
+        // Os vínculos numa consulta só, sem uma por usuário.
+        var links = (await dbContext.UserFederatedIdentities.AsNoTracking().ToListAsync(cancellationToken)).ToLookup(link => link.UserId);
         var now = timeProvider.GetUtcNow();
-        return TypedResults.Ok(users.Select(user => UserSummary.From(user, now)).ToList());
+        return TypedResults.Ok(users
+            .Select(user => UserSummary.From(user, now, FederatedSignInForms.Of(user.PasswordHash is not null, links[user.Id], catalog)))
+            .ToList());
     }
 
     private static async Task<IResult> GetAsync(
-        Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, CancellationToken cancellationToken)
+        Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, FederatedProviderCatalog catalog, CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
@@ -67,7 +73,7 @@ public static class UserEndpoints
         }
 
         return await dbContext.Users.FindAsync([id], cancellationToken) is { } user
-            ? await DetailAsync(user, dbContext, sessions, timeProvider, cancellationToken)
+            ? await DetailAsync(user, dbContext, sessions, timeProvider, catalog, cancellationToken)
             : NotFound();
     }
 
@@ -78,6 +84,7 @@ public static class UserEndpoints
         AppDbContext dbContext,
         UserSessions sessions,
         TimeProvider timeProvider,
+        FederatedProviderCatalog catalog,
         CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
@@ -112,7 +119,7 @@ public static class UserEndpoints
             return EmailInUse();
         }
 
-        return await DetailAsync(user, dbContext, sessions, timeProvider, cancellationToken);
+        return await DetailAsync(user, dbContext, sessions, timeProvider, catalog, cancellationToken);
     }
 
     private static async Task<IResult> DeactivateAsync(
@@ -121,6 +128,7 @@ public static class UserEndpoints
         AppDbContext dbContext,
         UserSessions sessions,
         TimeProvider timeProvider,
+        FederatedProviderCatalog catalog,
         CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
@@ -165,11 +173,11 @@ public static class UserEndpoints
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return await DetailAsync(target, dbContext, sessions, timeProvider, cancellationToken);
+        return await DetailAsync(target, dbContext, sessions, timeProvider, catalog, cancellationToken);
     }
 
     private static async Task<IResult> ActivateAsync(
-        Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, CancellationToken cancellationToken)
+        Guid id, HttpContext httpContext, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, FederatedProviderCatalog catalog, CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is null)
         {
@@ -194,7 +202,7 @@ public static class UserEndpoints
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        return await DetailAsync(user, dbContext, sessions, timeProvider, cancellationToken);
+        return await DetailAsync(user, dbContext, sessions, timeProvider, catalog, cancellationToken);
     }
 
     private static async Task<IResult> RevokeSessionsAsync(
@@ -214,7 +222,16 @@ public static class UserEndpoints
     }
 
     internal static async Task<IResult> DetailAsync(
-        User user, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, CancellationToken cancellationToken)
+        User user, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider, FederatedProviderCatalog catalog, CancellationToken cancellationToken)
+    {
+        var links = await FederatedSignInForms.LinksOfAsync(dbContext, user.Id, cancellationToken);
+        return await DetailAsync(user, dbContext, sessions, timeProvider,
+            FederatedSignInForms.Of(user.PasswordHash is not null, links, catalog), FederatedSignInForms.Connected(links, catalog), cancellationToken);
+    }
+
+    private static async Task<IResult> DetailAsync(
+        User user, AppDbContext dbContext, UserSessions sessions, TimeProvider timeProvider,
+        IReadOnlyList<string> signInForms, IReadOnlyList<ConnectedAccount> connected, CancellationToken cancellationToken)
     {
         var invitedBy = user.InvitedBy is { } inviterId
             ? await dbContext.Users.AsNoTracking()
@@ -223,7 +240,7 @@ public static class UserEndpoints
                 .SingleOrDefaultAsync(cancellationToken)
             : null;
 
-        return TypedResults.Ok(UserDetail.From(user, invitedBy, await sessions.SummarizeAsync(user.Id, cancellationToken), timeProvider.GetUtcNow()));
+        return TypedResults.Ok(UserDetail.From(user, invitedBy, await sessions.SummarizeAsync(user.Id, cancellationToken), timeProvider.GetUtcNow(), signInForms, connected));
     }
 
     public const string NotYetAcceptedMessage = "Este usuário ainda não aceitou o convite.";

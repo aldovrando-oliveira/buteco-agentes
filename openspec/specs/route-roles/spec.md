@@ -16,8 +16,8 @@ A tabela SHALL ser esta (A = `admin`, O = `operator`, L = `reader`):
 |---|---|---|
 | `apps/api` | leituras de agentes, provedores, MCP (inclusive `GET /mcp-servers/{id}/tools`), bases, documentos, eventos de documento, diagnóstico do índice, resumo de indexação e `/insights/*` | A O L |
 | `apps/api` | escritas de agentes (inclusive vínculos de MCP, delegação e bases), MCP (inclusive `POST /mcp-servers/test` e `POST /mcp-servers/{id}/test`), bases e documentos (inclusive reindexar) | A O |
-| `apps/api` | `/users/*` (inclusive convite, novo link, cancelamento, redefinição de senha, redefinição de 2 etapas e `PUT /users/{id}/role`) e `GET /identity` | A |
-| `apps/api` | `/account/*` | A O L |
+| `apps/api` | `/users/*` (inclusive convite, novo link, cancelamento, redefinição de senha, redefinição de 2 etapas, `PUT /users/{id}/role` e `DELETE /users/{id}/federated/{chave}`), `GET /identity` e `GET /identity/federated-providers` | A |
+| `apps/api` | `/account/*` (inclusive `POST /account/federated/{chave}/connect` e `DELETE /account/federated/{chave}`) | A O L |
 | `apps/api` | `/applications/*` (listar, ver, criar, editar, desativar, reativar, gerar e revogar segredo; listar, liberar, mudar operações e retirar agentes da aplicação) e `GET /agents/{id}/applications` | A |
 | `apps/api` | `GET /agents/{id}/applications/count` | A O L |
 | `apps/inbox` | `GET /channels/`, `GET /channels/{id}`, `GET /sessions/summary`, `GET /messages/summary` | A O L |
@@ -61,6 +61,14 @@ Com token do painel válido e papel válido, a requisição a uma rota inexisten
 #### Scenario: Só o Admin libera agentes para uma aplicação
 - **WHEN** um token do painel com `role` `operator` chama `POST /applications/{id}/agents` com corpo válido
 - **THEN** a resposta é `403`, e nenhum vínculo é gravado
+
+#### Scenario: Só o Admin lê os provedores e desconecta outro usuário
+- **WHEN** um token do painel de cada papel chama `GET /identity/federated-providers` e `DELETE /users/{id}/federated/{chave}` de outro usuário vinculado
+- **THEN** o `admin` não recebe `401` nem `403`, e o `operator` e o `reader` recebem `403`, sem o vínculo mudar
+
+#### Scenario: Todo papel desconecta a própria conta
+- **WHEN** um usuário ativo de cada papel, com senha e vínculo, chama `DELETE /account/federated/{chave}` com o próprio token
+- **THEN** nenhuma das respostas é `401` nem `403`
 
 ### Requirement: Guarda da matriz por app, sobre a tabela real
 Cada app SHALL ter um teste com a matriz desta spec escrita à parte da `RoleRoutes` de produção, que afirma que a tabela de produção tem exatamente as entradas e os papéis dela e, para cada entrada e cada um dos três papéis, chama a rota no host construído com um token do painel daquele papel e afirma o `403` vazio da autorização quando o papel não está na entrada da matriz, e uma resposta que não é o `401` nem o `403` vazios quando está. A expectativa SHALL NOT ser lida da própria `RoleRoutes`, o que faria o guarda circular. O teste SHALL afirmar que a matriz percorrida não é vazia.

@@ -330,6 +330,74 @@ no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
 (ciclo de sincronização) e o build arg `VITE_CONNECTORS_BASE_URL=""` do
 `frontend`, que só existe junto com o bloco `/connectors` do `nginx.conf`.
 
+### Provedores federados (#189)
+
+**O que muda:**
+
+- o login ganha a **entrada pelo Google**, atrás do emissor do Buteco: o `api` é cliente OIDC do
+  Google, e o painel continua falando só com o emissor. O token que os apps validam não muda;
+- **o login pelo Google também pede o código das 2 etapas do Buteco**; quem nunca cadastrou a
+  verificação cadastra no primeiro login;
+- só entra quem tem a conta Google **conectada** a um usuário (Minha conta, com a senha). Não há
+  entrada automática, nem por domínio; o aceite de convite pelo Google é a #274;
+- sem provedor configurado, **nada muda**: o login fica só com senha, como antes.
+
+**Versão do Docker Compose: 2.24.0 ou mais novo.** O provedor chega ao contêiner por um `env_file`
+opcional do `api` (`required: false`), que o Compose só aceita desde a 2.24.0. Antes do deploy, nos
+servidores de produção e de homologação:
+
+```bash
+docker compose version   # precisa ser v2.24.0 ou mais nova
+```
+
+Numa versão anterior, o `docker-compose.prod.yml` **reprova no parse** (`env_file` com formato
+inválido), sem subir nada: a falha é ruidosa, não silenciosa. Se não der para atualizar o Compose, a
+alternativa vale em todo Compose v2: trocar a forma longa pela curta
+(`env_file: ./federated-providers.env`) e manter o arquivo **sempre presente**, vazio quando não há
+provedor, criado no primeiro deploy com `install -m 600 /dev/null federated-providers.env`. O custo é
+o `up` reprovar se alguém apagar o arquivo.
+
+**O cliente OAuth no Google (o dono cria; nenhum segredo no repositório):**
+
+1. no Google Cloud Console, um projeto e a **tela de consentimento OAuth** (tipo "Interno" se a conta
+   for do Google Workspace; "Externo" em teste, com os usuários de teste listados);
+2. um **ID do cliente OAuth** do tipo "Aplicativo da Web", com a URI de redirecionamento autorizada
+   `https://<PUBLIC_DOMAIN>/auth/federated/callback` (e, para desenvolvimento,
+   `http://localhost:5173/auth/federated/callback`, que o proxy do Vite leva ao `api`). **Sem origem
+   JavaScript**: o painel não fala com o Google;
+3. o `ClientId` e o segredo no `federated-providers.env`, ao lado do `.env.prod`, com permissão 600
+   (o exemplo é o `federated-providers.env.example`):
+
+   ```bash
+   Identity__FederatedProviders__corporativo__Type=google
+   Identity__FederatedProviders__corporativo__ClientId=<o ID do cliente>
+   Identity__FederatedProviders__corporativo__ClientSecret=<o segredo do cliente>
+   # opcional: Identity__FederatedProviders__corporativo__HostedDomain=empresa.com
+   ```
+
+   A chave (`corporativo`) é sua; ela vai nas rotas e no motivo das recusas. O segredo só vale por
+   variável de ambiente: num arquivo JSON de configuração, o boot reprova.
+
+**Deploy:** a imagem do `api`, com a migration `AddUserFederatedIdentities` (a tabela
+`user_federated_identities` e dois índices únicos; só acréscimo). O nginx já leva `/auth` ao `api`.
+
+**Conferir:**
+
+- `curl -s https://<PUBLIC_DOMAIN>/auth/federated/providers` lista a chave e o tipo, e nada mais;
+- `curl -s -X POST https://<PUBLIC_DOMAIN>/auth/federated/refusal -H 'Content-Type: application/json'
+  -H 'Origin: https://<PUBLIC_DOMAIN>' -d '{}'` responde `404` vazio (sem o cookie da recusa, a rota
+  não revela nada);
+- em Identidade (`GET /identity/federated-providers`, Admin), o provedor sem segredo, com a URI de
+  retorno que foi registrada no Google;
+- o checklist da conferência com o cliente real, no `tasks.md` da change `provedores-federados-google`
+  (13.2 a 13.8): o login de uma conta conectada pedindo o código, os cookies em Chrome, Firefox e
+  Safari, a conta sem acesso caindo em `sem-acesso`.
+
+**Voltar atrás:** a imagem anterior do `api`. A tabela fica, ignorada, e os vínculos voltam a valer ao
+subir de novo. Na #189 ninguém fica só com Google (quem cria essa pessoa é o aceite pelo Google, #274):
+todo vinculado ainda entra com senha. O `federated-providers.env` pode ficar; a imagem anterior não
+o lê.
+
 ### Aplicações externas com credencial do Buteco (#186)
 
 **O que muda:**

@@ -103,7 +103,12 @@ A escrita do link (token, hash, propósito e vencimento, numa única instrução
 - **THEN** só o segundo é aceito; o primeiro recebe a resposta de link inválido
 
 ### Requirement: Criar convite, gerar novo link e gerar redefinição pedem a senha de quem chama
-`POST /users/invitations`, `POST /users/{id}/invitation/renew` e `POST /users/{id}/password-reset` SHALL conferir a senha atual de quem chama, recebida no campo `senha` do corpo, como o login confere. Durante o bloqueio do e-mail de quem chama, SHALL responder `423` com `Retry-After`, sem conferir a senha e sem gravar nada. Senha ausente ou errada SHALL responder `401` "Senha inválida.", contar uma falha no bloqueio do e-mail de quem chama (e não no do alvo) e não gravar nada. O acerto SHALL NOT zerar a contagem. `POST /users/{id}/invitation/cancel` SHALL NOT pedir senha.
+`POST /users/invitations`, `POST /users/{id}/invitation/renew` e `POST /users/{id}/password-reset` SHALL conferir a **confirmação de quem chama**. A mesma confirmação SHALL valer nas outras rotas que a pedem: promover a Admin (`user-management`), criar a aplicação externa e gerar segredo (`external-applications`) e conectar provedor (`federated-login`).
+
+- **Quem tem senha gravada** SHALL confirmar com a senha atual no campo `senha` do corpo, conferida como o login confere. Senha ausente ou errada SHALL responder `401` "Senha inválida.". Um `codigo` no corpo SHALL NOT substituir a senha de quem a tem: sem `senha` certa, a resposta é o mesmo `401`.
+- **Quem não tem senha gravada** SHALL confirmar com o código do app autenticador no campo `codigo`, conferido como o segundo passo confere o código do app, inclusive a recusa do passo já usado. O código de recuperação SHALL NOT valer aqui. Código ausente, errado, já usado ou de recuperação SHALL responder `401` "Código inválido.". Segredo que não decifra SHALL responder `500` "Não foi possível conferir o código do app autenticador. Fale com o administrador.", com o log de erro que já existe para esse caso.
+
+Durante o bloqueio do e-mail de quem chama, SHALL responder `423` com `Retry-After`, sem conferir nada e sem gravar nada. Toda confirmação recusada SHALL contar uma falha no bloqueio do e-mail de quem chama (e não no do alvo) e não gravar nada. O acerto SHALL NOT zerar a contagem. `POST /users/{id}/invitation/cancel` SHALL NOT pedir confirmação.
 
 #### Scenario: Senha errada não gera link
 - **WHEN** um usuário cria um convite, gera um novo link e gera uma redefinição, cada vez com a própria senha errada
@@ -116,6 +121,22 @@ A escrita do link (token, hash, propósito e vencimento, numa única instrução
 #### Scenario: Cancelar não pede senha
 - **WHEN** um convite é cancelado sem `senha` no corpo
 - **THEN** a resposta é `204`
+
+#### Scenario: Quem tem senha não confirma com o código
+- **WHEN** um Admin com senha cria um convite com um `codigo` válido do app e sem `senha`
+- **THEN** a resposta é `401` "Senha inválida.", contada no bloqueio do e-mail dele, e nenhum usuário é criado
+
+#### Scenario: Quem não tem senha confirma com o código do app
+- **WHEN** um Admin sem senha, com a verificação ligada, cria um convite com um `codigo` válido do app
+- **THEN** a resposta é a do sucesso, e o convite é criado
+
+#### Scenario: O código do app não vale duas vezes
+- **WHEN** o mesmo Admin sem senha usa o mesmo código, já aceito, numa segunda confirmação
+- **THEN** a resposta é `401` "Código inválido.", contada no bloqueio
+
+#### Scenario: Código de recuperação não confirma
+- **WHEN** o mesmo Admin sem senha confirma com um código de recuperação válido
+- **THEN** a resposta é `401` "Código inválido.", e o código de recuperação continua sem uso
 
 ### Requirement: Rotas administrativas do link atendem só o usuário real do token
 As quatro rotas administrativas (`POST /users/invitations`, `POST /users/{id}/invitation/renew`, `POST /users/{id}/invitation/cancel` e `POST /users/{id}/password-reset`) SHALL atender só o usuário real do `sub` do access token do emissor, existente, ativo e com o papel `admin` gravado, além do `role` `admin` no token (`route-roles`). Token de operador cujo `sub` não é usuário (cliente `buteco-painel`, subject `operator`, `sub` que não é id de usuário), usuário desativado com access token ainda válido e usuário cujo papel gravado não é `admin` SHALL receber `403`, antes de qualquer outra conferência e sem gravar nada. O papel do alvo SHALL NOT restringir as rotas: um Admin SHALL poder gerar o link de redefinição de senha de outro Admin.

@@ -1,4 +1,6 @@
+using Buteco.Api.Identity.Federated;
 using Buteco.Api.Infrastructure;
+using Buteco.Api.Users.Federated;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Passwords;
 using Buteco.Api.Users.Sessions;
@@ -26,7 +28,11 @@ public static class AccountEndpoints
     public const string GroupPath = "/account";
 
     // Papel: o gravado, e não o do token (design.md da change papeis-no-token, D3).
-    public sealed record ProfileResponse(Guid Id, string Nome, string Email, string Papel, DateTimeOffset CriadoEm, DateTimeOffset? UltimoAcesso, bool DuasEtapas);
+    // As formas de entrada e as contas conectadas, no formato do detalhe de usuário (design.md da change
+    // provedores-federados-google, D9).
+    public sealed record ProfileResponse(
+        Guid Id, string Nome, string Email, string Papel, DateTimeOffset CriadoEm, DateTimeOffset? UltimoAcesso, bool DuasEtapas,
+        IReadOnlyList<string> FormasDeEntrada, IReadOnlyList<ConnectedAccount> ContasConectadas);
 
     public sealed record ChangePasswordRequest(string? SenhaAtual, string? NovaSenha);
 
@@ -38,14 +44,17 @@ public static class AccountEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetAsync(HttpContext httpContext, AppDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task<IResult> GetAsync(HttpContext httpContext, AppDbContext dbContext, FederatedProviderCatalog catalog, CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAsync(httpContext.User, dbContext, cancellationToken) is not { } user)
         {
             return CurrentUser.Forbidden();
         }
 
-        return TypedResults.Ok(new ProfileResponse(user.Id, user.Name, user.Email, UserRoleText.WriteWire(user.Role), user.CreatedAt, user.LastAccessAt, user.IsTwoFactorEnabled));
+        var links = await FederatedSignInForms.LinksOfAsync(dbContext, user.Id, cancellationToken);
+        return TypedResults.Ok(new ProfileResponse(
+            user.Id, user.Name, user.Email, UserRoleText.WriteWire(user.Role), user.CreatedAt, user.LastAccessAt, user.IsTwoFactorEnabled,
+            FederatedSignInForms.Of(user.PasswordHash is not null, links, catalog), FederatedSignInForms.Connected(links, catalog)));
     }
 
     private static async Task<IResult> ChangePasswordAsync(

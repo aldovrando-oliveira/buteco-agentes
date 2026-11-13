@@ -16,6 +16,7 @@ using Buteco.Api.RejectionMetrics.Entities;
 using Buteco.Api.ExternalApplications;
 using Buteco.Api.Users;
 using Buteco.Api.Users.AccessLinks;
+using Buteco.Api.Users.Federated;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.TwoFactor;
 using Microsoft.EntityFrameworkCore;
@@ -73,6 +74,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ExternalApplicationSecret> ExternalApplicationSecrets => Set<ExternalApplicationSecret>();
 
     public DbSet<ExternalApplicationAgent> ExternalApplicationAgents => Set<ExternalApplicationAgent>();
+
+    public DbSet<UserFederatedIdentity> UserFederatedIdentities => Set<UserFederatedIdentity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -787,6 +790,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(code => code.UsedAt).HasColumnName("used_at");
             entity.HasOne<User>().WithMany().HasForeignKey(code => code.UserId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(code => new { code.UserId, code.CodeHash }).IsUnique();
+        });
+
+        // O vínculo com um provedor federado (design.md da change provedores-federados-google, D6). O
+        // login acha o usuário só pelo par (issuer, subject); um usuário liga uma conta por issuer. O
+        // convidado cancelado é apagado, e o vínculo vai junto.
+        modelBuilder.Entity<UserFederatedIdentity>(entity =>
+        {
+            entity.ToTable("user_federated_identities");
+            entity.HasKey(identity => identity.Id);
+            entity.Property(identity => identity.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(identity => identity.UserId).HasColumnName("user_id");
+            entity.Property(identity => identity.Issuer).HasColumnName("issuer").IsRequired();
+            entity.Property(identity => identity.Subject).HasColumnName("subject").IsRequired();
+            entity.Property(identity => identity.Email).HasColumnName("email");
+            entity.Property(identity => identity.ConnectedAt).HasColumnName("connected_at");
+            entity.Property(identity => identity.LastUsedAt).HasColumnName("last_used_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(identity => identity.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(identity => new { identity.Issuer, identity.Subject }).IsUnique();
+            entity.HasIndex(identity => new { identity.UserId, identity.Issuer }).IsUnique();
         });
 
         // Aplicações externas (design.md da change aplicacoes-externas-credencial, D3, D4 e D6). O

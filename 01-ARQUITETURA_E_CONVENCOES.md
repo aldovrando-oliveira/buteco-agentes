@@ -983,6 +983,48 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     `/.well-known` para o `apps/api`, e o painel fala com o emissor pela própria
     origem, como em produção.
 
+- **Provedores federados e login com Google** (#189; design da change `provedores-federados-google`):
+  - **O Google fica atrás do emissor.** O `apps/api` é também cliente OIDC (`OpenIddict.Client` 7.7.2 com o
+    `WebIntegration`), registrado **só com provedor configurado**. O painel continua falando só com o
+    `/connect/authorize` do Buteco, e o token que os três apps validam não muda (`iss`, `aud`, `client_id`,
+    `sub`). O `iss` do id token do Google é conferido contra o do discovery; o parâmetro `iss` da resposta
+    (RFC 9207) o WebIntegration desliga para o Google enquanto ele não anunciar o suporte, e o state token
+    amarra a resposta à registração que a pediu. Com um só provedor por issuer, não há mix-up a defender
+    no painel (o registro da #217 sobre conferir o `iss` no painel caiu).
+  - **A configuração:** `Identity:FederatedProviders`, um dicionário por chave neutra de quem instala, só
+    o tipo `google` (issuer, nome, escopos e `prompt=select_account` fixos pelo tipo), o `ClientSecret` só
+    por variável de ambiente, `HostedDomain` opcional como filtro. Dez inconsistências derrubam o boot
+    (`docs/configuration.md`), sem banco e sem rede. Em produção, um `env_file` opcional só do `api`.
+  - **O fluxo:** `POST /auth/federated/{chave}/start` (JSON e `Origin`, como o login) devolve `{ url }` e
+    grava o cookie do fluxo `buteco-fluxo-externo.<nonce>`: `Lax`, só no caminho do retorno, 10 min, com
+    só o valor anti-falsificação; o resto (nonce, PKCE, intenção, o `retorno` do painel) vai no state
+    token, cifrado e assinado pelo anel do emissor e **de uso único** (uma linha em `openiddict_tokens`,
+    sem autorização, removida pela mesma limpeza). Antes do desafio, o discovery do provedor é buscado
+    com prazo de 10 s: fora do alcance, `503` com `problem+json`, e não o `400` em texto do OpenIddict;
+    no retorno, o provedor fora do alcance é a recusa `falha`. O retorno, `GET /auth/federated/callback`, é endpoint
+    do cliente em passthrough (também os erros), conferido no boot como o authorize. A URI que o cliente
+    compara com a `redirect_uri` sai da base do painel, e não do host da requisição (o TLS termina fora e
+    o `apps/api` vê HTTP), como os endereços do servidor saem do issuer.
+  - **O login pelo Google também pede o código do Buteco** (Q1): o retorno grava o `buteco-sessao`
+    **pendente** e manda a `/entrar?federado=…&segundoPasso=totp|cadastro[&retorno=…]`; o segundo passo e
+    o cadastro são os de hoje. O retorno nunca manda ao authorize: a cadeia que começa no Google é
+    cross-site, e o `Strict` só vai no pedido seguinte que parte do painel (RFC 6265bis-22, §5.7 passo
+    18.3, §5.2 e §5.6.7.1).
+  - **O vínculo é pelo par (`issuer`, `sub`)**, em `user_federated_identities` (`UNIQUE (issuer, subject)` e
+    `UNIQUE (user_id, issuer)`), nunca pelo e-mail; o e-mail do vínculo é só exibição. Conectar é de
+    `/account`, com a confirmação de quem chama; desconectar, da pessoa (sem trocar o stamp) e do Admin
+    (troca o stamp e revoga as sessões, na mesma transação). A última forma de entrada (senha mais
+    vínculos de provedor configurado) não sai, sob `SELECT … FOR UPDATE` na linha do usuário.
+  - **As recusas não criam sessão:** `dominio-nao-permitido`, `desativado` (só com vínculo),
+    `email-nao-verificado`, `convite-pendente`, `nao-conectada`, `sem-acesso` e `falha`, em
+    `/entrar?recusa=…`; o e-mail confirmado vai num cookie `buteco-recusa` (`Strict`, 120 s, uso único),
+    lido por `POST /auth/federated/refusal`, nunca na URL. Logs 1198 a 1201, sem e-mail nem `sub`.
+  - **A confirmação de quem chama** (`CallerPassword`): quem tem senha confirma com ela; quem não tem
+    (só entra pelo provedor, #274) confirma com o código do app, nunca com o de recuperação.
+  - **As rotas:** `GET /auth/federated/providers` (anônima, só chave e tipo) e
+    `GET /identity/federated-providers` (Admin, sem segredo). O `formasDeEntrada` de `/users` continua em
+    strings e ganha `"google"`; o detalhe e `/account` ganham `contasConectadas`.
+
 Rotas anônimas são decisão de segurança, não detalhe de implementação:
 adicionar uma passa por revisão.
 

@@ -23,7 +23,10 @@
 
     <!-- libs/ProviderCatalog -->
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
+    <!-- 10.0.11 desde a change provedores-federados-google: o OpenIddict.Client 7.7.2 puxa o
+         Microsoft.Extensions.Configuration.Binder 10.0.11, que exige esta versão; com a 10.0.10, a
+         restauração dos testes do apps/api reprova por downgrade (NU1605). -->
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
 
     <!-- Data access -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
@@ -47,6 +50,11 @@
          EF Core Relational e Microsoft.Extensions.* >= 10.0.11 -->
     <PackageVersion Include="OpenIddict.Server.AspNetCore" Version="7.7.2" />
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.7.2" />
+    <!-- Cliente OIDC dos provedores federados (apps/api, change provedores-federados-google
+         D1): a mesma família e versão do servidor; o WebIntegration traz o tipo Google. -->
+    <PackageVersion Include="OpenIddict.Client.AspNetCore" Version="7.7.2" />
+    <PackageVersion Include="OpenIddict.Client.SystemNetHttp" Version="7.7.2" />
+    <PackageVersion Include="OpenIddict.Client.WebIntegration" Version="7.7.2" />
 
     <!-- Validação do token do emissor (apps/inbox, apps/connectors; change
          validacao-jwks-inbox-connectors D1). A cadeia Microsoft.IdentityModel.*
