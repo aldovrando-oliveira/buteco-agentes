@@ -41,7 +41,7 @@ public static class AccessLinkPublicEndpoints
 
     public sealed record PasswordResetLookupResponse(string Nome, string Email, DateTimeOffset ExpiraEm);
 
-    private sealed record ValidLink(Guid UserId, string Name, string Email, string NormalizedEmail, Guid? InvitedBy, DateTimeOffset ExpiresAt, byte[] Hash);
+    internal sealed record ValidLink(Guid UserId, string Name, string Email, string NormalizedEmail, Guid? InvitedBy, DateTimeOffset ExpiresAt, byte[] Hash);
 
     public static IEndpointRouteBuilder MapAccessLinkPublicEndpoints(this IEndpointRouteBuilder app)
     {
@@ -113,12 +113,8 @@ public static class AccessLinkPublicEndpoints
 
         var passwordHash = hasher.Hash(request.Senha!);
         var now = timeProvider.GetUtcNow();
-        var accepted = await dbContext.Users
-            .Where(user => user.Id == link.UserId &&
-                user.AccessLinkHash == link.Hash &&
-                user.AccessLinkPurpose == AccessLinkPurpose.Invitation &&
-                user.AccessLinkExpiresAt > now &&
-                user.Status == UserStatus.Invited)
+        // A condição de consumo é a mesma do aceite pelo provedor (InvitationConsumption).
+        var accepted = await InvitationConsumption.Pending(dbContext.Users, link.UserId, link.Hash, now)
             .ExecuteUpdateAsync(
                 set => set
                     .SetProperty(user => user.PasswordHash, passwordHash)
@@ -223,7 +219,7 @@ public static class AccessLinkPublicEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<ValidLink?> FindAsync(
+    internal static async Task<ValidLink?> FindAsync(
         AppDbContext dbContext, string? token, AccessLinkPurpose purpose, UserStatus status, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(token))
@@ -258,7 +254,7 @@ public static class AccessLinkPublicEndpoints
         }
     }
 
-    private static IResult InvalidLink() =>
+    internal static IResult InvalidLink() =>
         TypedResults.Problem(title: InvalidLinkMessage, statusCode: StatusCodes.Status404NotFound);
 
     private static IResult PolicyProblem() =>

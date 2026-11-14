@@ -14,6 +14,12 @@ public static class FederatedLogin
 
     public const string RefusalPath = "/auth/federated/refusal";
 
+    /// <summary>O início do aceite de convite pelo provedor (design.md da change aceite-convite-google, D1).</summary>
+    public const string InvitationStartPath = "/auth/invitation/federated/{chave}/start";
+
+    /// <summary>A tela do convite no painel, para onde voltam as recusas do aceite (Q1 da #274).</summary>
+    public const string InvitationPagePath = "/convite";
+
     /// <summary>O prefixo do cookie do fluxo; o OpenIddict acrescenta <c>.&lt;nonce&gt;</c>.</summary>
     public const string FlowCookieName = "buteco-fluxo-externo";
 
@@ -38,12 +44,16 @@ public static class FederatedLogin
         public const string UserId = "buteco_usuario";
         public const string SecurityStamp = "buteco_stamp";
         public const string ProviderKey = "buteco_provedor";
+
+        /// <summary>O SHA-256 do token do convite, em base64url; nunca o token (D1 da #274).</summary>
+        public const string LinkHash = "buteco_link";
     }
 
     public static class Intents
     {
         public const string Login = "login";
         public const string Connect = "conectar";
+        public const string Invitation = "convite";
     }
 
     /// <summary>Os motivos de recusa (spec <c>federated-login</c>).</summary>
@@ -59,5 +69,7 @@ public static class FederatedLogin
         public const string InUse = "em-uso";
         public const string AlreadyConnected = "ja-conectado";
         public const string SessionExpired = "sessao-expirada";
+        public const string OtherEmail = "outro-email";
+        public const string InvalidInvitation = "convite-invalido";
     }
 }

@@ -16,8 +16,20 @@ o versionamento pretende seguir
 
 ### Added
 
+- **Aceite de convite pelo Google** (#274, M3 · 2 de 3). Só o backend; as telas são da #190.
+  - `POST /auth/invitation/federated/{chave}/start` com o token do link: o convite é conferido antes de ir ao
+    Google, e o state leva o id do convidado e o hash do link, nunca o link;
+  - o e-mail que o Google devolve **verificado** tem de ser igual ao do convite; o aceite consome o convite
+    pela mesma condição do aceite por senha e grava o vínculo na mesma transação, e a pessoa fica **sem
+    senha**, com o Google como forma de entrada, e já cai no cadastro das 2 etapas;
+  - as recusas voltam ao convite (`/convite?recusa=…`), sem sessão: outro e-mail (com o e-mail confirmado no
+    `buteco-recusa`), e-mail não verificado, convite que deixou de valer, conta Google de outro usuário,
+    domínio fora do permitido e falha; logs 1202 e 1203 sem dado pessoal;
+  - **Deploy:** só a imagem do `api`, sem migration (`docs/deployment.md`, "Aceite de convite pelo Google
+    (#274)").
+
 - **Login com Google, atrás do emissor do Buteco** (#189, M3 · 1 de 3). Só o backend; as telas são da
-  #190, e o aceite de convite pelo Google é a #274.
+  #190, e o aceite de convite pelo Google veio na #274.
   - provedores federados por configuração (`Identity:FederatedProviders`, chave neutra, tipo `google`,
     segredo só por variável de ambiente, `HostedDomain` opcional), com dez inconsistências que derrubam
     o boot; sem a seção, nada muda;
@@ -1419,6 +1431,15 @@ o versionamento pretende seguir
   módulo de sessão do emissor.
 
 ### Fixed
+
+- **O log do `api` não leva mais o `sub` e o e-mail do Google nem o `code_verifier`** (#277): a biblioteca
+  OIDC (OpenIddict) gravava o userinfo do Google e o pedido de token em `Information`, também em produção,
+  desde a #189. O `appsettings.json` fixa o `OpenIddict` em `Warning` em todo ambiente; baixar esse nível
+  expõe esses dados de novo. Os testes passam a capturar também as categorias da biblioteca.
+
+- **A chave do provedor trocada no meio do login não dá mais `500`** (#276): com a chave renomeada e o
+  `api` reiniciado, o retorno de um fluxo em andamento respondia `500`; agora recusa com `falha`, no login,
+  no conectar e no aceite de convite.
 
 - **A busca e o filtro das Aplicações externas não piscam mais na primeira carga** (#272): a
   linha da busca e do filtro só aparece depois da primeira resposta com dados, como nas listas de

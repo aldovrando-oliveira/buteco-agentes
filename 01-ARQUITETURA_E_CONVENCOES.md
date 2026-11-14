@@ -1024,6 +1024,37 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
   - **As rotas:** `GET /auth/federated/providers` (anônima, só chave e tipo) e
     `GET /identity/federated-providers` (Admin, sem segredo). O `formasDeEntrada` de `/users` continua em
     strings e ganha `"google"`; o detalhe e `/account` ganham `contasConectadas`.
+  - **A registração do state que sumiu** (a chave do provedor trocada entre o início e o retorno): o
+    `ResolveClientRegistrationFromStateToken` do OpenIddict lança dentro do middleware, e o retorno
+    respondia `500` (#276). O `FederatedMissingRegistrationHandler`, logo antes dele, rejeita o pedido; com
+    o passthrough dos erros, a rota responde a `falha` da intenção, com as propriedades do state (login em
+    `/entrar`, conectar em `/account`, aceite em `/convite`). Sem nenhum provedor, o cliente nem existe, e
+    a rota responde `/entrar?recusa=falha` sem ler o state.
+- **Aceite de convite pelo Google** (#274; design da change `aceite-convite-google`):
+  - **O início** é `POST /auth/invitation/federated/{chave}/start` com `{ token }` (JSON, `Origin`, limite
+    global), anônimo, ao lado do `/auth/invitation/accept`. Confere o convite antes de ir ao Google (o
+    `404` único dos links); o state token leva a intenção `convite`, o id do convidado e o **hash** do
+    link, nunca o link: com o armazenamento de tokens, o payload do state fica gravado em
+    `openiddict_tokens` até a limpeza.
+  - **O retorno, nesta ordem:** o domínio; o convite ainda pendente com o mesmo hash (antes do e-mail: um
+    convite morto não recebe "use a conta certa"); o e-mail verificado; o e-mail normalizado igual ao do
+    convite; o par sem vínculo. Depois, numa transação, o consumo pela **mesma condição** do aceite por
+    senha (`InvitationConsumption`: id, hash, propósito, vencimento, estado convidado), mais o e-mail
+    normalizado, **sem gravar senha**, e o `INSERT` do vínculo; zero linhas ou `23505` desfazem os dois.
+    Aceito: o bloqueio do e-mail zerado, a sessão pendente, `302 /entrar?federado=…&segundoPasso=cadastro&convite=aceito`.
+  - **As recusas voltam ao convite** (`/convite?recusa=…&provedor=…`): `outro-email` (com o e-mail
+    confirmado no `buteco-recusa`), `email-nao-verificado`, `convite-invalido`, `em-uso`,
+    `dominio-nao-permitido` e `falha`. Nenhuma grava sessão nem vínculo. Logs 1202 (recusa) e 1203
+    (aceite), sem e-mail, `sub`, token nem hash.
+  - **A concorrência:** os dois `UPDATE` (senha e Google) disputam a mesma linha; no `READ COMMITTED` o
+    segundo reavalia a condição e volta zero linhas. Sem vínculo órfão.
+  - **O token do convite na aba** (contrato da #190): `sessionStorage`, `buteco.convite`, apagado no aceite e
+    em toda recusa, nunca na URL.
+  - **Sem senha:** a primeira vem do link de redefinição do Admin; o `password-reset-link` só serve Admin.
+- **O log do OpenIddict fica em `Warning`** (#277): a biblioteca grava o userinfo do provedor (`sub`, e-mail) e o
+  pedido de token (com o `code_verifier`) em `Information`, e os tokens em `Trace`. O filtro está no
+  `appsettings.json`, em todo ambiente; os testes capturam também as categorias `OpenIddict.*` e afirmam, fluxo
+  por fluxo, que nenhuma linha leva dado pessoal nem segredo.
 
 Rotas anônimas são decisão de segurança, não detalhe de implementação:
 adicionar uma passa por revisão.

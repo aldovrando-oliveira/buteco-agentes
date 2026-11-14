@@ -14,12 +14,12 @@ public static class InvitationSeed
     public sealed record Seeded(User User, string Token);
 
     public static async Task<Seeded> InvitedAsync(
-        IServiceProvider services, Guid invitedBy, string? email = null, string name = "Pessoa Convidada", DateTimeOffset? expiresAt = null)
+        IServiceProvider services, Guid invitedBy, string? email = null, string name = "Pessoa Convidada", DateTimeOffset? expiresAt = null, UserRole role = UserRole.Admin)
     {
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var now = scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow();
-        var user = User.CreateInvitation(email ?? LocalUserSeed.UniqueEmail("convidado"), name, invitedBy, now, UserRole.Admin);
+        var user = User.CreateInvitation(email ?? LocalUserSeed.UniqueEmail("convidado"), name, invitedBy, now, role);
         var token = AccessLinkToken.New();
         user.IssueAccessLink(AccessLinkPurpose.Invitation, AccessLinkToken.Hash(token), expiresAt ?? now + AccessLinkToken.InvitationLifetime);
         db.Users.Add(user);

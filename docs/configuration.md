@@ -211,7 +211,24 @@ login pelo Google recusa com o motivo `falha`, com log.
 
 O login pelo Google **também pede o código das 2 etapas do Buteco** (Q1 da #189): o
 retorno grava a sessão pendente e manda ao passo do código, ou ao cadastro de quem
-ainda não tem a verificação. O cliente OAuth no Google Cloud e o arquivo do segredo
+ainda não tem a verificação.
+
+**O convite também se aceita pelo provedor** (#274), a partir do link do convite, sem
+configuração nova: o e-mail que o Google devolve **verificado** tem de ser igual ao do
+convite, normalizado. O aceite deixa a pessoa **ativa e sem senha**, com o Google como
+forma de entrada, e já abre o login no cadastro das 2 etapas. Sem senha, a primeira vem
+do link de redefinição que um Admin gera em Editar usuário: o comando
+`password-reset-link` só atende Admin ([deployment.md](deployment.md#comando-de-emergência-da-senha-password-reset-link-257)).
+Trocar a chave de um provedor com fluxos em andamento faz esses retornos recusarem com
+`falha` (#276).
+
+**O log do OpenIddict fica em `Warning`** (`Logging:LogLevel:OpenIddict` no
+`appsettings.json`, em todo ambiente, #277). A biblioteca do emissor e do cliente OIDC
+grava dado pessoal e segredo em `Information` e abaixo: o userinfo do Google com o `sub`
+e o e-mail, o pedido de token com o `code_verifier`, e em `Trace` os tokens inteiros.
+**Baixar o nível do OpenIddict para `Information` (ou menos) expõe esses dados no log.**
+Para depurar localmente, `Logging__LogLevel__OpenIddict=Information` na variável de
+ambiente, sabendo disso; nunca em produção. O cliente OAuth no Google Cloud e o arquivo do segredo
 no servidor estão em [deployment.md](deployment.md#provedores-federados-189).
 
 ---

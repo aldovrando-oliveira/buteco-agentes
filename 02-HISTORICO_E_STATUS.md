@@ -8748,7 +8748,7 @@ M2 Diferentes acessos                            acompanhamento #195
   23 #188  painel de aplicações externas               ← #185 #186 #187
 M3 Autenticação com Google                       acompanhamento #196
   24 #189  provedores federados e Google               ← #181 #184
-  25 #274  aceite de convite pelo Google               ← #189
+  25 #274  aceite de convite pelo Google               ← #189   (fecha #276 e #277)
   26 #190  painel: login com provedor e recusas        ← #185 #189 #274
 M4 Autenticação corporativa                      acompanhamento #197
   27 #191  provedor OIDC genérico                      ← #189
@@ -19216,3 +19216,57 @@ Fica para a homologação da M3, como a validação visual. Checklist (o detalhe
 
 - **A #274** (aceite pelo Google) cria o primeiro usuário ativo sem senha: o `CallerPassword` com o código e a última forma de entrada já esperam por ele.
 
+
+## `aceite-convite-google` — Aceite de convite pelo Google (#274)
+
+**Change proposta e implementada em 13/11/2026**, na branch `feat/274-aceite-convite-google`, num worktree próprio, a partir de `1475d35` (merge do PR #275, a #189). M3 · 2 de 3. Só o `apps/api`; as telas são da #190. Fecha também a **#276** e a **#277**, os dois defeitos da #189 achados no apply.
+
+- **O início:** `POST /auth/invitation/federated/{chave}/start` com `{ token }` (JSON, `Origin`, limite global), anônimo. Confere o convite antes de ir ao Google (o `404` único dos links); o state token leva a intenção `convite`, o id do convidado e o **hash** do link, nunca o link (o payload do state fica gravado em `openiddict_tokens` até a limpeza).
+- **O retorno, na ordem:** o domínio; o convite ainda pendente com o mesmo hash (antes do e-mail, Q4); o e-mail verificado; o e-mail normalizado igual ao do convite; o par sem vínculo. Depois, numa transação, o consumo pela **mesma condição** do aceite por senha (`InvitationConsumption`), mais o e-mail normalizado (Q5), sem gravar senha, e o vínculo; zero linhas ou `23505` desfazem os dois. Aceito: o bloqueio do e-mail zerado (Q6), a sessão pendente, `302 /entrar?federado=…&segundoPasso=cadastro&convite=aceito` (Q7). A pessoa fica ativa **sem senha**.
+- **As recusas voltam ao convite** (Q1): `/convite?recusa=…&provedor=…`, com `outro-email` (o e-mail confirmado no `buteco-recusa`), `email-nao-verificado`, `convite-invalido`, `em-uso`, `dominio-nao-permitido` e `falha`. Nenhuma grava sessão nem vínculo. Logs 1202 e 1203 (Q8).
+- **A concorrência:** o aceite por senha e o pelo Google, ou dois pelo Google, disputam a mesma linha; o segundo `UPDATE` reavalia a condição e volta zero linhas. Sem vínculo órfão.
+- **O contrato do token na aba** para a #190 (`sessionStorage`, `buteco.convite`, apagado no aceite e em toda recusa, nunca na URL), [comentado na #190](https://github.com/aldovrando-oliveira/buteco-agentes/issues/190#issuecomment-6869086154).
+- **#276:** com a chave do provedor trocada entre o início e o retorno, o OpenIddict lançava dentro do middleware (`500`), no login da #189 e no aceite. O `FederatedMissingRegistrationHandler`, logo antes do `ResolveClientRegistrationFromStateToken`, rejeita o pedido; a rota responde a `falha` da intenção, com as propriedades do state (medido).
+- **#277:** o OpenIddict gravava o userinfo do Google (`sub`, e-mail) e o pedido de token (`code_verifier`) em `Information`, também em produção, desde a #189. O `appsettings.json` fixa o `OpenIddict` em `Warning` em todo ambiente. O guarda de log da #189 não via: a captura dos testes só aceitava as categorias do Buteco; alargada a `OpenIddict.*`.
+- Capacidades modificadas: `federated-login`, `user-access-links`, `issuer-user-login`, `local-users`, `route-authentication`.
+
+### Premissas (convenção 9)
+
+Cinco no corpo (D8 do design, sem mudança de contrato) e oito no apply (D10). Duas paradas decididas pelo dono (13/11/2026): **APPLY-1**, a chave trocada dava `500` (corrigido aqui, a #276); **APPLY-8**, o log da biblioteca com dado pessoal (corrigido aqui, a #277). A medida do log (D11): `OpenIddictClientDispatcher[6195]` e `OpenIddictServerDispatcher[6075]` em `Information`; a 6001, a 6013 e a 6015 em `Trace`; nada em `Warning` ou acima. Registros do corpo: o `password-reset-link` só serve Admin (um Operador ou Leitor só com Google ganha senha pelo link que um Admin gera, no `docs/deployment.md`); o passo depois do aceite é sempre o cadastro; o quadro `AceitarConvite` não tem os estados de e-mail não verificado nem de convite que deixou de valer (o dono desenha na `m3`).
+
+### O que a implementação mediu
+
+| suíte | baseline `1475d35` (`274/baseline/`) | fechamento (`274/fechamento-log/`) | veredito |
+|---|---|---|---|
+| `apps/api` | 1794 + 1 ignorado, 482 s, CPU mín. 44 | 1839 + 1 ignorado, 394 s, CPU mín. 60 (antes do #277: 1834 + 1, CPU mín. 48, `274/fechamento/`) | APROVADA |
+| `tests/ApiConnectorsRoundTrip.Tests` | 12/12, CPU 100 | 12/12, CPU 100 | APROVADA |
+
+- Todas na primeira rodada; a #232 não apareceu.
+- **Comparação por nome:** nenhum caso da baseline saiu nem mudou de resultado. Entraram 45: `FederatedInvitationAcceptTests` 17, `FederatedInvitationStartTests` 9, `FederatedInvitationConcurrencyTests` 7, `LogPrivacyTests` 5, `FederatedRenamedProvider{Login,Connect,Invitation}Tests` 3, `FederatedNoProviderTests` 1, `FederatedInvitationEndToEndTests` 1, `FederatedInvitationHostedDomainTests` 1, `FederatedProviderUnreachableTests` 1. Os da lista do topo (`TheAuthEntryPoints_AreTheKnownOnes` com a rota nova, `TwoConcurrentAccepts_OneWins_AndTheConsumptionIsOneConditionalUpdate` sem mudança) aprovados.
+- **Os 14 guardas (15 mutações)**, pelo `guarda-274.sh`, cada um reprovando contra o defeito nomeado e o arquivo voltando com o sha igual (`~/.cache/buteco-agents/274-guardas/`): o link no state token, a resposta única do início, a ordem (o e-mail antes do convite), o verificado retirado, o par de outro usuário por upsert, a sessão numa recusa, o e-mail e o `sub` no log, a recusa no `/entrar`, o handler da registração retirado, o `UPDATE` fora da transação, o `INSERT` antes do `UPDATE`, a condição sem o hash, sem o e-mail normalizado, e o filtro do OpenIddict retirado.
+- **Convenção 18** (só código, sem migrations, `openspec/` e `.md`), contra o D6 do design (~+270 / ~+765 / +130 / ~26 casos, ~40 depois da revisão):
+
+  | | projetado | medido | só a #274 (sem a #276 e a #277) |
+  |---|---|---|---|
+  | produção | ~+270 / −15 | +336 / −18 | ~+281 (+4 %) |
+  | testes (sem duplos) | ~+765 | +1.170 / −2 | ~+773 (+1 %) |
+  | duplos | +130 | +123 / −12 | +106 (−18 %) |
+  | configuração | — | +8 / −1 (`appsettings.json`, a #277) | — |
+  | casos | ~26 (~40 depois da revisão) | +45 | +36 |
+
+  A diferença bruta é a das duas correções que não estavam na projeção: a #276 (+52 de produção, 4 casos e +141 de teste) e a #277 (5 casos e +256 de teste, +17 de duplo na captura).
+- **Conferência local** (10.1): o `apps/api` na imagem do worktree, num pod com um duplo do Google fora do processo (HTTPS com uma CA da conferência, só no `SSL_CERT_FILE` do processo e no `--cacert` do roteiro), num banco descartável do `template0`, apagado no fim. O fluxo, 29/29: o aceite até o token com `role` `operator`, outro e-mail com o `buteco-recusa`, não verificado, o convite cancelado no meio, o cancelamento no Google, o início com link inválido e com chave desconhecida. O log reprovou (8 de 17 valores, todos da 6195): o achado da #277. A limpeza: contêineres, pod, imagem, banco e CA apagados; nenhum certificado da conferência nas Keychains do macOS, no `/etc/ssl`, no `~/.dotnet/corefx` nem na VM do Podman (pelo nome e pela impressão SHA-256 da CA).
+
+### Homologação da M3: a conferência com o Google real (com a da #189)
+
+O detalhe está no `tasks.md` da change, 10.2 a 10.5 (as contas de teste A, com o e-mail do convite, e B, com outro):
+
+- [ ] **10.2** o e-mail certo: o retorno em `/entrar?federado=corporativo&segundoPasso=cadastro&convite=aceito`, o cadastro das 2 etapas, o painel como Operador, a pessoa sem senha com o Google, o login seguinte pedindo o código do Buteco;
+- [ ] **10.3** outro e-mail: `/convite?recusa=outro-email`, o `buteco-recusa` lido uma vez, nenhuma sessão, o convite aceito em seguida por senha;
+- [ ] **10.4** cancelar no Google: `/convite?recusa=falha`, o convite pendente, o log 1199 com `access_denied`;
+- [ ] **10.5** o convite cancelado no meio: `/convite?recusa=convite-invalido`, sem sessão e sem vínculo;
+- [ ] **o log do `api`** na homologação: nenhuma linha com o e-mail ou o `sub` das contas de teste (`docker compose logs api | grep`).
+
+### Para as próximas
+
+- **A #190** (as telas da M3) recebe o contrato do D5 (as rotas, os motivos e o token na aba) e a lista do quadro `AceitarConvite` por estado; o dono desenha a entrega `m3` antes.
