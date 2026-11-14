@@ -387,6 +387,12 @@ o `up` reprovar se alguém apagar o arquivo.
 - `curl -s -X POST https://<PUBLIC_DOMAIN>/auth/federated/refusal -H 'Content-Type: application/json'
   -H 'Origin: https://<PUBLIC_DOMAIN>' -d '{}'` responde `404` vazio (sem o cookie da recusa, a rota
   não revela nada);
+- o retorno do Google numa navegação de verdade (#285):
+  `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Sec-Fetch-Mode: navigate' 'https://<PUBLIC_DOMAIN>/auth/federated/callback?state=x&code=y'`
+  responde `302` para `/entrar?recusa=falha` (o state forjado não vale), vindo do `api`. `200` é o shell do
+  SPA: o nginx desviou o retorno, e o login, o aceite e o conectar pelo Google não voltam. O `curl` sem o
+  cabeçalho não prova o caminho do navegador: o desvio de navegação do nginx olha o `Sec-Fetch-Mode`, que só o
+  navegador manda;
 - em Identidade (`GET /identity/federated-providers`, Admin), o provedor sem segredo, com a URI de
   retorno que foi registrada no Google;
 - o checklist da conferência com o cliente real, no `tasks.md` da change `provedores-federados-google`
@@ -463,6 +469,20 @@ provedores federados; e quem não tem senha confirma as ações sensíveis com o
 
 **Voltar atrás:** a imagem anterior do `frontend`. As contas conectadas continuam no banco, e o login pelo
 Google continua funcionando; só as telas somem.
+
+#### O retorno do Google chega ao `api` pelo nginx (#285)
+
+**O que muda:** o nginx do `frontend` ganha um `location = /auth/federated/callback`, sem o desvio de
+navegação. Antes, o Google devolvia o navegador ao retorno numa navegação de topo, o bloco de `/auth` o
+desviava para o shell do SPA, e a tela era o "404 Not Found" do painel: o login, o aceite de convite e o
+conectar pelo Google não voltavam. O resto de `/auth` continua no desvio.
+
+**Deploy:** só a imagem do `frontend`. Pode ir sozinha: o `api` já serve o retorno. Sem variável nova.
+
+**Conferir:** o `curl` com `Sec-Fetch-Mode: navigate` da seção da #189, acima (`302` para
+`/entrar?recusa=falha`; `200` é o defeito); depois, o login pelo Google pelo painel.
+
+**Voltar atrás:** a imagem anterior do `frontend`, com o defeito de volta (o retorno do Google cai no SPA).
 
 ### Aplicações externas com credencial do Buteco (#186)
 

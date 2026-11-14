@@ -1460,6 +1460,14 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **O retorno do Google chega ao `api` atrás do nginx do stack** (#285): o Google devolve o navegador a
+  `/auth/federated/callback` numa navegação de topo, e o bloco de `/auth` do `nginx.conf` do painel desviava essa
+  navegação para o shell do SPA, que mostrava "404 Not Found". O login, o aceite de convite e o conectar pelo
+  Google não voltavam. O retorno ganha um `location =` próprio, sem o desvio de navegação. Um teste do `api` tira
+  do código os caminhos abertos por navegação de topo (o retorno do cliente OIDC, o authorize e o logout do
+  emissor) e reprova o que não tiver o próprio bloco exato. **Deploy:** só a imagem do `frontend`
+  (`docs/deployment.md`, "O retorno do Google chega ao `api` pelo nginx (#285)").
+
 - **O log do `api` não leva mais o `sub` e o e-mail do Google nem o `code_verifier`** (#277): a biblioteca
   OIDC (OpenIddict) gravava o userinfo do Google e o pedido de token em `Information`, também em produção,
   desde a #189. O `appsettings.json` fixa o `OpenIddict` em `Warning` em todo ambiente; baixar esse nível
