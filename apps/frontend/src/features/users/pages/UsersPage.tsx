@@ -64,7 +64,8 @@ export function UsersPage() {
       <Stack gap={2}>
         <Title order={2}>Usuários</Title>
         <Text size="sm" c="dimmed">
-          Quem pode entrar no painel. O acesso é só por convite.
+          Quem pode entrar no painel. Todo usuário existe no Buteco; os provedores federados são formas adicionais de
+          provar quem ele é.
         </Text>
       </Stack>
 
@@ -170,15 +171,18 @@ export function UsersPage() {
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <SectionedCard title="Acesso só por convite">
           <Text size="sm" c="dimmed" px="md" py="sm">
-            Ninguém entra sem ter sido convidado aqui. Não existe cadastro aberto nem entrada automática.
+            Ninguém entra sem ter sido convidado aqui, mesmo autenticado pelo Google. Não existe entrada automática por
+            domínio.
           </Text>
         </SectionedCard>
         <SectionedCard title="Senha e recuperação">
           <Text size="sm" c="dimmed" px="md" py="sm">
-            {/* O texto do quadro `Usuarios` (`m2`): o anterior, "ligada por cada pessoa em Minha
-                conta", deixou de ser verdade com a #220 (change papeis-no-painel, achado do dono). */}
-            Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário. A verificação em 2 etapas é
-            obrigatória para todos os papéis: cada pessoa cadastra o app autenticador no primeiro login.
+            {/* O texto do quadro `Usuarios` (`m3`; change telas-contas-federadas, D7), sem o "feita no próprio
+                provedor" da entrega completa: quem entra pelo Google também confirma com o código do Buteco. O
+                "ligada por cada pessoa em Minha conta" deixou de ser verdade com a #220 (change papeis-no-painel). */}
+            Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário; quem entra só pelo Google recebe o
+            mesmo link para criar uma. A verificação em 2 etapas é obrigatória para todos os papéis, inclusive para quem
+            entra pelo Google: o Buteco pede o próprio código.
           </Text>
         </SectionedCard>
       </SimpleGrid>

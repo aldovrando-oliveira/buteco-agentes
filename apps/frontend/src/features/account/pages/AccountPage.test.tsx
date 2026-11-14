@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { signInForTest, signOutForTest } from '../../../test/authFakes';
 import { authRuntime } from '../../../auth/session';
-import { ACCOUNT, defaultRoutes, fakeAccountApi } from '../test/fakeAccountApi';
+import { ACCOUNT, PROVEDORES_GOOGLE, defaultRoutes, fakeAccountApi } from '../test/fakeAccountApi';
 import { renderAccount } from '../test/renderAccount';
 import { AccountPage } from './AccountPage';
 
@@ -30,7 +30,9 @@ describe('AccountPage', () => {
 
     expect(screen.getByRole('heading', { level: 2, name: 'Minha conta' })).toBeInTheDocument();
     expect(
-      screen.getByText('Os seus dados, a sua senha, os códigos de recuperação e os navegadores em que você está conectado.'),
+      // O subtítulo da M3 (lista do topo da change telas-contas-federadas, Q5). Sem provedor e sem conta
+      // conectada no duplo padrão, o cartão "Formas de entrada" não aparece, e a lista dos cartões fica.
+      screen.getByText('Os seus dados, as formas de entrada, a sua senha, os códigos de recuperação e os navegadores em que você está conectado.'),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('region').map((r) => within(r).getAllByRole('heading')[0].textContent)).toEqual([
       'Dados',
@@ -149,3 +151,22 @@ describe('AccountPage', () => {
     });
   });
 });
+
+// O cartão "Formas de entrada" entre Dados e Senha, com provedor configurado (change
+// telas-contas-federadas, D3).
+describe('AccountPage com provedor', () => {
+  it('Com provedor, os cinco cartões', async () => {
+    fakeAccountApi({ ...defaultRoutes(), 'GET /auth/federated/providers': { status: 200, body: PROVEDORES_GOOGLE } });
+    renderAccount(<AccountPage />);
+
+    await screen.findByRole('region', { name: 'Formas de entrada' });
+    expect(screen.getAllByRole('region').map((r) => within(r).getAllByRole('heading')[0].textContent)).toEqual([
+      'Dados',
+      'Formas de entrada',
+      'Senha',
+      'Verificação em 2 etapas',
+      'Sessões',
+    ]);
+  });
+});
+

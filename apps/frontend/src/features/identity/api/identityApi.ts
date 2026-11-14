@@ -97,3 +97,26 @@ export const IDENTITY_QUERY_KEY = ['identity'] as const;
 export function getIdentity(): Promise<IdentityOverview> {
   return request<IdentityOverview>('/identity');
 }
+
+/**
+ * Um provedor federado da configuração do servidor (`GET /identity/federated-providers`, Admin; #189).
+ * `usadoPara` é sempre `["login"]` na M3; `vinculos` conta usuários distintos. Sem estado de JWKS (Q11).
+ */
+export interface FederatedProvider {
+  chave: string;
+  tipo: string;
+  nome: string;
+  issuer: string;
+  usadoPara: string[];
+  clientId: string;
+  uriDeRetorno: string;
+  vinculos: number;
+}
+
+/** Uma consulta própria (D7): o erro dela não derruba o emissor e as chaves, nem o contrário. */
+export const FEDERATED_PROVIDERS_QUERY_KEY = ['identity', 'federated-providers'] as const;
+
+export async function getFederatedProviders(): Promise<FederatedProvider[]> {
+  const body = await request<{ provedores: FederatedProvider[] }>('/identity/federated-providers');
+  return body.provedores;
+}

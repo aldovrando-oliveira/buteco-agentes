@@ -4,6 +4,7 @@ import { SectionedCard } from '../../../components/data/SectionedCard';
 import { getIdentity, IDENTITY_QUERY_KEY } from '../api/identityApi';
 import { IssuerCard } from '../components/IssuerCard';
 import { SigningKeysCard } from '../components/SigningKeysCard';
+import { FederatedProvidersCard } from '../components/FederatedProvidersCard';
 import { retryWhileFailing } from '../retryWhileFailing';
 import { AccessDenied } from '../../../components/feedback/AccessDenied';
 import { is403 } from '../../../utils/failureNotice';
@@ -24,8 +25,8 @@ export function IdentityPage() {
       <Stack gap={2}>
         <Title order={2}>Identidade</Title>
         <Text size="sm" c="dimmed">
-          O Buteco emite os tokens de usuários e módulos, e é com estes dados que outros sistemas conferem se um token é
-          legítimo.
+          O Buteco emite os tokens de usuários, aplicações e módulos. Provedores federados são opcionais: sem nenhum, o
+          painel funciona só com usuários locais.
         </Text>
       </Stack>
 
@@ -61,6 +62,9 @@ export function IdentityPage() {
           <Skeleton height={14} width="40%" />
         </Stack>
       )}
+
+      {/* Fora do ramo do `GET /identity`: a consulta é própria, e o erro de uma não esconde a outra (D7). */}
+      <FederatedProvidersCard />
     </Stack>
   );
 }

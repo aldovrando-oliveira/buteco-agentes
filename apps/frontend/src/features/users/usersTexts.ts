@@ -1,4 +1,5 @@
 import { formatShortDateTime } from '../../utils/panelDates';
+import { KNOWN_PROVIDER_TYPES } from '../auth/api/federatedApi';
 import type { UserSummary } from './api/usersApi';
 
 // Os textos da lista de Usuários que dependem do dado (requisito "Colunas da lista de
@@ -6,6 +7,12 @@ import type { UserSummary } from './api/usersApi';
 // painel não conhece sai cru e neutro, nunca no verde de sucesso (convenção 13).
 
 export const INFORME_A_SENHA = 'Informe a sua senha.';
+
+// O modo código da confirmação de quem chama (change telas-contas-federadas, D2; os textos de
+// `MinhaConta/confirmar-codigo` nos seis formulários, decisão do dono Q6).
+export const INFORME_O_CODIGO = 'Informe o código.';
+export const AJUDA_DO_CODIGO =
+  'Você entra só pelo Google: confirme com o código de 6 dígitos do app. O código de recuperação não vale aqui.';
 
 // O papel no convite e em "Dados e papel" (quadros `Usuarios` e `UsuarioDetalhe`, entrega `m2`,
 // versão 58 do protótipo; change papeis-no-painel, D4). As descrições são as mesmas nos dois
@@ -51,11 +58,17 @@ export function twoFactorBadge(user: UserSummary): Selo {
   return user.duasEtapas ? { texto: 'Ativa', tom: 'green' } : { texto: 'Não configurada', tom: 'yellow' };
 }
 
-/** Os chips de Formas de entrada; lista vazia é "—" (o convidado). */
+/**
+ * Os chips de Formas de entrada; lista vazia é "—" (o convidado). Os tipos de provedor que o painel
+ * conhece ("Google") saem no tom da "Senha"; outro valor sai cru, em contorno (change
+ * telas-contas-federadas, D7; convenção 13).
+ */
 export function signInForms(user: UserSummary): { texto: string; conhecido: boolean }[] {
-  return user.formasDeEntrada.map((forma) =>
-    forma === 'senha' ? { texto: 'Senha', conhecido: true } : { texto: forma, conhecido: false },
-  );
+  return user.formasDeEntrada.map((forma) => {
+    if (forma === 'senha') return { texto: 'Senha', conhecido: true };
+    const rotulo = KNOWN_PROVIDER_TYPES[forma];
+    return rotulo === undefined ? { texto: forma, conhecido: false } : { texto: rotulo, conhecido: true };
+  });
 }
 
 export const conviteAceitoAoCancelar = (nome: string) =>

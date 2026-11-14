@@ -73,6 +73,7 @@ export const RAFAEL: UserDetail = {
   desativadoEm: null,
   convidadoPor: { id: PROPRIO_ID, nome: 'Aldovrando Oliveira' },
   sessoes: { ativas: 2, ultimaAtividade: '2026-11-06T21:45:00Z' },
+  contasConectadas: [],
 };
 
 export const BRUNO: UserDetail = {
@@ -103,6 +104,7 @@ export const JOANA_DETALHE: UserDetail = {
   desativadoEm: null,
   convidadoPor: { id: PROPRIO_ID, nome: 'Aldovrando Oliveira' },
   sessoes: { ativas: 0, ultimaAtividade: null },
+  contasConectadas: [],
 };
 
 export const RESET_LINK =

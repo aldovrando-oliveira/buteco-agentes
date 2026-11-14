@@ -39,7 +39,7 @@ describe('applicationsApi', () => {
     ['activate', () => activateApplication('a1'), 'POST /applications/a1/activate', undefined],
     [
       'secrets',
-      () => generateSecret('a1', 'senha-1'),
+      () => generateSecret('a1', { senha: 'senha-1' }),
       'POST /applications/a1/secrets',
       { senha: 'senha-1' },
     ],
@@ -120,7 +120,7 @@ describe('applicationsApi', () => {
       'POST /applications/a1/secrets': problem(401, 'Senha inválida.'),
     });
 
-    await expect(generateSecret('a1', 'errada')).rejects.toMatchObject({
+    await expect(generateSecret('a1', { senha: 'errada' })).rejects.toMatchObject({
       status: 401,
       title: 'Senha inválida.',
     });

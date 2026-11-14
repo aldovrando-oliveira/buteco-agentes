@@ -21,6 +21,8 @@ afterEach(() => {
 });
 
 const RESET = 'POST /users/u-rafael/two-factor/reset';
+const M3_VERIFICACAO =
+  'Obrigatória para todos os papéis, inclusive para quem entra pelo Google: o Buteco pede o próprio código.';
 const botao = () => screen.getByRole('button', { name: 'Redefinir verificação' });
 
 describe('Verificação em 2 etapas', () => {
@@ -29,7 +31,8 @@ describe('Verificação em 2 etapas', () => {
     renderUserDetail('u-rafael');
 
     expect(await screen.findByText('Ativa')).toBeInTheDocument();
-    expect(screen.getByText('Use Redefinir se a pessoa perdeu ou trocou o celular e os códigos de recuperação.')).toBeInTheDocument();
+    // Um texto só da M3 para os dois estados (lista do topo da change telas-contas-federadas, D5).
+    expect(screen.getByText(M3_VERIFICACAO)).toBeInTheDocument();
     expect(botao()).toBeEnabled();
     expect(screen.queryByText(/desde/)).not.toBeInTheDocument();
   });
@@ -39,7 +42,7 @@ describe('Verificação em 2 etapas', () => {
     renderUserDetail('u-rafael');
 
     expect(await screen.findByText('Não configurada')).toBeInTheDocument();
-    expect(screen.getByText('A pessoa cadastra a verificação no próximo login.')).toBeInTheDocument();
+    expect(screen.getByText(M3_VERIFICACAO)).toBeInTheDocument();
     expect(botao()).toBeDisabled();
   });
 

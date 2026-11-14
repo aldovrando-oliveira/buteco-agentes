@@ -74,6 +74,18 @@ export function AccountPasswordCard() {
     await logout();
   };
 
+  // Quem não tem senha (entrou só pelo Google) não troca senha: o formulário sempre responderia `401`.
+  // Só com a conta lida; pendente ou em erro, o cartão é o de hoje (change telas-contas-federadas, Q10).
+  if (account.data && !account.data.formasDeEntrada.includes('senha')) {
+    return (
+      <AccountCard title="Senha">
+        <Text size="sm">
+          Você entra só pelo Google. Para ter também uma senha, peça a um administrador o link para criar uma.
+        </Text>
+      </AccountCard>
+    );
+  }
+
   return (
     <AccountCard
       title="Senha"

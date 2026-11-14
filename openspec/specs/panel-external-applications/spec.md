@@ -66,17 +66,17 @@ Os estados sem tabela SHALL ser:
 
 - "Identificação": Nome ("Até 80 caracteres, sem repetir o nome de outra aplicação.") e Descrição ("Opcional, até 280 caracteres.");
 - "Credencial": "O Buteco vai gerar um **client ID** e um **segredo** para esta aplicação. Eles aparecem uma única vez, logo depois de criar; o Buteco guarda só o hash do segredo." e "O endereço em que a aplicação pede o token (client credentials) aparece depois de criar.", sem nenhuma URL;
-- "Confirmação": "Sua senha", com a dica "Criar a aplicação gera uma credencial. Confirme com a sua senha.";
+- "Confirmação": o campo da confirmação de quem chama ("Senha de quem chama", `panel-users-page`, com o modo); no modo senha, "Sua senha", com a dica "Criar a aplicação gera uma credencial. Confirme com a sua senha.";
 - o aviso "A aplicação nasce **sem nenhum agente liberado**: até você liberar agentes na tela dela, toda chamada A2A é recusada.";
 - "Cancelar" (para `/applications`) e "Criar aplicação" (azul), que mostra "Criando…" desabilitado enquanto envia.
 
-Antes de enviar, o painel SHALL conferir o nome aparado vazio ("Informe o nome."), o nome acima de 80 ("O nome tem no máximo 80 caracteres."), a descrição acima de 280 ("A descrição tem no máximo 280 caracteres.") e a senha vazia ("Informe a sua senha."), sem chamar o servidor. `POST /applications/` SHALL receber `{ nome, descricao, senha }`, com a descrição vazia enviada como `null`. As respostas:
+Antes de enviar, o painel SHALL conferir o nome aparado vazio ("Informe o nome."), o nome acima de 80 ("O nome tem no máximo 80 caracteres."), a descrição acima de 280 ("A descrição tem no máximo 280 caracteres.") e o campo da confirmação vazio (o texto do vazio do modo), sem chamar o servidor. `POST /applications/` SHALL receber `{ nome, descricao, senha }` no modo senha e `{ nome, descricao, codigo }` no modo código, com a descrição vazia enviada como `null`. As respostas:
 
 | resposta | o que a tela mostra |
 |---|---|
 | `400` com `errors.nome` ou `errors.descricao` | a mensagem no campo |
 | `409` | o `title` no campo Nome ("Já existe uma aplicação com este nome."), a senha mantida |
-| `401` | o `title` no campo da senha ("Senha inválida."), a senha esvaziada, sem renovar a sessão |
+| `401` | o `title` no campo da confirmação ("Senha inválida." ou "Código inválido."), o campo esvaziado, sem renovar a sessão |
 | `423` | o aviso amarelo do bloqueio, com o N do `Retry-After` ("…pausada por N minutos."), e "Criar aplicação" desabilitado até lá |
 | `403` | o aviso de ação de `panel-roles` |
 
@@ -99,6 +99,10 @@ Antes de enviar, o painel SHALL conferir o nome aparado vazio ("Informe o nome."
 #### Scenario: Sem URL antes de criar
 - **WHEN** o Admin abre `/applications/new`
 - **THEN** a seção "Credencial" não contém `connect/token`, e nenhum `GET /identity` é feito
+
+#### Scenario: Criar com o código
+- **WHEN** o Admin sem senha preenche o nome, digita `123456` em "Código do app autenticador" e aciona "Criar aplicação"
+- **THEN** `POST /applications/` recebe `codigo: "123456"`, sem `senha`
 
 ### Requirement: Credencial criada, mostrada uma vez
 Depois do `201` de `POST /applications/`, `apps/frontend` SHALL trocar o formulário, na mesma página `/applications/new`, pelo cartão "Aplicação criada" do quadro `AplicacaoCredencial`, sem janela modal:
@@ -203,7 +207,7 @@ Sem segredo `ativo` nem `substituido`, o cartão SHALL mostrar, em amarelo, "Nen
 - **THEN** o cartão mostra "Nenhum segredo válido: a aplicação não consegue obter token. Gere um novo segredo."
 
 ### Requirement: Gerar novo segredo
-"Gerar novo segredo" SHALL abrir, dentro do cartão "Credencial do Buteco", o formulário com "Sua senha", a dica "Gerar um segredo cria uma credencial nova. Confirme com a sua senha.", "Gerar segredo" (azul) e "Cancelar"; com segredo vivo, o formulário SHALL dizer também "O segredo atual continua valendo por até 7 dias, para a aplicação trocar sem parar.". A senha vazia SHALL mostrar "Informe a sua senha." sem enviar. `POST /applications/{id}/secrets` SHALL receber `{ senha }`; o `401`, o `423` e o `403` como na Nova aplicação, e o `409` e o `404` com o `title` no formulário.
+"Gerar novo segredo" SHALL abrir, dentro do cartão "Credencial do Buteco", o formulário com o campo da confirmação de quem chama ("Senha de quem chama", `panel-users-page`, com o modo; no modo senha, "Sua senha" e a dica "Gerar um segredo cria uma credencial nova. Confirme com a sua senha."), "Gerar segredo" (azul) e "Cancelar"; com segredo vivo, o formulário SHALL dizer também "O segredo atual continua valendo por até 7 dias, para a aplicação trocar sem parar.". O campo vazio SHALL mostrar o texto do vazio do modo, sem enviar. `POST /applications/{id}/secrets` SHALL receber `{ senha }` ou `{ codigo }`, pelo modo; o `401`, o `423` e o `403` como na Nova aplicação, e o `409` e o `404` com o `title` no formulário.
 
 O botão SHALL ficar desabilitado, com a dica ao lado:
 - com 3 segredos vivos (`ativo` ou `substituido`): "Já há 3 segredos válidos. Revogue um para gerar outro.";
@@ -226,6 +230,10 @@ No `201`, o formulário SHALL dar lugar ao bloco "Segredo novo": o `valor` com "
 #### Scenario: O segredo novo
 - **WHEN** `POST …/secrets` responde `201` e o detalhe recarregado traz o anterior como `substituido` até 16/11/2026
 - **THEN** o cartão mostra "Segredo novo" com o `valor`, "O anterior continua valendo até 16/11/2026.", e "Concluir" desabilitado até a caixa ser marcada
+
+#### Scenario: Gerar com o código
+- **WHEN** o Admin sem senha digita `123456` e aciona "Gerar segredo"
+- **THEN** `POST /applications/{id}/secrets` recebe exatamente `{ "codigo": "123456" }`
 
 ### Requirement: Revogar com confirmação na linha
 "Revogar" e "Revogar agora" SHALL abrir, numa faixa logo abaixo da linha do segredo e sem janela modal, a confirmação com o botão vermelho de mesmo nome e "Cancelar":

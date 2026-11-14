@@ -38,7 +38,8 @@ describe('Cartão Dados', () => {
 
     expect(screen.getByLabelText('Nome')).toHaveValue('Rafael Duarte');
     expect(screen.getByLabelText('E-mail')).toHaveValue('rafael.duarte@empresa.com');
-    expect(screen.getByText('É o e-mail de entrada no painel.')).toBeInTheDocument();
+    // A ajuda da M3 (lista do topo da change telas-contas-federadas, Q5).
+    expect(screen.getByText('É o login com senha. Trocar não afeta as contas conectadas.')).toBeInTheDocument();
     expect(salvar()).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Descartar' })).not.toBeInTheDocument();
   });

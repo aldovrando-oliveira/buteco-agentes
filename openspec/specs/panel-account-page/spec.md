@@ -4,7 +4,7 @@
 Diz o que a página Minha conta (`/account`) do painel faz (#246): os dados da própria conta, a troca da própria senha seguida do logout, o cadastro, a regeneração e a remoção da verificação em 2 etapas (com o QR no navegador e o segredo e os códigos só na memória da tela), as sessões da própria conta, e como o bloqueio e as falhas passageiras aparecem em cada cartão.
 ## Requirements
 ### Requirement: Página Minha conta em /account
-`apps/frontend` SHALL prover a página `/account`, dentro da casca e da exigência de sessão, como as outras rotas autenticadas. Ela SHALL ter o título "Minha conta", o subtítulo "Os seus dados, a sua senha, os códigos de recuperação e os navegadores em que você está conectado." e, nesta ordem, os cartões "Dados", "Senha", "Verificação em 2 etapas" e "Sessões" do quadro `MinhaConta` (`entrega=m1`).
+`apps/frontend` SHALL prover a página `/account`, dentro da casca e da exigência de sessão, como as outras rotas autenticadas. Ela SHALL ter o título "Minha conta", o subtítulo "Os seus dados, as formas de entrada, a sua senha, os códigos de recuperação e os navegadores em que você está conectado." e, nesta ordem, os cartões "Dados", "Formas de entrada" (quando aparece, `panel-federated-accounts`), "Senha", "Verificação em 2 etapas" e "Sessões" do quadro `MinhaConta` (`entrega=m3`).
 - A entrada para a página SHALL ser o link do rodapé (`frontend-app-shell`). Nenhum item de menu SHALL levar a ela.
 - Cada cartão SHALL carregar os próprios dados, e SHALL mostrar um indicador de carregamento enquanto espera.
 - Um erro no `GET` de um cartão SHALL mostrar dentro dele um aviso com o texto do erro (D8 do design) e o botão "Tentar de novo", sem afetar os outros cartões.
@@ -14,8 +14,12 @@ Diz o que a página Minha conta (`/account`) do painel faz (#246): os dados da p
 - **THEN** o painel vai a `/entrar` com `voltarPara=/account`
 
 #### Scenario: Os quatro cartões, na ordem
-- **WHEN** a pessoa abre `/account` com a sessão válida
-- **THEN** a página mostra "Minha conta", o subtítulo "Os seus dados, a sua senha, os códigos de recuperação e os navegadores em que você está conectado." e os cartões "Dados", "Senha", "Verificação em 2 etapas" e "Sessões", nesta ordem
+- **WHEN** a pessoa abre `/account` com a sessão válida, sem provedor configurado e sem conta conectada
+- **THEN** a página mostra "Minha conta", o subtítulo "Os seus dados, as formas de entrada, a sua senha, os códigos de recuperação e os navegadores em que você está conectado." e os cartões "Dados", "Senha", "Verificação em 2 etapas" e "Sessões", nesta ordem
+
+#### Scenario: Com provedor, os cinco cartões
+- **WHEN** a lista dos provedores traz `google`
+- **THEN** os cartões são "Dados", "Formas de entrada", "Senha", "Verificação em 2 etapas" e "Sessões", nesta ordem
 
 #### Scenario: Erro num cartão não derruba os outros
 - **WHEN** `GET /account/sessions` falha por rede, e as outras leituras respondem `200`
@@ -56,7 +60,7 @@ Nenhum campo do cartão SHALL ser editável.
 - **THEN** o cartão mostra "Operador" e o texto de quem não é Admin
 
 ### Requirement: Troca da própria senha
-O cartão "Senha" SHALL começar fechado, com "Você entra com `<e-mail>` e a sua senha." e o botão "Trocar senha". O botão SHALL abrir o formulário com:
+O cartão "Senha" SHALL começar fechado, com "Você entra com `<e-mail>` e a sua senha." e o botão "Trocar senha". **Para a pessoa sem senha** (`GET /account` com `formasDeEntrada` sem `"senha"`), o cartão SHALL mostrar só "Você entra só pelo Google. Para ter também uma senha, peça a um administrador o link para criar uma.", sem "Trocar senha" e sem o formulário; com a consulta pendente ou em erro, o cartão SHALL ser o de quem tem senha. O botão SHALL abrir o formulário com:
 - "Senha atual", "Nova senha" (com a ajuda "De 12 a 128 caracteres.") e "Repita a nova senha", os três pelo `PasswordField` (`frontend-password-field`);
 - o aviso "Ao trocar, você sai de todos os navegadores, inclusive deste, e entra de novo com a nova senha.";
 - "Trocar senha" e "Cancelar". "Cancelar" SHALL fechar o formulário e limpar os campos.
@@ -90,6 +94,10 @@ O cartão "Senha" SHALL começar fechado, com "Você entra com `<e-mail>` e a su
 #### Scenario: Cancelar fecha e limpa
 - **WHEN** a pessoa digita nos campos e aciona "Cancelar"
 - **THEN** o cartão volta ao estado fechado, e reabrir o formulário mostra os campos vazios
+
+#### Scenario: A pessoa sem senha
+- **WHEN** `GET /account` traz `formasDeEntrada: ["google"]`
+- **THEN** o cartão "Senha" mostra "Você entra só pelo Google. Para ter também uma senha, peça a um administrador o link para criar uma.", e não mostra "Trocar senha"
 
 ### Requirement: Estado da verificação em 2 etapas
 O cartão "Verificação em 2 etapas" SHALL vir do `GET /account/two-factor` (`{ ativa, ativadaEm, codigosRestantes }`):

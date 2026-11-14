@@ -1,5 +1,6 @@
 import { sessionFetch } from '../../../auth/session';
 import { retryAfterSeconds } from '../../../auth/transient';
+import type { CallerConfirmation } from '../../users/api/usersApi';
 
 // `request<T>` E `ApiError` PRÓPRIOS DA FEATURE, copiados do idioma de `agentsApi.ts`. Não é
 // descuido nem duplicação a corrigir: é regra escrita da casa (convenção 2 — esperar 2-3
@@ -81,6 +82,28 @@ export interface Account {
   criadoEm: string;
   ultimoAcesso: string | null;
   duasEtapas: boolean;
+  /**
+   * `"senha"` primeiro, só com a senha gravada; depois o TIPO de cada provedor configurado com um
+   * vínculo (`FederatedSignInForms.cs`). É o único sinal de que a pessoa tem senha (change
+   * telas-contas-federadas, D1).
+   */
+  formasDeEntrada: string[];
+  contasConectadas: ConnectedAccount[];
+}
+
+/**
+ * Uma conta de provedor ligada ao usuário (#189), em `GET /account` e `GET /users/{id}`, na ordem de
+ * `conectadaEm`. `chave` é nula exatamente quando o provedor saiu da configuração (`disponivel`
+ * falso): o vínculo não conta como forma de entrada, e nenhuma rota o remove (D1, Q9).
+ */
+export interface ConnectedAccount {
+  chave: string | null;
+  /** `google`, ou o tipo do provedor; fora da configuração, `"desconhecido"` se não for o Google. */
+  tipo: string;
+  email: string | null;
+  conectadaEm: string;
+  ultimoUso: string | null;
+  disponivel: boolean;
 }
 
 export function getAccount(): Promise<Account> {
@@ -140,4 +163,22 @@ export function revokeSession(id: string): Promise<void> {
 
 export function revokeOtherSessions(): Promise<EndedSessions> {
   return post<EndedSessions>('/account/sessions/revoke-others');
+}
+
+// --- Contas de provedores (#189; change telas-contas-federadas, D1 e D3) ---
+
+/**
+ * `200 { url }`, a autorização do provedor; `401` "Senha inválida." ou "Código inválido."; `404`
+ * "Provedor não configurado." (antes da confirmação); `423`; `503`; `403`; `500`. Sem `409` nem `429`.
+ */
+export function connectFederated(chave: string, confirmacao: CallerConfirmation): Promise<{ url: string }> {
+  return post<{ url: string }>(`/account/federated/${encodeURIComponent(chave)}/connect`, confirmacao);
+}
+
+/**
+ * `204`; `409` a última forma de entrada; `404` "Esta conta não está conectada a esse provedor.". Sem
+ * corpo e sem senha. Não troca o stamp: a sessão de quem desconecta continua (D6).
+ */
+export function disconnectOwnFederated(chave: string): Promise<void> {
+  return request<void>(`/account/federated/${encodeURIComponent(chave)}`, { method: 'DELETE' });
 }

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { signInForTest, signOutForTest } from '../../../test/authFakes';
 import { authRuntime, logout } from '../../../auth/session';
 import { PASSWORD_CHANGED_KEY } from '../../auth/passwordChangedNotice';
-import { defaultRoutes, fakeAccountApi, problem } from '../test/fakeAccountApi';
+import { ACCOUNT, defaultRoutes, fakeAccountApi, problem } from '../test/fakeAccountApi';
 import { renderAccount } from '../test/renderAccount';
 import { AccountPasswordCard } from './AccountPasswordCard';
 
@@ -167,3 +167,19 @@ describe('AccountPasswordCard', () => {
     expect(screen.getByLabelText('Senha atual')).toHaveValue('a-atual');
   });
 });
+
+// A pessoa que entra só pelo Google (spec `panel-account-page`, "Troca da própria senha"; change
+// telas-contas-federadas, Q10; quadro `MinhaConta/sem-senha`, versão 81). GUARDA 6.4.
+describe('Senha, para quem não tem senha', () => {
+  it('A pessoa sem senha', async () => {
+    fakeAccountApi({ ...defaultRoutes(), 'GET /account': { status: 200, body: { ...ACCOUNT, formasDeEntrada: ['google'] } } });
+    renderAccount(<AccountPasswordCard />);
+
+    expect(
+      await screen.findByText('Você entra só pelo Google. Para ter também uma senha, peça a um administrador o link para criar uma.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Trocar senha' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/e a sua senha\./)).not.toBeInTheDocument();
+  });
+});
+

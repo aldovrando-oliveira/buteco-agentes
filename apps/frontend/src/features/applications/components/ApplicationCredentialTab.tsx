@@ -358,7 +358,7 @@ function GenerateSecretForm({ app, temVivo, onCancel, onGerado }: GenerateSecret
     setErro(null);
     setRecusado(false);
     const result = await senha.enviar(
-      (s) => generateSecret(app.id, s),
+      (c) => generateSecret(app.id, c),
       (error) => {
         if (!isApiFailure(error)) return false;
         if (isRoleRefusal(error)) {
