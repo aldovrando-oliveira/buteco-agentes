@@ -44,6 +44,7 @@ type Qr =
 
 type Aviso =
   | { tipo: 'senha-salva' }
+  | { tipo: 'verde'; texto: string }
   | { tipo: 'bloqueado'; minutos: number | null }
   | { tipo: 'muitas-tentativas' }
   | { tipo: 'erro'; texto: string }
@@ -52,6 +53,11 @@ type Aviso =
 interface EnrollmentFormProps {
   /** Vindo das páginas do link, depois da senha criada: o aviso `cadastro-apos-nova-senha`. */
   vindoDoLink?: boolean;
+  /**
+   * O aviso verde da volta do provedor: "O Google confirmou…" ou "Convite aceito…" (design.md da
+   * change telas-login-google, D1). Fica até o fim do cadastro, como o da senha salva.
+   */
+  avisoVerde?: string;
   /** O `401` "A entrada expirou…": a página volta a e-mail e senha com o aviso. */
   onExpired: () => void;
   /** "Continuar" depois dos códigos: a sessão está completa, e a página segue o fluxo do emissor. */
@@ -73,10 +79,12 @@ function retryAfterMs(result: { kind: string; status?: number; retryAfter?: numb
     : null;
 }
 
-export function EnrollmentForm({ vindoDoLink, onExpired, onDone, onBack }: EnrollmentFormProps) {
+export function EnrollmentForm({ vindoDoLink, avisoVerde, onExpired, onDone, onBack }: EnrollmentFormProps) {
   const [tentativa, setTentativa] = useState(0);
   const [qr, setQr] = useState<Qr>({ tipo: 'carregando' });
-  const [aviso, setAviso] = useState<Aviso>(vindoDoLink ? { tipo: 'senha-salva' } : null);
+  const [aviso, setAviso] = useState<Aviso>(
+    vindoDoLink ? { tipo: 'senha-salva' } : avisoVerde ? { tipo: 'verde', texto: avisoVerde } : null,
+  );
   const [codigo, setCodigo] = useState('');
   const [erroDoCodigo, setErroDoCodigo] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -128,7 +136,7 @@ export function EnrollmentForm({ vindoDoLink, onExpired, onDone, onBack }: Enrol
   const confirmar = async (valor: string) => {
     setEnviando(true);
     setErroDoCodigo(null);
-    if (aviso?.tipo !== 'senha-salva') setAviso(null);
+    if (aviso?.tipo !== 'senha-salva' && aviso?.tipo !== 'verde') setAviso(null);
     const result: EnrollmentConfirmResult = await confirmEnrollment(valor);
     setEnviando(false);
 
@@ -209,6 +217,11 @@ export function EnrollmentForm({ vindoDoLink, onExpired, onDone, onBack }: Enrol
         {aviso?.tipo === 'senha-salva' && (
           <Alert color="green" role="status">
             {SENHA_SALVA_COM_CADASTRO}
+          </Alert>
+        )}
+        {aviso?.tipo === 'verde' && (
+          <Alert color="green" role="status">
+            {aviso.texto}
           </Alert>
         )}
         {aviso?.tipo === 'bloqueado' && (

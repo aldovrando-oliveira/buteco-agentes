@@ -8,6 +8,7 @@ import { theme } from '../../../theme';
 import { authRuntime } from '../../../auth/session';
 import { PENDING_LOGIN_KEY } from '../../../auth/loginFlow';
 import { jsonResponse } from '../../../test/authFakes';
+import { PROVIDERS_PATH } from '../../../test/federatedFakes';
 import { ConvitePage, RedefinirSenhaPage } from './AccessLinkPage';
 import { EntrarPage } from './EntrarPage';
 import { LINK_TOKEN_KEYS, type LinkPage } from '../linkToken';
@@ -47,6 +48,9 @@ function respondByPath(handlers: Record<string, Handler[]>) {
     calls.push({ url: input, body: init?.body ? JSON.parse(String(init.body)) : undefined, href: window.location.href });
     // A fila é do caminho, sem a query: uma query a mais no pedido é o que o caso do
     // token na URL precisa ver, e não um pedido sem resposta.
+    // A lista dos provedores (o convite, depois da consulta válida, e o /entrar, na montagem; change
+    // telas-login-google) responde vazia quando o caso não a pede: o bloco do provedor não aparece.
+    if (input === PROVIDERS_PATH && !(PROVIDERS_PATH in handlers)) return jsonResponse({ provedores: [] }, 200);
     const next = handlers[input.split('?')[0]]?.shift();
     if (next === undefined) throw new Error(`pedido sem resposta: ${input}`);
     if (next instanceof Error) throw next;
@@ -100,6 +104,10 @@ const notFound = () =>
     { title: 'Este link não vale mais. Se você já criou a senha, entre normalmente; se não, peça um novo link ao administrador.' },
     404,
   );
+
+// O convite pede a lista dos provedores depois da consulta válida (change telas-login-google); a
+// redefinição não. Os casos que conferem a lista exata de pedidos contam o da lista na posição dele.
+const LISTA: Record<LinkPage, string[]> = { convite: [PROVIDERS_PATH], 'redefinir-senha': [] };
 
 const SUBMIT: Record<LinkPage, string> = { convite: 'Criar senha e entrar', 'redefinir-senha': 'Salvar senha e entrar' };
 const PASSWORD_LABEL: Record<LinkPage, string> = { convite: 'Senha', 'redefinir-senha': 'Nova senha' };
@@ -166,13 +174,18 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
       await fillAndSubmit(user, page);
 
       await screen.findByText('Cadastre a verificação em 2 etapas');
-      await waitFor(() => expect(calls).toHaveLength(4));
-      expect(calls.map((c) => c.url)).toEqual([
+      // A lista dos provedores: a do convite, depois da consulta, e a do /entrar, na montagem (o efeito
+      // do cadastro, filho, roda antes do da página).
+      const esperados = [
         ROUTES[page].lookup,
+        ...LISTA[page],
         ROUTES[page].complete,
         '/auth/session',
         '/auth/session/enrollment/setup',
-      ]);
+        PROVIDERS_PATH,
+      ];
+      await waitFor(() => expect(calls).toHaveLength(esperados.length));
+      expect(calls.map((c) => c.url)).toEqual(esperados);
       for (const call of calls) expect(call.url).not.toContain('k7Qp2vX9');
       for (const call of calls) expect(call.href).not.toContain('k7Qp2vX9');
       expect(JSON.stringify(entrarStates)).not.toContain('k7Qp2vX9');
@@ -188,7 +201,9 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
       const segunda = renderAt(page);
 
       await within(segunda.container).findByLabelText(PASSWORD_LABEL[page]);
-      expect(calls.map((c) => c.body)).toEqual([{ token: 'k7Qp2vX9' }, { token: 'k7Qp2vX9' }]);
+      // Cada árvore faz a consulta com o token e, no convite, pede a lista dos provedores, sem corpo.
+      const umaArvore = [[ROUTES[page].lookup, { token: 'k7Qp2vX9' }], ...LISTA[page].map((url) => [url, undefined])];
+      await waitFor(() => expect(calls.map((c) => [c.url, c.body])).toEqual([...umaArvore, ...umaArvore]));
     });
 
     it('sem token não há pedido, e a página mostra o link inválido', () => {
@@ -239,8 +254,17 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
       renderAt(page, 'k7Qp2vX9', { strict: true });
 
       await screen.findByLabelText(PASSWORD_LABEL[page]);
-      expect(calls.length).toBeGreaterThan(0);
-      for (const call of calls) expect(call.body).toEqual({ token: 'k7Qp2vX9' });
+      // A lista exata de pedidos, na ordem (decisão do dono, 14/11/2026): a consulta com o token (duas
+      // vezes, pelo efeito duplo do StrictMode na montagem, como já era) e, no convite, a lista dos
+      // provedores, sem corpo; nenhum outro. Um pedido a mais reprova.
+      await waitFor(() =>
+        expect(calls.map((c) => [c.url, c.body])).toEqual([
+          [ROUTES[page].lookup, { token: 'k7Qp2vX9' }],
+          [ROUTES[page].lookup, { token: 'k7Qp2vX9' }],
+          ...LISTA[page].map((url) => [url, undefined]),
+        ]),
+      );
+      for (const call of calls) expect(call.url).not.toContain('k7Qp2vX9');
       expect(sessionStorage.getItem(LINK_TOKEN_KEYS[page])).toBe('k7Qp2vX9');
     });
   });
@@ -320,7 +344,7 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
 
       expect(await screen.findByText('A senha precisa ter de 12 a 128 caracteres.')).toBeInTheDocument();
       expect(screen.getByLabelText(PASSWORD_LABEL[page])).toHaveAttribute('aria-invalid', 'true');
-      expect(calls).toHaveLength(1);
+      await waitFor(() => expect(calls.map((c) => c.url)).toEqual([ROUTES[page].lookup, ...LISTA[page]]));
     });
 
     it('senha longa demais não envia', async () => {
@@ -336,7 +360,7 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
       await user.click(screen.getByRole('button', { name: SUBMIT[page] }));
 
       expect(await screen.findByText('A senha precisa ter de 12 a 128 caracteres.')).toBeInTheDocument();
-      expect(calls).toHaveLength(1);
+      await waitFor(() => expect(calls.map((c) => c.url)).toEqual([ROUTES[page].lookup, ...LISTA[page]]));
     });
 
     it('espaços contam como caracteres', async () => {
@@ -350,7 +374,7 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
 
       await fillAndSubmit(user, page, '  abcdefghij');
 
-      await waitFor(() => expect(calls[1]?.body).toEqual({ token: 'tok', senha: '  abcdefghij' }));
+      await waitFor(() => expect(calls[1 + LISTA[page].length]?.body).toEqual({ token: 'tok', senha: '  abcdefghij' }));
     });
 
     it('senhas diferentes não enviam', async () => {
@@ -362,7 +386,7 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
 
       expect(await screen.findByText('As senhas não conferem.')).toBeInTheDocument();
       expect(screen.getByLabelText('Repita a senha')).toHaveAttribute('aria-invalid', 'true');
-      expect(calls).toHaveLength(1);
+      await waitFor(() => expect(calls.map((c) => c.url)).toEqual([ROUTES[page].lookup, ...LISTA[page]]));
     });
 
     it('a política do servidor aparece no campo', async () => {
@@ -442,7 +466,10 @@ describe.each(['convite', 'redefinir-senha'] as const)('/%s', (page) => {
 
       expect(await screen.findByText('Cadastre a verificação em 2 etapas')).toBeInTheDocument();
       expect(screen.getByText('Senha salva. Falta só cadastrar o app autenticador para entrar.')).toBeInTheDocument();
-      expect(calls[2]).toMatchObject({ url: '/auth/session', body: { email: 'marcos.lima@empresa.com', senha: 'senha-de-doze' } });
+      expect(calls[2 + LISTA[page].length]).toMatchObject({
+        url: '/auth/session',
+        body: { email: 'marcos.lima@empresa.com', senha: 'senha-de-doze' },
+      });
       expect(assign).not.toHaveBeenCalled();
       expect(sessionStorage.getItem(PENDING_LOGIN_KEY)).toBeNull();
       expect(entrarStates.length).toBeGreaterThan(0);

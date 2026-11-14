@@ -11,6 +11,7 @@ import { authRuntime } from '../../../auth/session';
 import { PENDING_LOGIN_KEY } from '../../../auth/loginFlow';
 import { SESSION_KEY } from '../../../auth/sessionStore';
 import { jsonResponse } from '../../../test/authFakes';
+import { PROVIDERS_PATH } from '../../../test/federatedFakes';
 
 const assign = vi.fn<(url: string) => void>();
 
@@ -35,8 +36,12 @@ async function submit(
   await user.click(screen.getByRole('button', { name: 'Entrar' }));
 }
 
+// A lista dos provedores, que o /entrar pede na montagem (change telas-login-google), recebe uma
+// resposta própria: o `respond()` devolve a mesma instância de Response a todo pedido, e a lista
+// consumiria o corpo que o pedido do caso lê depois. Sem provedor, o bloco não aparece.
 function respond(response: Response | Error) {
-  const fetchMock = vi.fn(async () => {
+  const fetchMock = vi.fn(async (input?: string) => {
+    if (input === PROVIDERS_PATH) return jsonResponse({ provedores: [] }, 200);
     if (response instanceof Error) throw response;
     return response;
   });
@@ -96,7 +101,8 @@ describe('EntrarPage', () => {
     expect(screen.getByText(texto)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Esqueceu a senha?' }));
     expect(screen.queryByText(texto)).not.toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    // O único pedido é a lista dos provedores, da montagem (change telas-login-google).
+    expect(fetchMock.mock.calls).toEqual([[PROVIDERS_PATH]]);
   });
 
   // O POST /auth/session não responde mais 204 (change verificacao-2-etapas-obrigatoria, D1): o
@@ -124,7 +130,9 @@ describe('EntrarPage', () => {
     await submitAndVerify(user);
 
     await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    // Primeiro a lista dos provedores, da montagem; depois a senha (change telas-login-google).
+    expect(fetchMock.mock.calls.slice(0, 2).map(([input]) => input)).toEqual([PROVIDERS_PATH, '/auth/session']);
+    const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
     expect(url).toBe('/auth/session');
     expect(JSON.parse(String(init.body))).toEqual({ email: 'ana@exemplo.test', senha: 'senha-certa' });
     const authorize = new URL(assign.mock.calls[0][0], 'http://localhost');
@@ -188,7 +196,8 @@ describe('EntrarPage', () => {
     await submit(user, 'ana@exemplo.test', '');
 
     expect(await screen.findByText('Informe e-mail e senha.')).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    // O único pedido é a lista dos provedores, da montagem (change telas-login-google).
+    expect(fetchMock.mock.calls).toEqual([[PROVIDERS_PATH]]);
   });
 
   it('401 mostra o title do servidor, continua no /entrar e não grava sessão', async () => {
@@ -259,7 +268,8 @@ describe('EntrarPage', () => {
     expect(screen.getByRole('button', { name: 'Entrar' })).toBeDisabled();
     await act(() => vi.advanceTimersByTimeAsync(1_100));
     expect(screen.getByRole('button', { name: 'Entrar' })).toBeEnabled();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // A lista dos provedores, da montagem, e o envio, uma vez só (change telas-login-google).
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('falha de rede mostra que não foi possível falar com o servidor', async () => {
@@ -379,6 +389,8 @@ describe('EntrarPage', () => {
       const queue = [...codeResponses];
       const fetchMock = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(async (input) => {
         if (input === '/auth/session') return jsonResponse({ segundoPasso: 'totp' }, 200);
+        // A lista dos provedores, da montagem, à parte: a fila é só do código (change telas-login-google).
+        if (input === PROVIDERS_PATH) return jsonResponse({ provedores: [] }, 200);
         const next = queue.shift();
         if (next === undefined) throw new Error('pedido a mais');
         if (next instanceof Error) throw next;

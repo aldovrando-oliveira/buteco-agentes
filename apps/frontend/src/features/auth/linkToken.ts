@@ -14,6 +14,15 @@ export const LINK_TOKEN_KEYS: Record<LinkPage, string> = {
   'redefinir-senha': 'buteco.link.redefinir-senha',
 };
 
+/**
+ * Grava o token na chave da página. Exportada para o clique do provedor no convite, que regrava a
+ * chave com o token do estado antes de navegar ao provedor, sempre: depois de uma recusa (que apaga a
+ * chave), uma nova tentativa ainda volta com o token (design.md da change telas-login-google, D3).
+ */
+export function storeLinkToken(page: LinkPage, token: string) {
+  store(page, token);
+}
+
 function store(page: LinkPage, token: string) {
   try {
     window.sessionStorage.setItem(LINK_TOKEN_KEYS[page], token);

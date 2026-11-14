@@ -435,6 +435,20 @@ senha, com o vínculo, e **entra** pelo login pelo Google da #189. Um aceite em 
 cai, na imagem anterior, no login (a intenção `convite` é desconhecida para ela): sem vínculo e
 convidado, a recusa é `convite-pendente`, sem sessão e com o convite intacto. Nada a desfazer no banco.
 
+#### Telas do login e do convite pelo Google (#190)
+
+**O que muda:** a M3 passa a ter tela. O `/entrar` mostra "Entrar com Google" quando há provedor
+configurado (a lista vem de `GET /auth/federated/providers`; sem provedor, o login fica como antes, só com
+senha) e os avisos de cada recusa; o `/convite` ganha "Continuar com Google" ao lado da senha. Minha conta
+(conectar e desconectar), Usuários e Identidade, com as contas conectadas, são da #279.
+
+**Deploy:** só a imagem do `frontend`. Sem variável nova; o provedor é o da #189.
+
+**Conferir:** com provedor configurado, o botão aparece no `/entrar` e no `/convite`; o roteiro com o
+cliente real, agora pelo painel, no `tasks.md` da change `telas-login-google` (10.5 a 10.7).
+
+**Voltar atrás:** a imagem anterior do `frontend`. As rotas continuam no `api`; só os botões somem.
+
 ### Aplicações externas com credencial do Buteco (#186)
 
 **O que muda:**

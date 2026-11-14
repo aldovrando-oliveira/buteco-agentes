@@ -16,6 +16,20 @@ o versionamento pretende seguir
 
 ### Added
 
+- **Telas do login e do convite pelo Google** (#190, M3 · 3 de 4; a 4 de 4 é a #279, as contas conectadas). Só o
+  `apps/frontend`.
+  - "Entrar com Google" no `/entrar`, pela lista de `GET /auth/federated/providers` (sem provedor, nada muda);
+    "Redirecionando para o Google…", os avisos do `503`, do `429`, da rede e dos dois `404` do início pelo `title`;
+  - a volta do Google no passo do código ou no cadastro, com o aviso verde, e o convite aceito apagando o token da
+    aba antes do cadastro; a query limpa por `replace`, mantendo o `retorno`;
+  - os avisos de cada recusa, com o e-mail do `sem-acesso` lido uma vez da rota de uso único, e só quando a recusa
+    gravada é a da query;
+  - o convite com "Continuar com Google" ao lado da senha, o token regravado na aba antes da navegação, a volta das
+    recusas com o aviso do motivo, e um novo clique trocando o aviso da recusa pelo do início;
+  - convenção 18, contra o design (~+965 / ~+1.625 / +120 / ~103): produção +742 / −19, testes +1.516 / −16, duplos
+    +37, 99 casos;
+  - **Deploy:** só a imagem do `frontend` (`docs/deployment.md`, "Telas do login e do convite pelo Google (#190)").
+
 - **Aceite de convite pelo Google** (#274, M3 · 2 de 3). Só o backend; as telas são da #190.
   - `POST /auth/invitation/federated/{chave}/start` com o token do link: o convite é conferido antes de ir ao
     Google, e o state leva o id do convidado e o hash do link, nunca o link;
