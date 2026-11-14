@@ -95,10 +95,10 @@ describe('accountApi', () => {
 // As contas de provedores (change telas-contas-federadas, D1): o corpo com UM campo da confirmação, e
 // o `DELETE` sem corpo e sem senha.
 describe('accountApi, contas de provedores', () => {
-  it.each<[string, () => Promise<unknown>, unknown]>([
-    ['POST /account/federated/google/connect', () => connectFederated('google', { senha: 'minha-senha' }), { senha: 'minha-senha' }],
-    ['POST /account/federated/google/connect', () => connectFederated('google', { codigo: '123456' }), { codigo: '123456' }],
-  ])('%s leva só o campo da confirmação', async (key, call, body) => {
+  it.each<[string, string, () => Promise<unknown>, unknown]>([
+    ['POST /account/federated/google/connect', 'senha', () => connectFederated('google', { senha: 'minha-senha' }), { senha: 'minha-senha' }],
+    ['POST /account/federated/google/connect', 'codigo', () => connectFederated('google', { codigo: '123456' }), { codigo: '123456' }],
+  ])('%s leva só o campo %s', async (key, _campo, call, body) => {
     const api = fakeAccountApi({ [key]: { status: 200, body: { url: 'https://accounts.google.com/x' } } });
 
     await expect(call()).resolves.toEqual({ url: 'https://accounts.google.com/x' });
