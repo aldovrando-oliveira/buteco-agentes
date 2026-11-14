@@ -1,11 +1,13 @@
+using Buteco.Api.Users.Federated;
 using Buteco.Api.Users.Sessions;
 
 namespace Buteco.Api.Users.Management;
 
 /// <summary>
 /// Uma linha da lista de Usuários (design.md da change rotas-conta-usuarios, D6).
-/// <c>FormasDeEntrada</c> é <c>["senha"]</c> quando há senha gravada: na M1 é a única forma, e a
-/// coluna do protótipo já existe; a M3 acrescenta os provedores. O convidado (design.md da change
+/// <c>FormasDeEntrada</c> traz <c>"senha"</c> quando há senha gravada e, desde a M3, o tipo de cada
+/// provedor disponível com vínculo (<c>"google"</c>), no formato de strings que o painel já lê
+/// (<see cref="FederatedSignInForms"/>; design.md da change provedores-federados-google, D9). O convidado (design.md da change
 /// convites-redefinicao-senha, D10) não tem senha, e traz <c>Convite</c> com o vencimento; o
 /// <c>Vencido</c> sai do relógio do servidor, para a tela não afirmar pelo relógio do navegador.
 /// <c>Papel</c> é o gravado, em <c>admin</c>, <c>operador</c> ou <c>leitor</c>
@@ -32,13 +34,13 @@ public sealed record UserSummary(
 
     public const string PasswordSignIn = "senha";
 
-    public static UserSummary From(User user, DateTimeOffset now) => new(
+    public static UserSummary From(User user, DateTimeOffset now, IReadOnlyList<string>? signInForms = null) => new(
         user.Id,
         user.Name,
         user.Email,
         StateOf(user.Status),
         UserRoleText.WriteWire(user.Role),
-        SignInFormsOf(user.PasswordHash is not null),
+        signInForms ?? SignInFormsOf(user.PasswordHash is not null),
         user.IsTwoFactorEnabled,
         user.LastAccessAt,
         user.CreatedAt,
@@ -85,15 +87,18 @@ public sealed record UserDetail(
     InvitationSummary? Convite,
     DateTimeOffset? DesativadoEm,
     UserReference? ConvidadoPor,
-    UserSessionsSummary Sessoes)
+    UserSessionsSummary Sessoes,
+    IReadOnlyList<ConnectedAccount> ContasConectadas)
 {
-    public static UserDetail From(User user, UserReference? invitedBy, UserSessions.Summary sessions, DateTimeOffset now)
+    public static UserDetail From(
+        User user, UserReference? invitedBy, UserSessions.Summary sessions, DateTimeOffset now,
+        IReadOnlyList<string> signInForms, IReadOnlyList<ConnectedAccount> connected)
     {
-        var summary = UserSummary.From(user, now);
+        var summary = UserSummary.From(user, now, signInForms);
         return new(
             summary.Id, summary.Nome, summary.Email, summary.Estado, summary.Papel, summary.FormasDeEntrada, summary.DuasEtapas,
             summary.UltimoAcesso, summary.CriadoEm, summary.Convite, user.DeactivatedAt, invitedBy,
-            new UserSessionsSummary(sessions.Ativas, sessions.UltimaAtividade));
+            new UserSessionsSummary(sessions.Ativas, sessions.UltimaAtividade), connected);
     }
 }
 

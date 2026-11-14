@@ -26,7 +26,7 @@ As rotas desta capability (`GET /users`, `GET /users/{id}`, `PUT /users/{id}`, `
 - **THEN** a resposta é `403`
 
 ### Requirement: Lista de usuários
-`GET /users` SHALL responder `200` com todos os usuários, ativos, desativados e convidados, sem filtro e sem paginação, cada um com `id`, `nome`, `email`, `estado` (`ativo`, `desativado` ou `convidado`), `formasDeEntrada` (`["senha"]` quando há senha gravada; vazia sem senha), `duasEtapas` (verdadeiro quando a verificação está ligada), `ultimoAcesso`, `criadoEm` e `convite`. `convite` SHALL ser `{ expiraEm, vencido }` no convidado, com `vencido` calculado pelo relógio do servidor, e nulo nos outros. O convite vencido SHALL continuar na lista até gerar novo link ou cancelar. A lista SHALL sair ordenada por nome, com desempate pelo `id` como último critério (`api-response-ordering`).
+`GET /users` SHALL responder `200` com todos os usuários, ativos, desativados e convidados, sem filtro e sem paginação, cada um com `id`, `nome`, `email`, `estado` (`ativo`, `desativado` ou `convidado`), `formasDeEntrada`, `duasEtapas` (verdadeiro quando a verificação está ligada), `ultimoAcesso`, `criadoEm` e `convite`. `formasDeEntrada` SHALL ser uma lista de strings, nesta ordem e sem repetir: `"senha"` quando há senha gravada, e o `tipo` de cada provedor disponível (`federated-login`) com que o usuário tem vínculo (`"google"`); vazia sem nenhuma. `convite` SHALL ser `{ expiraEm, vencido }` no convidado, com `vencido` calculado pelo relógio do servidor, e nulo nos outros. O convite vencido SHALL continuar na lista até gerar novo link ou cancelar. A lista SHALL sair ordenada por nome, com desempate pelo `id` como último critério (`api-response-ordering`).
 
 #### Scenario: Campos e estados
 - **WHEN** existem um usuário ativo com a verificação ligada e um desativado
@@ -40,8 +40,12 @@ As rotas desta capability (`GET /users`, `GET /users/{id}`, `PUT /users/{id}`, `
 - **WHEN** dois usuários têm o mesmo nome
 - **THEN** eles saem em ordem crescente de `id`, e a consulta emitida termina o `ORDER BY` no `id`
 
+#### Scenario: Vínculo com o provedor
+- **WHEN** existem um usuário com senha e vínculo com o provedor, e um sem senha só com o vínculo
+- **THEN** o primeiro sai com `formasDeEntrada` igual a `["senha", "google"]`, e o segundo com `["google"]`
+
 ### Requirement: Detalhe de usuário com a contagem de sessões
-`GET /users/{id}` SHALL responder `200` com os campos da lista, mais `desativadoEm`, `convidadoPor` e `sessoes: { ativas, ultimaAtividade }`, em que `ativas` é o número de sessões vivas do usuário (a definição de `user-account`) e `ultimaAtividade` é o maior último uso entre elas, ou nulo sem sessão. `convidadoPor` SHALL ser `{ id, nome }` de quem criou o convite, também depois de aceito, e nulo para quem não entrou por convite. Id inexistente SHALL responder `404`.
+`GET /users/{id}` SHALL responder `200` com os campos da lista, mais `desativadoEm`, `convidadoPor`, `sessoes: { ativas, ultimaAtividade }` e `contasConectadas`, em que `ativas` é o número de sessões vivas do usuário (a definição de `user-account`) e `ultimaAtividade` é o maior último uso entre elas, ou nulo sem sessão. `convidadoPor` SHALL ser `{ id, nome }` de quem criou o convite, também depois de aceito, e nulo para quem não entrou por convite. `contasConectadas` SHALL ser `[{ chave, tipo, email, conectadaEm, ultimoUso, disponivel }]`, um item por vínculo, inclusive o de provedor fora da configuração (com `chave` nula e `disponivel` falso), na ordem de `conectadaEm`; vazia sem vínculo. Id inexistente SHALL responder `404`.
 
 #### Scenario: Contagem de sessões de outro usuário
 - **WHEN** um usuário com duas sessões vivas, uma renovada depois da outra, é consultado por outro
@@ -54,6 +58,10 @@ As rotas desta capability (`GET /users`, `GET /users/{id}`, `PUT /users/{id}`, `
 #### Scenario: Usuário inexistente
 - **WHEN** o detalhe é pedido para um id que não existe
 - **THEN** a resposta é `404`
+
+#### Scenario: As contas conectadas
+- **WHEN** o detalhe de um usuário vinculado ao provedor `corporativo` é consultado
+- **THEN** `contasConectadas` traz a chave `corporativo`, `tipo` `google`, o e-mail confirmado, `conectadaEm`, `ultimoUso` e `disponivel` verdadeiro, e nenhum `sub`
 
 ### Requirement: Editar nome e e-mail
 `PUT /users/{id}` com `{ nome, email }` SHALL gravar o nome (sem espaços nas pontas, de 1 a 200 caracteres) e o e-mail (sem espaços nas pontas, formato de endereço válido, até 254 caracteres), com o e-mail normalizado recalculado, e responder `200` com o detalhe. O `id` (o `sub`) SHALL NOT mudar. A edição SHALL NOT trocar o carimbo de segurança nem encerrar sessões, e SHALL NOT pedir a senha de ninguém.
@@ -128,9 +136,9 @@ A desativação SHALL rodar sob o `pg_advisory_xact_lock` de chave `BUTECOD1` (`
 - **THEN** a resposta é `200` com `encerradas` igual a 2, a renovação das duas recebe `invalid_grant`, e o login seguinte do outro abre uma sessão nova que renova
 
 ### Requirement: Mudar o papel de um usuário
-`PUT /users/{id}/role` com `{ papel, senha? }` (`papel` em `admin`, `operador` ou `leitor`, pela tabela de correspondência do design, D3) SHALL gravar o papel do usuário indicado (ativo ou convidado; o desativado SHALL receber `409`) e responder `200` com o detalhe. Papel igual ao gravado SHALL responder `200` sem gravar nada. Papel fora dos três valores SHALL responder `400`, e id inexistente, `404`.
+`PUT /users/{id}/role` com `{ papel, senha?, codigo? }` (`papel` em `admin`, `operador` ou `leitor`, pela tabela de correspondência do design, D3) SHALL gravar o papel do usuário indicado (ativo ou convidado; o desativado SHALL receber `409`) e responder `200` com o detalhe. Papel igual ao gravado SHALL responder `200` sem gravar nada. Papel fora dos três valores SHALL responder `400`, e id inexistente, `404`.
 
-- **Promover a Admin** (papel novo `admin`, alvo de outro papel) SHALL pedir a senha atual de quem chama no campo `senha`, com as regras de "Criar convite, gerar novo link e gerar redefinição pedem a senha de quem chama" (`user-access-links`): `423` durante o bloqueio do e-mail de quem chama, `401` "Senha inválida." contado nesse bloqueio, nada gravado. Rebaixar SHALL NOT pedir senha.
+- **Promover a Admin** (papel novo `admin`, alvo de outro papel) SHALL pedir a confirmação de quem chama, com as regras de "Criar convite, gerar novo link e gerar redefinição pedem a senha de quem chama" (`user-access-links`): a senha no campo `senha` para quem tem senha, o código do app no campo `codigo` para quem não tem; `423` durante o bloqueio do e-mail de quem chama, `401` contado nesse bloqueio, nada gravado. Rebaixar SHALL NOT pedir confirmação.
 - **A mudança SHALL rodar sob o `pg_advisory_xact_lock` `BUTECOD1`** (`4779819235982394417`), a mesma chave da desativação, relendo dentro do lock quem chama e o alvo. Quem chama que já não é Admin ativo SHALL receber `403`, sem gravar nada.
 - **O último Admin:** tirar o papel `admin` de um Admin quando ele é o único Admin ativo, contado dentro do lock, SHALL responder `409` "A instalação precisa de pelo menos um Admin ativo.", sem gravar nada.
 - **A si mesmo:** quem chama SHALL poder mudar o próprio papel, sujeito à regra do último Admin.
@@ -155,6 +163,10 @@ A desativação SHALL rodar sob o `pg_advisory_xact_lock` de chave `BUTECOD1` (`
 #### Scenario: Promover pede a senha
 - **WHEN** um Admin promove um Operador a `admin` sem `senha`, e depois com a própria senha certa
 - **THEN** a primeira resposta é `401`, contada no bloqueio do e-mail de quem chama, o alvo continua `operador`, e a segunda é `200` com `papel` `admin`
+
+#### Scenario: Admin sem senha promove com o código do app
+- **WHEN** um Admin sem senha, com a verificação ligada, promove um Operador a `admin` com um `codigo` válido do app
+- **THEN** a resposta é `200` com `papel` `admin`
 
 #### Scenario: Papel inválido
 - **WHEN** o corpo traz `papel` `superusuario`

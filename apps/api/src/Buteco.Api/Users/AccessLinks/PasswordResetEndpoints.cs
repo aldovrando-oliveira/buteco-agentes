@@ -3,6 +3,7 @@ using Buteco.Api.Infrastructure;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Management;
 using Buteco.Api.Users.Passwords;
+using Buteco.Api.Users.TwoFactor;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -45,6 +46,7 @@ public static class PasswordResetEndpoints
         AppDbContext dbContext,
         LoginThrottleStore throttle,
         PasswordHasher hasher,
+        TwoFactorVerifier verifier,
         IdentityIssuerState issuer,
         IOptions<IdentityIssuerOptions> options,
         PasswordResetLink link,
@@ -76,7 +78,7 @@ public static class PasswordResetEndpoints
                 return Deactivated();
         }
 
-        if (await CallerPassword.RejectAsync(caller, request?.Senha, hasher, throttle, cancellationToken) is { } rejected)
+        if (await CallerPassword.RejectAsync(caller, request?.Senha, request?.Codigo, hasher, verifier, throttle, cancellationToken) is { } rejected)
         {
             return rejected;
         }

@@ -943,6 +943,49 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.ToTable("task_rejections", (string)null);
                 });
 
+            modelBuilder.Entity("Buteco.Api.Users.Federated.UserFederatedIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ConnectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("connected_at");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("text")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("issuer");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("subject");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Issuer", "Subject")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Issuer")
+                        .IsUnique();
+
+                    b.ToTable("user_federated_identities", (string)null);
+                });
+
             modelBuilder.Entity("Buteco.Api.Users.Login.LoginThrottle", b =>
                 {
                     b.Property<string>("NormalizedEmail")
@@ -1459,6 +1502,15 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.HasOne("Buteco.Api.KnowledgeDocuments.Entities.KnowledgeDocument", null)
                         .WithMany()
                         .HasForeignKey("KnowledgeDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Buteco.Api.Users.Federated.UserFederatedIdentity", b =>
+                {
+                    b.HasOne("Buteco.Api.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

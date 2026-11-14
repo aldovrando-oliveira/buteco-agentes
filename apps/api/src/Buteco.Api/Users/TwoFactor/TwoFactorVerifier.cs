@@ -36,7 +36,18 @@ public sealed class TwoFactorVerifier(
 {
     public static readonly EventId SecretUnreadableEvent = new(1194, "TwoFactorSecretUnreadable");
 
-    public async Task<TwoFactorCheck> VerifyAsync(User user, string? input, CancellationToken cancellationToken)
+    public Task<TwoFactorCheck> VerifyAsync(User user, string? input, CancellationToken cancellationToken) =>
+        VerifyAsync(user, input, allowRecoveryCode: true, cancellationToken);
+
+    /// <summary>
+    /// Só o código do app, com o mesmo uso único do passo (design.md da change provedores-federados-google,
+    /// D8): a confirmação de quem chama sem senha. O código de recuperação é o estoque de emergência do
+    /// celular perdido e não confirma ação administrativa; ele é recusado sem ser gasto.
+    /// </summary>
+    public Task<TwoFactorCheck> VerifyAppCodeAsync(User user, string? input, CancellationToken cancellationToken) =>
+        VerifyAsync(user, input, allowRecoveryCode: false, cancellationToken);
+
+    private async Task<TwoFactorCheck> VerifyAsync(User user, string? input, bool allowRecoveryCode, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
 
@@ -72,7 +83,7 @@ public sealed class TwoFactorVerifier(
             return accepted == 1 ? TwoFactorCheck.Accepted : TwoFactorCheck.Rejected;
         }
 
-        if (RecoveryCode.Normalize(input) is { } recoveryCode)
+        if (allowRecoveryCode && RecoveryCode.Normalize(input) is { } recoveryCode)
         {
             var hash = RecoveryCode.Hash(recoveryCode);
             var used = await dbContext.UserRecoveryCodes

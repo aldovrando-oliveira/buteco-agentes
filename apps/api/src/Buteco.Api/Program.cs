@@ -7,6 +7,8 @@ using Buteco.Api.AgentKnowledgeBindings.Endpoints;
 using Buteco.Api.AgentMcpBindings.Endpoints;
 using Buteco.Api.Auth;
 using Buteco.Api.Identity;
+using Buteco.Api.Identity.Federated;
+using Buteco.Api.Users.Federated;
 using Buteco.Api.Identity.Flow;
 using Buteco.Api.Identity.Overview;
 using Buteco.Api.Identity.ServiceTokens;
@@ -206,6 +208,10 @@ app.ValidateConnectorsConfiguration();
 // emissor, D3.4). Provado pela composição real em IdentityIssuerStartupValidationTests.
 app.ValidateIdentityIssuerConfiguration();
 
+// Convenção 8: Identity:FederatedProviders, com a lista fechada de inconsistências
+// (design.md da change provedores-federados-google, D3). Sem banco e sem rede.
+app.ValidateFederatedProvidersConfiguration();
+
 // Convenção 8: todo subject de destino da tabela de clientes do token do emissor existe na
 // tabela de subjects do apps/api (usuarios-locais-login-emissor, D3.3).
 app.ValidateIssuerClientSubjects();
@@ -243,6 +249,8 @@ app.MapExternalApplicationEndpoints();
 app.MapExternalApplicationAgentEndpoints();
 app.MapPasswordResetEndpoints();
 app.MapAccessLinkPublicEndpoints();
+app.MapFederatedLoginEndpoints();
+app.MapFederatedAccountEndpoints();
 app.MapIdentityOverviewEndpoint();
 app.MapEndSessionEndpoint();
 app.MapAgentEndpoints();
@@ -273,6 +281,10 @@ app.ValidateRouteAuthenticationClassification(
     "/auth/invitation/accept",
     "/auth/password-reset",
     "/auth/password-reset/complete",
+    FederatedLogin.StartPath,
+    FederatedLogin.CallbackPath,
+    FederatedLogin.ProvidersPath,
+    FederatedLogin.RefusalPath,
     "/connect/authorize",
     "/connect/logout",
     "/agents/{id:guid}/.well-known/agent-card.json");

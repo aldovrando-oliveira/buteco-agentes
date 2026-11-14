@@ -24,6 +24,8 @@ logs/
 .env.*
 !.env.example
 !.env.prod.example
+# O arquivo dos provedores federados do servidor (#189); o exemplo é versionado.
+federated-providers.env
 appsettings.*.local.json
 secrets.json
 

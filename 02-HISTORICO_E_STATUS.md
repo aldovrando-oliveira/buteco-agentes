@@ -8748,12 +8748,17 @@ M2 Diferentes acessos                            acompanhamento #195
   23 #188  painel de aplicações externas               ← #185 #186 #187
 M3 Autenticação com Google                       acompanhamento #196
   24 #189  provedores federados e Google               ← #181 #184
-  25 #190  painel: login com provedor e recusas        ← #185 #189
+  25 #274  aceite de convite pelo Google               ← #189
+  26 #190  painel: login com provedor e recusas        ← #185 #189 #274
 M4 Autenticação corporativa                      acompanhamento #197
-  26 #191  provedor OIDC genérico                      ← #189
-  27 #192  aplicações federadas (troca de token)       ← #187 #191
-  28 #193  painel da M4                                ← #188 #190 #192
+  27 #191  provedor OIDC genérico                      ← #189
+  28 #192  aplicações federadas (troca de token)       ← #187 #191
+  29 #193  painel da M4                                ← #188 #190 #192
 ```
+
+*(Atualizada em 13/11/2026, pela `provedores-federados-google`: a M3 passou de 2 para 3 itens. A **#274**, o
+aceite de convite pelo Google, saiu da #189 numa change própria (decisão do dono, Q10 do design da #189), e
+fica entre a #189 e a #190.)*
 
 *(Atualizada em 09/11/2026, pela `papeis-no-token`: a M2 passou de 5 para 6 itens. A **#257**, o
 comando de emergência para o link de redefinição de senha, entrou logo depois da #184, numa change
@@ -19149,3 +19154,65 @@ As três primeiras rodadas pegaram o Mac em limite térmico (`CPU_Speed_Limit` 2
 - **A suíte do fechamento rodou depois do Prettier**, do `eslint` e do `tsc -b`, sobre a árvore do commit (a #270 tinha rodado antes do Prettier e só repetido o arquivo isolado).
 - **A baseline teve sobreposição:** uma rodada isolada do arquivo de teste (14 casos, ~6 s) rodou fora do lock enquanto a baseline corria. Verde, conta pela regra assimétrica; a duração (225 s) e a CPU mínima (53) carregam a sobreposição.
 - **Os guardas (convenção 15),** pelo `guarda-272.sh`, cada um reprovando e o arquivo voltando com o sha igual (`~/.cache/buteco-agents/272-guardas/`): a linha visível na primeira carga (o comportamento da #270) reprova os casos da primeira carga e do erro dela; a linha escondida em toda carga (`!isFetching`) reprova o da busca seguinte e o da busca sem resultado da #270; a condição só por `data !== undefined` reprova o do erro de uma busca seguinte.
+
+## `provedores-federados-google` — Provedores federados por configuração e login com Google (#189)
+
+**Change proposta e implementada em 12–13/11/2026**, na branch `feat/189-login-google`, num worktree próprio, a partir de `3de31dd` (merge do PR #273). M3 · 1 de 3. Só o `apps/api`; as telas são da #190, e o aceite de convite pelo Google virou a #274 (Q10).
+
+- **O Google atrás do emissor:** o `apps/api` é cliente OIDC (`OpenIddict.Client` 7.7.2 com o `WebIntegration`), registrado só com provedor configurado; o painel continua falando só com o emissor, e o token que os três apps validam não muda. O registro da #217 (conferir o `iss` no painel) caiu: não há segundo emissor para o painel.
+- **`Identity:FederatedProviders`**, por chave neutra, só o tipo `google`, o segredo só por variável de ambiente, `HostedDomain` opcional; dez inconsistências derrubam o boot. Em produção, um `env_file` opcional só do `api` (Docker Compose ≥ 2.24.0; a alternativa para versão anterior está no `docs/deployment.md`).
+- **O login pelo Google também pede o código do Buteco** (Q1): o retorno grava o `buteco-sessao` pendente e manda ao `totp` ou ao `cadastro` de hoje; nunca ao authorize, porque a cadeia que começa no Google é cross-site.
+- **O vínculo pelo par (`issuer`, `sub`)** em `user_federated_identities`; conectar com a confirmação de quem chama; desconectar pela pessoa (sem trocar o stamp) e pelo Admin (troca o stamp e revoga as sessões); a última forma de entrada não sai.
+- **Sete recusas sem sessão**, o e-mail confirmado num cookie `buteco-recusa` de uso único (nunca na URL), logs 1198–1201 sem dado pessoal.
+- **O `CallerPassword` aceita o código do app de quem não tem senha** (nunca o de recuperação; quem tem senha, só a senha).
+- **As rotas:** `GET /auth/federated/providers` (anônima) e `GET /identity/federated-providers` (Admin, sem segredo); `formasDeEntrada` continua em strings e ganha `"google"`; `contasConectadas` no detalhe e em `/account`.
+- Capacidades novas: `federated-providers`, `federated-login`. Modificadas: `issuer-user-login`, `user-access-links`, `user-management`, `external-applications`, `user-account`, `local-users`, `route-roles`, `route-authentication` (inclusive o cenário do `204` atrasado desde a #220), `issuer-token-storage`.
+
+### Premissas (convenção 9)
+
+Onze, todas no D15 do design. Duas decididas pelo dono (13/11/2026): **APPLY-7**, o cenário "Duas desconexões ao mesmo tempo" não se monta na M3 (com um provedor por issuer, quem não tem senha tem no máximo uma forma de entrada) e virou "A conferência trava a linha do usuário"; **APPLY-11**, com o Google fora do alcance o `start` respondia `400` em texto do OpenIddict depois de ~15 s, e passou a buscar o discovery antes do desafio, com prazo explícito de 10 s, respondendo `503` com `problem+json` ("Não foi possível falar com o provedor. Tente de novo em instantes."); o retorno com o provedor fora do alcance continua em `falha`. A busca passa pelo cache do cliente OIDC (o `ConfigurationManager` da registração, renovado a cada 12 h, o mesmo que o desafio lê): dois inícios seguidos, um só pedido de discovery, conferido por teste e guarda antes do merge. As outras, sem mudança de contrato: o `Microsoft.Extensions.Configuration` central 10.0.11; o cliente só com provedor; a URI de retorno pela base do painel; a URI da requisição pela base do painel (o `apps/api` atrás do proxy vê HTTP); o uso único do `buteco-recusa` também contra o valor reenviado; o passthrough dos erros do cliente; o `response_mode` que o pedido não repete.
+
+### O que a implementação mediu
+
+| suíte | baseline `3de31dd` (`189/baseline-final/`) | fechamento (`189/fechamento-final/`) | veredito |
+|---|---|---|---|
+| `apps/api` | 1696 + 1 ignorado, 339 s, CPU mín. 60 (rodada 2) | 1794 + 1 ignorado, 342 s, CPU mín. 58 (depois do caso do cache do discovery; antes, 1793 + 1 depois do APPLY-11, e 1789 + 1 antes dele) | APROVADA |
+| `tests/InboxOrchestratorRoundTrip.Tests` | 16/16, CPU 100 (rodada 2) | 16/16, CPU 100 | APROVADA |
+| `tests/ApiConnectorsRoundTrip.Tests` | 12/12, CPU 100 | 12/12, CPU 100 | APROVADA |
+
+- **As rodadas 1:** na baseline, o `apps/api` saiu INCONCLUSIVO (CPU 48) e o `rt-inbox` REPROVADO válido (CPU 100) pelo `OrphanDispatchRoundTripTests.Question2_WorkerFailurePath_SendsPush_AndDispatchIsResolved`, intermitente nova da mesma classe da #176 (comentada lá); no fechamento, o `apps/api` saiu INCONCLUSIVO (CPU 60). Os dois `apps/api` inconclusivos pelo mesmo caso fora da change, `KnowledgeBaseIndexingSummaryTests.SummaryQuery_CostDoesNotGrowWithNumberOfBases` (`Expected: 3, Actual: 2`: uma consulta de fundo entra na primeira captura de SQL com a máquina carregada). **Já tem issue, a #232** (aberta na #181, com a mesma hipótese): as quatro ocorrências (baseline da #184, baseline e duas rodadas do fechamento da #189) foram comentadas lá, em vez de uma issue nova.
+- **Comparação por nome:** nenhum caso da baseline saiu nem mudou de resultado. Entraram 98: `FederatedLoginTests` 29, `FederatedConnectTests` 15, `FederatedProvidersStartupValidationTests` 15, `CallerConfirmationTests` 9, `FederatedProviderRoutesTests` 5, `FakeGoogleTests` 3, `FederatedLoginHostedDomainTests` 3, `FederatedProviderUnreachableTests` 2, `FederatedProviderHangingTests` 1, `FederatedDiscoveryCacheTests` 1, `UserFederatedIdentityStorageTests` 2, `FederatedEndToEndTests` 1, e 12 resultados novos da matriz. Os da lista do topo (`TheAuthEntryPoints_AreTheKnownOnes`, `RoleMatrixTests.Expected`) mudaram só a lista esperada.
+- **Os 32 guardas (convenção 15: os 30 do plano, o do APPLY-11 e o do cache do discovery)**, pelo `guarda-189.sh`, cada um reprovando contra o defeito nomeado e o arquivo voltando com o sha igual (`~/.cache/buteco-agents/189-guardas/`), entre eles: o vínculo pelo e-mail, o login pelo Google sem o código, a última forma removida, o cookie do fluxo sem bater com o state, o segredo do JSON, as recusas gravando sessão, o e-mail no log e o código aceito de quem tem senha.
+- **Convenção 18** (só código, sem migrations, `openspec/` e `.md`), contra o D12 do design (projeção da 189a; a do primeiro design, antes da divisão, era ~1.210 / ~1.680 / 380):
+
+  | | projetado | medido | erro |
+  |---|---|---|---|
+  | produção | ~+1.310 | +1.558 / −48 | +19 % |
+  | testes (sem duplos) | ~+1.880 | +1.646 / −3 | −12 % |
+  | duplos (`FakeGoogle`, `GoogleFlow`) | +380 | +434 | +14 % |
+  | casos | — (não projetado) | +97 | — |
+
+  Com o APPLY-11 (o início com prazo e `503`): +41 de produção, +77 de testes e +35 de duplo (os estados `Down` e `Hanging`).
+
+  Com o erro medido que o design somava (+57 % / +70 %), a faixa era ~2.000 / ~3.800: as duas colunas ficaram **abaixo**, a primeira vez desde a #180 em que os testes erraram para cima. O duplo, com item próprio desde a décima segunda medição, acertou.
+- **Conferência local** (13.1), num banco descartável copiado do de desenvolvimento por `pg_dump` e apagado no fim, com o `apps/api` sem rede externa: o boot de cada regra, as rotas, a recusa sem cookie, a rota da Identidade com o token real de um Admin, e o achado do `start` sem rede (APPLY-11).
+
+### Homologação da M3: a conferência com o Google real (decisão do dono, 13/11/2026)
+
+Fica para a homologação da M3, como a validação visual. Checklist (o detalhe está no `tasks.md` da change, 13.2 a 13.8):
+
+- [ ] **Preparação:** a tela de consentimento OAuth e um cliente "Aplicativo da Web" no Google Cloud, com a URI `https://<PUBLIC_DOMAIN>/auth/federated/callback` (e `http://localhost:5173/auth/federated/callback` para o local), sem origem JavaScript; o `federated-providers.env` (600) no servidor; `docker compose version` ≥ 2.24.0;
+- [ ] **13.2** o pedido abre a escolha de conta do Google, sem `redirect_uri_mismatch`;
+- [ ] **13.3** o id token real: `iss` com esquema, `email_verified`, `hd` no Workspace e ausente na conta pessoal;
+- [ ] **13.4** o retorno aceito com ou sem o parâmetro `iss` do Google;
+- [ ] **13.5** em **Chrome, Firefox e Safari**: o `buteco-fluxo-externo` (`Lax`) indo no retorno; o `buteco-sessao` e o `buteco-recusa` (`Strict`) **gravados na resposta do retorno**; os dois não indo no carregamento do `/entrar` e indo no `POST` do painel; o authorize devolvendo o código;
+- [ ] **13.6** e-mail não verificado → `email-nao-verificado`;
+- [ ] **13.7** cancelar no Google → `falha`, log 1199;
+- [ ] **13.8** conectar e desconectar de verdade, e o login seguinte pedindo o código do Buteco.
+
+**Risco registrado:** se o Safari, ou outro navegador, não gravar o `buteco-sessao` `Strict` na resposta do retorno (a navegação de topo que vem do Google), o desenho do D5 muda: o retorno passaria a gravar um cookie `Lax` curto de uso único, trocado pelo `buteco-sessao` num `POST` same-site do painel. Isso vira uma correção depois do merge, com contrato novo para a #190.
+
+### Para as próximas
+
+- **A #274** (aceite pelo Google) cria o primeiro usuário ativo sem senha: o `CallerPassword` com o código e a última forma de entrada já esperam por ele.
+

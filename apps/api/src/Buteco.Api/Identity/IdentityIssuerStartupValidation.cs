@@ -7,6 +7,7 @@ using Buteco.Api.Options;
 using Buteco.Api.Users.TwoFactor;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
+using OpenIddict.Client;
 using OpenIddict.Server;
 
 namespace Buteco.Api.Identity;
@@ -180,11 +181,54 @@ public static class IdentityIssuerStartupValidation
             }
         }
 
+        // O cliente OIDC dos provedores federados (design.md da change provedores-federados-google, D3):
+        // a mesma conferência, nos dois sentidos, contra IdentityIssuerEndpoints.ExpectedClient. Só o
+        // retorno existe, em passthrough.
+        // Sem provedor configurado, o cliente não é registrado, e não há o que conferir.
+        var clientRegistered = app.Services.GetService<Federated.FederatedProviderCatalog>() is { Providers.Count: > 0 };
+        var client = ComposeClientWithoutKeys(app.Services);
+        var clientPaths = client.RedirectionEndpointUris.Concat(client.PostLogoutRedirectionEndpointUris)
+            .Select(PathOf).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var path in clientPaths)
+        {
+            if (!IdentityIssuerEndpoints.ExpectedClient.TryGetValue(path, out var expected))
+            {
+                problems.Add($"endpoint '{path}' configurado no cliente OIDC e fora da lista esperada");
+            }
+            else if (expected.Passthrough && !(mappedRoutes.GetValueOrDefault(path) ?? []).Any(route => IsAnonymousWithReason(route, expected.Reason)))
+            {
+                problems.Add(
+                    $"'{path}' é endpoint do cliente OIDC em passthrough e não tem rota mapeada de mesmo caminho, anônima e classificada como {expected.Reason}");
+            }
+        }
+
+        foreach (var expected in IdentityIssuerEndpoints.ExpectedClient.Keys)
+        {
+            if (clientRegistered && !clientPaths.Contains(expected))
+            {
+                problems.Add($"'{expected}' está na lista esperada do cliente e não corresponde a nenhum endpoint configurado no cliente OIDC");
+            }
+        }
+
         if (problems.Count > 0)
         {
             throw new InvalidOperationException(
                 $"Endpoints do emissor OIDC divergem da lista esperada: {string.Join("; ", problems)}.");
         }
+    }
+
+    private static OpenIddictClientOptions ComposeClientWithoutKeys(IServiceProvider services)
+    {
+        // Como no servidor: sem PostConfigure e sem o configurer do anel.
+        var options = new OpenIddictClientOptions();
+        foreach (var configurer in services.GetServices<IConfigureOptions<OpenIddictClientOptions>>()
+                     .Where(configurer => configurer is not IdentityKeyRingClientOptionsConfigurer))
+        {
+            configurer.Configure(options);
+        }
+
+        return options;
     }
 
     private static bool IsAnonymousWithReason(RouteEndpoint route, AnonymousRouteReason reason) =>

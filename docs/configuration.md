@@ -165,6 +165,55 @@ qual a própria API é **alcançada** de fora, do ponto de vista do AgentCard.
 Até a #180, a url ausente subia o app com o emissor desligado e os endereços A2A
 ausentes; esse estado deixou de existir.
 
+### Provedores federados (`Identity:FederatedProviders`, #189)
+
+O login pelo Google fica **atrás do emissor do Buteco**: o `apps/api` é cliente OIDC
+do provedor, e o painel continua falando só com o emissor. Sem a seção, nada muda: o
+login fica só com senha, e o cliente OIDC nem é registrado.
+
+A seção é um dicionário por **chave neutra**, escolhida por quem instala (por
+exemplo `corporativo`); a chave vai nas rotas (`/auth/federated/<chave>/…`) e no
+motivo das recusas. Na M3 o único tipo é `google`:
+
+| campo | | regra |
+|---|---|---|
+| a chave | obrigatória | de 2 a 32 caracteres, minúsculas, dígitos e hífen, começando por letra |
+| `Type` | obrigatório | `google` |
+| `ClientId` | obrigatório | o ID do cliente OAuth do Google; não é segredo |
+| `ClientSecret` | obrigatório | **só por variável de ambiente**: `Identity__FederatedProviders__<chave>__ClientSecret` |
+| `HostedDomain` | opcional | o claim `hd` do id token tem de ser igual, em todo login e todo conectar; é um filtro, nunca entrada automática |
+
+**Fixos pelo tipo, sem campo:** o issuer `https://accounts.google.com/`, o nome
+"Google", os escopos `openid email profile`, `prompt=select_account` e o modo de
+resposta `query`. A URI de retorno é a base do painel (`Identity__PanelBaseUrl`, ou
+`PublicUrl__BaseUrl` sem ela) mais `/auth/federated/callback`. Mudar a seção exige
+reiniciar o `apps/api`; tirar uma entrada desliga o provedor, e os vínculos ficam
+gravados, sem valer, até um provedor do mesmo issuer voltar.
+
+**O boot reprova**, sem banco e sem rede, nomeando a chave e o campo, nunca o valor
+do segredo:
+
+1. chave fora do formato;
+2. `Type` ausente;
+3. `Type` diferente de `google`;
+4. `ClientId` ausente ou em branco;
+5. `ClientSecret` ausente ou em branco;
+6. dois provedores com o mesmo issuer (o vínculo é pelo par `issuer`, `sub`);
+7. `ClientSecret` cujo valor efetivo vem de um arquivo JSON de configuração;
+8. campo fora de `Type`, `ClientId`, `ClientSecret` e `HostedDomain` (um `ClientID` com
+   erro de digitação, que o binder ignoraria);
+9. `HostedDomain` que não é um nome de domínio;
+10. `ClientSecret` igual a uma das chaves de cifra ou a um dos segredos de cliente de
+    serviço do `apps/api`.
+
+Alcançar o Google não é condição de boot: com ele fora do ar, o `apps/api` sobe, e o
+login pelo Google recusa com o motivo `falha`, com log.
+
+O login pelo Google **também pede o código das 2 etapas do Buteco** (Q1 da #189): o
+retorno grava a sessão pendente e manda ao passo do código, ou ao cadastro de quem
+ainda não tem a verificação. O cliente OAuth no Google Cloud e o arquivo do segredo
+no servidor estão em [deployment.md](deployment.md#provedores-federados-189).
+
 ---
 
 ## `apps/workers`
@@ -378,8 +427,18 @@ por ambiente: `Connectors__BaseUrl` (`http://connectors:8080`, no `apps/api`),
 `Api__BaseUrl` (`http://api:8080`, no `apps/connectors`, como no `apps/inbox`) e
 `VITE_CONNECTORS_BASE_URL` (`""`, build do frontend). Ficam fixos no compose.
 
+**Os provedores federados não vêm do `.env.prod`**: a chave é de quem instala, e o
+compose não tem um nome fixo a interpolar. Eles vêm de um arquivo opcional de
+ambiente **só do `api`**, `federated-providers.env`, ao lado do `.env.prod` e fora do
+repositório, com as variáveis `Identity__FederatedProviders__<chave>__Type`,
+`__ClientId`, `__HostedDomain` e `__ClientSecret` (o exemplo, sem segredo, é o
+[`federated-providers.env.example`](../federated-providers.env.example)). Sem o arquivo,
+nenhum provedor. Exige Docker Compose 2.24.0 ou mais novo (ver
+[deployment.md](deployment.md#provedores-federados-189)).
+
 Nenhum `.env` real é versionado; `.gitignore` cobre `.env` e `.env.*`,
-com exceção explícita dos dois arquivos de exemplo.
+com exceção explícita dos dois arquivos de exemplo, e cobre o
+`federated-providers.env`.
 
 A sequência de deploy e os riscos operacionais conhecidos estão em
 [deployment.md](deployment.md).

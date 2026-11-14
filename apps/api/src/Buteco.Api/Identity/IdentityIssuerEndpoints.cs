@@ -36,4 +36,16 @@ public static class IdentityIssuerEndpoints
             [Authorization] = new(AnonymousRouteReason.AuthEntryPoint, Passthrough: true),
             [EndSession] = new(AnonymousRouteReason.SessionEnd, Passthrough: true),
         };
+
+    /// <summary>
+    /// Os endpoints do <b>cliente</b> OIDC dos provedores federados (design.md da change
+    /// provedores-federados-google, D3), conferidos do mesmo jeito contra as URIs que a composição real
+    /// configura no cliente: só o retorno, em passthrough, com a rota anônima de motivo
+    /// <see cref="AnonymousRouteReason.AuthEntryPoint"/>.
+    /// </summary>
+    public static IReadOnlyDictionary<string, ExpectedEndpoint> ExpectedClient { get; } =
+        new Dictionary<string, ExpectedEndpoint>(StringComparer.Ordinal)
+        {
+            [Federated.FederatedLogin.CallbackPath] = new(AnonymousRouteReason.AuthEntryPoint, Passthrough: true),
+        };
 }

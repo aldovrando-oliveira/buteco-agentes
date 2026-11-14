@@ -1,7 +1,9 @@
+using Buteco.Api.Identity.Federated;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Users.AccessLinks;
 using Buteco.Api.Users.Login;
 using Buteco.Api.Users.Passwords;
+using Buteco.Api.Users.TwoFactor;
 using Buteco.Api.Users.Sessions;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,7 +30,7 @@ public static class UserRoleEndpoint
 {
     public const string LastAdminMessage = "A instalação precisa de pelo menos um Admin ativo.";
 
-    public sealed record ChangeRoleRequest(string? Papel, string? Senha);
+    public sealed record ChangeRoleRequest(string? Papel, string? Senha, string? Codigo = null);
 
     public static async Task<IResult> ChangeAsync(
         Guid id,
@@ -37,8 +39,10 @@ public static class UserRoleEndpoint
         AppDbContext dbContext,
         LoginThrottleStore throttle,
         PasswordHasher hasher,
+        TwoFactorVerifier verifier,
         UserSessions sessions,
         TimeProvider timeProvider,
+        FederatedProviderCatalog catalog,
         CancellationToken cancellationToken)
     {
         if (await CurrentUser.FindAdminAsync(httpContext.User, dbContext, cancellationToken) is not { } caller)
@@ -66,7 +70,7 @@ public static class UserRoleEndpoint
 
         if (current.Role == role)
         {
-            return await UserEndpoints.DetailAsync(current, dbContext, sessions, timeProvider, cancellationToken);
+            return await UserEndpoints.DetailAsync(current, dbContext, sessions, timeProvider, catalog, cancellationToken);
         }
 
         if (role == UserRole.Admin)
@@ -76,7 +80,7 @@ public static class UserRoleEndpoint
                 return locked;
             }
 
-            if (await CallerPassword.RejectAsync(caller, request.Senha, hasher, throttle, cancellationToken) is { } rejected)
+            if (await CallerPassword.RejectAsync(caller, request.Senha, request.Codigo, hasher, verifier, throttle, cancellationToken) is { } rejected)
             {
                 return rejected;
             }
@@ -106,6 +110,6 @@ public static class UserRoleEndpoint
         target.ChangeRole(role);
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return await UserEndpoints.DetailAsync(target, dbContext, sessions, timeProvider, cancellationToken);
+        return await UserEndpoints.DetailAsync(target, dbContext, sessions, timeProvider, catalog, cancellationToken);
     }
 }

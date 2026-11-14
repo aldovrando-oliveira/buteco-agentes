@@ -73,8 +73,10 @@ ainda não emitiram. `POST /auth/login` SHALL NOT existir.
 #### Scenario: Abrir a sessão do emissor é acessível sem token
 - **WHEN** um cliente envia `POST /auth/session` com credenciais válidas, da
   origem do painel e sem o header `Authorization`
-- **THEN** a API responde `204 No Content`, sem rejeitar a requisição por
-  ausência do header `Authorization`
+- **THEN** a API responde `200 OK` com `{ "segundoPasso": "totp" }` ou
+  `{ "segundoPasso": "cadastro" }` (a verificação em 2 etapas é obrigatória
+  desde a #220, `issuer-user-login`), sem rejeitar a requisição por ausência do
+  header `Authorization`
 
 #### Scenario: O segundo passo do login é acessível sem token
 - **WHEN** um cliente envia `POST /auth/session/second-factor` com o cookie da
@@ -217,16 +219,17 @@ Os endpoints do emissor SHALL ser anônimos e SHALL ser conferidos no boot por u
 
 - `/.well-known/openid-configuration` e `/.well-known/jwks`;
 - `/connect/token`;
-- `/connect/authorize` e `/connect/logout`.
+- `/connect/authorize` e `/connect/logout`;
+- desde a #189, o endpoint de retorno do cliente OIDC dos provedores federados, `/auth/federated/callback`.
 
-Eles são atendidos pelo OpenIddict dentro do middleware de autenticação, e por isso a checagem de rotas anônimas existente não os enxerga. O authorize e o logout funcionam em modo passthrough: depois de o OpenIddict validar o pedido, uma rota mapeada do app decide a resposta.
+Eles são atendidos pelo OpenIddict (o servidor e, no retorno, o cliente) dentro do middleware de autenticação, e por isso a checagem de rotas anônimas existente não os enxerga. O authorize, o logout e o retorno do cliente funcionam em modo passthrough: depois de o OpenIddict validar o pedido, uma rota mapeada do app decide a resposta.
 
 O `apps/api` SHALL manter uma lista esperada desses endpoints, cada um com:
 
-- **motivo:** `PublicDiscovery` para discovery e JWKS, `AuthEntryPoint` para o token e o authorize, `SessionEnd` para o logout;
+- **motivo:** `PublicDiscovery` para discovery e JWKS, `AuthEntryPoint` para o token, o authorize e o retorno do cliente, `SessionEnd` para o logout;
 - **marcação de passthrough.**
 
-O boot SHALL comparar essa lista, nos dois sentidos, com as URIs de endpoint que a composição real configura no servidor OIDC, e SHALL falhar se houver:
+O boot SHALL comparar essa lista, nos dois sentidos, com as URIs de endpoint que a composição real configura no servidor OIDC e no cliente OIDC, e SHALL falhar se houver:
 
 - endpoint configurado fora da lista;
 - item da lista sem endpoint configurado;
@@ -255,7 +258,9 @@ A checagem SHALL NOT consultar o banco.
 - **WHEN** o app sobe
 - **THEN** as rotas mapeadas classificadas como anônimas são exatamente:
   - `/health`;
-  - `/auth/session`;
+  - `/auth/session`, `/auth/session/second-factor`, `/auth/session/enrollment/setup` e `/auth/session/enrollment/confirm`;
+  - `/auth/invitation`, `/auth/invitation/accept`, `/auth/password-reset` e `/auth/password-reset/complete`;
+  - `/auth/federated/{chave}/start`, `/auth/federated/callback`, `/auth/federated/providers` e `/auth/federated/refusal`;
   - `/connect/authorize`;
   - `/connect/logout`;
   - `/agents/{id:guid}/.well-known/agent-card.json`.
@@ -265,6 +270,10 @@ A checagem SHALL NOT consultar o banco.
 #### Scenario: Allowlist com rota que não existe derruba o boot
 - **WHEN** a allowlist de rotas anônimas contém um caminho que nenhuma rota mapeada tem
 - **THEN** o boot falha com uma mensagem que cita esse caminho
+
+#### Scenario: Retorno do cliente sem rota derruba o boot
+- **WHEN** a composição configura `/auth/federated/callback` no cliente OIDC em passthrough e a rota `GET /auth/federated/callback` não está mapeada
+- **THEN** o boot falha com uma mensagem que cita `/auth/federated/callback`
 
 ### Requirement: apps/api aceita só o access token do emissor
 O `apps/api` SHALL autenticar cada requisição com um esquema só, o do access token do próprio emissor, e SHALL aceitar o token que satisfaça todas as condições abaixo, recusando com `401` o que falhar qualquer uma, inclusive o que não seja um JWS compacto:
@@ -310,4 +319,19 @@ O `sub` do token SHALL NOT ser usado como subject. Token válido com `client_id`
 #### Scenario: Token do cliente de serviço do connectors só nas rotas do service:connectors
 - **WHEN** um access token `client_credentials` do `buteco-servico-connectors` chama `GET /sync/knowledge-bases/` e `GET /agents`
 - **THEN** as respostas são `200 OK` e `403 Forbidden`
+
+### Requirement: Rotas anônimas do login federado
+As rotas do login federado que não podem exigir token SHALL ser anônimas, classificadas com o motivo `AuthEntryPoint`: `POST /auth/federated/{chave}/start`, `GET /auth/federated/callback`, `GET /auth/federated/providers` e `POST /auth/federated/refusal`. As que mudam estado (`start` e `refusal`) SHALL ter as barreiras do login (só JSON, `Origin` conferida). As rotas de conectar e desconectar (`/account/federated/*`, `/users/{id}/federated/*`) e `GET /identity/federated-providers` SHALL NOT ser anônimas.
+
+#### Scenario: O início do login federado é acessível sem token
+- **WHEN** um cliente envia `POST /auth/federated/corporativo/start`, JSON, da origem do painel e sem `Authorization`
+- **THEN** a API responde `200`, sem rejeitar o pedido por ausência do header
+
+#### Scenario: Conectar não é anônimo
+- **WHEN** um cliente envia `POST /account/federated/corporativo/connect` sem `Authorization`
+- **THEN** a API responde `401`
+
+#### Scenario: As portas de entrada são as conhecidas
+- **WHEN** o app sobe
+- **THEN** as rotas mapeadas classificadas como `AuthEntryPoint` são exatamente as de "Rotas anônimas do app são as conhecidas" menos `/health`, `/connect/logout` e o `AgentCard`
 

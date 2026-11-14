@@ -9,9 +9,7 @@ refresh continuam gravados. A limpeza periódica remove as entradas mortas com
 mais de 14 dias, uma instância por ciclo, sob lock próprio, e preserva o que a revogação
 de sessão usa. O boot amarra a idade mínima da limpeza à duração do refresh token.
 Criada pela change `limpeza-tokens-openiddict` (#209).
-
 ## Requirements
-
 ### Requirement: Entradas mortas de token e de autorização são removidas periodicamente
 Com o emissor ligado, o `apps/api` SHALL remover, a cada 1 hora, as linhas de `openiddict_tokens` e de `openiddict_authorizations` criadas há mais de 14 dias que o OpenIddict considera removíveis: token vencido, ou com status diferente de `valid` e de `inactive`, ou cuja autorização não está `valid`; e autorização sem nenhum token que não esteja `valid` ou seja ad hoc. Os tokens SHALL ser removidos antes das autorizações, no mesmo ciclo. A remoção SHALL acontecer em lotes, sem uma transação que abranja o ciclo inteiro. O primeiro ciclo SHALL acontecer um intervalo depois do start, sem acesso ao banco no boot.
 
@@ -90,3 +88,15 @@ Com o emissor ligado, nenhum access token, de nenhum grant, e nenhum id token SH
 #### Scenario: Só código e refresh ficam ligados
 - **WHEN** o OpenIddict gera um token de qualquer tipo (access, refresh, id, código de autorização) em qualquer grant (`client_credentials`, `authorization_code`, `refresh_token`)
 - **THEN** a criação da linha fica desligada para todo access token e todo id token, e ligada para o refresh token e o código de autorização
+
+### Requirement: O state token do cliente OIDC gera entrada de uso único
+Cada início do fluxo federado (`federated-login`) SHALL gerar uma linha de state token em `openiddict_tokens`, sem autorização ligada, que o retorno SHALL resgatar: um state token SHALL ser aceito uma vez só. Essas linhas SHALL NOT aparecer como sessão (`user-account`), e SHALL ser removidas pela mesma limpeza das outras entradas mortas, com a mesma idade mínima. O fluxo do usuário por senha SHALL continuar gravando só o código de autorização e o refresh token.
+
+#### Scenario: O início grava o state, e o retorno o resgata
+- **WHEN** um fluxo federado começa e o retorno é aceito
+- **THEN** `openiddict_tokens` tem uma linha de state token, sem autorização, já resgatada, e nenhuma sessão nova aparece em `GET /account/sessions` antes do segundo passo
+
+#### Scenario: A limpeza remove o state morto
+- **WHEN** a limpeza roda com uma linha de state token resgatada há mais de 14 dias
+- **THEN** a linha é removida
+

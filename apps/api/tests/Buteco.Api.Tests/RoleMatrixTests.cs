@@ -103,11 +103,13 @@ public class RoleMatrixTests(RoleMatrixTests.Fixture factory) : IClassFixture<Ro
         [("POST", "/users/{id:guid}/sessions/revoke")] = "A",
         [("PUT", "/users/{id:guid}/role")] = "A",
         [("POST", "/users/{id:guid}/two-factor/reset")] = "A",
+        [("DELETE", "/users/{id:guid}/federated/{chave}")] = "A",
         [("POST", "/users/invitations")] = "A",
         [("POST", "/users/{id:guid}/invitation/renew")] = "A",
         [("POST", "/users/{id:guid}/invitation/cancel")] = "A",
         [("POST", "/users/{id:guid}/password-reset")] = "A",
         [("GET", "/identity")] = "A",
+        [("GET", "/identity/federated-providers")] = "A",
         [("GET", "/account/")] = "A O L",
         [("POST", "/account/password")] = "A O L",
         [("GET", "/account/sessions/")] = "A O L",
@@ -115,6 +117,8 @@ public class RoleMatrixTests(RoleMatrixTests.Fixture factory) : IClassFixture<Ro
         [("POST", "/account/sessions/revoke-others")] = "A O L",
         [("GET", "/account/two-factor/")] = "A O L",
         [("POST", "/account/two-factor/recovery-codes")] = "A O L",
+        [("POST", "/account/federated/{chave}/connect")] = "A O L",
+        [("DELETE", "/account/federated/{chave}")] = "A O L",
         // Aplicações externas (change aplicacoes-externas-credencial, D3): só o Admin, inclusive ler.
         [("GET", "/applications/")] = "A",
         [("POST", "/applications/")] = "A",
@@ -201,6 +205,7 @@ public class RoleMatrixTests(RoleMatrixTests.Fixture factory) : IClassFixture<Ro
             .Replace("{knowledgeBaseId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
             .Replace("{secretId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
             .Replace("{agentId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
+            .Replace("{chave}", "corporativo", StringComparison.Ordinal)
             .Replace("{id}", Guid.NewGuid().ToString(), StringComparison.Ordinal);
         if (path.Contains('{', StringComparison.Ordinal))
         {

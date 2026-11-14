@@ -16,6 +16,22 @@ o versionamento pretende seguir
 
 ### Added
 
+- **Login com Google, atrás do emissor do Buteco** (#189, M3 · 1 de 3). Só o backend; as telas são da
+  #190, e o aceite de convite pelo Google é a #274.
+  - provedores federados por configuração (`Identity:FederatedProviders`, chave neutra, tipo `google`,
+    segredo só por variável de ambiente, `HostedDomain` opcional), com dez inconsistências que derrubam
+    o boot; sem a seção, nada muda;
+  - o `apps/api` como cliente OIDC do Google; o login pelo Google **também pede o código das 2 etapas do
+    Buteco**, e o token que os apps validam não muda;
+  - o vínculo pela conta Google (`issuer`, `sub`), conectado em Minha conta com a senha; desconectar pela
+    própria pessoa ou pelo Admin (que encerra as sessões); a última forma de entrada não sai;
+  - sete recusas sem sessão, com o e-mail confirmado num cookie de uso único, e logs sem dado pessoal;
+  - `GET /auth/federated/providers` (login) e `GET /identity/federated-providers` (Admin, sem segredo).
+  - com o Google fora do alcance, o início responde `503` com `problem+json` em até 10 s.
+  - **Deploy:** um `federated-providers.env` opcional só do `api`, Docker Compose 2.24.0 ou mais novo
+    (`docs/deployment.md`, "Provedores federados (#189)").
+
+
 **Estrutura do monorepo**
 
 - Monorepo com quatro apps isolados — `apps/api`, `apps/workers`,
@@ -1074,6 +1090,14 @@ o versionamento pretende seguir
   `scripts/check-docs.py`.
 
 ### Changed
+
+- **A confirmação de quem chama aceita o código do app autenticador de quem não tem senha** (#189), no
+  campo `codigo` das rotas que pedem a senha (convite, novo link, redefinição, promover a Admin, criar
+  aplicação externa, gerar segredo e conectar provedor). Quem tem senha continua só com a senha; o código
+  de recuperação não vale ali.
+- **`formasDeEntrada`** em `/users` passa a trazer `"google"`, no mesmo formato de strings; o detalhe e
+  `/account` ganham `contasConectadas` (#189).
+
 
 - **O AgentCard declara o esquema OAuth2 do Buteco** (#186). `securitySchemes` troca o `bearer`
   por `oauth2`, com o fluxo `clientCredentials`, o endpoint de token público e o escopo
