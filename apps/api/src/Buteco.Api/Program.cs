@@ -285,6 +285,7 @@ app.ValidateRouteAuthenticationClassification(
     FederatedLogin.CallbackPath,
     FederatedLogin.ProvidersPath,
     FederatedLogin.RefusalPath,
+    FederatedLogin.InvitationStartPath,
     "/connect/authorize",
     "/connect/logout",
     "/agents/{id:guid}/.well-known/agent-card.json");

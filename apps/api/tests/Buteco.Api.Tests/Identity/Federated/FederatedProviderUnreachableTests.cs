@@ -39,6 +39,23 @@ public class FederatedProviderUnreachableTests(UnreachableGoogleFixture fixture)
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
+
+    [Fact]
+    public async Task TheInvitationStart_WithTheProviderDown_IsA503ProblemJson_WithoutCookie_AndTheInvitationUnchanged()
+    {
+        var caller = await SignedInUser.CreateAsync(fixture, "aceite-fora-do-ar");
+        var invited = await InvitationSeed.InvitedAsync(fixture.Services, caller.User.Id);
+
+        var started = await GoogleFlow.StartInvitationAsync(GoogleFlow.Client(fixture), invited.Token);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, started.Response.StatusCode);
+        Assert.Equal("application/problem+json", started.Response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains(FederatedChallenge.UnreachableMessage, await started.Response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Empty(GoogleFlow.SetCookiesOf(started.Response));
+        var reloaded = await SignedInUser.ReloadAsync(fixture.Services, invited.User.Id);
+        Assert.Equal(Buteco.Api.Users.UserStatus.Invited, reloaded.Status);
+        Assert.Equal(invited.User.AccessLinkHash, reloaded.AccessLinkHash);
+    }
 }
 
 /// <summary>O provedor que não responde: o início desiste no prazo explícito (10 s), e não no das tentativas do cliente.</summary>

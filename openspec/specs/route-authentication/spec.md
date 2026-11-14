@@ -260,6 +260,7 @@ A checagem SHALL NOT consultar o banco.
   - `/health`;
   - `/auth/session`, `/auth/session/second-factor`, `/auth/session/enrollment/setup` e `/auth/session/enrollment/confirm`;
   - `/auth/invitation`, `/auth/invitation/accept`, `/auth/password-reset` e `/auth/password-reset/complete`;
+  - `/auth/invitation/federated/{chave}/start`;
   - `/auth/federated/{chave}/start`, `/auth/federated/callback`, `/auth/federated/providers` e `/auth/federated/refusal`;
   - `/connect/authorize`;
   - `/connect/logout`;
@@ -321,7 +322,7 @@ O `sub` do token SHALL NOT ser usado como subject. Token válido com `client_id`
 - **THEN** as respostas são `200 OK` e `403 Forbidden`
 
 ### Requirement: Rotas anônimas do login federado
-As rotas do login federado que não podem exigir token SHALL ser anônimas, classificadas com o motivo `AuthEntryPoint`: `POST /auth/federated/{chave}/start`, `GET /auth/federated/callback`, `GET /auth/federated/providers` e `POST /auth/federated/refusal`. As que mudam estado (`start` e `refusal`) SHALL ter as barreiras do login (só JSON, `Origin` conferida). As rotas de conectar e desconectar (`/account/federated/*`, `/users/{id}/federated/*`) e `GET /identity/federated-providers` SHALL NOT ser anônimas.
+As rotas do login federado que não podem exigir token SHALL ser anônimas, classificadas com o motivo `AuthEntryPoint`: `POST /auth/federated/{chave}/start`, `GET /auth/federated/callback`, `GET /auth/federated/providers`, `POST /auth/federated/refusal` e o início do aceite de convite, `POST /auth/invitation/federated/{chave}/start`. As que mudam estado (os dois `start` e o `refusal`) SHALL ter as barreiras do login (só JSON, `Origin` conferida). As rotas de conectar e desconectar (`/account/federated/*`, `/users/{id}/federated/*`) e `GET /identity/federated-providers` SHALL NOT ser anônimas.
 
 #### Scenario: O início do login federado é acessível sem token
 - **WHEN** um cliente envia `POST /auth/federated/corporativo/start`, JSON, da origem do painel e sem `Authorization`
@@ -334,4 +335,8 @@ As rotas do login federado que não podem exigir token SHALL ser anônimas, clas
 #### Scenario: As portas de entrada são as conhecidas
 - **WHEN** o app sobe
 - **THEN** as rotas mapeadas classificadas como `AuthEntryPoint` são exatamente as de "Rotas anônimas do app são as conhecidas" menos `/health`, `/connect/logout` e o `AgentCard`
+
+#### Scenario: O início do aceite de convite é acessível sem token
+- **WHEN** um cliente envia `POST /auth/invitation/federated/corporativo/start`, JSON, da origem do painel, com o token de um convite pendente e sem `Authorization`
+- **THEN** a API responde `200`, sem rejeitar o pedido por ausência do header
 

@@ -116,6 +116,23 @@ public static class GoogleFlow
         return Read(await client.SendAsync(request));
     }
 
+    /// <summary><c>POST /auth/invitation/federated/{chave}/start</c> com o token do convite, JSON e a origem do issuer (#274).</summary>
+    public static async Task<Started> StartInvitationAsync(HttpClient client, string? token, string key = FederatedLoginFixture.Key, string? origin = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/auth/invitation/federated/{key}/start") { Content = JsonContent.Create(new { token }) };
+        request.Headers.Add("Origin", origin ?? LocalUserSeed.IssuerOrigin);
+        return Read(await client.SendAsync(request));
+    }
+
+    /// <summary>O aceite inteiro pelo provedor: o início com o token, o consentimento e o retorno (#274).</summary>
+    public static async Task<Returned> AcceptInvitationAsync(FederatedLoginFixture fixture, string token, FakeGoogle.Account account)
+    {
+        var client = Client(fixture);
+        var started = await StartInvitationAsync(client, token);
+        Assert.Equal(HttpStatusCode.OK, started.Response.StatusCode);
+        return await ReturnAsync(client, Consent(fixture, started, account), started.Query["state"], started.FlowCookie);
+    }
+
     public static async Task<Started> Read(Task<HttpResponseMessage> pending) => Read(await pending);
 
     public static Started Read(HttpResponseMessage response)

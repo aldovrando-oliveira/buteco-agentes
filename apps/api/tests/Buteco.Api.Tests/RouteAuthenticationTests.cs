@@ -108,8 +108,9 @@ public class RouteAuthenticationTests(ApiFactoryFixture factory) : IClassFixture
     {
         // As rotas anônimas de entrada: a #220 acrescentou só as duas do cadastro no login, e a #189 as
         // quatro do login federado (início, retorno, lista dos provedores e aviso da recusa; tasks.md da
-        // change provedores-federados-google, lista do topo). Uma rota anônima nova aqui é uma porta
-        // nova, e precisa de decisão.
+        // change provedores-federados-google, lista do topo), e a #274 o início do aceite de convite pelo
+        // provedor (tasks.md da change aceite-convite-google, lista do topo). Uma rota anônima nova aqui é
+        // uma porta nova, e precisa de decisão.
         var entryPoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
             .Where(endpoint => endpoint.Metadata.GetMetadata<AnonymousRouteClassification>()?.Reason == AnonymousRouteReason.AuthEntryPoint)
@@ -125,6 +126,7 @@ public class RouteAuthenticationTests(ApiFactoryFixture factory) : IClassFixture
                 "/auth/federated/{chave}/start",
                 "/auth/invitation",
                 "/auth/invitation/accept",
+                "/auth/invitation/federated/{chave}/start",
                 "/auth/password-reset",
                 "/auth/password-reset/complete",
                 "/auth/session",

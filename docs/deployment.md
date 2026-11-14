@@ -339,7 +339,7 @@ no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
 - **o login pelo Google também pede o código das 2 etapas do Buteco**; quem nunca cadastrou a
   verificação cadastra no primeiro login;
 - só entra quem tem a conta Google **conectada** a um usuário (Minha conta, com a senha). Não há
-  entrada automática, nem por domínio; o aceite de convite pelo Google é a #274;
+  entrada automática, nem por domínio; o aceite de convite pelo Google veio na #274 (abaixo);
 - sem provedor configurado, **nada muda**: o login fica só com senha, como antes.
 
 **Versão do Docker Compose: 2.24.0 ou mais novo.** O provedor chega ao contêiner por um `env_file`
@@ -397,6 +397,43 @@ o `up` reprovar se alguém apagar o arquivo.
 subir de novo. Na #189 ninguém fica só com Google (quem cria essa pessoa é o aceite pelo Google, #274):
 todo vinculado ainda entra com senha. O `federated-providers.env` pode ficar; a imagem anterior não
 o lê.
+
+#### Aceite de convite pelo Google (#274)
+
+**O que muda:** quem recebe um convite pode aceitá-lo pelo Google, sem criar senha, a partir do link
+do convite (`POST /auth/invitation/federated/<chave>/start`). O e-mail que o Google devolve
+**verificado** tem de ser igual ao do convite; o aceite grava o vínculo e já abre o login, no cadastro
+das 2 etapas. Com outro e-mail, e-mail não verificado, convite que deixou de valer ou conta Google já
+de outro usuário, o painel volta ao convite com o motivo, e nada é gravado. A pessoa fica sem senha: a
+primeira vem do link de redefinição que um Admin gera (o `password-reset-link` só serve Admin, acima).
+
+**Também:** com a chave do provedor trocada entre o início e o retorno (renomeada e o `api`
+reiniciado), o retorno respondia `500`; agora recusa com `falha` (#276), no login, no conectar e no
+aceite.
+
+**O log:** o OpenIddict gravava o `sub` e o e-mail do Google (o userinfo) e o `code_verifier` do pedido
+de token em `Information`, também em produção (#277, desde a #189). A imagem nova traz o filtro
+`Logging:LogLevel:OpenIddict` = `Warning` no `appsettings.json`. **Não sobrescreva esse nível para
+`Information` ou menos** (por exemplo `Logging__LogLevel__OpenIddict` no `.env.prod`): o log volta a levar
+dado pessoal. O log já gravado antes do deploy pode ter esses dados; trate-o conforme a retenção do host.
+
+**Deploy:** só a imagem do `api`. Sem migration e sem variável nova: o provedor é o da #189; o filtro de
+log vem na imagem.
+
+**Conferir:**
+
+- com um convite pendente, `POST /auth/invitation/federated/<chave>/start` com
+  `{"token":"<token do link>"}`, `Content-Type: application/json` e `Origin: https://<PUBLIC_DOMAIN>`
+  responde `200` com o `url` do Google; com um link vencido, o mesmo `404` "Este link não vale mais…"
+  da consulta do convite;
+- o roteiro com o cliente real, no `tasks.md` da change `aceite-convite-google` (10.2 a 10.5): o aceite
+  com o e-mail certo caindo no cadastro das 2 etapas; outro e-mail voltando a
+  `/convite?recusa=outro-email`; o cancelamento no Google; o convite cancelado no meio.
+
+**Voltar atrás:** a imagem anterior do `api` (a da #189). Quem aceitou pelo Google continua ativo, sem
+senha, com o vínculo, e **entra** pelo login pelo Google da #189. Um aceite em voo na hora da troca
+cai, na imagem anterior, no login (a intenção `convite` é desconhecida para ela): sem vínculo e
+convidado, a recusa é `convite-pendente`, sem sessão e com o convite intacto. Nada a desfazer no banco.
 
 ### Aplicações externas com credencial do Buteco (#186)
 
@@ -923,6 +960,11 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --no-dep
   senha atual, o carimbo de segurança e as sessões continuam até a senha nova ser criada;
 - **quem ele atende:** só **Admin ativo**. Operador e Leitor pedem o link a um Admin no painel
   (sempre sobra um Admin ativo, #184); o convidado recebe um novo link do convite em Usuários;
+- **quem só tem Google:** desde a #274, quem aceita o convite pelo Google fica **sem senha**. Um
+  Operador ou um Leitor nessa situação que perde o acesso à conta Google **não é atendido pelo
+  comando** (sai `4`): ganha a primeira senha pelo link de redefinição que um Admin gera no painel
+  (Editar usuário, `POST /users/{id}/password-reset`), que grava a senha de quem não tinha. Só um Admin
+  sem senha e sem Google, sem outro Admin, depende do comando;
 - **quem pode usar:** só quem roda `docker compose` no host do stack. Não há rota HTTP, e o
   processo do comando não abre porta;
 - **onde o link sai:** **uma vez, sozinho numa linha da saída padrão**. A linha `Warning` com o

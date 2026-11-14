@@ -158,6 +158,8 @@ As quatro rotas administrativas (`POST /users/invitations`, `POST /users/{id}/in
 
 `POST /auth/invitation/accept` com `{ token, senha }` SHALL conferir a senha nova pela política de senha (`user-account`), com `400` fora dela, e procurar o link antes de calcular o hash. Com o link válido, SHALL gravar o hash Argon2id da senha, pôr o usuário no estado ativo e apagar o link numa única instrução condicionada ao hash do link, ao propósito, ao vencimento e ao estado convidado, de modo que dois aceites do mesmo link nunca têm sucesso os dois. Em seguida SHALL zerar o bloqueio do e-mail do usuário e responder `204`, sem abrir sessão. A sessão SHALL nascer só do login com a senha criada.
 
+O convite SHALL poder ser aceito também pelo provedor federado (`federated-login`, "Decisão do aceite de convite no retorno"), sem senha. A condição de consumo (o hash do link, o propósito, o vencimento e o estado convidado) SHALL ser a mesma nos dois aceites, de modo que o mesmo convite nunca é aceito pelos dois; o consumo pelo provedor acrescenta a ela o e-mail normalizado e não grava senha.
+
 #### Scenario: Consulta do convite
 - **WHEN** o link de um convite válido é consultado
 - **THEN** a resposta é `200` com o nome e o e-mail do convidado, o nome de quem convidou e o vencimento, e nada muda no banco
@@ -177,6 +179,10 @@ As quatro rotas administrativas (`POST /users/invitations`, `POST /users/{id}/in
 #### Scenario: O aceite zera o bloqueio
 - **WHEN** o e-mail do convidado está bloqueado por tentativas de login e o convite é aceito
 - **THEN** o login seguinte com a senha criada responde `200` com `{ "segundoPasso": "cadastro" }`, e não `423`
+
+#### Scenario: Aceite por senha depois do aceite pelo provedor
+- **WHEN** um convite é aceito pelo provedor, e o mesmo link é usado em `POST /auth/invitation/accept` com uma senha dentro da política
+- **THEN** a resposta é a de link inválido, e o usuário continua sem senha
 
 ### Requirement: Consultar o link de redefinição e concluir a redefinição
 `POST /auth/password-reset` com `{ token }` SHALL responder `200 { nome, email, expiraEm }` só para um link de redefinição válido (existente, de propósito `password_reset`, de usuário ativo e não vencido), sem gravar nada.
@@ -215,9 +221,9 @@ O link SHALL deixar de valer quando: um link novo é gerado para o mesmo usuári
 - **THEN** a resposta é a de link inválido
 
 ### Requirement: Rotas públicas do link: barreiras, limite e resposta única
-As quatro rotas públicas (`POST /auth/invitation`, `POST /auth/invitation/accept`, `POST /auth/password-reset` e `POST /auth/password-reset/complete`) SHALL ser anônimas e SHALL aplicar as barreiras do login antes de tudo: só `application/json` (`415`) e `Origin` igual à do issuer ou à de `Identity:PanelBaseUrl` (`403`). O aceite e a conclusão SHALL entrar no limite global de verificações de senha (`local-users`); as duas consultas SHALL NOT entrar.
+As cinco rotas públicas (`POST /auth/invitation`, `POST /auth/invitation/accept`, `POST /auth/password-reset`, `POST /auth/password-reset/complete` e o início do aceite pelo provedor, `POST /auth/invitation/federated/{chave}/start`, de `federated-login`) SHALL ser anônimas e SHALL aplicar as barreiras do login antes de tudo: só `application/json` (`415`) e `Origin` igual à do issuer ou à de `Identity:PanelBaseUrl` (`403`). O aceite, a conclusão e o início do aceite pelo provedor SHALL entrar no limite global de verificações de senha (`local-users`); as duas consultas SHALL NOT entrar.
 
-Link inexistente, vencido, usado, cancelado, substituído, de outro propósito ou de usuário fora do estado esperado SHALL receber a mesma resposta: `404` "Este link não vale mais. Se você já criou a senha, entre normalmente; se não, peça um novo link ao administrador.", com o mesmo corpo em todos os casos e sem calcular hash de senha.
+Link inexistente, vencido, usado, cancelado, substituído, de outro propósito ou de usuário fora do estado esperado SHALL receber a mesma resposta: `404` "Este link não vale mais. Se você já criou a senha, entre normalmente; se não, peça um novo link ao administrador.", com o mesmo corpo em todos os casos e sem calcular hash de senha. No início do aceite pelo provedor, a mesma resposta SHALL valer, sem cookie do fluxo e sem pedido ao provedor.
 
 #### Scenario: Resposta única para link inválido
 - **WHEN** a consulta e o uso recebem um token inexistente, um vencido, um já usado, um cancelado e um de outro propósito
@@ -230,6 +236,10 @@ Link inexistente, vencido, usado, cancelado, substituído, de outro propósito o
 #### Scenario: Aceite e conclusão no limite global
 - **WHEN** o aceite recebe mais pedidos simultâneos do que o limite global de verificações de senha admite
 - **THEN** os excedentes esperam na fila ou recebem `429` com `Retry-After`, como no login
+
+#### Scenario: Resposta única também no início do aceite pelo provedor
+- **WHEN** `POST /auth/invitation` e `POST /auth/invitation/federated/corporativo/start` recebem o mesmo token vencido
+- **THEN** as duas respostas têm o mesmo status e o mesmo corpo, e a do início não traz `Set-Cookie`
 
 ### Requirement: Comando de emergência para gerar o link de redefinição de senha
 O binário do `apps/api` SHALL aceitar o comando `password-reset-link --email <e-mail>`, lido dos argumentos do processo antes de montar o host web. Com ele, o processo SHALL subir sem servidor HTTP, sem rotas e sem serviços em segundo plano, gerar o link e terminar. Em produção, roda por `docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --no-deps api password-reset-link --email <e-mail>`.

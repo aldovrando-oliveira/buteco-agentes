@@ -73,6 +73,7 @@ public static class IdentityIssuerServiceCollectionExtensions
 
         services.AddMemoryCache();
         services.AddSingleton<FederatedRefusalCookie>();
+        services.AddSingleton<FederatedInvitationPause>();
         var panelBase = Uri.TryCreate(configuration[$"{IdentityIssuerOptions.SectionName}:{nameof(IdentityIssuerOptions.PanelBaseUrl)}"], UriKind.Absolute, out var panel)
             ? panel
             : issuer;
@@ -192,6 +193,7 @@ public static class IdentityIssuerServiceCollectionExtensions
 
                 // A URI do retorno pela base do painel, e não pelo host da requisição (registro do apply).
                 client.AddEventHandler(FederatedRequestUriHandler.Descriptor);
+                client.AddEventHandler(FederatedMissingRegistrationHandler.Descriptor);
 
                 var web = client.UseWebProviders();
                 foreach (var provider in federated.Providers)

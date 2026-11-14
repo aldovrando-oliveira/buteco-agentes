@@ -50,6 +50,7 @@ public static partial class FederatedLoginEndpoints
         Anonymous(app.MapGet(FederatedLogin.CallbackPath, CallbackAsync));
         Anonymous(app.MapGet(FederatedLogin.ProvidersPath, ListForLogin));
         Anonymous(app.MapPost(FederatedLogin.RefusalPath, ReadRefusal));
+        Anonymous(app.MapPost(FederatedLogin.InvitationStartPath, StartInvitationAsync)).WithMetadata(new LoginRateLimiting.Marker());
         return app;
     }
 
@@ -147,24 +148,31 @@ public static partial class FederatedLoginEndpoints
             var error = Item(items, OpenIddictClientAspNetCoreConstants.Properties.Error)
                 ?? (provider is null && result.Succeeded ? "provedor_fora_da_configuracao" : "sem_detalhe");
             LogFailed(logger, key ?? "(desconhecido)", error);
-            return intent == FederatedLogin.Intents.Connect
-                ? AccountRefusal(FederatedLogin.Refusals.Failure, key)
-                : LoginRefusal(FederatedLogin.Refusals.Failure, key);
+            return FailureRefusal(intent, key);
         }
 
         var identity = ProviderIdentity.From(principal);
         if (identity is null)
         {
             LogFailed(logger, provider.Key, "sem_sub");
-            return intent == FederatedLogin.Intents.Connect
-                ? AccountRefusal(FederatedLogin.Refusals.Failure, provider.Key)
-                : LoginRefusal(FederatedLogin.Refusals.Failure, provider.Key);
+            return FailureRefusal(intent, provider.Key);
         }
 
-        return intent == FederatedLogin.Intents.Connect
-            ? await ConnectAsync(provider, identity, items, dbContext, timeProvider, logger, cancellationToken)
-            : await LoginAsync(httpContext, provider, identity, items, dbContext, refusal, timeProvider, logger, cancellationToken);
+        return intent switch
+        {
+            FederatedLogin.Intents.Connect => await ConnectAsync(provider, identity, items, dbContext, timeProvider, logger, cancellationToken),
+            FederatedLogin.Intents.Invitation => await InvitationAsync(httpContext, provider, identity, items, dbContext, refusal, timeProvider, logger, cancellationToken),
+            _ => await LoginAsync(httpContext, provider, identity, items, dbContext, refusal, timeProvider, logger, cancellationToken),
+        };
     }
+
+    /// <summary>A recusa <c>falha</c> volta para onde a intenção do state token começou; ilegível, ao login.</summary>
+    private static IResult FailureRefusal(string? intent, string? providerKey) => intent switch
+    {
+        FederatedLogin.Intents.Connect => AccountRefusal(FederatedLogin.Refusals.Failure, providerKey),
+        FederatedLogin.Intents.Invitation => InvitationRefusal(FederatedLogin.Refusals.Failure, providerKey),
+        _ => LoginRefusal(FederatedLogin.Refusals.Failure, providerKey),
+    };
 
     /// <summary>A decisão do login (spec <c>federated-login</c>, "Decisão do login no retorno"), na ordem.</summary>
     private static async Task<IResult> LoginAsync(
