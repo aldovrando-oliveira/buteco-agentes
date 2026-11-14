@@ -8750,11 +8750,21 @@ M3 Autenticação com Google                       acompanhamento #196
   24 #189  provedores federados e Google               ← #181 #184
   25 #274  aceite de convite pelo Google               ← #189   (fecha #276 e #277)
   26 #190  painel: login com provedor e recusas        ← #185 #189 #274
+  27 #279  painel: contas conectadas (Minha conta, Usuários, Identidade) ← #190
 M4 Autenticação corporativa                      acompanhamento #197
-  27 #191  provedor OIDC genérico                      ← #189
-  28 #192  aplicações federadas (troca de token)       ← #187 #191
-  29 #193  painel da M4                                ← #188 #190 #192
+  28 #191  provedor OIDC genérico                      ← #189
+  29 #192  aplicações federadas (troca de token)       ← #187 #191
+  30 #193  painel da M4                                ← #188 #190 #192 #279
 ```
+
+**Decisão do dono, 14/11/2026: archive antes do PR, inclusive em change de tela.** A validação visual e a
+conferência real são da homologação, depois do merge, e não seguram o archive nem o PR; alteração pedida na
+homologação vira change nova, por issue, e a change arquivada não é reaberta (`01`, convenção 23).
+
+*(Atualizada em 14/11/2026, pela `telas-login-google`: a M3 passou de 3 para 4 itens. A #190 foi dividida por
+decisão do dono, na revisão do design dela: a **#190** (a 190a) fica com o login pelo Google, as recusas no
+`/entrar` e o convite com provedor; a **#279** (a 190b) leva as telas das contas conectadas, Minha conta, Usuários
+e Identidade. A #193 passa a depender também da #279.)*
 
 *(Atualizada em 13/11/2026, pela `provedores-federados-google`: a M3 passou de 2 para 3 itens. A **#274**, o
 aceite de convite pelo Google, saiu da #189 numa change própria (decisão do dono, Q10 do design da #189), e
@@ -19270,3 +19280,66 @@ O detalhe está no `tasks.md` da change, 10.2 a 10.5 (as contas de teste A, com 
 ### Para as próximas
 
 - **A #190** (as telas da M3) recebe o contrato do D5 (as rotas, os motivos e o token na aba) e a lista do quadro `AceitarConvite` por estado; o dono desenha a entrega `m3` antes.
+
+## `telas-login-google` — Telas do login e do convite pelo Google (#190, a 190a)
+
+**Change proposta e implementada em 14/11/2026**, na branch `feat/190-telas-login-google`, num worktree próprio, a partir de `0f44c10` (merge do PR #278, a #274). M3 · 3 de 4 (a 4 de 4 é a #279, as contas conectadas). Só o `apps/frontend`; protótipo na versão `1794626941-64ac` (a 77) do projeto do Claude Design.
+
+- **Os botões no `/entrar`:** a lista vem de `GET /auth/federated/providers`, um botão por provedor de tipo conhecido (hoje só `google`); a lista falhando ou fora do formato esconde o bloco, sem aviso (Q5). O clique faz o `POST /auth/federated/{chave}/start` com o `retorno` conferido, mostra "Redirecionando para o Google…" sem "Cancelar" e navega ao `url`; o `503`, o `429` (amarelo) e a rede têm aviso próprio, e os dois `404` do início se separam pelo `title` exato (`START_404_TITLES`, uma constante, conferida contra o backend).
+- **A volta pela query:** `federado` e `segundoPasso` abrem o código ou o cadastro com o aviso verde; `convite=aceito` apaga `buteco.link.convite` antes do cadastro, com o aviso só do convite (Q12); o `segundoPasso` desconhecido cai no e-mail e senha. Os parâmetros saem do endereço por `replace`, e o `retorno` fica (Q4).
+- **As recusas no `/entrar`:** um aviso por motivo, com a cor, o título e o rótulo do botão ("Entrar com outra conta Google" nos três que pedem outra conta); o desconhecido sai como a falha. O `sem-acesso` lê o e-mail de `POST /auth/federated/refusal` uma vez por montagem (um `ref` contra o efeito duplo do `StrictMode`), **só quando a recusa gravada é a da query** (o motivo e, quando veio, o provedor; revisão do dono, no apply).
+- **O convite com provedor:** "Entre com uma conta Google", "Continuar com Google", a nota do e-mail e "ou crie uma senha". O clique **regrava** `buteco.link.convite` antes de navegar; o `404` do link inválido apaga a chave e vai ao cartão "Este link não vale mais". A volta da recusa consulta o link, mostra o aviso do motivo e apaga a chave; sem o token na aba, nenhum pedido e o cartão "Convite". Um novo clique esconde o aviso da recusa, e a resposta do início mostra só o seu (decisão do dono, no apply).
+- **O token:** nunca na URL, em log, no `localStorage` nem em cookie; a chave da #245, `buteco.link.convite` (Q2).
+- Capacidades: `panel-federated-login` (nova) e `panel-access-link-pages` (modificada).
+
+### Premissas e decisões do apply (convenção 9)
+
+O "O que o apply mudou" do design tem os 13 itens. Três paradas decididas pelo dono (14/11/2026):
+
+- **A 6.7 (a guarda do `StrictMode` no convite) é mutante equivalente.** No convite o hook só liga depois da consulta e não religa; a premissa do D3 foi corrigida, e a guarda segue provada pela 4.4.
+- **Os dois avisos juntos depois de um novo clique no convite**, achados pela sonda da 6.7: o clique passa a esconder o aviso da recusa, como no `/entrar` (a guarda 6.8).
+- **O e-mail de outra recusa:** o backend grava o `buteco-recusa` no `sem-acesso`, no `nao-conectada`, no `convite-pendente` e no `outro-email`; sem conferir o motivo, um cookie não lido emprestaria o e-mail a outro aviso dentro dos 120 s. O `readRefusalEmail()` devolve `{ motivo, provedor, email }`, e o hook confere (a guarda 4.8).
+
+Também: a chave do token no `01` estava escrita como `buteco.convite` (a entrada da #274, acima, ficou como foi escrita); o `01` agora diz `buteco.link.convite`.
+
+### O que a implementação mediu
+
+| suíte | baseline `0f44c10` (`190/baseline/`) | fechamento (`190/fechamento-r2/`) | veredito |
+|---|---|---|---|
+| `apps/frontend` | 2634/2634, 199 arquivos, 176 s, CPU mín. 58 | 2733/2733, 202 arquivos, 152 s, CPU mín. 65 | APROVADA |
+
+- Uma rodada antes da 4.8 (`190/fechamento/`): 2726/2726, CPU mín. 55, APROVADA.
+- **Comparação por nome:** nenhum caso da baseline saiu nem mudou de nome. Entraram 99, todos nos três arquivos novos: `federatedApi.test.ts` 20, `EntrarFederated.test.tsx` 40 e `ConviteFederated.test.tsx` 39. Os da lista do topo (`EntrarPage.test.tsx` e o ramo `convite` do `AccessLinkPage.test.tsx`, com a lista exata dos pedidos) aprovados.
+- **Os 18 guardas (19 mutações)**, pelo `guarda-190.sh`, cada um reprovando contra o defeito nomeado e o arquivo voltando com o sha igual (`~/.cache/buteco-agents/190-guardas/`): o tipo desconhecido com botão, a falha da lista como aviso, o início sem o `retorno`, o `segundoPasso` não removido, o token que sobra depois do aceite, os dois avisos verdes somados, a guarda do `StrictMode` retirada, o motivo desconhecido sem aviso, a limpeza sem o `retorno`, a rota do aviso em todo motivo, o e-mail sem conferir o motivo, a chave apagada antes da navegação, o token na URL e no log, o clique que não regrava a chave, todo `404` como link inválido, o token que sobra depois da recusa, a consulta sem o token, e os dois avisos somados no novo clique. A 6.7 ficou fora, como mutante equivalente.
+- **Lint e build:** sem aviso novo; o build tem o mesmo aviso de chunk acima de 500 kB da baseline (o `index` de 1.219,34 kB para 1.229,16 kB).
+- **Convenção 18** (só código, sem `openspec/` e `.md`), contra o D7 do design:
+
+  | | projetado | medido | diferença |
+  |---|---|---|---|
+  | produção | ~+965 | +742 / −19 | −23 % |
+  | testes (sem duplos) | ~+1.625 | +1.516 / −16 | −7 % |
+  | duplos | +120 | +37 | −69 % |
+  | casos | ~103 | 99 | −4 % |
+
+  Os duplos ficaram abaixo porque cada arquivo de teste tem o seu `respondByPath`; só os fakes divididos foram para `src/test/federatedFakes.ts`.
+
+### Homologação da M3: validação visual e conferência real (não prendem o PR)
+
+Pela regra geral (decisão do dono, 14/11/2026; `01`, convenção 23), a change foi arquivada antes do PR e a homologação vem depois do merge. O que ela pedir vira change nova, por issue; a `telas-login-google` não é reaberta.
+
+**Validação visual**, quadro a quadro contra a versão `1794626941-64ac` (a 77):
+
+- [ ] **10.1 `Main` (`entrega=m3`):** `inicio`; `redirecionando`; `recusa-sem-acesso` e `recusa-sem-acesso-sem-email`; `recusa-convite-pendente`; `recusa-nao-conectada`; `recusa-desativado`; `recusa-email-nao-verificado`; `recusa-dominio-nao-permitido`; `recusa-falha`; `recusa-desconhecida`; `google-indisponivel`; `google-nao-configurado`; `google-muitas-tentativas`; `google-falha-de-rede`; `google-outra-resposta`; `mfa-vindo-do-google`; `cadastro-vindo-do-google`; `cadastro-convite-aceito`;
+- [ ] **10.2 `LoginRecusado`:** os oito cartões (1, 1b, 2 a 7), com as cores e o rótulo do botão;
+- [ ] **10.3 `AceitarConvite` (`entrega=m3`):** `escolha`; `redirecionando`; `provedor-indisponivel`; `provedor-nao-configurado`; `provedor-muitas-tentativas`; `provedor-falha-de-rede`; `provedor-outra-resposta`; `recusa-outro-email`; `recusa-email-nao-verificado`; `recusa-em-uso`; `recusa-dominio-nao-permitido`; `recusa-falha`; `recusa-convite-invalido`; `recusa-sem-token-outro-email`; `recusa-sem-token-falha`;
+- [ ] **10.4 os dados na aba:** `buteco.link.convite` some depois do aceite (antes do cadastro) e de cada recusa; nenhum token na URL em nenhum momento.
+
+**Conferência com o Google real**, com o roteiro da #189 e da #274, agora pelo painel:
+
+- [ ] **10.5** o login de uma conta conectada pelo botão, em Chrome, Firefox e Safari (o `buteco-sessao` e o `buteco-recusa` indo nos `POST`);
+- [ ] **10.6** as recusas reais: `sem-acesso` (com o e-mail, e sem ele depois de recarregar), `nao-conectada`, `convite-pendente`, `falha`;
+- [ ] **10.7** o aceite pelo painel: o e-mail certo, outro e-mail (os dois e-mails e o aceite por senha em seguida), cancelar no Google, o convite cancelado no meio.
+
+### Para as próximas
+
+- **A #279** (a 190b) leva Minha conta (conectar e desconectar), Usuários e Identidade com as contas conectadas, e as Q3, Q8 a Q11 do design.

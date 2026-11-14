@@ -10,6 +10,8 @@ import { INFORME_O_CODIGO, MUITAS_TENTATIVAS, SENHA_SALVA_COM_CODIGO } from '../
 
 export type SecondFactorNotice =
   | { tipo: 'senha-salva' }
+  /** O aviso verde da volta do provedor (design.md da change telas-login-google, D1). */
+  | { tipo: 'confirmado'; texto: string }
   | { tipo: 'bloqueado'; minutos: number | null }
   | { tipo: 'muitas-tentativas' }
   | { tipo: 'erro'; texto: string }
@@ -65,6 +67,11 @@ export function SecondFactorForm({
         {notice?.tipo === 'senha-salva' && (
           <Alert color="green" role="status">
             {SENHA_SALVA_COM_CODIGO}
+          </Alert>
+        )}
+        {notice?.tipo === 'confirmado' && (
+          <Alert color="green" role="status">
+            {notice.texto}
           </Alert>
         )}
         {notice?.tipo === 'bloqueado' && (

@@ -1048,9 +1048,29 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     (aceite), sem e-mail, `sub`, token nem hash.
   - **A concorrência:** os dois `UPDATE` (senha e Google) disputam a mesma linha; no `READ COMMITTED` o
     segundo reavalia a condição e volta zero linhas. Sem vínculo órfão.
-  - **O token do convite na aba** (contrato da #190): `sessionStorage`, `buteco.convite`, apagado no aceite e
-    em toda recusa, nunca na URL.
+  - **O token do convite na aba** (contrato da #190): `sessionStorage`, `buteco.link.convite` (a chave da
+    #245), apagado no aceite e em toda recusa, nunca na URL.
   - **Sem senha:** a primeira vem do link de redefinição do Admin; o `password-reset-link` só serve Admin.
+- **As telas do login e do convite pelo Google** (#190, a 190a; design da change `telas-login-google`):
+  - **Os botões vêm da rota anônima** `GET /auth/federated/providers`: um botão por provedor de tipo que o
+    painel conhece (hoje só `google`); outro tipo não ganha botão. A lista falhando (rede, status, formato)
+    é a lista vazia: o bloco some, sem aviso. O clique faz o `POST …/start` (no `/entrar`, com o `retorno`
+    já conferido pelo `followableAuthorizeReturn`; no `/convite`, com o token no corpo) e navega ao `url`
+    pelo `authRuntime.assign`. O `503`, o `429` e a rede têm aviso próprio; os dois `404` do início se
+    separam **só pelo `title` exato** (`START_404_TITLES`, uma constante, conferida contra o backend no
+    `federatedApi.test.ts`): o do provedor fora da configuração recarrega a lista; o do link que deixou de
+    valer, no convite, apaga a chave e mostra o cartão do link inválido; outro `404` é a falha genérica.
+  - **A volta pela query, lida uma vez e limpa:** `federado` e `segundoPasso` abrem o código ou o cadastro
+    com o aviso verde; `convite=aceito` apaga `buteco.link.convite` antes do cadastro; `recusa` e `provedor`
+    dão o aviso do motivo (o desconhecido sai como a falha). Depois de lidos, a página troca o endereço
+    por `replace`, sem esses parâmetros e mantendo o `retorno`.
+  - **O aviso da recusa lê o e-mail uma vez:** só o `sem-acesso` (login) e o `outro-email` (convite) chamam
+    `POST /auth/federated/refusal`, de uso único; a promessa fica num `ref` contra o efeito duplo do
+    `StrictMode`. Sem o e-mail (o `404`, a rede, o recarregar), a variante sem ele.
+  - **O convite com provedor:** o clique **regrava** `buteco.link.convite` com o token antes de navegar (a
+    segunda tentativa depois de uma recusa funciona); a volta da recusa lê o token, consulta o link e apaga
+    a chave; sem o token na aba, nenhum pedido sai e a página mostra o cartão do motivo. Nenhum token vai em
+    URL ou log.
 - **O log do OpenIddict fica em `Warning`** (#277): a biblioteca grava o userinfo do provedor (`sub`, e-mail) e o
   pedido de token (com o `code_verifier`) em `Information`, e os tokens em `Trace`. O filtro está no
   `appsettings.json`, em todo ambiente; os testes capturam também as categorias `OpenIddict.*` e afirmam, fluxo
@@ -2420,6 +2440,13 @@ de propor algo nesta base:
       condição observável, não "quando fizer sentido" (convenção 22).
 
     **A forma curta: _o que não tem issue não existe depois do archive._**
+
+    **Archive antes do PR, inclusive em change de tela** (decisão do dono,
+    14/11/2026). Toda change é fechada (archive) antes de abrir o PR. A
+    validação visual (convenção 14) e a conferência real acontecem na
+    homologação, depois do merge, e não seguram nem o archive nem o PR. Se a
+    homologação pedir alteração, ela vira **change nova**, ligada à entrega
+    por uma issue, pela regra acima; a change arquivada nunca é reaberta.
 
 24. **A issue tem ciclo de vida, e ele é o que a 23 não diz.** A 23 fixou que
     toda change nasce de uma issue; ela para na criação. Esta diz quem move a
