@@ -6,11 +6,11 @@ A página Usuários do painel (`/users`): a lista de quem pode entrar, o convite
 ### Requirement: Página Usuários em /users
 `apps/frontend` SHALL prover a página `/users` dentro da casca, com a mesma exigência de sessão das outras rotas autenticadas, só para o papel Admin (guarda de rota de `panel-roles`). A página SHALL ter:
 - o título "Usuários";
-- o subtítulo "Quem pode entrar no painel. O acesso é só por convite.";
-- o cartão "Usuários" do quadro `Usuarios` (`entrega=m2`);
-- abaixo dele, os cartões "Acesso só por convite" e "Senha e recuperação", com os textos do quadro na versão `m2`:
-  - "Acesso só por convite": "Ninguém entra sem ter sido convidado aqui. Não existe cadastro aberto nem entrada automática.";
-  - "Senha e recuperação": "Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário. A verificação em 2 etapas é obrigatória para todos os papéis: cada pessoa cadastra o app autenticador no primeiro login.".
+- o subtítulo "Quem pode entrar no painel. Todo usuário existe no Buteco; os provedores federados são formas adicionais de provar quem ele é.";
+- o cartão "Usuários" do quadro `Usuarios` (`entrega=m3`);
+- abaixo dele, os cartões "Acesso só por convite" e "Senha e recuperação", com os textos do quadro na versão `m3`:
+  - "Acesso só por convite": "Ninguém entra sem ter sido convidado aqui, mesmo autenticado pelo Google. Não existe entrada automática por domínio.";
+  - "Senha e recuperação": "Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário; quem entra só pelo Google recebe o mesmo link para criar uma. A verificação em 2 etapas é obrigatória para todos os papéis, inclusive para quem entra pelo Google: o Buteco pede o próprio código.".
 
 O cartão "Usuários" SHALL ler `GET /users` e SHALL mostrar:
 - "Carregando os usuários…" (`role="status"`) enquanto espera;
@@ -32,7 +32,8 @@ O cartão "Usuários" SHALL ler `GET /users` e SHALL mostrar:
 
 #### Scenario: O cartão de senha e recuperação
 - **WHEN** a página de Usuários aparece
-- **THEN** o cartão "Senha e recuperação" mostra "Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário. A verificação em 2 etapas é obrigatória para todos os papéis: cada pessoa cadastra o app autenticador no primeiro login.", e não contém "ligada por cada pessoa"
+- **THEN** o cartão "Senha e recuperação" mostra "Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário; quem entra só pelo Google recebe o mesmo link para criar uma. A verificação em 2 etapas é obrigatória para todos os papéis, inclusive para quem entra pelo Google: o Buteco pede o próprio código.", e não contém "ligada por cada pessoa" nem "feita no próprio provedor"
+- **AND** o subtítulo é "Quem pode entrar no painel. Todo usuário existe no Buteco; os provedores federados são formas adicionais de provar quem ele é.", e o cartão "Acesso só por convite" mostra "Ninguém entra sem ter sido convidado aqui, mesmo autenticado pelo Google. Não existe entrada automática por domínio."
 
 #### Scenario: Admin rebaixado recebe 403
 - **WHEN** a sessão ainda traz `role` `admin`, e o `GET /users` responde `403`
@@ -44,7 +45,7 @@ A tabela SHALL ter as colunas Usuário, Formas de entrada, Papel, Verificação 
 | coluna | o que mostra |
 |---|---|
 | Usuário | o `nome` em negrito e, abaixo, o `email` em fonte monoespaçada |
-| Formas de entrada | um chip "Senha" para cada `senha` em `formasDeEntrada`; "—" quando a lista é vazia; um chip neutro com o valor cru para qualquer outro valor |
+| Formas de entrada | um chip "Senha" para cada `senha` em `formasDeEntrada`, e um chip "Google" para cada `google`, os dois no mesmo tom; "—" quando a lista é vazia; um chip neutro, em contorno, com o valor cru para qualquer outro valor |
 | Papel | o rótulo do `papel` (`panel-roles`): "Admin", "Operador" ou "Leitor", também no convidado; "—" para valor desconhecido |
 | Verificação em 2 etapas | "Ativa" (verde) com `duasEtapas: true`; "Não configurada" (amarelo) com `false`; "—" (neutro) para o convidado |
 | Estado | ver a tabela abaixo |
@@ -94,6 +95,14 @@ A coluna Estado SHALL mostrar:
 #### Scenario: A ordem é a da resposta
 - **WHEN** a lista traz "Bruno" antes de "Ana"
 - **THEN** a tabela mostra "Bruno" na primeira linha
+
+#### Scenario: O chip Google no tom da Senha
+- **WHEN** a lista traz um ativo com `formasDeEntrada: ["senha", "google"]`
+- **THEN** a linha mostra os chips "Senha" e "Google", no mesmo tom, e nenhum chip "google"
+
+#### Scenario: Outro tipo de provedor continua neutro
+- **WHEN** a lista traz um ativo com `formasDeEntrada: ["keycloak"]`
+- **THEN** a linha mostra o chip neutro, em contorno, "keycloak"
 
 ### Requirement: Ações da linha sem destino inexistente
 A coluna Ações SHALL mostrar, na linha do convidado, "Gerar novo link" e "Cancelar convite", com `aria-label` "Gerar novo link para {nome}" e "Cancelar convite de {nome}".
@@ -230,19 +239,28 @@ O envio SHALL chamar `POST /users/{id}/invitation/renew` com `{ senha }`.
 - **THEN** o cartão mostra "O convite de Joana Prado já foi aceito, então não há o que cancelar. A lista foi atualizada.", e o `GET /users` é chamado de novo
 
 ### Requirement: Senha de quem chama
-Os formulários de convite e de novo link SHALL ter o campo "Sua senha", com:
-- `autocomplete="current-password"`;
-- a ajuda do quadro: "Para convidar alguém, confirme que é você." ou "Para gerar um link, confirme que é você.";
-- o componente `PasswordField`.
+Os formulários de convite e de novo link SHALL ter o campo da confirmação de quem chama. Esta é a regra de todos os formulários que confirmam quem chama: o convite e o novo link (aqui), a redefinição de senha e a promoção a Admin (`panel-user-detail-page`), a nova aplicação e o novo segredo (`panel-external-applications`) e o conectar (`panel-federated-accounts`).
+
+**O modo** SHALL vir de `GET /account` (a mesma consulta de Minha conta): **código** só quando a resposta chegou e `formasDeEntrada` não tem `"senha"`; **senha** em qualquer outro caso, inclusive com a consulta pendente ou em erro.
+
+| | modo senha | modo código |
+|---|---|---|
+| rótulo | "Sua senha" | "Código do app autenticador" |
+| entrada | o `PasswordField`, `autocomplete="current-password"` | texto, `inputmode="numeric"`, `autocomplete="one-time-code"` |
+| ajuda | a do formulário: "Para convidar alguém, confirme que é você." ou "Para gerar um link, confirme que é você." | "Você entra só pelo Google: confirme com o código de 6 dígitos do app. O código de recuperação não vale aqui." |
+| vazio | "Informe a sua senha." | "Informe o código." |
+| corpo | `senha` | `codigo` |
+
+O corpo SHALL levar só o campo do modo: `senha` no modo senha, `codigo` no modo código, nunca os dois. **No modo senha, um `401` com o `title` "Código inválido."** (a conta não carregou, e quem chama não tem senha) SHALL reler `GET /account`; com a resposta, o campo SHALL passar ao modo código. **A troca de modo SHALL chegar limpa:** o campo do código SHALL aparecer vazio e sem erro, com a ajuda do modo código; o "Código inválido." da tentativa com a senha não fica no campo do código, porque a pessoa digitou uma senha.
 
 | caso | a tela |
 |---|---|
-| campo vazio no envio | "Informe a sua senha." no campo, com `aria-invalid`, sem chamar a rota |
-| `401` | o `title` da resposta ("Senha inválida.") no campo, com `aria-invalid`. A pessoa SHALL continuar na página, com a sessão intacta, e a rota SHALL ter sido chamada uma vez só |
+| campo vazio no envio | o texto do vazio do modo no campo, com `aria-invalid`, sem chamar a rota |
+| `401` | o `title` da resposta ("Senha inválida." ou "Código inválido.") no campo, com `aria-invalid`. A pessoa SHALL continuar na página, com a sessão intacta, e a rota SHALL ter sido chamada uma vez só |
 | `423` | acima do campo, o aviso amarelo "Muitas tentativas sem sucesso. Por segurança, a sua conta fica pausada por N minutos.", com N do `Retry-After` arredondado para cima ("alguns minutos" sem o cabeçalho legível), e o botão de envio desabilitado até passar o `Retry-After` |
 | `429`, `503`, rede | o aviso de falha do formulário, com os textos do `/entrar`, e o botão desabilitado até o `Retry-After` quando houver |
 
-A senha SHALL ficar só no estado do formulário. Ela SHALL ser apagada ao fechar o formulário, no sucesso, depois do `401` e ao sair da página.
+A senha ou o código SHALL ficar só no estado do formulário, e SHALL ser apagado ao fechar o formulário, no sucesso, depois do `401` e ao sair da página.
 
 #### Scenario: Senha vazia não é enviada
 - **WHEN** a pessoa aciona "Gerar convite" com "Sua senha" vazia
@@ -256,6 +274,34 @@ A senha SHALL ficar só no estado do formulário. Ela SHALL ser apagada ao fecha
 #### Scenario: Conta pausada
 - **WHEN** `POST /users/{id}/invitation/renew` responde `423` com `Retry-After: 300`
 - **THEN** o formulário mostra "Muitas tentativas sem sucesso. Por segurança, a sua conta fica pausada por 5 minutos.", e "Gerar novo link" fica desabilitado até passarem 300 s
+
+#### Scenario: Sem senha, o campo é o do código
+- **WHEN** `GET /account` traz `formasDeEntrada: ["google"]`, e o Admin abre o formulário de convite
+- **THEN** o campo é "Código do app autenticador", com `autocomplete="one-time-code"` e a ajuda "Você entra só pelo Google: confirme com o código de 6 dígitos do app. O código de recuperação não vale aqui."
+
+#### Scenario: O código vai como codigo, sem a senha
+- **WHEN** o Admin sem senha preenche o convite, digita `123456` e aciona "Gerar convite"
+- **THEN** o corpo do `POST /users/invitations` tem `codigo: "123456"` e não tem `senha`
+
+#### Scenario: Código errado fica no campo
+- **WHEN** no modo código, `POST /users/invitations` responde `401` com `title` "Código inválido."
+- **THEN** o campo mostra "Código inválido.", com `aria-invalid="true"`, e fica vazio
+
+#### Scenario: Código vazio não é enviado
+- **WHEN** no modo código, o Admin aciona "Gerar convite" com o campo vazio
+- **THEN** o campo mostra "Informe o código.", e nenhuma chamada a `POST /users/invitations` acontece
+
+#### Scenario: Com a conta em erro, o modo é a senha
+- **WHEN** `GET /account` falha por rede, e o Admin abre o formulário de convite
+- **THEN** o campo é "Sua senha"
+
+#### Scenario: O código inválido no modo senha relê a conta
+- **WHEN** `GET /account` falhou, o Admin envia "Sua senha", `POST /users/invitations` responde `401` "Código inválido.", e a releitura de `GET /account` traz `formasDeEntrada: ["google"]`
+- **THEN** `GET /account` foi chamado de novo, e o campo passa a "Código do app autenticador"
+
+#### Scenario: A troca para o código chega limpa
+- **WHEN** `GET /account` falhou, o Admin envia "Sua senha", `POST /users/invitations` responde `401` "Código inválido.", e a releitura de `GET /account` traz `formasDeEntrada: ["google"]`
+- **THEN** o campo "Código do app autenticador" está vazio, sem `aria-invalid` e sem "Código inválido.", com a ajuda "Você entra só pelo Google: confirme com o código de 6 dígitos do app. O código de recuperação não vale aqui."
 
 ### Requirement: Link de convite mostrado uma vez e só na memória da tela
 O painel do link SHALL mostrar:

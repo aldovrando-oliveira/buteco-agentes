@@ -1,5 +1,6 @@
 import { sessionFetch } from '../../../auth/session';
 import { retryAfterSeconds } from '../../../auth/transient';
+import type { CallerConfirmation } from '../../users/api/usersApi';
 import type {
   AgentApplication,
   AgentApplicationsCount,
@@ -124,7 +125,7 @@ export interface ApplicationInput {
 }
 
 export function createApplication(
-  input: ApplicationInput & { senha: string },
+  input: ApplicationInput & CallerConfirmation,
 ): Promise<CreatedApplication> {
   return send<CreatedApplication>('POST', '/applications/', input);
 }
@@ -141,8 +142,15 @@ export function activateApplication(id: string): Promise<ApplicationDetail> {
   return send<ApplicationDetail>('POST', `/applications/${encodeURIComponent(id)}/activate`);
 }
 
-export function generateSecret(id: string, senha: string): Promise<CreatedSecret> {
-  return send<CreatedSecret>('POST', `/applications/${encodeURIComponent(id)}/secrets`, { senha });
+export function generateSecret(
+  id: string,
+  confirmacao: CallerConfirmation,
+): Promise<CreatedSecret> {
+  return send<CreatedSecret>(
+    'POST',
+    `/applications/${encodeURIComponent(id)}/secrets`,
+    confirmacao,
+  );
 }
 
 export function revokeSecret(id: string, secretId: string): Promise<ApplicationDetail> {

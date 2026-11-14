@@ -13,6 +13,7 @@ import {
 import {
   activateUser,
   deactivateUser,
+  disconnectUserFederated,
   getUser,
   resetTwoFactor,
   revokeUserSessions,
@@ -22,11 +23,22 @@ import {
 import { USERS_QUERY_KEY, userQueryKey } from '../queryKeys';
 import { detailRetry, is404 } from '../detailRetry';
 import { stateBadge } from '../usersTexts';
-import { confirmDeactivate, detailSubtitle, endedSessions, reactivated } from '../userDetailTexts';
+import {
+  confirmDeactivate,
+  detailSubtitle,
+  endedSessions,
+  googleDisconnected,
+  reactivated,
+  USUARIO_NAO_ENCONTRADO,
+} from '../userDetailTexts';
 import { ConfirmBar } from '../components/ConfirmBar';
 import { Selo } from '../components/Selo';
 import { UserDataCard } from '../components/UserDataCard';
-import { SignInFormsCard, type ResetState } from '../components/SignInFormsCard';
+import {
+  SignInFormsCard,
+  type DisconnectState,
+  type ResetState,
+} from '../components/SignInFormsCard';
 import { UserTwoFactorCard } from '../components/UserTwoFactorCard';
 import { UserSessionsCard } from '../components/UserSessionsCard';
 import { AccessDenied } from '../../../components/feedback/AccessDenied';
@@ -43,9 +55,13 @@ type Acao =
   | { tipo: 'redefinir-senha' }
   | { tipo: 'link'; acesso: AccessLink }
   | { tipo: 'redefinir-2fa' }
-  | { tipo: 'encerrar-sessoes' };
+  | { tipo: 'encerrar-sessoes' }
+  // O desconectar pelo Admin, na linha da conta (change telas-contas-federadas, D5): a confirmação, e
+  // o `409` da última forma, que fica na mesma linha até "Fechar" ou outra ação.
+  | { tipo: 'desconectar'; chave: string }
+  | { tipo: 'desconectar-409'; chave: string };
 
-type Sucesso = { onde: 'pagina' | 'sessoes'; texto: string } | null;
+type Sucesso = { onde: 'pagina' | 'sessoes' | 'formas'; texto: string } | null;
 
 export function UserDetailPage() {
   const id = useParams().id ?? '';
@@ -67,11 +83,14 @@ function UserDetail({ id }: { id: string }) {
   const [acao, setAcao] = useState<Acao>({ tipo: 'nenhuma' });
   const [sucesso, setSucesso] = useState<Sucesso>(null);
   const [falha, setFalha] = useState<FailureNotice | null>(null);
+  /** A falha do desconectar, no cartão Formas de entrada (D5). */
+  const [falhaFormas, setFalhaFormas] = useState<FailureNotice | null>(null);
   const [enviando, setEnviando] = useState(false);
 
   const abrir = (proxima: Acao) => {
     setSucesso(null);
     setFalha(null);
+    setFalhaFormas(null);
     setAcao(proxima);
   };
   const reler = () => queryClient.invalidateQueries({ queryKey: userQueryKey(id), exact: true });
@@ -200,6 +219,43 @@ function UserDetail({ id }: { id: string }) {
       },
     );
 
+  const desconexao: DisconnectState =
+    acao.tipo === 'desconectar'
+      ? { chave: acao.chave, fase: 'confirmar' }
+      : acao.tipo === 'desconectar-409'
+        ? { chave: acao.chave, fase: '409' }
+        : null;
+
+  /**
+   * `DELETE /users/{id}/federated/{chave}`. O backend troca o stamp da pessoa e encerra as sessões
+   * dela: a releitura traz as sessões em zero. Os dois `404` se separam pelo `title`: o do usuário
+   * leva a "inexistente" pela releitura; o da conta fica no aviso do cartão.
+   */
+  const desconectar = async (chave: string) => {
+    setFalhaFormas(null);
+    setEnviando(true);
+    try {
+      await disconnectUserFederated(user.id, chave);
+      setAcao({ tipo: 'nenhuma' });
+      setSucesso({ onde: 'formas', texto: googleDisconnected(user.nome) });
+      await reler();
+      void relerLista();
+    } catch (error) {
+      if (isApiFailure(error) && error.status === 409) {
+        setAcao({ tipo: 'desconectar-409', chave });
+        await reler();
+      } else if (isApiFailure(error) && error.status === 404) {
+        setAcao({ tipo: 'nenhuma' });
+        if (error.title !== USUARIO_NAO_ENCONTRADO) setFalhaFormas(failureNotice(error));
+        await reler();
+      } else {
+        setFalhaFormas(failureNotice(error));
+      }
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const encerrarSessoes = () =>
     executar(
       () => revokeUserSessions(user.id),
@@ -306,6 +362,13 @@ function UserDetail({ id }: { id: string }) {
           setAcao({ tipo: 'nenhuma' });
           void reler();
         }}
+        desconexao={desconexao}
+        desconectando={enviando && acao.tipo === 'desconectar'}
+        avisoDesconexao={
+          sucesso?.onde === 'formas' ? { cor: 'green', texto: sucesso.texto } : falhaFormas
+        }
+        onAskDisconnect={(chave) => abrir({ tipo: 'desconectar', chave })}
+        onConfirmDisconnect={(chave) => void desconectar(chave)}
       />
 
       <UserTwoFactorCard

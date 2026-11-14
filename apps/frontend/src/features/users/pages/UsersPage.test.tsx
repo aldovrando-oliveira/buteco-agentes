@@ -26,15 +26,20 @@ describe('UsersPage', () => {
     renderUsers();
 
     expect(screen.getByRole('heading', { name: 'Usuários', level: 2 })).toBeInTheDocument();
-    expect(screen.getByText('Quem pode entrar no painel. O acesso é só por convite.')).toBeInTheDocument();
-    expect(screen.getByText('Acesso só por convite')).toBeInTheDocument();
-    expect(screen.getByText('Senha e recuperação')).toBeInTheDocument();
-    // O texto do `m2` (change papeis-no-painel; caso que muda de asserção, listado no tasks.md).
+    // Os textos da M3 (lista do topo da change telas-contas-federadas, Q5 e D7).
     expect(
       screen.getByText(
-        'Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário. A verificação em 2 etapas é obrigatória para todos os papéis: cada pessoa cadastra o app autenticador no primeiro login.',
+        'Quem pode entrar no painel. Todo usuário existe no Buteco; os provedores federados são formas adicionais de provar quem ele é.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('Acesso só por convite')).toBeInTheDocument();
+    expect(screen.getByText('Senha e recuperação')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Esqueceu a senha: um Admin gera um link de redefinição em Editar usuário; quem entra só pelo Google recebe o mesmo link para criar uma. A verificação em 2 etapas é obrigatória para todos os papéis, inclusive para quem entra pelo Google: o Buteco pede o próprio código.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/feita no próprio provedor/)).not.toBeInTheDocument();
     expect(screen.queryByText(/ligada por cada pessoa/)).not.toBeInTheDocument();
     expect(await screen.findByText('Ana Souza')).toBeInTheDocument();
   });
@@ -313,3 +318,29 @@ describe('UsersPage', () => {
     });
   });
 });
+
+// O chip "Google" (spec `panel-users-page`, "Colunas da lista de Usuários"; change telas-contas-federadas,
+// D7; quadro `Usuarios`, `entrega=m3`, versão 81).
+describe('Formas de entrada na lista', () => {
+  it('O chip Google no tom da Senha', async () => {
+    fakeUsersApi({ 'GET /users': { status: 200, body: [{ ...ATIVO, formasDeEntrada: ['senha', 'google'] }] } });
+    renderUsers();
+
+    await screen.findByText('Ana Souza');
+    const senha = within(linha('Ana Souza')).getByText('Senha');
+    const google = within(linha('Ana Souza')).getByText('Google');
+    expect(within(linha('Ana Souza')).queryByText('google')).not.toBeInTheDocument();
+    const variante = (el: HTMLElement) => el.closest('[data-variant]')?.getAttribute('data-variant');
+    expect(variante(google)).toBe(variante(senha));
+  });
+
+  it('Outro tipo de provedor continua neutro', async () => {
+    fakeUsersApi({ 'GET /users': { status: 200, body: [{ ...ATIVO, formasDeEntrada: ['keycloak'] }] } });
+    renderUsers();
+
+    await screen.findByText('Ana Souza');
+    const chip = within(linha('Ana Souza')).getByText('keycloak');
+    expect(chip.closest('[data-variant]')).toHaveAttribute('data-variant', 'outline');
+  });
+});
+

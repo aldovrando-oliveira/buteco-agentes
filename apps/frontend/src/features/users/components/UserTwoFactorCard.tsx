@@ -33,11 +33,11 @@ export function UserTwoFactorCard({
   onCancel,
 }: UserTwoFactorCardProps) {
   const ativa = user.duasEtapas;
+  // Um texto só para os dois estados na M3 (quadro `UsuarioDetalhe`, `entrega=m3`; change
+  // telas-contas-federadas, D5): quem entra pelo Google também confirma com o código do Buteco.
   const texto = proprio
     ? 'Para trocar de celular, peça a outro Admin que redefina a sua verificação.'
-    : ativa
-      ? 'Use Redefinir se a pessoa perdeu ou trocou o celular e os códigos de recuperação.'
-      : 'A pessoa cadastra a verificação no próximo login.';
+    : 'Obrigatória para todos os papéis, inclusive para quem entra pelo Google: o Buteco pede o próprio código.';
 
   return (
     <SectionedCard title="Verificação em 2 etapas">

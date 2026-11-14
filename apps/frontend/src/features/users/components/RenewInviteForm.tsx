@@ -21,7 +21,7 @@ export function RenewInviteForm({ user, onRenewed, onGone, onClose }: RenewInvit
 
   const enviar = async () => {
     const result = await senha.enviar(
-      (s) => renewInvitation(user.id, s),
+      (c) => renewInvitation(user.id, c),
       (error) => {
         if (!isApiFailure(error)) return false;
         if (error.status === 409) onGone('aceito');

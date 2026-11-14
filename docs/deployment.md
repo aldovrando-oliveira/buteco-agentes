@@ -449,6 +449,21 @@ cliente real, agora pelo painel, no `tasks.md` da change `telas-login-google` (1
 
 **Voltar atrás:** a imagem anterior do `frontend`. As rotas continuam no `api`; só os botões somem.
 
+#### Telas das contas conectadas (#279)
+
+**O que muda:** Minha conta ganha o cartão "Formas de entrada" (conectar e desconectar o Google); Editar
+usuário mostra as contas conectadas, e o Admin pode desconectar a de outra pessoa; Identidade lista os
+provedores federados; e quem não tem senha confirma as ações sensíveis com o código do app autenticador.
+
+**Deploy:** só a imagem do `frontend`. Sem variável nova; as rotas são da #189 e da #274.
+
+**Conferir:** o roteiro com o Google real, pelo painel, no `tasks.md` da change `telas-contas-federadas`
+(14.6 a 14.8). A falha do conectar que ainda volta ao `/entrar` (sem provedor na volta, ou o state sem a intenção) é a
+#281, do `api`.
+
+**Voltar atrás:** a imagem anterior do `frontend`. As contas conectadas continuam no banco, e o login pelo
+Google continua funcionando; só as telas somem.
+
 ### Aplicações externas com credencial do Buteco (#186)
 
 **O que muda:**

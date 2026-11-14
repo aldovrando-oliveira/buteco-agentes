@@ -50,3 +50,13 @@ export function nextStepText(chave: SigningKey, timeZone?: string): string {
       return '—';
   }
 }
+
+/** "Usado para" do provedor federado: `login` é o login de usuários; outro valor sai cru, neutro (convenção 13). */
+export function usageLabel(uso: string): { texto: string; conhecido: boolean } {
+  return uso === 'login' ? { texto: 'Login de usuários', conhecido: true } : { texto: uso, conhecido: false };
+}
+
+/** A coluna Vínculos: "1 usuário" no singular, "<n> usuários" no resto, inclusive 0 (Q8). */
+export function linkCount(vinculos: number): string {
+  return vinculos === 1 ? '1 usuário' : `${vinculos} usuários`;
+}

@@ -8751,6 +8751,7 @@ M3 Autenticação com Google                       acompanhamento #196
   25 #274  aceite de convite pelo Google               ← #189   (fecha #276 e #277)
   26 #190  painel: login com provedor e recusas        ← #185 #189 #274
   27 #279  painel: contas conectadas (Minha conta, Usuários, Identidade) ← #190
+     #281  a falha do conectar volta ao /entrar (api; em aberto, não bloqueia)
 M4 Autenticação corporativa                      acompanhamento #197
   28 #191  provedor OIDC genérico                      ← #189
   29 #192  aplicações federadas (troca de token)       ← #187 #191
@@ -8760,6 +8761,11 @@ M4 Autenticação corporativa                      acompanhamento #197
 **Decisão do dono, 14/11/2026: archive antes do PR, inclusive em change de tela.** A validação visual e a
 conferência real são da homologação, depois do merge, e não seguram o archive nem o PR; alteração pedida na
 homologação vira change nova, por issue, e a change arquivada não é reaberta (`01`, convenção 23).
+
+*(Atualizada em 14/11/2026, pela `telas-contas-federadas`: a **#281** entrou na M3, em aberto e sem número na
+ordem. É um bug do `apps/api` achado no design da #279 (Q10): sem provedor configurado na volta, ou com o state sem a
+intenção, a falha do conectar responde `302 /entrar?recusa=falha` (`FederatedLoginEndpoints.cs`, l. 133–137 e
+l. 170–175), e não `/account?recusa=falha`. Não bloqueia a #279, que trata a volta em `/account`.)*
 
 *(Atualizada em 14/11/2026, pela `telas-login-google`: a M3 passou de 3 para 4 itens. A #190 foi dividida por
 decisão do dono, na revisão do design dela: a **#190** (a 190a) fica com o login pelo Google, as recusas no
@@ -19343,3 +19349,69 @@ Pela regra geral (decisão do dono, 14/11/2026; `01`, convenção 23), a change 
 ### Para as próximas
 
 - **A #279** (a 190b) leva Minha conta (conectar e desconectar), Usuários e Identidade com as contas conectadas, e as Q3, Q8 a Q11 do design.
+
+## `telas-contas-federadas` — Telas das contas conectadas (#279, a 190b)
+
+**Change proposta e implementada em 14/11/2026**, na branch `feat/279-telas-contas-federadas`, num worktree próprio, a partir de `9ec078c` (merge do PR #280, a #190). M3 · 4 de 4. Só o `apps/frontend`; protótipo na versão `1794678488-1a7d` (a 82) do projeto do Claude Design, quadros `MinhaConta`, `UsuarioDetalhe`, `Usuarios` e `Provedores` com `entrega=m3`.
+
+- **A confirmação de quem chama com o código:** o `useCallerPassword` lê `GET /account` e tem modo; sem `"senha"` em `formasDeEntrada`, o campo é "Código do app autenticador" (`one-time-code`, numérico, a ajuda do código) nos seis formulários (convite, novo link, redefinição, promoção a Admin, criar aplicação, gerar segredo) e no conectar. Pendente ou em erro, o modo é a senha (Q2). O corpo leva só `senha` ou só `codigo`. No modo senha, o `401` "Código inválido." relê a conta, e o campo passa ao código **vazio e sem erro** (decisão do dono no fechamento).
+- **Minha conta, "Formas de entrada":** a linha Senha ("Trocar senha" só no cartão Senha, Q7), as contas conectadas (e-mail, "Conectada em", "Último uso", "Desconectar"), os provedores sem conta com "Conectar Google", o vínculo fora da configuração com o selo e "Sem ação", e o tipo desconhecido cru. A última forma não sai ("Desconectar" desabilitado e o `409` na linha). O cartão aparece com provedor, conta, aviso ou o formulário do conectar aberto.
+- **Conectar:** a confirmação na linha, o `POST /account/federated/{chave}/connect`, "Redirecionando para o Google…" e a navegação ao `url`; o `401` no campo, o `404` "Provedor não configurado." relendo a lista, o `423` e o `503` no formulário.
+- **A volta em `/account`:** `conectado` dá o aviso verde; `recusa` dá o aviso do motivo (`em-uso`, `ja-conectado`, `sessao-expirada` com o texto da Q3, `dominio-nao-permitido`, `falha`; o desconhecido sai como a falha). Os parâmetros saem por `replace`, com o `state` mantido; a rota do aviso não é chamada.
+- **Desconectar:** a própria conta em Minha conta (a sessão continua, "Conta Google desconectada.", Q4); o Admin, em Editar usuário, com a confirmação e o `409` na célula de Ações da linha (versão 81); o próprio vê "Desconectar em Minha conta". A sessão de quem o Admin desconectou acaba na próxima renovação, pelo `invalid_grant` (D6, sem código novo).
+- **Usuários e Identidade:** os textos da M3; o chip "Google" no tom da "Senha"; o cartão "Provedores federados" (`GET /identity/federated-providers`, o `nome` e a `chave` em mono, "1 usuário" / "`<n>` usuários", Q8 e Q9), cujo erro não derruba o emissor.
+- Capacidades: `panel-federated-accounts` (nova); `panel-account-page`, `panel-users-page`, `panel-user-detail-page`, `panel-external-applications` e `panel-identity-page` (modificadas).
+
+### Premissas e decisões do apply (convenção 9)
+
+O "O que o apply mudou" do design tem os 10 itens. Decisões do dono:
+
+- **Na aprovação das specs:** o aviso da volta ou do desconectar segura o cartão (o guarda 3.5); o `409` do Admin na linha (a versão 81).
+- **No fechamento:** aceitos os 4 casos de API com o arranjo novo (as funções passaram a receber `{ senha }` ou `{ codigo }`; a chamada mudou, o corpo esperado não), a linha reindentada do `callerPassword.ts` e os itens do "O que o apply mudou". Duas correções: **a troca de modo chega limpa** (o cenário "A troca para o código chega limpa" e o guarda 2.9; o caso da 2.6 perdeu a asserção do erro herdado, que a decisão inverte); e **a verificação do próprio em Editar usuário fica com o texto de hoje** ("Para trocar de celular, peça a outro Admin que redefina a sua verificação."), com o quadro corrigido na versão 82.
+- **Premissa falsa registrada:** nenhum caso dos seis formulários conferia a lista exata dos pedidos; os casos novos de corpo exato ficaram no `callerPassword.test.tsx`.
+- **A #281** (bug, `app: api`, M3, ligada à #196): a falha do conectar sem provedor na volta, ou com o state sem a intenção, ainda volta ao `/entrar` (Q10). Em aberto, não bloqueia.
+
+### O que a implementação mediu
+
+| suíte | baseline `9ec078c` (`279/baseline/`) | fechamento (`279/fechamento-2/`) | veredito |
+|---|---|---|---|
+| `apps/frontend` | 2733/2733, 202 arquivos, 264 s, CPU mín. 41 | 2818/2818, 207 arquivos, 217 s, CPU mín. 34 | APROVADA |
+
+- Uma rodada antes das correções do fechamento (`279/fechamento/`): 2817/2817, 207 arquivos, 188 s, CPU mín. 39, APROVADA.
+- **Comparação por nome:** nenhum caso da baseline saiu nem mudou de nome; os 7 da lista do topo (os textos da M3) e os 4 de arranjo aprovados; o caso do rebaixamento de si mesmo (`UserDataCard.test.tsx`) passou sem mudança. Entraram 85: `AccountSignInFormsCard.test.tsx` 25, `callerPassword.test.tsx` 14, `federatedReturn.test.tsx` 11, `SignInFormsCard.test.tsx` 11, `IdentityPage.test.tsx` 9, `accountApi.test.ts` 5, `usersApi.test.ts` 4, `UsersPage.test.tsx` 2, e 1 em `AccountPasswordCard.test.tsx`, `AccountPage.test.tsx`, `federatedDisconnectSession.test.tsx` e `identityApi.test.ts`.
+- Duas linhas de um `it.each` do `accountApi.test.ts` têm o mesmo título: por nome distinto são 84.
+- **Os 15 guardas**, pelo `guarda-279.sh`, cada um reprovando contra o defeito nomeado e o arquivo voltando com o sha igual (`~/.cache/buteco-agents/279-guardas/`): a releitura no `401` "Código inválido." (2.6, rodada de novo depois da correção); o modo código mandando `{ senha }` e os dois campos (2.7 e 2.8, nos seis formulários); o erro herdado na troca de modo (2.9); o vínculo indisponível contando como forma; "Desconectar" habilitado com uma forma só; a visibilidade do cartão ignorando o aviso; o conectar no modo código mandando `{ senha }`; os parâmetros da volta não limpos; a limpeza perdendo o `state`; o motivo desconhecido sem aviso; "Trocar senha" para quem não tem senha; "Desconectar" na própria linha do Admin; o erro dos provedores derrubando o emissor; o plural no 1.
+- **Lint e build:** sem aviso novo; o build tem o mesmo aviso de chunk acima de 500 kB da baseline (o `index` de 1.229,16 kB para 1.244,06 kB).
+- **Convenção 18** (só `apps/frontend/src`), contra o D10 do design:
+
+  | | projetado | medido | diferença |
+  |---|---|---|---|
+  | produção | ~+1.055 | +1.158 / −83 (26 arquivos; 946 de lógica, 152 de comentário, 60 em branco) | +10 % |
+  | testes (sem duplos) | ~+2.000 | +1.397 / −19 (15 arquivos) | −30 % |
+  | duplos | +100 | +79 / −1 (3 arquivos) | −21 % |
+  | casos | ~127 | 85 | −33 % |
+
+  O custo por caso acertou (~16 linhas); o erro está na contagem: a projeção contou mais casos por componente do que os cenários pediram (Identidade 15 → 10, API 14 → 10). A produção ficou perto da âncora da #190 e longe do +67 % da #188.
+
+### Homologação da M3: validação visual e conferência real (não prendem o PR)
+
+Pela regra geral (decisão do dono, 14/11/2026; `01`, convenção 23), a change foi arquivada antes do PR e a homologação vem depois do merge. O que ela pedir vira change nova, por issue, ligada à #196; a `telas-contas-federadas` não é reaberta.
+
+**Validação visual**, quadro e estado contra a versão `1794678488-1a7d` (a 82):
+
+- [ ] **14.1 `MinhaConta` (`entrega=m3`), prop `formas`:** `lista`; `sem-conta`; `confirmar-senha`; `confirmar-senha-errada`; `confirmar-codigo`; `confirmar-codigo-errado`; `provedor-indisponivel`; `provedor-nao-configurado`; `redirecionando`; `conectado`; `recusa-em-uso`; `recusa-ja-conectado`; `recusa-sessao-expirada`; `recusa-dominio-nao-permitido`; `recusa-falha`; `confirmar-desconectar`; `desconectar-409`; `desconectado`; `fora-da-configuracao`; `sem-senha`;
+- [ ] **14.2 `UsuarioDetalhe` (`entrega=m3`), prop `formas`:** `senha-e-google`; `so-senha`; `so-google`; `fora-da-configuracao`; `confirmar-desconectar`; `desconectar-409`; `desconectado`; e `alvo=proprio` (a verificação com o texto de hoje) e `alvo=desativado`;
+- [ ] **14.3 `Usuarios` (`entrega=m3`):** o chip "Google" no tom da "Senha"; o subtítulo e os dois cartões;
+- [ ] **14.4 `Provedores` (`entrega=m3`), prop `federados`:** `lista`; `vazio`; `carregando`; `erro`;
+- [ ] **14.5 os seis formulários no modo código**, com um Admin sem senha, contra `MinhaConta/confirmar-codigo` e `confirmar-codigo-errado`.
+
+**Conferência com o Google real** (o roteiro da #189, agora pelo painel):
+
+- [ ] **14.6** conectar com a senha e com o código (um Admin que entrou pelo convite com o Google); a volta com o aviso verde; o login seguinte pelo botão do `/entrar`;
+- [ ] **14.7** as recusas: `em-uso`, `ja-conectado`, `sessao-expirada` (trocar a senha noutra aba antes de voltar do Google), `falha` (cancelar no Google), `dominio-nao-permitido` com um `HostedDomain`;
+- [ ] **14.8** desconectar a própria conta (a sessão continua); o Admin desconecta outra pessoa com o painel dela aberto noutro navegador (a aba dela cai em `/entrar?motivo=sessao-expirada` na renovação, em até 15 min); o `409` da última forma.
+
+### Para as próximas
+
+- **A M3 fecha com o merge** da #279, menos a **#281** (em aberto, do `apps/api`) e a homologação acima.
+- **A M4** (#191, #192, #193) começa pelo provedor OIDC genérico; a #193 depende da #279.

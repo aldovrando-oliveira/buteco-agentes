@@ -66,3 +66,9 @@ export const reactivated = (nome: string) =>
 
 export const confirmResetTwoFactor = (nome: string) =>
   `Redefinir a verificação de ${nome}? O app autenticador e os códigos de recuperação deixam de valer, e a pessoa sai de todos os navegadores. No próximo login, ela cadastra o app autenticador de novo.`;
+
+/** O `404` do usuário que sumiu (`UserEndpoints.cs`); o outro `404` do desconectar é o da conta. */
+export const USUARIO_NAO_ENCONTRADO = 'Usuário não encontrado.';
+
+/** O desconectar pelo Admin troca o stamp e encerra as sessões da pessoa (change telas-contas-federadas, D6). */
+export const googleDisconnected = (nome: string) => `Google desconectado. ${nome} saiu de todos os navegadores.`;

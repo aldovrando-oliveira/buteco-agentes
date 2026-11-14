@@ -110,7 +110,7 @@ Os `403` do servidor para as ações vetadas a si mesmo SHALL aparecer pelo `tit
 - **THEN** o texto aparece no aviso da confirmação, e a verificação continua "Ativa"
 
 ### Requirement: Uma ação aberta por vez
-A página SHALL manter no máximo uma ação aberta entre: a confirmação de desativar, o formulário "Redefinir senha", o painel do link de redefinição, a confirmação de redefinir a verificação e a confirmação de encerrar as sessões. Abrir uma ação SHALL fechar a anterior e descartar o que ela guardava, inclusive a senha digitada e um link já mostrado. Os avisos de sucesso ("N sessões encerradas.", "Reativação concluída…") SHALL ficar até a próxima ação. O rascunho do cartão Dados SHALL NOT ser descartado ao abrir uma ação. Com um pedido em voo, o botão dele SHALL mostrar o carregando, e "Cancelar" SHALL ficar desabilitado.
+A página SHALL manter no máximo uma ação aberta entre: a confirmação de desativar, o formulário "Redefinir senha", o painel do link de redefinição, a confirmação de redefinir a verificação, a confirmação de encerrar as sessões, e a confirmação de desconectar uma conta de provedor (com o `409` que fica na linha) (`panel-federated-accounts`). Abrir uma ação SHALL fechar a anterior e descartar o que ela guardava, inclusive a senha digitada e um link já mostrado. Os avisos de sucesso ("N sessões encerradas.", "Reativação concluída…") SHALL ficar até a próxima ação. O rascunho do cartão Dados SHALL NOT ser descartado ao abrir uma ação. Com um pedido em voo, o botão dele SHALL mostrar o carregando, e "Cancelar" SHALL ficar desabilitado.
 
 #### Scenario: Abrir outra ação tira o link
 - **WHEN** o painel do link de redefinição está aberto, e a pessoa aciona "Encerrar todas as sessões"
@@ -120,8 +120,12 @@ A página SHALL manter no máximo uma ação aberta entre: a confirmação de de
 - **WHEN** o Nome foi editado sem salvar, e a pessoa abre "Redefinir senha" e cancela
 - **THEN** o Nome continua com o texto editado, e "Salvar alterações" continua habilitado
 
+#### Scenario: Abrir outra ação fecha o desconectar
+- **WHEN** a confirmação de desconectar o Google de Rafael Duarte está aberta, e a pessoa aciona "Redefinir senha"
+- **THEN** a confirmação de desconectar fecha, e o formulário da redefinição abre
+
 ### Requirement: Cartão Dados de Editar usuário
-O cartão "Dados e papel" do quadro `UsuarioDetalhe` (`entrega=m2`) SHALL ter os campos "Nome" e "E-mail", com os valores do detalhe e a ajuda do e-mail "É o e-mail de entrada no painel.", e o campo "Papel", com as opções "Admin", "Operador" e "Leitor", o papel do detalhe selecionado, e, abaixo, a descrição do papel selecionado:
+O cartão "Dados e papel" do quadro `UsuarioDetalhe` (`entrega=m3`) SHALL ter os campos "Nome" e "E-mail", com os valores do detalhe e a ajuda do e-mail "É o login com senha. Trocar não afeta as contas conectadas.", e o campo "Papel", com as opções "Admin", "Operador" e "Leitor", o papel do detalhe selecionado, e, abaixo, a descrição do papel selecionado:
 - Admin: "Tudo, inclusive usuários e Identidade.";
 - Operador: "Agentes, MCP, conhecimento, canais e histórico de conversas. Não gerencia usuários e não vê Identidade.";
 - Leitor: "Vê agentes, MCP, conhecimento, canais e Insights. Não altera nada, não vê o histórico de conversas nem usa os conectores.".
@@ -130,7 +134,7 @@ Com `papel` desconhecido no detalhe, o Papel SHALL começar sem seleção, e nen
 
 **O desativado:** o Papel SHALL ficar desabilitado, com "Reative o usuário antes de mudar o papel." abaixo da descrição. Nome e E-mail continuam editáveis.
 
-**Promover a Admin:** com "Admin" escolhido para um alvo cujo papel lido não é Admin, o cartão SHALL mostrar o bloco "Como Admin, {nome} passa a gerir usuários e a ver Identidade. Para promover, confirme com a sua senha." com o campo "Sua senha", com as regras de "Senha de quem chama" de `panel-users-page`: vazia não é enviada; `401` "Senha inválida." no campo; `423` com o aviso de bloqueio no bloco (`role="alert"`) e "Salvar alterações" desabilitado até o `Retry-After`. A senha SHALL sair do campo no sucesso, depois do `401` e quando o bloco some.
+**Promover a Admin:** com "Admin" escolhido para um alvo cujo papel lido não é Admin, o cartão SHALL mostrar o bloco "Como Admin, {nome} passa a gerir usuários e a ver Identidade. Para promover, confirme com a sua senha." com o campo "Sua senha" (no modo código, "Como Admin, {nome} passa a gerir usuários e a ver Identidade. Para promover, confirme com o código do app autenticador." com o campo "Código do app autenticador"), com as regras de "Senha de quem chama" de `panel-users-page`, inclusive o modo e o corpo (`PUT /users/{id}/role` com `{ papel, senha }` ou `{ papel, codigo }`): vazia não é enviada; `401` ("Senha inválida." ou "Código inválido.") no campo; `423` com o aviso de bloqueio no bloco (`role="alert"`) e "Salvar alterações" desabilitado até o `Retry-After`. A senha SHALL sair do campo no sucesso, depois do `401` e quando o bloco some.
 
 **Salvar.** "Salvar alterações" (primário) SHALL ficar desabilitado enquanto Nome, E-mail e Papel forem iguais aos lidos. Com um deles diferente, SHALL aparecer "Descartar", que volta aos valores lidos. "Salvar alterações" SHALL, nesta ordem:
 1. com Nome ou E-mail diferentes, chamar `PUT /users/{id}` com `{ nome, email }`, como digitados;
@@ -221,32 +225,61 @@ A página SHALL NOT ter guarda de rascunho ao sair dela.
 - **WHEN** a pessoa muda o E-mail e o Papel e aciona "Descartar"
 - **THEN** o E-mail volta ao lido, o Papel volta ao lido, e "Salvar alterações" fica desabilitado
 
+#### Scenario: A ajuda do e-mail da M3
+- **WHEN** o detalhe de outro usuário aparece
+- **THEN** o campo "E-mail" tem a ajuda "É o login com senha. Trocar não afeta as contas conectadas."
+
+#### Scenario: A promoção com o código
+- **WHEN** o Admin sem senha (`GET /account` com `formasDeEntrada: ["google"]`) escolhe "Admin" para Rafael Duarte
+- **THEN** aparece "Como Admin, Rafael Duarte passa a gerir usuários e a ver Identidade. Para promover, confirme com o código do app autenticador." com o campo "Código do app autenticador"
+- **AND** salvar com `123456` manda `PUT /users/u-rafael/role` com `{ papel: "admin", codigo: "123456" }`, sem `senha`
+
 ### Requirement: Formas de entrada
-O cartão "Formas de entrada" SHALL ter uma linha por item de `formasDeEntrada`. `senha` SHALL ser a linha "Senha", com a identificação = `email` em fonte monoespaçada. Um valor desconhecido SHALL sair cru, sem ação. A coluna de ações da linha Senha SHALL ser:
-- para outro usuário ativo: o botão "Redefinir senha";
-- para o próprio: o link "Trocar em Minha conta" (`/account`);
+O cartão "Formas de entrada" do quadro `UsuarioDetalhe` (`entrega=m3`) SHALL ter a tabela Forma · Identificação · Conectada em · Último uso · Ações, com a linha "Senha" e uma linha por item de `contasConectadas` do detalhe, na ordem da resposta.
+
+**A linha Senha** SHALL aparecer sempre. Com `"senha"` em `formasDeEntrada`, a identificação SHALL ser o `email` em fonte monoespaçada; sem, "Sem senha". "Conectada em" e "Último uso" SHALL ser "—" (a data da senha não é servida). As ações:
+- para outro usuário ativo com senha: o botão "Redefinir senha";
+- para outro usuário ativo sem senha: o botão "Gerar link de senha";
+- para o próprio, com senha: o link "Trocar em Minha conta" (`/account`); sem senha, nenhuma ação;
 - para o desativado: o texto "Reative para gerar um link", sem botão.
 
-O rodapé do cartão SHALL ser "Por enquanto, a senha é a única forma de entrada.". O cartão SHALL NOT ter as colunas "Conectada em" e "Último uso" nem linhas de provedor federado (M3).
+**As contas conectadas** SHALL seguir as linhas e a regra da última forma de "Formas de entrada em Minha conta" (`panel-federated-accounts`), com as ações de "Desconectar pelo Admin em Editar usuário". O rótulo da Forma SHALL vir do mapa de tipos conhecidos (`google` → "Google"); um `tipo` desconhecido SHALL sair cru, sem ação.
+
+O rodapé do cartão SHALL ser "Contas de provedores são conectadas pela própria pessoa em Minha conta. Aqui o administrador só desconecta. A última forma de entrada não pode ser removida.".
 
 #### Scenario: A linha Senha de outro usuário
-- **WHEN** o detalhe de um ativo tem `formasDeEntrada: ["senha"]` e `email: "rafael.duarte@empresa.com"`
-- **THEN** o cartão tem a linha "Senha" com "rafael.duarte@empresa.com" e o botão "Redefinir senha"
+- **WHEN** o detalhe de um ativo tem `formasDeEntrada: ["senha"]`, `contasConectadas: []` e `email: "rafael.duarte@empresa.com"`
+- **THEN** o cartão tem a linha "Senha" com "rafael.duarte@empresa.com", "—" em "Conectada em" e "Último uso", e o botão "Redefinir senha"
+- **AND** o rodapé é "Contas de provedores são conectadas pela própria pessoa em Minha conta. Aqui o administrador só desconecta. A última forma de entrada não pode ser removida."
 
 #### Scenario: A linha Senha do desativado
 - **WHEN** o detalhe tem `estado: "desativado"`
 - **THEN** a linha Senha mostra "Reative para gerar um link", sem "Redefinir senha"
 
+#### Scenario: A senha e o Google
+- **WHEN** o detalhe de um ativo tem `formasDeEntrada: ["senha", "google"]` e uma conta Google disponível de "rafael.duarte@empresa.com", conectada em 14/08/2026
+- **THEN** a linha "Google" mostra o e-mail, "14/08/2026" e "Desconectar"
+
+#### Scenario: A pessoa sem senha
+- **WHEN** o detalhe de um ativo tem `formasDeEntrada: ["google"]`
+- **THEN** a linha Senha mostra "Sem senha" e o botão "Gerar link de senha"
+
+#### Scenario: O vínculo fora da configuração, no Admin
+- **WHEN** o detalhe tem um item com `disponivel: false`
+- **THEN** a linha mostra o selo "Provedor fora da configuração" e "Sem ação"
+
 ### Requirement: Redefinir senha com a senha de quem chama
 "Redefinir senha" SHALL abrir, dentro do cartão Formas de entrada, o formulário com:
 - o título "Gerar link para {nome} criar uma nova senha";
 - o texto "A senha atual continua valendo até a nova ser criada. Quando isso acontecer, a pessoa sai de todos os navegadores.";
-- "Sua senha", pelo campo de senha de quem chama da `panel-users-page` (o `PasswordField`, `autocomplete="current-password"`), com a ajuda "Para gerar o link, confirme que é você.";
+- o campo da confirmação de quem chama da `panel-users-page` ("Senha de quem chama", com o modo), com a ajuda "Para gerar o link, confirme que é você." no modo senha;
 - "Gerar link" (primário) e "Cancelar".
 
-"Gerar link" SHALL seguir o requisito "Senha de quem chama" da `panel-users-page` e chamar `POST /users/{id}/password-reset` com `{ senha }`:
-- "Sua senha" vazia: "Informe a sua senha." no campo, sem chamar a rota;
-- `401` "Senha inválida.": o `title` no campo, com `aria-invalid`, a senha limpa, sem renovar a sessão nem deslogar;
+"Gerar link de senha", para a pessoa sem senha, SHALL abrir o mesmo formulário, com o título "Gerar link para {nome} criar uma senha" e o texto "Hoje a pessoa entra só pelo Google. Com o link, ela cria uma senha e passa a ter as duas formas de entrada.".
+
+"Gerar link" SHALL seguir o requisito "Senha de quem chama" da `panel-users-page` e chamar `POST /users/{id}/password-reset` com `{ senha }` ou `{ codigo }`, pelo modo:
+- o campo vazio: o texto do vazio do modo no campo, sem chamar a rota;
+- `401` ("Senha inválida." ou "Código inválido."): o `title` no campo, com `aria-invalid`, o campo limpo, sem renovar a sessão nem deslogar;
 - `423` + `Retry-After`: o aviso amarelo "Muitas tentativas sem sucesso. Por segurança, a sua conta fica pausada por N minutos." acima do campo, com o N do `Retry-After`, e "Gerar link" desabilitado até passar;
 - `403`: o `title` no aviso do formulário;
 - `409` ("Usuário desativado." ou "Este usuário ainda não aceitou o convite."): o `title` no aviso do formulário, e o detalhe relido;
@@ -254,7 +287,7 @@ O rodapé do cartão SHALL ser "Por enquanto, a senha é a única forma de entra
 - `429`, `503` ou rede: o aviso de falha dos cartões;
 - `200 { link, expiraEm }`: o painel do link (requisito "Link de redefinição mostrado uma vez").
 
-"Cancelar" SHALL fechar o formulário e limpar a senha. A senha SHALL só existir no estado do formulário, e SHALL ser limpa no sucesso, depois do `401`, ao fechar e ao desmontar.
+"Cancelar" SHALL fechar o formulário e limpar o campo. A senha ou o código SHALL só existir no estado do formulário, e SHALL ser limpo no sucesso, depois do `401`, ao fechar e ao desmontar.
 
 #### Scenario: O formulário
 - **WHEN** a pessoa aciona "Redefinir senha" no detalhe de "Rafael Duarte"
@@ -275,6 +308,14 @@ O rodapé do cartão SHALL ser "Por enquanto, a senha é a única forma de entra
 #### Scenario: Desativado no meio
 - **WHEN** a rota responde `409` "Usuário desativado."
 - **THEN** o texto aparece no aviso do formulário, e `GET /users/u-rafael` é chamado de novo
+
+#### Scenario: O link de senha para quem entra só pelo Google
+- **WHEN** o Admin aciona "Gerar link de senha" no detalhe de Rafael Duarte, sem senha
+- **THEN** aparece "Gerar link para Rafael Duarte criar uma senha" e "Hoje a pessoa entra só pelo Google. Com o link, ela cria uma senha e passa a ter as duas formas de entrada."
+
+#### Scenario: A redefinição com o código
+- **WHEN** o Admin sem senha digita `123456` e aciona "Gerar link"
+- **THEN** `POST /users/u-rafael/password-reset` recebe exatamente `{ "codigo": "123456" }`
 
 ### Requirement: Link de redefinição mostrado uma vez
 Com o `200`, o formulário SHALL dar lugar ao painel do link, com a forma do quadro `UsuarioDetalhe` (`acao=link-gerado`):
@@ -309,8 +350,10 @@ O link e o `expiraEm` SHALL ficar só no estado da página: o pedido SHALL ser u
 
 ### Requirement: Verificação em 2 etapas de outro usuário
 O cartão "Verificação em 2 etapas" SHALL mostrar, por `duasEtapas`:
-- `true`: o selo "Ativa" (verde), "Use Redefinir se a pessoa perdeu ou trocou o celular e os códigos de recuperação." e o botão "Redefinir verificação";
-- `false`: o selo "Não configurada" (amarelo), "A pessoa cadastra a verificação no próximo login." e o botão "Redefinir verificação" desabilitado.
+- `true`: o selo "Ativa" (verde) e o botão "Redefinir verificação";
+- `false`: o selo "Não configurada" (amarelo) e o botão "Redefinir verificação" desabilitado.
+
+Nos dois casos, o texto SHALL ser "Obrigatória para todos os papéis, inclusive para quem entra pelo Google: o Buteco pede o próprio código." (quadro `UsuarioDetalhe`, `entrega=m3`).
 
 O desativado com a verificação ativa SHALL ter o botão habilitado. O cartão SHALL NOT mostrar a data de ativação.
 
@@ -322,11 +365,11 @@ O desativado com a verificação ativa SHALL ter o botão habilitado. O cartão 
 
 #### Scenario: Verificação ativa
 - **WHEN** o detalhe de outro usuário tem `duasEtapas: true`
-- **THEN** o cartão mostra "Ativa", "Use Redefinir se a pessoa perdeu ou trocou o celular e os códigos de recuperação." e o botão "Redefinir verificação" habilitado
+- **THEN** o cartão mostra "Ativa", "Obrigatória para todos os papéis, inclusive para quem entra pelo Google: o Buteco pede o próprio código." e o botão "Redefinir verificação" habilitado
 
 #### Scenario: Com a verificação desligada, o botão fica desabilitado
 - **WHEN** o detalhe tem `duasEtapas: false`
-- **THEN** o cartão mostra "Não configurada" e "A pessoa cadastra a verificação no próximo login.", e "Redefinir verificação" está desabilitado
+- **THEN** o cartão mostra "Não configurada" e "Obrigatória para todos os papéis, inclusive para quem entra pelo Google: o Buteco pede o próprio código.", e "Redefinir verificação" está desabilitado
 
 #### Scenario: A confirmação diz o que acontece no próximo login
 - **WHEN** "Redefinir verificação" é acionado para Rafael Duarte

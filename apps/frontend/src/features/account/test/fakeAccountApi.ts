@@ -58,7 +58,20 @@ export function fakeAccountApi(routes: Record<string, FakeReply | FakeReply[]> =
   // O emissor responde por padrão: todo `403` renova a sessão uma vez (change papeis-no-painel,
   // D3), e sem resposta a renovação repetiria por 25 s. O caso que quer outro emissor declara a
   // sua `POST /connect/token`.
-  const comEmissor: Record<string, FakeReply | FakeReply[]> = { 'POST /connect/token': () => Promise.resolve(tokenResponse(2)), ...routes };
+  //
+  // Mais três por padrão (change telas-contas-federadas, D2 e D10), que o caso sobrepõe ao declarar:
+  // - `GET /account`, com SENHA: todo formulário com a confirmação de quem chama lê a conta para saber
+  //   o modo, e sem a rota a consulta cairia em erro e o modo ficaria `'senha'` pelo caminho errado;
+  // - as duas listas de provedores, VAZIAS: sem provedor, o cartão "Formas de entrada" de Minha conta
+  //   não aparece, e o cartão dos provedores da Identidade não soma linha nem "Tentar de novo" (o
+  //   `IdentityPage.test.tsx` conta as linhas da página inteira e procura o botão por papel).
+  const comEmissor: Record<string, FakeReply | FakeReply[]> = {
+    'POST /connect/token': () => Promise.resolve(tokenResponse(2)),
+    'GET /account': { status: 200, body: ACCOUNT },
+    'GET /auth/federated/providers': { status: 200, body: { provedores: [] } },
+    'GET /identity/federated-providers': { status: 200, body: { provedores: [] } },
+    ...routes,
+  };
   const queues = new Map<string, FakeReply[]>(
     Object.entries(comEmissor).map(([key, reply]) => [key, Array.isArray(reply) ? [...reply] : [reply]]),
   );
@@ -104,6 +117,29 @@ export function fakeAccountApi(routes: Record<string, FakeReply | FakeReply[]> =
   };
 }
 
+/** Uma conta Google conectada e disponível (`GET /account` e `GET /users/{id}`). */
+export const GOOGLE_CONECTADA = {
+  chave: 'google',
+  tipo: 'google',
+  email: 'ana@empresa.com',
+  conectadaEm: '2026-08-14T12:00:00Z',
+  ultimoUso: '2026-11-06T12:02:00Z',
+  disponivel: true,
+};
+
+/** Um vínculo com um provedor que saiu da configuração: `chave` nula, sem ação (Q9). */
+export const GOOGLE_FORA = {
+  chave: null,
+  tipo: 'google',
+  email: 'ana@antiga.com.br',
+  conectadaEm: '2026-09-02T12:00:00Z',
+  ultimoUso: '2026-10-10T12:00:00Z',
+  disponivel: false,
+};
+
+/** A lista anônima dos provedores com o Google configurado. */
+export const PROVEDORES_GOOGLE = { provedores: [{ chave: 'google', tipo: 'google' }] };
+
 /** As respostas de uma conta comum, para os cartões que o teste não exercita. */
 export const ACCOUNT = {
   id: 'u-1',
@@ -113,6 +149,15 @@ export const ACCOUNT = {
   criadoEm: '2026-08-12T13:00:00Z',
   ultimoAcesso: '2026-11-06T17:15:00Z',
   duasEtapas: false,
+  formasDeEntrada: ['senha'],
+  contasConectadas: [],
+};
+
+/** A conta de Ana sem senha: entrou só pelo Google (change telas-contas-federadas). */
+export const ACCOUNT_SO_GOOGLE = {
+  ...ACCOUNT,
+  formasDeEntrada: ['google'],
+  contasConectadas: [GOOGLE_CONECTADA],
 };
 
 export const TWO_FACTOR_OFF = { ativa: false, ativadaEm: null, codigosRestantes: 0 };

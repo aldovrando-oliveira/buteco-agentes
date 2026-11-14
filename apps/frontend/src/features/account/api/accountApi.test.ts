@@ -5,6 +5,8 @@ import { fakeAccountApi, problem } from '../test/fakeAccountApi';
 import {
   ApiError,
   changePassword,
+  connectFederated,
+  disconnectOwnFederated,
   getAccount,
   getTwoFactor,
   listSessions,
@@ -89,3 +91,44 @@ describe('accountApi', () => {
     expect(authRuntime.assign).not.toHaveBeenCalled();
   });
 });
+
+// As contas de provedores (change telas-contas-federadas, D1): o corpo com UM campo da confirmação, e
+// o `DELETE` sem corpo e sem senha.
+describe('accountApi, contas de provedores', () => {
+  it.each<[string, () => Promise<unknown>, unknown]>([
+    ['POST /account/federated/google/connect', () => connectFederated('google', { senha: 'minha-senha' }), { senha: 'minha-senha' }],
+    ['POST /account/federated/google/connect', () => connectFederated('google', { codigo: '123456' }), { codigo: '123456' }],
+  ])('%s leva só o campo da confirmação', async (key, call, body) => {
+    const api = fakeAccountApi({ [key]: { status: 200, body: { url: 'https://accounts.google.com/x' } } });
+
+    await expect(call()).resolves.toEqual({ url: 'https://accounts.google.com/x' });
+
+    expect(api.calls(key)[0].body).toEqual(body);
+  });
+
+  it('a chave vai codificada no caminho', async () => {
+    const api = fakeAccountApi({ 'POST /account/federated/a%20b/connect': { status: 200, body: { url: 'u' } } });
+
+    await connectFederated('a b', { senha: 's' });
+
+    expect(api.calls('POST /account/federated/a%20b/connect')).toHaveLength(1);
+  });
+
+  it('o DELETE da própria conta não leva corpo', async () => {
+    const api = fakeAccountApi({ 'DELETE /account/federated/google': { status: 204 } });
+
+    await expect(disconnectOwnFederated('google')).resolves.toBeUndefined();
+
+    expect(api.calls('DELETE /account/federated/google')).toEqual([
+      { method: 'DELETE', path: '/account/federated/google', body: undefined, authorization: 'Bearer token-de-teste' },
+    ]);
+  });
+
+  it('o 401 do código chega com o title, sem renovar a sessão', async () => {
+    const api = fakeAccountApi({ 'POST /account/federated/google/connect': problem(401, 'Código inválido.') });
+
+    await expect(connectFederated('google', { codigo: '000000' })).rejects.toMatchObject({ status: 401, title: 'Código inválido.' });
+    expect(api.calls('POST /connect/token')).toHaveLength(0);
+  });
+});
+

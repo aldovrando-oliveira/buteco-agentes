@@ -1,5 +1,6 @@
 import { sessionFetch } from '../../../auth/session';
 import { retryAfterSeconds } from '../../../auth/transient';
+import type { ConnectedAccount } from '../../account/api/accountApi';
 
 // `request<T>` E `ApiError` PRÓPRIOS DA FEATURE, copiados do idioma de `accountApi.ts`. Não é
 // descuido nem duplicação a corrigir: é regra escrita da casa (convenção 2 — esperar 2-3
@@ -76,6 +77,13 @@ export interface InvitationSummary {
   vencido: boolean;
 }
 
+/**
+ * A confirmação de quem chama (#189, `CallerPassword.RejectAsync`): a senha, para quem tem senha, ou
+ * o código do app autenticador, para quem não tem. Vai UM campo só no corpo; o backend confere o do
+ * modo e ignora o outro (change telas-contas-federadas, D2).
+ */
+export type CallerConfirmation = { senha: string } | { codigo: string };
+
 /** Uma linha de `GET /users` (#219, #181). */
 export interface UserSummary {
   id: string;
@@ -110,7 +118,6 @@ export interface InvitationRequest {
   email: string;
   /** Obrigatório desde a #184: `admin`, `operador` ou `leitor` (`papelParaCorpo`). */
   papel: string;
-  senha: string;
 }
 
 export function listUsers(): Promise<UserSummary[]> {
@@ -118,13 +125,13 @@ export function listUsers(): Promise<UserSummary[]> {
 }
 
 /** `201`; `400` campos (inclusive `papel`); `409` e-mail em uso; `401` "Senha inválida."; `423` + `Retry-After`. */
-export function inviteUser(body: InvitationRequest): Promise<InvitationCreated> {
+export function inviteUser(body: InvitationRequest & CallerConfirmation): Promise<InvitationCreated> {
   return post<InvitationCreated>('/users/invitations', body);
 }
 
 /** `200`; `404`; `409` não é convite; `401`; `423`. */
-export function renewInvitation(id: string, senha: string): Promise<AccessLink> {
-  return post<AccessLink>(`/users/${encodeURIComponent(id)}/invitation/renew`, { senha });
+export function renewInvitation(id: string, confirmacao: CallerConfirmation): Promise<AccessLink> {
+  return post<AccessLink>(`/users/${encodeURIComponent(id)}/invitation/renew`, confirmacao);
 }
 
 /** `204`; `404`; `409` "O convite já foi aceito.". Não pede senha: só tira acesso. */
@@ -146,6 +153,8 @@ export interface UserDetail extends UserSummary {
   desativadoEm: string | null;
   convidadoPor: UserReference | null;
   sessoes: { ativas: number; ultimaAtividade: string | null };
+  /** As contas de provedores da pessoa (#189), como em `GET /account`. */
+  contasConectadas: ConnectedAccount[];
 }
 
 const segment = (id: string) => `/users/${encodeURIComponent(id)}`;
@@ -179,8 +188,8 @@ export function revokeUserSessions(id: string): Promise<{ encerradas: number }> 
  * O link de redefinição, mostrado uma vez (D7): nunca vai para cache, storage ou URL.
  * `200`; `403` a si mesmo; `404`; `409` convidado ou desativado; `401` "Senha inválida."; `423`.
  */
-export function requestPasswordReset(id: string, senha: string): Promise<AccessLink> {
-  return post<AccessLink>(`${segment(id)}/password-reset`, { senha });
+export function requestPasswordReset(id: string, confirmacao: CallerConfirmation): Promise<AccessLink> {
+  return post<AccessLink>(`${segment(id)}/password-reset`, confirmacao);
 }
 
 /** `204`; `403` a si mesmo; `404`; `409` já não configurada. Encerra as sessões da pessoa. */
@@ -194,6 +203,19 @@ export function resetTwoFactor(id: string): Promise<void> {
  * `errors.papel`; `401` "Senha inválida."; `423`; `403`; `404`; `409` o último Admin ou o
  * desativado.
  */
-export function changeUserRole(id: string, body: { papel: string; senha?: string }): Promise<UserDetail> {
+export function changeUserRole(
+  id: string,
+  body: { papel: string } | ({ papel: string } & CallerConfirmation),
+): Promise<UserDetail> {
   return request<UserDetail>(`${segment(id)}/role`, { method: 'PUT', body: JSON.stringify(body) });
+}
+
+/**
+ * O Admin desconecta a conta de provedor de OUTRA pessoa (#189). `204`; `403` "Para desconectar a sua
+ * própria conta, use Minha conta."; `404` "Usuário não encontrado." ou "Esta conta não está conectada a
+ * esse provedor."; `409` a última forma. Sem corpo e sem senha. O backend troca o stamp da pessoa e
+ * encerra as sessões dela (change telas-contas-federadas, D6).
+ */
+export function disconnectUserFederated(id: string, chave: string): Promise<void> {
+  return request<void>(`${segment(id)}/federated/${encodeURIComponent(chave)}`, { method: 'DELETE' });
 }

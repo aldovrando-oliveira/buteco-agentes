@@ -16,6 +16,7 @@ import {
   resetTwoFactor,
   revokeUserSessions,
   updateUser,
+  disconnectUserFederated,
 } from './usersApi';
 
 beforeEach(() => {
@@ -46,7 +47,7 @@ describe('usersApi', () => {
       () => inviteUser({ nome: 'Marcos Lima', email: 'marcos@exemplo.test', papel: 'operador', senha: 'minha-senha' }),
       { nome: 'Marcos Lima', email: 'marcos@exemplo.test', papel: 'operador', senha: 'minha-senha' },
     ],
-    ['POST /users/u%201/invitation/renew', () => renewInvitation('u 1', 'minha-senha'), { senha: 'minha-senha' }],
+    ['POST /users/u%201/invitation/renew', () => renewInvitation('u 1', { senha: 'minha-senha' }), { senha: 'minha-senha' }],
   ])('%s leva o corpo do contrato', async (key, call, body) => {
     const api = fakeUsersApi({ [key]: { status: 200, body: {} } });
 
@@ -113,7 +114,7 @@ describe('usersApi', () => {
       ],
       [
         'POST /users/u%201/password-reset',
-        () => requestPasswordReset('u 1', 'minha-senha'),
+        () => requestPasswordReset('u 1', { senha: 'minha-senha' }),
         { senha: 'minha-senha' },
       ],
     ])('%s leva o método, o caminho e o corpo do contrato', async (key, call, body) => {
@@ -143,3 +144,29 @@ describe('usersApi', () => {
     });
   });
 });
+
+// O desconectar pelo Admin e a confirmação com o código (change telas-contas-federadas, D1 e D2).
+describe('usersApi, contas de provedores', () => {
+  it('o DELETE da conta de outra pessoa não leva corpo', async () => {
+    const api = fakeUsersApi({ 'DELETE /users/u%201/federated/google': { status: 204 } });
+
+    await expect(disconnectUserFederated('u 1', 'google')).resolves.toBeUndefined();
+
+    expect(api.calls('DELETE /users/u%201/federated/google')).toEqual([
+      { method: 'DELETE', path: '/users/u%201/federated/google', body: undefined, authorization: 'Bearer token-de-teste' },
+    ]);
+  });
+
+  it.each<[string, () => Promise<unknown>, unknown]>([
+    ['POST /users/u%201/invitation/renew', () => renewInvitation('u 1', { codigo: '123456' }), { codigo: '123456' }],
+    ['POST /users/u%201/password-reset', () => requestPasswordReset('u 1', { codigo: '123456' }), { codigo: '123456' }],
+    ['PUT /users/u%201/role', () => changeUserRole('u 1', { papel: 'admin', codigo: '123456' }), { papel: 'admin', codigo: '123456' }],
+  ])('%s leva o código no lugar da senha', async (key, call, body) => {
+    const api = fakeUsersApi({ [key]: { status: 200, body: {} } });
+
+    await call();
+
+    expect(api.calls(key)[0].body).toEqual(body);
+  });
+});
+

@@ -43,7 +43,7 @@ export function InviteForm({ onCreated, onClose }: InviteFormProps) {
       return;
     }
     const result = await senha.enviar(
-      (s) => inviteUser({ nome, email, papel: papelParaCorpo(papel), senha: s }),
+      (c) => inviteUser({ nome, email, papel: papelParaCorpo(papel), ...c }),
       (error) => {
         if (!isApiFailure(error)) return false;
         if (isRoleRefusal(error)) {

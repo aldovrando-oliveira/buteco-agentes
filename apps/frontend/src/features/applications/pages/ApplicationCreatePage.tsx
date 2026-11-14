@@ -51,7 +51,7 @@ export function ApplicationCreatePage() {
     setErros(locais);
     if (locais.nome || locais.descricao) return;
     const result = await senha.enviar(
-      (s) => createApplication({ ...corpoDosCampos(campos), senha: s }),
+      (c) => createApplication({ ...corpoDosCampos(campos), ...c }),
       (error) => {
         if (!isApiFailure(error)) return false;
         if (isRoleRefusal(error)) {

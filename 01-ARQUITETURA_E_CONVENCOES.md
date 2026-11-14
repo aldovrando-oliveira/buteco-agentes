@@ -1071,6 +1071,24 @@ o `apps/connectors`, que valida do mesmo jeito desde a #103.)*
     segunda tentativa depois de uma recusa funciona); a volta da recusa lê o token, consulta o link e apaga
     a chave; sem o token na aba, nenhum pedido sai e a página mostra o cartão do motivo. Nenhum token vai em
     URL ou log.
+- **As telas das contas conectadas** (#279, a 190b; design da change `telas-contas-federadas`):
+  - **A confirmação de quem chama tem modo** (`useCallerPassword`, um hook para os seis formulários e o
+    conectar): o modo vem de `formasDeEntrada` de `GET /account`, e é **código** só com a resposta em mãos e
+    sem `"senha"`; pendente ou em erro, é a senha. O corpo leva **um** campo, `senha` ou `codigo`, nunca os
+    dois. No modo senha, o `401` "Código inválido." relê a conta, e o campo passa ao código vazio e sem erro.
+  - **Minha conta, "Formas de entrada":** a senha, as contas de `contasConectadas` e os provedores da rota
+    anônima sem conta. A última forma (a senha mais as contas `disponivel`) não sai: "Desconectar" fica
+    desabilitado, e o `409` vai na linha. Conectar é `POST /account/federated/{chave}/connect` com a
+    confirmação, e a página navega ao `url`.
+  - **A volta do conectar** é `/account?conectado=…` ou `?recusa=…&provedor=…`, lida uma vez e limpa por
+    `replace`, com o `state` da navegação mantido; o conectar não grava o `buteco-recusa`, e a página não chama
+    a rota do aviso. A falha do conectar que ainda volta ao `/entrar` (sem provedor na volta, ou o state sem a
+    intenção) é a #281, do backend.
+  - **O Admin só desconecta** (`DELETE /users/{id}/federated/{chave}`), em Editar usuário, com a confirmação
+    na linha; o próprio desconecta em Minha conta. A sessão de quem foi desconectado acaba na próxima
+    renovação, pelo `invalid_grant` de sempre do `sessionFetch`, sem consulta nova no painel dela.
+  - **Identidade, "Provedores federados":** `GET /identity/federated-providers`, só leitura; o erro dele não
+    derruba o cartão do emissor.
 - **O log do OpenIddict fica em `Warning`** (#277): a biblioteca grava o userinfo do provedor (`sub`, e-mail) e o
   pedido de token (com o `code_verifier`) em `Information`, e os tokens em `Trace`. O filtro está no
   `appsettings.json`, em todo ambiente; os testes capturam também as categorias `OpenIddict.*` e afirmam, fluxo

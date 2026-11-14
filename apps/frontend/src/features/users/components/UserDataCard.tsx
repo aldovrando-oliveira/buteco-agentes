@@ -30,7 +30,13 @@ import {
   type FailureNotice,
 } from '../../../utils/failureNotice';
 import { ACCOUNT_QUERY_KEY } from '../../account/queryKeys';
-import { ApiError, changeUserRole, updateUser, type UserDetail } from '../api/usersApi';
+import {
+  ApiError,
+  changeUserRole,
+  updateUser,
+  type CallerConfirmation,
+  type UserDetail,
+} from '../api/usersApi';
 import { useCallerPassword } from '../callerPassword';
 import { USERS_QUERY_KEY, userQueryKey } from '../queryKeys';
 import { DEIXAR_DE_SER_ADMIN, DESCRICAO_DO_PAPEL } from '../usersTexts';
@@ -78,6 +84,7 @@ function ficaNoBlocoDaSenha(error: unknown): boolean {
 
 /** O motivo da gravação parcial: o `title` do servidor, ou o texto dos avisos dos cartões. */
 function motivo(error: unknown): string {
+  // O `title` diz qual confirmação falhou ("Senha inválida." ou "Código inválido."; D2).
   if (isApiFailure(error) && error.status === 401) return error.title ?? 'Senha inválida.';
   return failureText(error);
 }
@@ -167,12 +174,10 @@ export function UserDataCard({ user, proprio, onGone }: UserDataCardProps) {
   /** O passo 2: o papel. `depoisDosDados` diz se a falha vira o aviso de gravação parcial. */
   async function salvarPapel(alvo: Papel, depoisDosDados: boolean) {
     let falha: unknown;
-    const chamar = (s?: string) =>
+    const chamar = (c?: CallerConfirmation) =>
       changeUserRole(
         user.id,
-        s === undefined
-          ? { papel: papelParaCorpo(alvo) }
-          : { papel: papelParaCorpo(alvo), senha: s },
+        c === undefined ? { papel: papelParaCorpo(alvo) } : { papel: papelParaCorpo(alvo), ...c },
       ).catch((error: unknown) => {
         falha = error;
         throw error;
@@ -271,7 +276,7 @@ export function UserDataCard({ user, proprio, onGone }: UserDataCardProps) {
               value={email}
               onChange={(e) => editar('email', e.currentTarget.value)}
               error={erros.email}
-              description="É o e-mail de entrada no painel."
+              description="É o login com senha. Trocar não afeta as contas conectadas."
               inputWrapperOrder={['label', 'input', 'error', 'description']}
             />
             <Stack gap={4}>
@@ -299,7 +304,8 @@ export function UserDataCard({ user, proprio, onGone }: UserDataCardProps) {
             <Stack gap="xs" maw={560}>
               <Text size="sm">
                 Como Admin, {user.nome} passa a gerir usuários e a ver Identidade. Para promover,
-                confirme com a sua senha.
+                confirme com{' '}
+                {senha.modo === 'codigo' ? 'o código do app autenticador' : 'a sua senha'}.
               </Text>
               {senha.aviso && (
                 <Alert color={senha.aviso.cor} role="alert">

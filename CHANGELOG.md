@@ -16,6 +16,20 @@ o versionamento pretende seguir
 
 ### Added
 
+- **Telas das contas conectadas** (#279, M3 · 4 de 4). Só o `apps/frontend`.
+  - a confirmação de quem chama com o código do app autenticador para quem não tem senha, nos seis formulários
+    (convite, novo link, redefinição, promoção a Admin, criar aplicação, gerar segredo) e no conectar; o modo vem de
+    `GET /account`, e o corpo leva só `senha` ou só `codigo`;
+  - Minha conta com o cartão "Formas de entrada": a senha, as contas conectadas e os provedores sem conta;
+    conectar com a confirmação na linha e a volta em `/account` (o aviso verde ou o do motivo, a query limpa por
+    `replace`); desconectar a própria conta; a última forma de entrada não sai;
+  - Editar usuário com as contas conectadas, e o Admin desconectando a de outra pessoa, com a confirmação e o
+    `409` na linha; a sessão dela acaba na próxima renovação;
+  - Usuários e Identidade com os textos da M3, e o cartão "Provedores federados" em Identidade;
+  - convenção 18, contra o design (~+1.055 / ~+2.000 / +100 / ~127): produção +1.158 / −83, testes +1.397 / −19,
+    duplos +79 / −1, 85 casos;
+  - **Deploy:** só a imagem do `frontend` (`docs/deployment.md`, "Telas das contas conectadas (#279)").
+
 - **Telas do login e do convite pelo Google** (#190, M3 · 3 de 4; a 4 de 4 é a #279, as contas conectadas). Só o
   `apps/frontend`.
   - "Entrar com Google" no `/entrar`, pela lista de `GET /auth/federated/providers` (sem provedor, nada muda);
