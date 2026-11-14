@@ -8752,6 +8752,7 @@ M3 Autenticação com Google                       acompanhamento #196
   26 #190  painel: login com provedor e recusas        ← #185 #189 #274
   27 #279  painel: contas conectadas (Minha conta, Usuários, Identidade) ← #190
      #281  a falha do conectar volta ao /entrar (api; em aberto, não bloqueia)
+     #285  o nginx serve o SPA no retorno do Google (frontend; achado da homologação, defeito de entrega da #189)
 M4 Autenticação corporativa                      acompanhamento #197
   28 #191  provedor OIDC genérico                      ← #189
   29 #192  aplicações federadas (troca de token)       ← #187 #191
@@ -19415,3 +19416,53 @@ Pela regra geral (decisão do dono, 14/11/2026; `01`, convenção 23), a change 
 
 - **A M3 fecha com o merge** da #279, menos a **#281** (em aberto, do `apps/api`) e a homologação acima.
 - **A M4** (#191, #192, #193) começa pelo provedor OIDC genérico; a #193 depende da #279.
+
+## `nginx-retorno-federado` — O retorno do Google chega ao `apps/api` pelo nginx (#285)
+
+**Change proposta e implementada em 14/11/2026**, na branch `fix/285-nginx-retorno-federado`, num worktree próprio, a partir de `f503aca` (merge do PR #284, a #283). Defeito de entrega da M3, achado na homologação: depois da autorização no Google, o navegador voltava a `GET /auth/federated/callback?state=…&iss=…&code=…` e mostrava o "404 Not Found" do React Router. O bloco de regex que leva `/auth` ao `apps/api` no `apps/frontend/deploy/nginx.conf` tem o desvio de navegação (`Sec-Fetch-Mode: navigate` → `/index.html`), e o retorno do Google é uma navegação de topo. O login, o aceite de convite e o conectar pelo Google não voltavam. O `code` ficava na URL do SPA, mas vale uma vez, depende do PKCE e do cookie do fluxo, e não vaza pelo `Referer` (`no-referrer`). A #189 não foi reaberta (convenção 23).
+
+Por que passou: as conferências 13.1 da #189 e 10.1 da #274 usaram `curl`, sem `Sec-Fetch-Mode`; o `NginxRouteCoverageTests` da #268 conferia o prefixo, e não a navegação de topo; e no desenvolvimento o proxy do Vite leva `/auth` inteiro ao `apps/api`, sem desvio.
+
+- **A correção:** um `location = /auth/federated/callback`, no molde do `/connect/authorize` (o `$api_upstream` e os mesmos `proxy_set_header`), **sem** o desvio, com o comentário do porquê. O resto de `/auth` continua no desvio. O bloco herda a CSP e o `no-referrer` do `server`.
+- **O guarda que faltou:** o `NginxNavigationEndpointsTests` do `apps/api`, numa classe própria sobre o `FederatedLoginFixture` (decisão do dono). A lista sai do código: o `FederatedLogin.CallbackPath`, os `RedirectionEndpointUris` e `PostLogoutRedirectionEndpointUris` do cliente OIDC composto, e os endpoints do emissor em passthrough (`/connect/authorize` e `/connect/logout`, Q1). Cada caminho precisa de um `location =` próprio, para o `apps/api`, sem o desvio. A conferência é o `NginxRouting.FindNavigationProblems`, no leitor de `tests/Shared/`. A lista do cliente vazia reprova. O `ExactBlocks` do `NginxRouteCoverageTests` ganhou o bloco novo, com o motivo.
+- **O inventário (design D2):** nenhuma outra rota dos três apps é aberta por navegação de topo sob um prefixo com o desvio. Os destinos do SPA (`/entrar`, `/convite`, `/account?conectado=…`) continuam no SPA, e o `/account` continua no desvio.
+- **Nenhum código de produção dos apps muda.** Capacidade modificada: `server-deployment`.
+- **Documentação:** `docs/deployment.md` (na seção da #189, a conferência com `Sec-Fetch-Mode: navigate`; a nota "O retorno do Google chega ao `api` pelo nginx (#285)") e o `CHANGELOG.md`.
+
+### O que a implementação mediu
+
+| suíte | baseline `f503aca` (`285/baseline/`) | fechamento (`285/final/`) | veredito |
+|---|---|---|---|
+| `api` | 1839 + 1 ignorado, 8 min 24 s, CPU mín. 32 | 1844 + 1 ignorado, 8 min 33 s, CPU mín. 37 | APROVADA |
+| `inbox` | 362, 48 s, CPU mín. 100 | 362, 34 s, CPU mín. 100 | APROVADA |
+| `connectors` | 339 + 1 ignorado, 15 s, CPU mín. 100 | 339 + 1 ignorado, 15 s, CPU mín. 100 | APROVADA |
+| `frontend` | 2818 em 207 arquivos, 266 s, CPU mín. 34 | 2818 em 207 arquivos, 151 s, CPU mín. 65 | APROVADA |
+
+- **A primeira rodada da `frontend` na baseline** saiu com `exit 127` (`vitest: command not found`, o worktree sem `node_modules`). Foi refeita depois do `npm ci`, e não conta.
+- **Comparação por classe + nome** (`.trx`) e por arquivo + nome (`frontend.json`): nenhum caso de antes ficou sem par. Novos, só no `apps/api`: o `NginxNavigationEndpointsTests` e os 4 do leitor (`ANavigationPath_…`). Na `frontend`, os mesmos 2818, por linha e por nome distinto.
+- **O guarda contra o defeito real (2.2):** com o `nginx.conf` do `main`, o teste novo reprovou com uma linha só: `'/auth/federated/callback' é aberto por navegação de topo e não tem 'location = /auth/federated/callback': cai no shell do SPA.` O authorize e o logout aprovaram. Com a correção, os testes do nginx no `apps/api` deram 16 de 16, e o `nginxHeaders.test.ts` 5 de 5.
+- **Os guardas por mutação** (`~/.cache/buteco-agents/285-guardas/`): cada um reprovou nomeando o item, e o arquivo voltou pela cópia com o sha igual.
+  - o desvio no bloco novo (3.4): o teste novo e o de cobertura, pela exceção exata com o desvio;
+  - o bloco para o `inbox` (3.5): `encaminha para 'inbox', não para 'api'`;
+  - o teste sobre o `LocalUsersFixture`, sem provedor (3.6): `o cliente OIDC do host não tem nenhuma URI de retorno`;
+  - a entrada tirada do `ExactBlocks` (3.7): `não está entre as exceções nomeadas`.
+- **A conferência com o nginx de verdade** (`~/.cache/buteco-agents/285-conferencia/`):
+  - **montagem:** o `podman build` e o `nginx -t` das duas imagens; o `apps/api` local, num banco descartável criado do `template0` (o `template1` do Postgres de desenvolvimento tem a colação divergente), com um provedor Google de credenciais falsas; o contêiner `api` encaminhando ao host; o `resolver` trocado só no contêiner (#212);
+  - **imagem da change:** o retorno com `Sec-Fetch-Mode: navigate` respondeu `302`, com `Location: /entrar?recusa=falha` e `Referrer-Policy: no-referrer`, e o mesmo sem o cabeçalho;
+  - **os contrapontos:** `/auth/federated/providers` navegando → `200 text/html`, e sem o cabeçalho, o JSON; `/account?conectado=x` e `/auth/federated/callbackxyz` navegando → o `index.html`;
+  - **imagem da baseline:** o retorno navegando → `200 text/html`, o defeito da homologação;
+  - **a rede:** nenhum pedido de saída no log do `apps/api`;
+  - **a limpeza:** as imagens, os contêineres, a rede e o banco apagados, e conferidos.
+- **Lint e build do `frontend`:** limpos; o mesmo aviso de chunk acima de 500 kB (o `index` em 1.244,06 kB).
+- **Convenção 18**, contra o D6:
+
+  | | projetado | medido |
+  |---|---|---|
+  | produção (`nginx.conf`) | ~+18 | +21 / −1 (7 de configuração, 14 de comentário) |
+  | testes | ~+117 | +149 (+27 %; quase tudo nos textos forjados dos casos do leitor) |
+  | casos | 5 | 5 |
+
+### Para as próximas
+
+- Caminho novo que o navegador abre no `apps/api` por navegação de topo (outro retorno do cliente OIDC, ou um endpoint do emissor em passthrough) reprova na suíte do `apps/api` até ganhar o próprio `location =`, sem o desvio, e a entrada no `ExactBlocks`.
+- **Depois do deploy da imagem do `frontend`:** o `curl` com navegação da seção da #189 no `docs/deployment.md`, e a homologação da M3 retomada em "Login pelo Google".

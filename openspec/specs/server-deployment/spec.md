@@ -208,7 +208,11 @@ As exceções SHALL ser explícitas, nomeadas e com o motivo de cada uma:
   (`/.well-known/openid-configuration`, `/.well-known/jwks`,
   `/connect/authorize` e `/connect/logout`): `/.well-known/` é prefixo de uso
   geral na web e não entra inteiro, e o authorize e o logout são navegação de
-  browser por definição, sem o desvio de navegação.
+  browser por definição, sem o desvio de navegação;
+- o retorno do cliente OIDC dos provedores federados do `apps/api`
+  (`/auth/federated/callback`, o `FederatedLogin.CallbackPath`), em bloco exato
+  próprio: o provedor devolve o navegador a ele numa navegação de topo, e o bloco
+  exato vence a regex de `auth`, sem o desvio de navegação.
 
 A cobertura SHALL ser conferida por um teste na suíte de cada app que o nginx
 roteia, sobre os endpoints do host construído do próprio app (a composição real,
@@ -220,6 +224,22 @@ bloco exato saiu) também reprova. A mensagem SHALL nomear o prefixo.
 Todo bloco de prefixo de API SHALL aplicar o mesmo desvio de navegação real
 (`Sec-Fetch-Mode: navigate` cai no shell do SPA), inclusive quando o prefixo não é
 rota de página do `react-router` no momento.
+
+**Todo caminho que o navegador abre no `apps/api` por navegação de topo** SHALL ter
+um bloco exato próprio (`location =`), que encaminha ao `apps/api` **sem** o desvio
+de navegação: sob o bloco de prefixo, a navegação de topo receberia o shell do SPA
+em vez da resposta do `apps/api`. São eles os endpoints do cliente OIDC dos
+provedores federados (o `FederatedLogin.CallbackPath` e os caminhos de
+`RedirectionEndpointUris` e de `PostLogoutRedirectionEndpointUris` do cliente
+composto) e os endpoints do emissor em passthrough, que o painel abre por
+navegação (o `/connect/authorize` e o `/connect/logout`). A conferência SHALL ser um teste da suíte do `apps/api` que tira essa
+lista do código, sobre um host com um provedor configurado, e a compara com a
+configuração do nginx lida do repositório. A lista do código vazia SHALL reprovar,
+e a mensagem SHALL nomear o caminho.
+
+Os destinos do SPA para onde o `apps/api` redireciona (`/entrar`, `/convite` e
+`/account`, com a query da volta) SHALL continuar no SPA: em `/account`, que é
+prefixo de API, a navegação de topo SHALL continuar no desvio.
 
 Acrescentar prefixo de rota de primeiro nível a `apps/api`, a `apps/inbox` ou a
 `apps/connectors` SHALL incluir a entrada correspondente nesta configuração, ainda
@@ -346,6 +366,34 @@ suficiente para detectar a omissão.
 - **WHEN** um bloco de regex que encaminha para um app não tem o desvio de
   navegação (`Sec-Fetch-Mode: navigate` reescrito para `/index.html`)
 - **THEN** o teste de cobertura da suíte desse app reprova, nomeando o bloco
+
+#### Scenario: Retorno do provedor federado chega ao apps/api numa navegação real
+- **WHEN** o browser volta do Google numa navegação de topo (`Sec-Fetch-Mode:
+  navigate`) a `/auth/federated/callback?state=…&code=…` contra o nginx do stack
+- **THEN** o nginx encaminha a requisição para `apps/api`, que responde pela
+  própria rota (com um state forjado, `302` para `/entrar?recusa=falha`); a
+  requisição **não** recebe `200` com o `index.html` do SPA
+
+#### Scenario: O resto de /auth continua no desvio de navegação
+- **WHEN** o browser faz uma navegação real (`Sec-Fetch-Mode: navigate`) em
+  `/auth/federated/providers` ou em `/auth/federated/callbackxyz`
+- **THEN** o nginx responde com `index.html` e `Cache-Control: no-store`, sem
+  encaminhar a requisição para `apps/api`
+
+#### Scenario: A volta do conectar em /account continua no SPA
+- **WHEN** o browser chega a `/account?conectado=<chave>` ou a
+  `/account?recusa=<motivo>` numa navegação de topo, pelo `302` do `apps/api`
+- **THEN** o nginx responde com `index.html` (o desvio de navegação do bloco de
+  `account`), e o SPA lê a query
+
+#### Scenario: Caminho de navegação de topo do apps/api sem bloco exato reprova a suíte
+- **WHEN** um caminho de navegação de topo do `apps/api` tirado do código (o
+  retorno do cliente OIDC, um redirecionamento configurado no cliente, ou um
+  endpoint do emissor que o painel abre por navegação, como o `/connect/authorize`
+  e o `/connect/logout`) não tem
+  `location =` próprio que encaminhe ao `apps/api`, ou o tem com o desvio de
+  navegação
+- **THEN** o teste da suíte do `apps/api` reprova, nomeando o caminho
 
 ### Requirement: Shell do SPA não é armazenado em cache, e os assets continuam cacheáveis
 O nginx do stack SHALL entregar o shell do SPA (`index.html`) com

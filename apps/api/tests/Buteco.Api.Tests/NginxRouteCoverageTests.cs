@@ -1,4 +1,5 @@
 using Buteco.Api.Identity;
+using Buteco.Api.Identity.Federated;
 using Buteco.Api.Tests.Support;
 using Buteco.Tests.Shared;
 using Microsoft.AspNetCore.Routing;
@@ -33,6 +34,8 @@ public class NginxRouteCoverageTests(ApiFactoryFixture factory)
             "navegação de browser por definição, e por isso sem o desvio de navegação; o location = vence a regex de connect",
         [IdentityIssuerEndpoints.EndSession] =
             "navegação de browser por definição, e por isso sem o desvio de navegação; o location = vence a regex de connect",
+        [FederatedLogin.CallbackPath] =
+            "o retorno do cliente OIDC: o provedor devolve o navegador numa navegação de topo, sem o desvio; o location = vence a regex de auth",
     };
 
     [Fact]

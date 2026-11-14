@@ -249,4 +249,35 @@ public static class NginxRouting
 
         return problems;
     }
+
+    /// <summary>
+    /// Os caminhos que o navegador abre no app por navegação de topo sem um <c>location =</c> próprio, encaminhando
+    /// ao app e sem o desvio de navegação (spec server-deployment, "Nginx do stack roteia por prefixo"; change
+    /// nginx-retorno-federado, #285, design D3). Pelo bloco de regex do prefixo, com o desvio, esses caminhos recebem
+    /// o shell do SPA. Lista vazia é tudo certo.
+    /// </summary>
+    /// <param name="paths">Os caminhos, tirados do código (a query não entra: o location = casa só o caminho).</param>
+    /// <param name="upstream">O host do upstream do app no nginx: api, inbox ou connectors.</param>
+    public static IReadOnlyList<string> FindNavigationProblems(IEnumerable<string> paths, IReadOnlyList<Location> locations, string upstream)
+    {
+        var problems = new List<string>();
+        foreach (var path in paths.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            var block = locations.FirstOrDefault(l => l.Modifier == "=" && l.Pattern == path);
+            if (block is null)
+            {
+                problems.Add($"'{path}' é aberto por navegação de topo e não tem 'location = {path}': cai no shell do SPA.");
+            }
+            else if (block.Upstream != upstream)
+            {
+                problems.Add($"'{path}' é aberto por navegação de topo e o 'location = {path}' encaminha para '{block.Upstream ?? "nenhum upstream"}', não para '{upstream}'.");
+            }
+            else if (block.HasNavigationDeviation)
+            {
+                problems.Add($"'{path}' é aberto por navegação de topo e o 'location = {path}' tem o desvio de navegação: cai no shell do SPA.");
+            }
+        }
+
+        return problems;
+    }
 }

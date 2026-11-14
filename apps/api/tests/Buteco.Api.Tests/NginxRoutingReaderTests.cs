@@ -119,6 +119,78 @@ public class NginxRoutingReaderTests
         Assert.Contains("^/(agents)(/|$)", exception.Message, StringComparison.Ordinal);
     }
 
+    // ---- Os caminhos de navegação de topo (change nginx-retorno-federado, #285, design D3) ----
+
+    private const string CallbackPath = "/auth/federated/callback";
+
+    private const string AuthBlock = """
+        location ~ ^/(auth)(/|$) {
+            if ($http_sec_fetch_mode = navigate) {
+                rewrite ^ /index.html last;
+            }
+            set $api_upstream api:8080;
+            proxy_pass http://$api_upstream;
+        }
+        """;
+
+    private static string ExactCallback(string body) => $$"""
+        location = {{CallbackPath}} {
+        {{body}}
+        }
+        {{AuthBlock}}
+        """;
+
+    [Fact]
+    public void ANavigationPath_WithItsExactBlockToTheApp_WithoutTheDeviation_HasNoProblem()
+    {
+        var locations = NginxRouting.Parse(ExactCallback("""
+                set $api_upstream api:8080;
+                proxy_pass http://$api_upstream;
+            """));
+
+        Assert.Empty(NginxRouting.FindNavigationProblems([CallbackPath], locations, "api"));
+    }
+
+    [Fact]
+    public void ANavigationPath_OnlyUnderTheRegexBlockWithTheDeviation_IsNamed()
+    {
+        var problem = Assert.Single(NginxRouting.FindNavigationProblems([CallbackPath], NginxRouting.Parse(AuthBlock), "api"));
+
+        Assert.Contains($"'{CallbackPath}'", problem, StringComparison.Ordinal);
+        Assert.Contains("não tem 'location =", problem, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ANavigationPath_WhoseExactBlockHasTheDeviation_IsNamed()
+    {
+        var locations = NginxRouting.Parse(ExactCallback("""
+                if ($http_sec_fetch_mode = navigate) {
+                    rewrite ^ /index.html last;
+                }
+                set $api_upstream api:8080;
+                proxy_pass http://$api_upstream;
+            """));
+
+        var problem = Assert.Single(NginxRouting.FindNavigationProblems([CallbackPath], locations, "api"));
+
+        Assert.Contains($"'{CallbackPath}'", problem, StringComparison.Ordinal);
+        Assert.Contains("desvio de navegação", problem, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ANavigationPath_WhoseExactBlockGoesToAnotherUpstream_IsNamed()
+    {
+        var locations = NginxRouting.Parse(ExactCallback("""
+                set $inbox_upstream inbox:8080;
+                proxy_pass http://$inbox_upstream;
+            """));
+
+        var problem = Assert.Single(NginxRouting.FindNavigationProblems([CallbackPath], locations, "api"));
+
+        Assert.Contains($"'{CallbackPath}'", problem, StringComparison.Ordinal);
+        Assert.Contains("encaminha para 'inbox'", problem, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TheRepositoryConfig_IsFound()
     {
