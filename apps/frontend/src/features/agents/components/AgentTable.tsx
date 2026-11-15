@@ -58,22 +58,28 @@ function ToolsCell({ agent }: { agent: Agent }) {
 export function AgentTable({ agents }: AgentTableProps) {
   return (
     <SectionedCard>
-      <Table>
+      {/* Layout fixo, com largura em cada coluna (#287). No layout automático, o
+          piso de largura de uma coluna é o conteúdo sem quebra; o `nowrap` do
+          truncate da descrição fazia a coluna crescer até a linha inteira em vez
+          de cortar, e o `overflow: hidden` do SectionedCard escondia as outras
+          quatro colunas, sem rolagem. Com a largura fixa, o conteúdo não mexe na
+          grade e o truncate corta. Mesmo mecanismo do KnowledgeBaseTable. */}
+      <Table layout="fixed">
         <Table.Thead bg="var(--buteco-surface-subtle)">
           <Table.Tr>
-            <Table.Th>
+            <Table.Th w="38%">
               <SectionLabel>Agente</SectionLabel>
             </Table.Th>
-            <Table.Th>
+            <Table.Th w="18%">
               <SectionLabel>Provedor / modelo</SectionLabel>
             </Table.Th>
-            <Table.Th>
+            <Table.Th w="13%">
               <SectionLabel>Ferramentas</SectionLabel>
             </Table.Th>
-            <Table.Th>
+            <Table.Th w="17%">
               <SectionLabel>Delega para</SectionLabel>
             </Table.Th>
-            <Table.Th>
+            <Table.Th w="14%">
               <SectionLabel>Estado</SectionLabel>
             </Table.Th>
           </Table.Tr>
@@ -85,12 +91,12 @@ export function AgentTable({ agents }: AgentTableProps) {
             return (
               <Table.Tr key={agent.id}>
                 <Table.Td>
-                  <Stack gap={2} style={{ minWidth: 0 }}>
+                  <Stack gap={2}>
                     <Anchor component={Link} to={`/agents/${agent.id}`}>
                       {agent.name}
                     </Anchor>
                     {agent.description && (
-                      <Text size="xs" c="dimmed" truncate>
+                      <Text size="xs" c="dimmed" truncate title={agent.description}>
                         {agent.description}
                       </Text>
                     )}

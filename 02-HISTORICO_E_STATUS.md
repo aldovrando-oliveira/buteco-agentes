@@ -19466,3 +19466,34 @@ Por que passou: as conferências 13.1 da #189 e 10.1 da #274 usaram `curl`, sem 
 
 - Caminho novo que o navegador abre no `apps/api` por navegação de topo (outro retorno do cliente OIDC, ou um endpoint do emissor em passthrough) reprova na suíte do `apps/api` até ganhar o próprio `location =`, sem o desvio, e a entrada no `ExactBlocks`.
 - **Depois do deploy da imagem do `frontend`:** o `curl` com navegação da seção da #189 no `docs/deployment.md`, e a homologação da M3 retomada em "Login pelo Google".
+
+## `lista-agentes-descricao-truncada` — A lista de agentes com descrição longa (#287)
+
+**Change proposta e implementada em 14/11/2026**, na branch `fix/287-lista-agentes-descricao`, num worktree próprio, a partir de `c74d0d2` (merge do PR #286, a #285). Em `/agents`, um agente com descrição longa (caso real: "Butecando - Recrutamento", ~330 caracteres) fazia a tabela passar da largura do card: só a coluna "Agente" ficava visível, e "Provedor / modelo", "Ferramentas", "Delega para" e "Estado" sumiam, sem rolagem.
+
+Por que acontecia: a descrição já tinha `truncate`, mas a `Table` do `AgentTable` estava em layout automático. Nele, o piso de largura de uma coluna é o conteúdo sem quebra, e o `nowrap` do truncate fazia a coluna crescer até a linha inteira em vez de cortar. O `overflow: hidden` do `SectionedCard` escondia o resto. O `minWidth: 0` do `Stack` da célula não tinha efeito dentro de `td`.
+
+- **A correção** (design D1–D3, D5): `Table layout="fixed"`, com `w` em cada `Table.Th` (`38 | 18 | 13 | 17 | 14 %`), o mecanismo do `KnowledgeBaseTable`; `title={agent.description}` no `Text` da descrição; o `minWidth: 0` do `Stack` saiu. O `truncate` que já existia passou a cortar.
+- **Escopo (D4):** só o `AgentTable`. Dentro de `<Table`, o único outro truncate/lineClamp é o do `KnowledgeBaseTable`, que já era `fixed`.
+- **Os testes** prendem o artefato que a correção grava, porque o jsdom não calcula layout (D6): `--table-layout: fixed` no `<table>` e as cinco larguras nos `<th>`, escritas no teste e não lidas do componente; e, na descrição, o `title` com o texto inteiro e o `data-truncate="end"`, o atributo em que o CSS do Mantine 9.4.2 pendura o corte.
+- Capacidade modificada: `agent-catalog-ui` (o requisito "Listagem de agentes na interface", com a descrição em uma linha e as colunas independentes do comprimento dela, e um cenário novo).
+
+### O que a implementação mediu
+
+| suíte | baseline `c74d0d2` (`287-baseline/`) | fechamento (`287-fechamento/`) | veredito |
+|---|---|---|---|
+| `frontend` | 2818 em 207 arquivos, 198 s, CPU mín. 55 | 2820 em 207 arquivos, 169 s, CPU mín. 62 | APROVADA |
+
+- **Comparação por arquivo + nome** (`frontend.json`): nenhum caso da baseline sumiu nem mudou de resultado. Novos, os dois do `AgentTable.test.tsx`: `trunca a descrição em uma linha e guarda o texto completo no title` e `fixa a largura das colunas, independente do conteúdo`.
+- **A suíte do fechamento rodou depois do Prettier**, do `eslint` e do `tsc -b`. Uma rodada anterior, antes do Prettier (que só quebrou uma linha do teste), também saiu `APROVADA` com 2820 e ficou à parte, em `287-fechamento-pre-prettier/`; não conta.
+- **Os guardas (convenção 15),** pelo `guarda-287.sh`, cada um com 1 reprovado de 17 no `AgentTable.test.tsx` e o `AgentTable.tsx` voltando com o sha igual (`~/.cache/buteco-agents/287-guardas/`):
+  - sem `layout="fixed"`, com as larguras mantidas → reprova `fixa a largura das colunas…`, em `--table-layout` (`expected '' to be 'fixed'`);
+  - sem o `title` → reprova `trunca a descrição…`, na asserção do `title`;
+  - sem o `truncate`, com o `title` mantido → reprova o mesmo caso, na asserção do `data-truncate`.
+- **O ambiente:** os dois worktrees nasceram sem `node_modules` (`npm ci` antes da baseline). A baseline começou com load 5,99 e acabou com 40,70; o fechamento começou com 1,37. A CPU caiu nas duas, como sempre na suíte do `frontend`; verdes, contam pela regra assimétrica.
+- **Medição fora do painel, anterior à change** (design, "Medição fora do painel"): Chrome headless, esquema claro, componente isolado. No layout antigo, só "Agente" visível a 1650, 1100 e 820 px; com o fixo, as cinco colunas nas três larguras, com "Precisa de reconfiguração" cortado a 1100 px e "Inativo" também a 820 px.
+
+### Para as próximas
+
+- **A conferência visual fica para a homologação** (convenção 23; checklist no PR): `/agents` com um agente de descrição longa, um sem provider/model e um que delega para dois, nos dois esquemas de cor, com a janela cheia e a ~1100 px. As porcentagens foram ao merge sem conferência no painel real nem no esquema escuro. Ajuste pedido ali vira change nova, ligada à #287 por issue.
+- **Os selos da coluna "Estado" cortados abaixo de ~1200 px de área útil:** se incomodar na homologação, um rótulo curto no selo vira issue própria.
