@@ -8751,8 +8751,8 @@ M3 Autenticação com Google                       acompanhamento #196
   25 #274  aceite de convite pelo Google               ← #189   (fecha #276 e #277)
   26 #190  painel: login com provedor e recusas        ← #185 #189 #274
   27 #279  painel: contas conectadas (Minha conta, Usuários, Identidade) ← #190
-     #281  a falha do conectar volta ao /entrar (api; em aberto, não bloqueia)
-     #285  o nginx serve o SPA no retorno do Google (frontend; achado da homologação, defeito de entrega da #189)
+     #285  o nginx serve o SPA no retorno do Google (frontend; achado da homologação, corrigido no PR #286)
+     (#281, a falha do conectar que volta ao /entrar, saiu da M3 para o backlog em 17/11/2026)
 M4 Autenticação corporativa                      acompanhamento #197
   28 #191  provedor OIDC genérico                      ← #189
   29 #192  aplicações federadas (troca de token)       ← #187 #191
@@ -19216,6 +19216,8 @@ Onze, todas no D15 do design. Duas decididas pelo dono (13/11/2026): **APPLY-7**
 
 ### Homologação da M3: a conferência com o Google real (decisão do dono, 13/11/2026)
 
+*(Feita em 17/11/2026: ver "Homologação da M3 — Autenticação com Google (#196)", no fim.)*
+
 Fica para a homologação da M3, como a validação visual. Checklist (o detalhe está no `tasks.md` da change, 13.2 a 13.8):
 
 - [ ] **Preparação:** a tela de consentimento OAuth e um cliente "Aplicativo da Web" no Google Cloud, com a URI `https://<PUBLIC_DOMAIN>/auth/federated/callback` (e `http://localhost:5173/auth/federated/callback` para o local), sem origem JavaScript; o `federated-providers.env` (600) no servidor; `docker compose version` ≥ 2.24.0;
@@ -19276,6 +19278,8 @@ Cinco no corpo (D8 do design, sem mudança de contrato) e oito no apply (D10). D
 
 ### Homologação da M3: a conferência com o Google real (com a da #189)
 
+*(Feita em 17/11/2026: ver "Homologação da M3 — Autenticação com Google (#196)", no fim.)*
+
 O detalhe está no `tasks.md` da change, 10.2 a 10.5 (as contas de teste A, com o e-mail do convite, e B, com outro):
 
 - [ ] **10.2** o e-mail certo: o retorno em `/entrar?federado=corporativo&segundoPasso=cadastro&convite=aceito`, o cadastro das 2 etapas, o painel como Operador, a pessoa sem senha com o Google, o login seguinte pedindo o código do Buteco;
@@ -19331,6 +19335,8 @@ Também: a chave do token no `01` estava escrita como `buteco.convite` (a entrad
   Os duplos ficaram abaixo porque cada arquivo de teste tem o seu `respondByPath`; só os fakes divididos foram para `src/test/federatedFakes.ts`.
 
 ### Homologação da M3: validação visual e conferência real (não prendem o PR)
+
+*(Feita em 17/11/2026: ver "Homologação da M3 — Autenticação com Google (#196)", no fim.)*
 
 Pela regra geral (decisão do dono, 14/11/2026; `01`, convenção 23), a change foi arquivada antes do PR e a homologação vem depois do merge. O que ela pedir vira change nova, por issue; a `telas-login-google` não é reaberta.
 
@@ -19395,6 +19401,8 @@ O "O que o apply mudou" do design tem os 10 itens. Decisões do dono:
   O custo por caso acertou (~16 linhas); o erro está na contagem: a projeção contou mais casos por componente do que os cenários pediram (Identidade 15 → 10, API 14 → 10). A produção ficou perto da âncora da #190 e longe do +67 % da #188.
 
 ### Homologação da M3: validação visual e conferência real (não prendem o PR)
+
+*(Feita em 17/11/2026: ver "Homologação da M3 — Autenticação com Google (#196)", no fim.)*
 
 Pela regra geral (decisão do dono, 14/11/2026; `01`, convenção 23), a change foi arquivada antes do PR e a homologação vem depois do merge. O que ela pedir vira change nova, por issue, ligada à #196; a `telas-contas-federadas` não é reaberta.
 
@@ -19497,3 +19505,30 @@ Por que acontecia: a descrição já tinha `truncate`, mas a `Table` do `AgentTa
 
 - **A conferência visual fica para a homologação** (convenção 23; checklist no PR): `/agents` com um agente de descrição longa, um sem provider/model e um que delega para dois, nos dois esquemas de cor, com a janela cheia e a ~1100 px. As porcentagens foram ao merge sem conferência no painel real nem no esquema escuro. Ajuste pedido ali vira change nova, ligada à #287 por issue.
 - **Os selos da coluna "Estado" cortados abaixo de ~1200 px de área útil:** se incomodar na homologação, um rótulo curto no selo vira issue própria.
+
+## Homologação da M3 — Autenticação com Google (#196)
+
+**Concluída em 17/11/2026, com sucesso.** O dono fez a homologação no servidor, com o Google real, depois do merge da #279 (PR #282) e da #285 (PR #286). A autenticação passou em todos os passos do roteiro, e a validação visual em todos os quadros. Pela convenção 23, as changes da M3 foram arquivadas antes da homologação, e nenhuma foi reaberta.
+
+### O resultado, por seção do roteiro
+
+- **Login pelo Google, em Chrome, Firefox e Safari:** passou. A escolha de conta, sem `redirect_uri_mismatch`, os cookies do fluxo e da sessão, e o login seguinte pedindo o código do Buteco (#189 13.2 a 13.5 e 13.8; #190 10.5).
+- **As recusas:** passaram, no login (#189 13.6 e 13.7; #190 10.6) e no conectar (#279 14.7).
+- **O aceite de convite pelo Google:** passou, pelo link do convite e pelo painel (#274 10.2 a 10.5; #190 10.7).
+- **As contas conectadas:** passaram. Conectar com a senha e com o código, desconectar a própria conta, o Admin desconectando outra pessoa e o `409` da última forma (#279 14.6 e 14.8).
+- **A validação visual:** passou em todos os quadros, contra o projeto do Claude Design (#190 10.1 a 10.3; #279 14.1 a 14.5).
+
+### O achado: a #285
+
+O primeiro passo do login pelo Google parou no retorno: o navegador voltava a `/auth/federated/callback` e mostrava o "404 Not Found" do painel. O bloco de `/auth` do `nginx.conf` do `frontend` desviava a navegação de topo para o shell do SPA. Era um defeito de entrega da #189, que as conferências por `curl` sem `Sec-Fetch-Mode` não pegaram.
+
+A correção foi a change `nginx-retorno-federado` (PR #286): um `location =` próprio, sem o desvio, e o guarda `NginxNavigationEndpointsTests` no `apps/api`. Com a imagem nova do `frontend` publicada, o `curl` com `Sec-Fetch-Mode: navigate` da seção da #189 no `docs/deployment.md` deu `302 /entrar?recusa=falha`, com `Referrer-Policy: no-referrer`. O roteiro foi retomado em "Login pelo Google" e seguiu até o fim sem outro achado.
+
+### A #281 vai para o backlog
+
+**Decisão do dono, 17/11/2026:** a #281 (bug, `app: api`) sai da M3 e vai para o backlog, sem milestone e em `Backlog` no board. Ela é a falha do conectar que volta ao `/entrar?recusa=falha`, e não ao `/account?recusa=falha`, quando falta o provedor na volta ou o state vem sem a intenção. Não bloqueia a entrega, é rara e não causa dano. A M3 fecha sem ela.
+
+### O que fecha
+
+- A **#196** fecha com o merge deste registro. Todas as issues dela estão em `Done`, menos a #281, que foi para o backlog.
+- **A M4 — Autenticação corporativa (#197)** é a próxima: a #191 (provedor OIDC genérico), a #192 e a #193, nessa ordem. Pela regra da #196, as issues dela vão para `Ready` quando a M3 fechar.
