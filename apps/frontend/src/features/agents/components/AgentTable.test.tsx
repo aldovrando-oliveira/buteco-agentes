@@ -40,6 +40,18 @@ const inactiveAgent: Agent = {
   a2a: null,
 };
 
+// Descrição do tamanho do caso real da #287 (~330 caracteres), longa o bastante
+// para passar da coluna do agente em qualquer largura de tela.
+const longDescription =
+  'Conduz a triagem de candidatos para as vagas abertas do Butecando: lê o currículo enviado, ' +
+  'confere os requisitos obrigatórios da vaga, faz as perguntas de pré-entrevista sobre ' +
+  'disponibilidade, pretensão salarial e experiência, registra as respostas no histórico do ' +
+  'candidato e encaminha para o recrutador responsável os perfis aprovados na etapa inicial.';
+
+// Larguras do design D2, escritas aqui e não lidas do componente: se o teste lesse
+// a mesma fonte que o AgentTable, não testaria a fonte (convenção 15).
+const expectedColumnWidths = ['38%', '18%', '13%', '17%', '14%'];
+
 function renderTable(agents: Agent[]) {
   return render(
     <MantineProvider theme={theme}>
@@ -184,5 +196,25 @@ describe('AgentTable', () => {
     renderTable([activeAgent]);
 
     expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('trunca a descrição em uma linha e guarda o texto completo no title', () => {
+    renderTable([{ ...activeAgent, description: longDescription }]);
+
+    const description = screen.getByText(longDescription);
+    expect(description).toHaveAttribute('title', longDescription);
+    // O atributo que o Text do Mantine grava com `truncate`, e no qual o CSS dele
+    // pendura o nowrap e as reticências; o jsdom não aplica esse CSS (design D6).
+    expect(description).toHaveAttribute('data-truncate', 'end');
+  });
+
+  it('fixa a largura das colunas, independente do conteúdo', () => {
+    renderTable([{ ...activeAgent, description: longDescription }, inactiveAgent]);
+
+    const table = screen.getByRole('table');
+    expect(table.style.getPropertyValue('--table-layout')).toBe('fixed');
+    expect(screen.getAllByRole('columnheader').map((header) => header.style.width)).toEqual(
+      expectedColumnWidths,
+    );
   });
 });

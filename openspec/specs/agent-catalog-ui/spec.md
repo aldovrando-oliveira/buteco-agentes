@@ -18,7 +18,12 @@ nome ou descrição e um controle de filtro por estado (todos, ativos,
 inativos e os que precisam de reconfiguração), ambos aplicados no cliente
 sobre a coleção já carregada, e SHALL sinalizar, na linha de cada agente,
 quantos dos seus servidores MCP estão vinculados sem nenhuma tool
-permitida.
+permitida. A descrição SHALL ocupar uma única linha na coluna do agente,
+truncada com reticências quando não couber, com o texto completo no
+atributo `title` dessa linha e na página de detalhe do agente; o
+comprimento da descrição SHALL NOT alterar a largura das colunas da
+listagem nem tirar da área visível as outras quatro colunas (provider e
+model, ferramentas, delegação e estado).
 
 #### Scenario: Lista carregada com sucesso
 - **WHEN** o usuário acessa a página de agentes e existem agentes
@@ -60,6 +65,14 @@ permitida.
 - **WHEN** a lista inclui um agente com `description` não nula
 - **THEN** a interface exibe a descrição desse agente na sua linha, junto
   do nome
+
+#### Scenario: Descrição longa é truncada sem esconder as outras colunas
+- **WHEN** a lista inclui um agente cuja descrição não cabe na largura da
+  coluna do agente (por exemplo, com cerca de 330 caracteres)
+- **THEN** a interface exibe a descrição em uma única linha, cortada com
+  reticências, com o texto completo no atributo `title`, e as colunas de
+  provider e model, ferramentas, delegação e estado continuam visíveis,
+  com a mesma largura que teriam com uma descrição curta
 
 #### Scenario: Resumo de ferramentas exibido por agente
 - **WHEN** a lista inclui um agente com um ou mais servidores MCP em

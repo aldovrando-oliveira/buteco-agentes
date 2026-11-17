@@ -1460,6 +1460,13 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **A lista de agentes não perde mais as colunas com descrição longa** (#287): em `/agents`, um agente com
+  descrição de ~330 caracteres fazia a tabela passar da largura do card, e só a coluna "Agente" ficava visível,
+  sem rolagem. A tabela passa a ter largura fixa por coluna, como a das bases de conhecimento, e a descrição fica
+  numa linha, cortada com reticências, com o texto inteiro ao passar o mouse e na página do agente. Abaixo de
+  ~1200 px de área útil, os selos da coluna "Estado" também ganham reticências. **Deploy:** só a imagem do
+  `frontend`.
+
 - **O retorno do Google chega ao `api` atrás do nginx do stack** (#285): o Google devolve o navegador a
   `/auth/federated/callback` numa navegação de topo, e o bloco de `/auth` do `nginx.conf` do painel desviava essa
   navegação para o shell do SPA, que mostrava "404 Not Found". O login, o aceite de convite e o conectar pelo
