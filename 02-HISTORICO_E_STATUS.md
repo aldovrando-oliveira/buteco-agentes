@@ -19220,14 +19220,14 @@ Onze, todas no D15 do design. Duas decididas pelo dono (13/11/2026): **APPLY-7**
 
 Fica para a homologação da M3, como a validação visual. Checklist (o detalhe está no `tasks.md` da change, 13.2 a 13.8):
 
-- [ ] **Preparação:** a tela de consentimento OAuth e um cliente "Aplicativo da Web" no Google Cloud, com a URI `https://<PUBLIC_DOMAIN>/auth/federated/callback` (e `http://localhost:5173/auth/federated/callback` para o local), sem origem JavaScript; o `federated-providers.env` (600) no servidor; `docker compose version` ≥ 2.24.0;
-- [ ] **13.2** o pedido abre a escolha de conta do Google, sem `redirect_uri_mismatch`;
-- [ ] **13.3** o id token real: `iss` com esquema, `email_verified`, `hd` no Workspace e ausente na conta pessoal;
-- [ ] **13.4** o retorno aceito com ou sem o parâmetro `iss` do Google;
-- [ ] **13.5** em **Chrome, Firefox e Safari**: o `buteco-fluxo-externo` (`Lax`) indo no retorno; o `buteco-sessao` e o `buteco-recusa` (`Strict`) **gravados na resposta do retorno**; os dois não indo no carregamento do `/entrar` e indo no `POST` do painel; o authorize devolvendo o código;
-- [ ] **13.6** e-mail não verificado → `email-nao-verificado`;
-- [ ] **13.7** cancelar no Google → `falha`, log 1199;
-- [ ] **13.8** conectar e desconectar de verdade, e o login seguinte pedindo o código do Buteco.
+- [x] **Preparação:** a tela de consentimento OAuth e um cliente "Aplicativo da Web" no Google Cloud, com a URI `https://<PUBLIC_DOMAIN>/auth/federated/callback` (e `http://localhost:5173/auth/federated/callback` para o local), sem origem JavaScript; o `federated-providers.env` (600) no servidor; `docker compose version` ≥ 2.24.0;
+- [x] **13.2** o pedido abre a escolha de conta do Google, sem `redirect_uri_mismatch`;
+- [x] **13.3** o id token real: `iss` com esquema, `email_verified`, `hd` no Workspace e ausente na conta pessoal;
+- [x] **13.4** o retorno aceito com ou sem o parâmetro `iss` do Google;
+- [x] **13.5** em **Chrome, Firefox e Safari**: o `buteco-fluxo-externo` (`Lax`) indo no retorno; o `buteco-sessao` e o `buteco-recusa` (`Strict`) **gravados na resposta do retorno**; os dois não indo no carregamento do `/entrar` e indo no `POST` do painel; o authorize devolvendo o código;
+- [x] **13.6** e-mail não verificado → `email-nao-verificado`;
+- [x] **13.7** cancelar no Google → `falha`, log 1199;
+- [x] **13.8** conectar e desconectar de verdade, e o login seguinte pedindo o código do Buteco.
 
 **Risco registrado:** se o Safari, ou outro navegador, não gravar o `buteco-sessao` `Strict` na resposta do retorno (a navegação de topo que vem do Google), o desenho do D5 muda: o retorno passaria a gravar um cookie `Lax` curto de uso único, trocado pelo `buteco-sessao` num `POST` same-site do painel. Isso vira uma correção depois do merge, com contrato novo para a #190.
 
@@ -19282,11 +19282,11 @@ Cinco no corpo (D8 do design, sem mudança de contrato) e oito no apply (D10). D
 
 O detalhe está no `tasks.md` da change, 10.2 a 10.5 (as contas de teste A, com o e-mail do convite, e B, com outro):
 
-- [ ] **10.2** o e-mail certo: o retorno em `/entrar?federado=corporativo&segundoPasso=cadastro&convite=aceito`, o cadastro das 2 etapas, o painel como Operador, a pessoa sem senha com o Google, o login seguinte pedindo o código do Buteco;
-- [ ] **10.3** outro e-mail: `/convite?recusa=outro-email`, o `buteco-recusa` lido uma vez, nenhuma sessão, o convite aceito em seguida por senha;
-- [ ] **10.4** cancelar no Google: `/convite?recusa=falha`, o convite pendente, o log 1199 com `access_denied`;
-- [ ] **10.5** o convite cancelado no meio: `/convite?recusa=convite-invalido`, sem sessão e sem vínculo;
-- [ ] **o log do `api`** na homologação: nenhuma linha com o e-mail ou o `sub` das contas de teste (`docker compose logs api | grep`).
+- [x] **10.2** o e-mail certo: o retorno em `/entrar?federado=corporativo&segundoPasso=cadastro&convite=aceito`, o cadastro das 2 etapas, o painel como Operador, a pessoa sem senha com o Google, o login seguinte pedindo o código do Buteco;
+- [x] **10.3** outro e-mail: `/convite?recusa=outro-email`, o `buteco-recusa` lido uma vez, nenhuma sessão, o convite aceito em seguida por senha;
+- [x] **10.4** cancelar no Google: `/convite?recusa=falha`, o convite pendente, o log 1199 com `access_denied`;
+- [x] **10.5** o convite cancelado no meio: `/convite?recusa=convite-invalido`, sem sessão e sem vínculo;
+- [x] **o log do `api`** na homologação: nenhuma linha com o e-mail ou o `sub` das contas de teste (`docker compose logs api | grep`).
 
 ### Para as próximas
 
@@ -19342,16 +19342,16 @@ Pela regra geral (decisão do dono, 14/11/2026; `01`, convenção 23), a change 
 
 **Validação visual**, quadro a quadro contra a versão `1794626941-64ac` (a 77):
 
-- [ ] **10.1 `Main` (`entrega=m3`):** `inicio`; `redirecionando`; `recusa-sem-acesso` e `recusa-sem-acesso-sem-email`; `recusa-convite-pendente`; `recusa-nao-conectada`; `recusa-desativado`; `recusa-email-nao-verificado`; `recusa-dominio-nao-permitido`; `recusa-falha`; `recusa-desconhecida`; `google-indisponivel`; `google-nao-configurado`; `google-muitas-tentativas`; `google-falha-de-rede`; `google-outra-resposta`; `mfa-vindo-do-google`; `cadastro-vindo-do-google`; `cadastro-convite-aceito`;
-- [ ] **10.2 `LoginRecusado`:** os oito cartões (1, 1b, 2 a 7), com as cores e o rótulo do botão;
-- [ ] **10.3 `AceitarConvite` (`entrega=m3`):** `escolha`; `redirecionando`; `provedor-indisponivel`; `provedor-nao-configurado`; `provedor-muitas-tentativas`; `provedor-falha-de-rede`; `provedor-outra-resposta`; `recusa-outro-email`; `recusa-email-nao-verificado`; `recusa-em-uso`; `recusa-dominio-nao-permitido`; `recusa-falha`; `recusa-convite-invalido`; `recusa-sem-token-outro-email`; `recusa-sem-token-falha`;
-- [ ] **10.4 os dados na aba:** `buteco.link.convite` some depois do aceite (antes do cadastro) e de cada recusa; nenhum token na URL em nenhum momento.
+- [x] **10.1 `Main` (`entrega=m3`):** `inicio`; `redirecionando`; `recusa-sem-acesso` e `recusa-sem-acesso-sem-email`; `recusa-convite-pendente`; `recusa-nao-conectada`; `recusa-desativado`; `recusa-email-nao-verificado`; `recusa-dominio-nao-permitido`; `recusa-falha`; `recusa-desconhecida`; `google-indisponivel`; `google-nao-configurado`; `google-muitas-tentativas`; `google-falha-de-rede`; `google-outra-resposta`; `mfa-vindo-do-google`; `cadastro-vindo-do-google`; `cadastro-convite-aceito`;
+- [x] **10.2 `LoginRecusado`:** os oito cartões (1, 1b, 2 a 7), com as cores e o rótulo do botão;
+- [x] **10.3 `AceitarConvite` (`entrega=m3`):** `escolha`; `redirecionando`; `provedor-indisponivel`; `provedor-nao-configurado`; `provedor-muitas-tentativas`; `provedor-falha-de-rede`; `provedor-outra-resposta`; `recusa-outro-email`; `recusa-email-nao-verificado`; `recusa-em-uso`; `recusa-dominio-nao-permitido`; `recusa-falha`; `recusa-convite-invalido`; `recusa-sem-token-outro-email`; `recusa-sem-token-falha`;
+- [x] **10.4 os dados na aba:** `buteco.link.convite` some depois do aceite (antes do cadastro) e de cada recusa; nenhum token na URL em nenhum momento.
 
 **Conferência com o Google real**, com o roteiro da #189 e da #274, agora pelo painel:
 
-- [ ] **10.5** o login de uma conta conectada pelo botão, em Chrome, Firefox e Safari (o `buteco-sessao` e o `buteco-recusa` indo nos `POST`);
-- [ ] **10.6** as recusas reais: `sem-acesso` (com o e-mail, e sem ele depois de recarregar), `nao-conectada`, `convite-pendente`, `falha`;
-- [ ] **10.7** o aceite pelo painel: o e-mail certo, outro e-mail (os dois e-mails e o aceite por senha em seguida), cancelar no Google, o convite cancelado no meio.
+- [x] **10.5** o login de uma conta conectada pelo botão, em Chrome, Firefox e Safari (o `buteco-sessao` e o `buteco-recusa` indo nos `POST`);
+- [x] **10.6** as recusas reais: `sem-acesso` (com o e-mail, e sem ele depois de recarregar), `nao-conectada`, `convite-pendente`, `falha`;
+- [x] **10.7** o aceite pelo painel: o e-mail certo, outro e-mail (os dois e-mails e o aceite por senha em seguida), cancelar no Google, o convite cancelado no meio.
 
 ### Para as próximas
 
@@ -19408,17 +19408,17 @@ Pela regra geral (decisão do dono, 14/11/2026; `01`, convenção 23), a change 
 
 **Validação visual**, quadro e estado contra a versão `1794678488-1a7d` (a 82):
 
-- [ ] **14.1 `MinhaConta` (`entrega=m3`), prop `formas`:** `lista`; `sem-conta`; `confirmar-senha`; `confirmar-senha-errada`; `confirmar-codigo`; `confirmar-codigo-errado`; `provedor-indisponivel`; `provedor-nao-configurado`; `redirecionando`; `conectado`; `recusa-em-uso`; `recusa-ja-conectado`; `recusa-sessao-expirada`; `recusa-dominio-nao-permitido`; `recusa-falha`; `confirmar-desconectar`; `desconectar-409`; `desconectado`; `fora-da-configuracao`; `sem-senha`;
-- [ ] **14.2 `UsuarioDetalhe` (`entrega=m3`), prop `formas`:** `senha-e-google`; `so-senha`; `so-google`; `fora-da-configuracao`; `confirmar-desconectar`; `desconectar-409`; `desconectado`; e `alvo=proprio` (a verificação com o texto de hoje) e `alvo=desativado`;
-- [ ] **14.3 `Usuarios` (`entrega=m3`):** o chip "Google" no tom da "Senha"; o subtítulo e os dois cartões;
-- [ ] **14.4 `Provedores` (`entrega=m3`), prop `federados`:** `lista`; `vazio`; `carregando`; `erro`;
-- [ ] **14.5 os seis formulários no modo código**, com um Admin sem senha, contra `MinhaConta/confirmar-codigo` e `confirmar-codigo-errado`.
+- [x] **14.1 `MinhaConta` (`entrega=m3`), prop `formas`:** `lista`; `sem-conta`; `confirmar-senha`; `confirmar-senha-errada`; `confirmar-codigo`; `confirmar-codigo-errado`; `provedor-indisponivel`; `provedor-nao-configurado`; `redirecionando`; `conectado`; `recusa-em-uso`; `recusa-ja-conectado`; `recusa-sessao-expirada`; `recusa-dominio-nao-permitido`; `recusa-falha`; `confirmar-desconectar`; `desconectar-409`; `desconectado`; `fora-da-configuracao`; `sem-senha`;
+- [x] **14.2 `UsuarioDetalhe` (`entrega=m3`), prop `formas`:** `senha-e-google`; `so-senha`; `so-google`; `fora-da-configuracao`; `confirmar-desconectar`; `desconectar-409`; `desconectado`; e `alvo=proprio` (a verificação com o texto de hoje) e `alvo=desativado`;
+- [x] **14.3 `Usuarios` (`entrega=m3`):** o chip "Google" no tom da "Senha"; o subtítulo e os dois cartões;
+- [x] **14.4 `Provedores` (`entrega=m3`), prop `federados`:** `lista`; `vazio`; `carregando`; `erro`;
+- [x] **14.5 os seis formulários no modo código**, com um Admin sem senha, contra `MinhaConta/confirmar-codigo` e `confirmar-codigo-errado`.
 
 **Conferência com o Google real** (o roteiro da #189, agora pelo painel):
 
-- [ ] **14.6** conectar com a senha e com o código (um Admin que entrou pelo convite com o Google); a volta com o aviso verde; o login seguinte pelo botão do `/entrar`;
-- [ ] **14.7** as recusas: `em-uso`, `ja-conectado`, `sessao-expirada` (trocar a senha noutra aba antes de voltar do Google), `falha` (cancelar no Google), `dominio-nao-permitido` com um `HostedDomain`;
-- [ ] **14.8** desconectar a própria conta (a sessão continua); o Admin desconecta outra pessoa com o painel dela aberto noutro navegador (a aba dela cai em `/entrar?motivo=sessao-expirada` na renovação, em até 15 min); o `409` da última forma.
+- [x] **14.6** conectar com a senha e com o código (um Admin que entrou pelo convite com o Google); a volta com o aviso verde; o login seguinte pelo botão do `/entrar`;
+- [x] **14.7** as recusas: `em-uso`, `ja-conectado`, `sessao-expirada` (trocar a senha noutra aba antes de voltar do Google), `falha` (cancelar no Google), `dominio-nao-permitido` com um `HostedDomain`;
+- [x] **14.8** desconectar a própria conta (a sessão continua); o Admin desconecta outra pessoa com o painel dela aberto noutro navegador (a aba dela cai em `/entrar?motivo=sessao-expirada` na renovação, em até 15 min); o `409` da última forma.
 
 ### Para as próximas
 
@@ -19512,9 +19512,9 @@ Por que acontecia: a descrição já tinha `truncate`, mas a `Table` do `AgentTa
 
 ### O resultado, por seção do roteiro
 
-- **Login pelo Google, em Chrome, Firefox e Safari:** passou. A escolha de conta, sem `redirect_uri_mismatch`, os cookies do fluxo e da sessão, e o login seguinte pedindo o código do Buteco (#189 13.2 a 13.5 e 13.8; #190 10.5).
+- **Login pelo Google, em Chrome, Firefox e Safari:** passou. A escolha de conta, sem `redirect_uri_mismatch`, os cookies do fluxo e da sessão, e o login seguinte pedindo o código do Buteco (#189 13.2 a 13.5 e 13.8; #190 10.5). No fim da seção, o log do `api` sem o e-mail nem o `sub` das contas de teste (#274).
 - **As recusas:** passaram, no login (#189 13.6 e 13.7; #190 10.6) e no conectar (#279 14.7).
-- **O aceite de convite pelo Google:** passou, pelo link do convite e pelo painel (#274 10.2 a 10.5; #190 10.7).
+- **O aceite de convite pelo Google:** passou, pelo link do convite e pelo painel (#274 10.2 a 10.5; #190 10.7). Nos passos 1, 2, 4 e 6, o `buteco.link.convite` saiu da aba, e nenhum token apareceu na URL (#190 10.4).
 - **As contas conectadas:** passaram. Conectar com a senha e com o código, desconectar a própria conta, o Admin desconectando outra pessoa e o `409` da última forma (#279 14.6 e 14.8).
 - **A validação visual:** passou em todos os quadros, contra o projeto do Claude Design (#190 10.1 a 10.3; #279 14.1 a 14.5).
 
