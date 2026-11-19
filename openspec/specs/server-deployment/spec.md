@@ -233,7 +233,9 @@ provedores federados (o `FederatedLogin.CallbackPath` e os caminhos de
 `RedirectionEndpointUris` e de `PostLogoutRedirectionEndpointUris` do cliente
 composto) e os endpoints do emissor em passthrough, que o painel abre por
 navegação (o `/connect/authorize` e o `/connect/logout`). A conferência SHALL ser um teste da suíte do `apps/api` que tira essa
-lista do código, sobre um host com um provedor configurado, e a compara com a
+lista do código, sobre um host com um provedor configurado e sobre um host sem
+nenhum provedor (o cliente OIDC existe nos dois, e o retorno é navegação de topo
+nos dois), e a compara com a
 configuração do nginx lida do repositório. A lista do código vazia SHALL reprovar,
 e a mensagem SHALL nomear o caminho.
 
@@ -393,7 +395,12 @@ suficiente para detectar a omissão.
   e o `/connect/logout`) não tem
   `location =` próprio que encaminhe ao `apps/api`, ou o tem com o desvio de
   navegação
-- **THEN** o teste da suíte do `apps/api` reprova, nomeando o caminho
+- **THEN** o teste da suíte do `apps/api` reprova, nos dois hosts, nomeando o caminho
+
+#### Scenario: A lista do código vazia reprova nos dois hosts
+- **WHEN** a lista de caminhos de navegação de topo que o teste tira do código vem
+  vazia, no host com provedor ou no host sem nenhum provedor
+- **THEN** o teste reprova dizendo que não há o que conferir, e não fica verde
 
 ### Requirement: Shell do SPA não é armazenado em cache, e os assets continuam cacheáveis
 O nginx do stack SHALL entregar o shell do SPA (`index.html`) com

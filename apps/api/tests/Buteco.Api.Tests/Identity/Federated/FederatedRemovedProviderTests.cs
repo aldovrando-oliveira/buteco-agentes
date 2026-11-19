@@ -4,9 +4,11 @@ using System.Net.Http.Json;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Tests.Support;
 using Buteco.Api.Users;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OpenIddict.Abstractions;
 using OpenIddict.Client;
 
 namespace Buteco.Api.Tests.Identity.Federated;
@@ -126,6 +128,146 @@ public class FederatedNoProviderTests(NoProviderFixture fixture) : IClassFixture
         Assert.Equal("/entrar?recusa=falha", response.Headers.Location!.OriginalString);
         Assert.DoesNotContain(GoogleFlow.SetCookiesOf(response), cookie => cookie.StartsWith("buteco-sessao=", StringComparison.Ordinal));
     }
+}
+
+/// <summary>
+/// O caso 1 da #281 (change conectar-falha-minha-conta, design D1): o fluxo começa com o único provedor, e a volta
+/// chega ao <c>apps/api</c> reiniciado SEM nenhum provedor, no mesmo banco e com o mesmo anel. O cliente OIDC existe
+/// sem registração, confere o state e restaura as propriedades; a falha volta aonde a intenção começou. Antes da
+/// correção, as três voltas respondiam <c>/entrar?recusa=falha</c> (a rota recusava antes de ler o state).
+/// </summary>
+public class FederatedNoProviderAfterRestartTests(RestartedWithoutProviderFixture fixture) : IClassFixture<RestartedWithoutProviderFixture>
+{
+    [Fact]
+    public async Task TheConnect_WithNoProviderConfigured_IsFailure_BackToTheAccount()
+    {
+        var person = await SignedInUser.CreateAsync(fixture, "conectar-sem-provedor");
+        var (started, code) = await StartConnectAsync(person);
+        var stateBefore = await RestartAssertions.StateStatusAsync(fixture, started);
+        var restarted = await fixture.WithoutProviderAsync();
+        var before = restarted.Logs.Lines.Count;
+
+        var returned = await GoogleFlow.ReturnAsync(SignedInUser.Anonymous(restarted), code, started.Query["state"], started.FlowCookie);
+
+        Assert.Equal("valid", stateBefore);
+        Assert.Equal(HttpStatusCode.Redirect, returned.Response.StatusCode);
+        Assert.Equal("/account?recusa=falha&provedor=corporativo", returned.Location);
+        Assert.Null(returned.Cookie("buteco-sessao"));
+        RestartAssertions.OnlyTheFlowCookieDeleted(returned, started);
+        Assert.Empty(await RemovedProviderAssertions.LinksOfAsync(fixture, person.User.Id));
+        Assert.Equal("redeemed", await RestartAssertions.StateStatusAsync(fixture, started));
+        RestartAssertions.NoProviderLogged(restarted, before, "corporativo");
+    }
+
+    [Fact]
+    public async Task TheLogin_WithNoProviderConfigured_IsFailure_ToTheLogin_WithTheProvider()
+    {
+        var client = GoogleFlow.Client(fixture);
+        var started = await GoogleFlow.StartAsync(client);
+        Assert.Equal(HttpStatusCode.OK, started.Response.StatusCode);
+        var code = GoogleFlow.Consent(fixture, started, GoogleFlow.NewAccount(LocalUserSeed.UniqueEmail("login-sem-provedor")));
+        var restarted = await fixture.WithoutProviderAsync();
+        var before = restarted.Logs.Lines.Count;
+
+        var returned = await GoogleFlow.ReturnAsync(SignedInUser.Anonymous(restarted), code, started.Query["state"], started.FlowCookie);
+
+        Assert.Equal(HttpStatusCode.Redirect, returned.Response.StatusCode);
+        Assert.Equal("/entrar?recusa=falha&provedor=corporativo", returned.Location);
+        Assert.Null(returned.Cookie("buteco-sessao"));
+        RestartAssertions.OnlyTheFlowCookieDeleted(returned, started);
+        RestartAssertions.NoProviderLogged(restarted, before, "corporativo");
+    }
+
+    [Fact]
+    public async Task TheAccept_WithNoProviderConfigured_IsFailure_BackToTheInvitation_StillPending()
+    {
+        var caller = await SignedInUser.CreateAsync(fixture, "aceite-sem-provedor");
+        var invited = await InvitationSeed.InvitedAsync(fixture.Services, caller.User.Id);
+        var started = await GoogleFlow.StartInvitationAsync(GoogleFlow.Client(fixture), invited.Token);
+        Assert.Equal(HttpStatusCode.OK, started.Response.StatusCode);
+        var code = GoogleFlow.Consent(fixture, started, GoogleFlow.NewAccount(invited.User.Email));
+        var restarted = await fixture.WithoutProviderAsync();
+
+        var returned = await GoogleFlow.ReturnAsync(SignedInUser.Anonymous(restarted), code, started.Query["state"], started.FlowCookie);
+
+        Assert.Equal(HttpStatusCode.Redirect, returned.Response.StatusCode);
+        Assert.Equal("/convite?recusa=falha&provedor=corporativo", returned.Location);
+        Assert.Null(returned.Cookie("buteco-sessao"));
+        Assert.Empty(await RemovedProviderAssertions.LinksOfAsync(fixture, invited.User.Id));
+        var reloaded = await SignedInUser.ReloadAsync(fixture.Services, invited.User.Id);
+        Assert.Equal(UserStatus.Invited, reloaded.Status);
+        Assert.Equal(invited.User.AccessLinkHash, reloaded.AccessLinkHash);
+    }
+
+    /// <summary>
+    /// O destino da falha não sai do pedido (D3; spec federated-login, "O destino da falha não sai do pedido"): parâmetros
+    /// a mais na query da volta não mudam o <c>Location</c>, que é um dos três destinos fixos e relativos.
+    /// </summary>
+    [Theory]
+    [InlineData("https://outro.example/")]
+    [InlineData("//outro.example")]
+    public async Task TheFailureTarget_IsAlwaysOneOfTheFixed(string retorno)
+    {
+        var person = await SignedInUser.CreateAsync(fixture, "conectar-destino-fixo");
+        var (started, code) = await StartConnectAsync(person);
+        var restarted = await fixture.WithoutProviderAsync();
+        var query = new Dictionary<string, string?> { ["state"] = started.Query["state"], ["code"] = code, ["retorno"] = retorno, ["redirect_uri"] = retorno };
+        var request = new HttpRequestMessage(HttpMethod.Get, QueryHelpers.AddQueryString("/auth/federated/callback", query));
+        request.Headers.Add("Cookie", started.FlowCookie!);
+
+        var response = await SignedInUser.Anonymous(restarted).SendAsync(request);
+
+        var location = response.Headers.Location!.OriginalString;
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains(location, RestartAssertions.FixedFailureTargets);
+        Assert.StartsWith("/", location, StringComparison.Ordinal);
+        Assert.False(location.StartsWith("//", StringComparison.Ordinal), location);
+        Assert.Equal("/account?recusa=falha&provedor=corporativo", location);
+    }
+
+    private async Task<(GoogleFlow.Started Started, string Code)> StartConnectAsync(SignedInUser person)
+    {
+        var connect = new HttpRequestMessage(HttpMethod.Post, "/account/federated/corporativo/connect") { Content = JsonContent.Create(new { senha = person.Password }) };
+        connect.Headers.Authorization = new AuthenticationHeaderValue("Bearer", person.AccessToken);
+        var started = GoogleFlow.Read(await GoogleFlow.Client(fixture).SendAsync(connect));
+        Assert.Equal(HttpStatusCode.OK, started.Response.StatusCode);
+        return (started, GoogleFlow.Consent(fixture, started, GoogleFlow.NewAccount(LocalUserSeed.UniqueEmail("conta-do-conectar"))));
+    }
+}
+
+internal static class RestartAssertions
+{
+    /// <summary>Os destinos fixos da falha (D3), sem e com a chave conhecida.</summary>
+    public static readonly string[] FixedFailureTargets =
+    [
+        "/entrar?recusa=falha", "/account?recusa=falha", "/convite?recusa=falha",
+        "/entrar?recusa=falha&provedor=corporativo", "/account?recusa=falha&provedor=corporativo", "/convite?recusa=falha&provedor=corporativo",
+    ];
+
+    /// <summary>
+    /// O status da linha do state token em openiddict_tokens, achada pelo reference id (o state da URL). Pelo gerente
+    /// do OpenIddict: a coluna guarda o reference id ofuscado (<c>OpenIddictTokenManager.ObfuscateReferenceIdAsync</c>).
+    /// </summary>
+    public static async Task<string?> StateStatusAsync(ApiFactoryFixture fixture, GoogleFlow.Started started)
+    {
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
+        var token = await manager.FindByReferenceIdAsync(started.Query["state"]);
+        return token is null ? null : await manager.GetStatusAsync(token);
+    }
+
+    /// <summary>O cookie do fluxo apagado, e nenhum outro cookie gravado (D3: sem cookie novo).</summary>
+    public static void OnlyTheFlowCookieDeleted(GoogleFlow.Returned returned, GoogleFlow.Started started)
+    {
+        var flowName = started.FlowCookie!.Split('=')[0];
+        Assert.Contains(returned.SetCookies, header => header.StartsWith($"{flowName}=;", StringComparison.Ordinal));
+        Assert.All(returned.SetCookies, header => Assert.True(header.Split(';')[0].EndsWith('='), $"cookie gravado na falha: {header.Split(';')[0].Split('=')[0]}"));
+    }
+
+    public static void NoProviderLogged(NoProviderSameDatabaseHost host, int before, string key) =>
+        Assert.Contains(host.Logs.Lines.Skip(before), line => line.EventId.Id == 1199
+            && line.Message.Contains($"provedor {key},", StringComparison.Ordinal)
+            && line.Message.Contains("sem_provedor_configurado", StringComparison.Ordinal));
 }
 
 internal static class RemovedProviderAssertions

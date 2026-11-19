@@ -340,7 +340,9 @@ no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
   verificação cadastra no primeiro login;
 - só entra quem tem a conta Google **conectada** a um usuário (Minha conta, com a senha). Não há
   entrada automática, nem por domínio; o aceite de convite pelo Google veio na #274 (abaixo);
-- sem provedor configurado, **nada muda**: o login fica só com senha, como antes.
+- sem provedor configurado, **nada muda**: o login fica só com senha, como antes. Desde a #281 o cliente
+  OIDC do `api` fica registrado também sem provedor, sem registração nenhuma: sem pedido de rede, sem
+  rota nova, e o início do login pelo Google continua respondendo `404`.
 
 **Versão do Docker Compose: 2.24.0 ou mais novo.** O provedor chega ao contêiner por um `env_file`
 opcional do `api` (`required: false`), que o Compose só aceita desde a 2.24.0. Antes do deploy, nos
@@ -464,8 +466,7 @@ provedores federados; e quem não tem senha confirma as ações sensíveis com o
 **Deploy:** só a imagem do `frontend`. Sem variável nova; as rotas são da #189 e da #274.
 
 **Conferir:** o roteiro com o Google real, pelo painel, no `tasks.md` da change `telas-contas-federadas`
-(14.6 a 14.8). A falha do conectar que ainda volta ao `/entrar` (sem provedor na volta, ou o state sem a intenção) é a
-#281, do `api`.
+(14.6 a 14.8). A falha do conectar sem provedor na volta passou a voltar a `/account` na #281, do `api` (abaixo).
 
 **Voltar atrás:** a imagem anterior do `frontend`. As contas conectadas continuam no banco, e o login pelo
 Google continua funcionando; só as telas somem.
@@ -483,6 +484,28 @@ conectar pelo Google não voltavam. O resto de `/auth` continua no desvio.
 `/entrar?recusa=falha`; `200` é o defeito); depois, o login pelo Google pelo painel.
 
 **Voltar atrás:** a imagem anterior do `frontend`, com o defeito de volta (o retorno do Google cai no SPA).
+
+#### A falha do conectar sem provedor volta a Minha conta (#281)
+
+**O que muda:** quando o provedor sai da configuração (com reinício do `api`) entre o início e a volta do
+Google, a falha volta aonde o fluxo começou: o conectar a `/account?recusa=falha&provedor=<chave>`, o aceite
+de convite a `/convite?recusa=falha&provedor=<chave>` e o login a `/entrar?recusa=falha&provedor=<chave>`.
+Antes, as três iam ao `/entrar?recusa=falha`. Para isso, o cliente OIDC do `api` fica registrado também sem
+provedor, sem registração: ele lê o state do fluxo de antes do reinício e recusa por falta do provedor. Sem
+provedor, nada muda para quem não usa o Google (sem pedido de rede, sem rota nova). A volta com o state que o
+`api` não reconhece (ausente, forjado, vencido ou já usado) continua indo ao `/entrar?recusa=falha`.
+
+**Deploy:** só a imagem do `api`. Sem variável nova e sem migration.
+
+**Conferir (homologação, depois do merge; no servidor de homologação, nunca no de produção):** com uma conta
+de teste sem Google, começar o conectar em Minha conta e parar na escolha de conta do Google; tirar as
+variáveis `Identity__FederatedProviders__<chave>__*` do `api` e `docker compose -f docker-compose.prod.yml up -d api`;
+voltar ao navegador em até 10 min e escolher a conta. Esperado: `/account` com "Não foi possível conectar a
+conta Google. Tente de novo.", a pessoa logada, nenhuma conta conectada, e no log do `api` a linha
+`FederatedLoginFailed` (1199) com a chave e `sem_provedor_configurado`, sem e-mail nem `sub`. Depois, as
+variáveis de volta, o `api` reiniciado e um conectar inteiro dando certo.
+
+**Voltar atrás:** a imagem anterior do `api`. A falha do conectar sem provedor volta a ir ao `/entrar`.
 
 ### Aplicações externas com credencial do Buteco (#186)
 

@@ -79,10 +79,13 @@ public class IdentityIssuerEndpointsPassthroughTests
     [Fact]
     public void WithBothRoutesAnonymousAndClassified_Passes()
     {
+        // O retorno do cliente OIDC também, como no Program.cs: desde a #281 o cliente existe sempre, com ou sem
+        // provedor, e o passthrough dele cobra a rota (change conectar-falha-minha-conta).
         var app = Build(app =>
         {
             Anonymous(app, IdentityIssuerEndpoints.Authorization, AnonymousRouteReason.AuthEntryPoint);
             Anonymous(app, IdentityIssuerEndpoints.EndSession, AnonymousRouteReason.SessionEnd);
+            Anonymous(app, Buteco.Api.Identity.Federated.FederatedLogin.CallbackPath, AnonymousRouteReason.AuthEntryPoint);
         });
 
         app.ValidateIdentityIssuerEndpoints();

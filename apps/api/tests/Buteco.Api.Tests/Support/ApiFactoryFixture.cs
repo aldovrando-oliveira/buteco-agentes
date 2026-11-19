@@ -23,6 +23,13 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
     protected virtual string? ConfiguredPublicBaseUrl => PublicBaseUrl;
 
+    /// <summary>
+    /// O banco de OUTRO host, em vez do contêiner próprio: o host que volta "depois de um reinício", no mesmo banco e
+    /// com o mesmo anel (change conectar-falha-minha-conta, #281, D4). Nulo: o contêiner próprio, como sempre.
+    /// Com valor, este host não sobe nem apaga contêiner; só confere a migração e carrega o anel.
+    /// </summary>
+    protected virtual string? SharedDatabaseConnectionString => null;
+
     // Compatibilidade com testes que já referenciavam estas constantes
     // diretamente nesta fixture — mesmos valores de TestAuthentication.
     public const string KnownOperatorPassword = TestAuthentication.KnownOperatorPassword;
@@ -79,7 +86,7 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
                 services.Remove(descriptor);
             }
 
-            services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(_postgres.GetConnectionString()));
+            services.AddDbContext<AppDbContext>(options => options.UseButecoAgentsNpgsql(PostgresConnectionString));
 
             // O fixture NÃO sobe RabbitMQ, e a partir da change
             // knowledge-base-indexacao todo POST/PUT de documento publica na
@@ -145,7 +152,7 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
     /// A conexão do Postgres do contêiner, para um processo à parte, como o comando de emergência
     /// das 2 etapas rodado pelo binário (change verificacao-2-etapas-obrigatoria, D6).
     /// </summary>
-    public string PostgresConnectionString => _postgres.GetConnectionString();
+    public string PostgresConnectionString => SharedDatabaseConnectionString ?? _postgres.GetConnectionString();
 
     /// <summary>
     /// <c>false</c> deixa o banco sem migrar depois de subir o host: é o estado em que o
@@ -156,7 +163,10 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
     async Task IAsyncLifetime.InitializeAsync()
     {
-        await _postgres.StartAsync();
+        if (SharedDatabaseConnectionString is null)
+        {
+            await _postgres.StartAsync();
+        }
 
         if (MigratesOnInitialize)
         {
@@ -183,6 +193,11 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
     async Task IAsyncLifetime.DisposeAsync()
     {
+        if (SharedDatabaseConnectionString is not null)
+        {
+            return;
+        }
+
         await _postgres.DisposeAsync();
     }
 }

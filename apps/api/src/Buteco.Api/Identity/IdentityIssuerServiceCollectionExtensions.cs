@@ -156,14 +156,19 @@ public static class IdentityIssuerServiceCollectionExtensions
                     .EnableEndSessionEndpointPassthrough();
             });
 
-        // O cliente OIDC só existe com provedor configurado: sem nenhum, o login fica só com senha,
-        // exatamente como antes da change (spec federated-providers), e nenhum handler do cliente entra
-        // no caminho das requisições.
-        if (federated.Providers.Count == 0)
-        {
-            return services;
-        }
-
+        // O cliente OIDC é registrado SEMPRE, também sem nenhum provedor configurado, e aí sem registração
+        // nenhuma (change conectar-falha-minha-conta, #281, design D1; spec federated-providers):
+        //   1. o retorno de um fluxo começado antes de um reinício sem o provedor precisa ler o state token
+        //      para voltar aonde a intenção começou (o conectar a /account, o aceite a /convite). Sem o
+        //      cliente, o esquema não existe, o AuthenticateAsync da rota lança, e a rota só podia responder
+        //      /entrar sem ler nada; com ele, o OpenIddict confere o state e restaura as propriedades, e o
+        //      FederatedMissingRegistrationHandler recusa por falta da registração, como na chave trocada;
+        //   2. as credenciais que decifram o state saem do anel do emissor (IdentityKeyRingClientOptionsConfigurer),
+        //      que existe sem provedor: nada aqui depende da seção Identity:FederatedProviders;
+        //   3. sem provedor, nada muda para quem não usa o Google: sem registração não há discovery a buscar
+        //      (nenhum pedido de rede), o único endpoint do cliente é o retorno, que já era rota mapeada, e o
+        //      início continua respondendo 404 pelo catálogo, antes de qualquer desafio. Medido na sonda da
+        //      tarefa 0 (P2) e preso pelos casos de FederatedClientWithoutProviderTests.
         services.AddSingleton<IConfigureOptions<OpenIddictClientOptions>, IdentityKeyRingClientOptionsConfigurer>();
         services.AddSingleton<IOptionsChangeTokenSource<OpenIddictClientOptions>, IdentityKeyRingClientChangeTokenSource>();
 
@@ -195,6 +200,7 @@ public static class IdentityIssuerServiceCollectionExtensions
                 client.AddEventHandler(FederatedRequestUriHandler.Descriptor);
                 client.AddEventHandler(FederatedMissingRegistrationHandler.Descriptor);
 
+                // Sem provedor, o laço não registra nada: o cliente fica sem registração.
                 var web = client.UseWebProviders();
                 foreach (var provider in federated.Providers)
                 {
