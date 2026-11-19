@@ -6,7 +6,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
 o versionamento segue
 [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-> A **1.0.0** é a primeira versão e reúne as entregas M1, M2 e M3.
+> A **1.0.0** é a primeira versão e reúne tudo o que foi construído até aqui: os agentes, os provedores de IA,
+> as ferramentas MCP, a delegação entre agentes, os canais de mensagem, as bases de conhecimento, os insights, o
+> protocolo A2A, as aplicações externas e o acesso (o emissor de identidade, os usuários, os papéis e a entrada
+> pelo Google), e não só as entregas M1, M2 e M3.
 
 ---
 

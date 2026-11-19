@@ -2770,9 +2770,15 @@ de propor algo nesta base:
     - **A tag só nasce depois do merge desse PR, no commit do merge**, em que os
       arquivos já dizem a versão nova: `git tag -a vX.Y.Z -m "vX.Y.Z"`. **Nunca uma
       tag para depois alterar os arquivos.**
-    - **A release no GitHub sai dessa tag**, com notas resumidas e o link para a
-      seção do `CHANGELOG` na própria tag
-      (`.../blob/vX.Y.Z/CHANGELOG.md`).
+    - **A release no GitHub sai dessa tag**, com notas resumidas e o link para o
+      `CHANGELOG` na própria tag (`.../blob/vX.Y.Z/CHANGELOG.md`).
+    - **As notas da release descrevem o que a versão contém, para quem usa.** Na
+      primeira versão, o produto inteiro; nas seguintes, o que mudou em relação à
+      anterior, agrupado por área (agentes, canais, bases de conhecimento,
+      acesso…). **Sem número de issue nem de PR**: o rastro fica no `CHANGELOG`.
+      As notas da 1.0.0 saíram primeiro só com a autenticação (as entregas M1, M2
+      e M3, com as issues) e foram refeitas em 19/11/2026 para descrever o produto
+      inteiro, que é o que a primeira versão contém.
     - **O AgentCard da A2A tem versão própria** (`AgentCardEndpoints.cs`), que é a
       do agente para o protocolo, e **não acompanha a do produto**. É a exceção da
       regra da versão única, e a única.

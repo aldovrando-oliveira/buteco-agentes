@@ -10,9 +10,10 @@ also a first-class [A2A](https://a2a-protocol.org/latest/) endpoint, so other
 systems can discover and invoke it over an open protocol instead of a
 proprietary API.
 
-> **Status: pre-release.** No official version has been cut yet. The platform
-> is functional end to end — see the [changelog](CHANGELOG.md) for what is
-> already built and [open items](#project-status) for what is not.
+> **Status: [v1.0.0](https://github.com/aldovrando-oliveira/buteco-agentes/releases/tag/v1.0.0).**
+> The first version, running in production, with a single version across all
+> components. See the [changelog](CHANGELOG.md) for what is built and
+> [open items](#project-status) for what is not.
 
 > **Language note.** This README, the license and the security policy are in
 > English. The technical documentation in [`docs/`](docs/README.md) and the
@@ -60,11 +61,11 @@ results back over webhooks.
 
 | App | Role | Stack |
 |---|---|---|
-| **`apps/api`** | Agent catalog, MCP catalog, delegation, knowledge bases, A2A endpoint and agent card, operator login. Never calls the LLM — it persists the task and publishes a job | .NET 10, ASP.NET Core Minimal API, EF Core, RabbitMQ publisher |
+| **`apps/api`** | Agent catalog, MCP catalog, delegation, knowledge bases, insights, A2A endpoint and agent card, external applications, and the OpenID Connect issuer with users, roles and Google sign-in. Never calls the LLM — it persists the task and publishes a job | .NET 10, ASP.NET Core Minimal API, EF Core, OpenIddict, RabbitMQ publisher |
 | **`apps/workers`** | Executes tasks: calls the LLM, resolves MCP tools, runs delegation, fires push notifications | .NET 10 Worker Service, `Microsoft.Agents.AI` |
 | **`apps/inbox`** | Inbound channel catalog, contact/session CRM, message history, debounce orchestrator, channel adapters | .NET 10 Minimal API, own isolated database |
-| **`apps/connectors`** | File-provider connectors for knowledge bases: folder browsing, folder description, root listing and markdown per file. Today, Google Drive through a service account. Development only for now: not yet in the server stack | .NET 10 Minimal API, no database, plain REST calls to the provider |
-| **`apps/frontend`** | Operations panel for agents, MCP, delegation, channels, sessions and conversation history | React 19, TypeScript, Vite, Mantine |
+| **`apps/connectors`** | File-provider connectors for knowledge bases: folder browsing, folder description, root listing and markdown per file. Today, Google Drive through a service account. Part of the server stack, behind the panel's nginx | .NET 10 Minimal API, no database, plain REST calls to the provider |
+| **`apps/frontend`** | Operations panel for agents, MCP, delegation, channels, sessions and conversation history, knowledge bases, insights, external applications, users, identity and the user's own account | React 19, TypeScript, Vite, Mantine |
 
 The five apps never reference each other's code. Anything crossing an app
 boundary goes over authenticated HTTP. See
@@ -75,22 +76,30 @@ boundary goes over authenticated HTTP. See
 ## Features
 
 - **Agent catalog** — instructions, description, skills, per-agent LLM
-  provider and model, activate/deactivate.
+  provider and model, activate/deactivate. Each conversation hands the agent
+  the current date, time and channel.
 - **Multiple LLM providers** — OpenAI, Anthropic (Claude) and Google (Gemini);
   a provider appears only when its credential is configured.
 - **A2A protocol** — `SendMessage`, `GetTask`, per-agent agent card at
   `/.well-known/agent-card.json`, and push notifications over webhooks.
-- **MCP tools** — server catalog with encrypted credentials, per-binding tool
-  selection, and real tool calls during execution.
-- **Agent-to-agent delegation** — one-directional links with depth control.
+- **External applications** — other systems call agents over A2A with a
+  credential issued by Buteco, granted agent by agent and per operation.
+- **MCP tools** — server catalog with encrypted credentials (no
+  authentication, bearer token, or a token in a custom header), a connection
+  test, per-binding tool selection, and real tool calls during execution.
+- **Agent-to-agent delegation** — one-directional links with depth control,
+  cycle detection, and a diagnosis for delegations that do not complete.
 - **Messaging channels** — WhatsApp (via [WAHA](https://waha.devlike.pro/))
   and Telegram, behind a plugin contract that new adapters implement.
 - **Conversation memory** — sessions persisted by context, with incremental
   summarization as conversations grow.
-- **Knowledge bases** — base and document catalog with markdown extraction,
-  chunked and embedded into a vector index in the background. Operators manage
-  documents from the panel: upload or write them, update, delete, watch each
-  one move through indexing, and retry a document whose indexing failed. The
+- **Knowledge bases** — manual bases, and bases synced from a Google Drive
+  folder through `apps/connectors`. Documents go through markdown extraction
+  and are chunked and embedded into a vector index in the background, with a
+  history of the changes to each document. On manual bases, operators manage
+  documents from the panel: upload or write them, update and delete them; on
+  synced bases, the folder is the source. On both, operators watch each
+  document move through indexing and retry one whose indexing failed. The
   base catalog shows, per base, how many documents it holds and how many are
   indexed, in progress or failed, and can filter down to the bases that have a
   failure. A diagnostics tab on each base reports the provenance actually
@@ -100,7 +109,19 @@ boundary goes over authenticated HTTP. See
   present. At execution time each linked, active base becomes a search tool the
   agent can call; results carry the distance, and the agent decides what is
   relevant.
-- **Operations panel** — a web UI for all of the above.
+- **Insights** — token usage, tasks, failures and refusals, system-wide and
+  per agent, as daily series over a chosen period. Delegation is shown from
+  both sides, and measurement gaps are always flagged rather than shown as
+  zero.
+- **Access** — Buteco is its own OpenID Connect issuer, with automatic
+  signing-key rotation. Users sign in with email and password; two-step
+  verification is mandatory for everyone, with recovery codes. Access is by
+  invitation link only, and an Admin generates password-reset links. Three
+  roles: Admin, Operator and Reader. Users can also sign in with Google, accept
+  an invitation with it, and connect or disconnect their Google account; the
+  Buteco two-step code is still required to sign in.
+- **Operations panel** — a web UI for all of the above, with an inventory of
+  the catalogs, search, filters, and light and dark themes.
 
 ---
 
@@ -127,7 +148,8 @@ dotnet run --project apps/connectors/src/Buteco.Connectors   # http://localhost:
 cd apps/frontend && npm install && npm run dev        # http://localhost:5173
 ```
 
-Log in with the development operator: `operator` / `changeme`.
+Sign in with the first development Admin, `operador@buteco.local` /
+`changeme`; the first sign-in asks you to set up two-step verification.
 
 `apps/workers` requires the `TZ` environment variable set to a canonical IANA
 name — it refuses to start otherwise. Using Podman? Read the
@@ -176,6 +198,8 @@ Known gaps, tracked deliberately:
 - **Three coarse roles, no per-resource permissions.** Local users are Admin,
   Operator or Reader, checked per route in the three apps that accept the panel token;
   permissions per agent or knowledge base are out of scope.
+- **Google is the only external sign-in provider.** A generic OpenID Connect
+  provider, for corporate sign-in, is planned and not built.
 
 ---
 
