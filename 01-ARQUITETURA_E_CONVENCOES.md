@@ -2722,3 +2722,63 @@ de propor algo nesta base:
     comparação entre os dois critérios acusou o buraco**; a leitura do primeiro
     resultado não tinha como. Parente da convenção 22 na sexta ocorrência: o número
     não envelheceu, nasceu errado.
+
+26. **Fechamento de versão: os arquivos dizem a versão antes de a tag existir.**
+    Decisão do dono de 19/11/2026, no fechamento da v1.0.0 (02, "v1.0.0 — a
+    primeira versão"). O PR de release da 1.0.0 foi reprovado na primeira revisão
+    porque levava só o `CHANGELOG`; a tag teria nascido num commit em que o
+    `package.json` dizia `0.0.0`.
+
+    **A regra da versão única: o produto é um entregável só e tem UMA versão, a mesma
+    em todos os componentes** — o `apps/api`, o `apps/inbox`, o `apps/connectors`, o
+    `apps/workers`, o `apps/frontend` e os demais projetos (a `libs/ProviderCatalog`,
+    os testes, o bundle do migrator). **Nenhum componente tem versão própria.** A
+    única exceção é o AgentCard da A2A, que é a versão do agente para o protocolo, e
+    não a de um componente. As imagens de deploy da #293, quando vierem, levam a
+    mesma versão na tag.
+
+    - **SemVer, a partir da 1.0.0.** **Patch** para correção; **minor** para
+      funcionalidade compatível (a M4 será a 1.1.0); **major** para quebra de
+      contrato com quem integra: a API A2A, os tokens e as rotas públicas.
+    - **O PR de release muda três coisas juntas, no mesmo commit:**
+      - o `CHANGELOG.md`: o `[Unreleased]` vira `[X.Y.Z] - AAAA-MM-DD`, um
+        `[Unreleased]` vazio entra acima e os links de comparação do rodapé ganham a
+        versão nova;
+      - o `apps/frontend/package.json`, com o `package-lock.json` (`npm version
+        X.Y.Z --no-git-tag-version`; o diff do lock é só a versão, nas duas linhas);
+      - a `<Version>` do `Directory.Build.props` da raiz, que vale para todos os
+        projetos .NET (os apps, a `libs/ProviderCatalog`, os testes, e o bundle do
+        migrator, que compila o api e o inbox). **Nenhum `.csproj` define
+        `<Version>`, `<AssemblyVersion>` ou `<FileVersion>` próprio.**
+
+      O `ProductVersionCoherenceTests` (suíte do `apps/api`, ao lado dos testes do
+      nginx, que também leem arquivos do repositório) guarda a versão única. Ele
+      reprova:
+      - se o `apps/frontend/package.json` e o props divergirem, nomeando os dois
+        valores;
+      - se algum `.csproj` do repositório definir `Version`, `VersionPrefix`,
+        `VersionSuffix`, `AssemblyVersion`, `FileVersion` ou `InformationalVersion`,
+        com qualquer valor, mesmo igual ao do produto, nomeando o arquivo e a
+        propriedade;
+      - se algum `package.json` do repositório tiver outra `version`, ou nenhuma,
+        nomeando o arquivo. Hoje só existe o do frontend, e um novo segue a mesma
+        versão.
+
+      A varredura pula `node_modules`, `bin`, `obj` e as pastas ocultas (`.git`, e
+      `.claude`, onde moram as worktrees, que são cópias do repositório em outra
+      branch). Ele não confere o `CHANGELOG`.
+    - **A tag só nasce depois do merge desse PR, no commit do merge**, em que os
+      arquivos já dizem a versão nova: `git tag -a vX.Y.Z -m "vX.Y.Z"`. **Nunca uma
+      tag para depois alterar os arquivos.**
+    - **A release no GitHub sai dessa tag**, com notas resumidas e o link para a
+      seção do `CHANGELOG` na própria tag
+      (`.../blob/vX.Y.Z/CHANGELOG.md`).
+    - **O AgentCard da A2A tem versão própria** (`AgentCardEndpoints.cs`), que é a
+      do agente para o protocolo, e **não acompanha a do produto**. É a exceção da
+      regra da versão única, e a única.
+
+    **Uma armadilha do .NET:** sem `<Version>` nenhuma, o SDK já dá `1.0.0.0` aos
+    assemblies. Então uma DLL que diz `1.0.0.0` não prova que o props está valendo.
+    O que prova é o `dotnet msbuild <csproj> -getProperty:Version
+    -getProperty:DirectoryBuildPropsPath`, ou mudar a `<Version>` e ver a DLL
+    acompanhar (feito na 1.0.0: `1.0.1` no props deu `1.0.1.0` no `Buteco.Api.dll`).

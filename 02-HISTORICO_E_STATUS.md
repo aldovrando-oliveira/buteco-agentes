@@ -8753,7 +8753,7 @@ M3 Autenticação com Google                       acompanhamento #196
   27 #279  painel: contas conectadas (Minha conta, Usuários, Identidade) ← #190
      #285  o nginx serve o SPA no retorno do Google (frontend; achado da homologação, corrigido no PR #286)
      (#281, a falha do conectar que volta ao /entrar, saiu da M3 para o backlog em 17/11/2026)
-     #281  saiu do backlog em 17/11/2026, por decisão do dono, antes da M4 (sem milestone; change conectar-falha-minha-conta, aplicada em 18/11/2026)
+     #281  saiu do backlog em 17/11/2026, por decisão do dono, antes da M4 (sem milestone; change conectar-falha-minha-conta, aplicada em 18/11/2026, PR #291; homologada em 19/11/2026)
 M4 Autenticação corporativa                      acompanhamento #197
   28 #191  provedor OIDC genérico                      ← #189
   29 #192  aplicações federadas (troca de token)       ← #187 #191
@@ -19583,3 +19583,13 @@ A correção foi a change `nginx-retorno-federado` (PR #286): um `location =` pr
 
 - **A homologação (seção 7 da tasks), depois do merge, no servidor de homologação, com a confirmação do dono sobre a máquina:** se for a mesma do piloto, a reprodução não acontece ali. O roteiro está no `docs/deployment.md`, "A falha do conectar sem provedor volta a Minha conta (#281)". Resultado na #281.
 - **Teste que monta o registro do emissor sem o `Program.cs`** (como o `IdentityIssuerEndpointsPassthroughTests`) precisa mapear o retorno do cliente OIDC: o cliente existe sempre.
+
+### A homologação
+
+**Passou em 19/11/2026**, depois do merge do PR #291, no servidor de homologação (seção 7 da tasks, marcada na change arquivada). A reprodução do caso 1, pelo roteiro do `docs/deployment.md`, voltou a `/account?recusa=falha`, com a linha `1199` no log e nenhum vínculo gravado. Nenhum achado; a change não foi reaberta (convenção 23).
+
+## v1.0.0 — a primeira versão
+
+**Fechada em 19/11/2026**, na branch `release/v1.0.0` a partir de `ad6b142` (merge do PR #291). Reúne as entregas da M1, da M2 e da M3, a #281 e o trabalho anterior às milestones; o `CHANGELOG` passou de `[Unreleased]` a `[1.0.0] - 2026-11-19`.
+
+**Decisão do dono, 19/11/2026: a política de versão.** O projeto segue o Versionamento Semântico a partir da 1.0.0, porque está em produção e a API A2A é usada por aplicações externas. **Patch** para correção; **minor** para funcionalidade compatível (a M4 será a 1.1.0); **major** para quebra de contrato com quem integra: a API A2A, os tokens e as rotas públicas. A tag (`vX.Y.Z`, anotada) é criada só depois do merge do PR de release, no commit do merge. O fechamento de versão (o que o PR de release muda, a tag, a release, o AgentCard de fora) virou a convenção 26 do `01-ARQUITETURA_E_CONVENCOES.md`, "Fechamento de versão"; na 1.0.0, o PR #292 passou a levar também o `package.json` (com o lock), a `<Version>` do `Directory.Build.props` e o teste de coerência.
