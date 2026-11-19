@@ -7,4 +7,11 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <!-- A versão do produto, a mesma do apps/frontend/package.json (convenção "Fechamento de versão", no
+       01-ARQUITETURA_E_CONVENCOES.md; o ProductVersionCoherenceTests, no apps/api, confere as duas). Nenhum .csproj
+       define a sua. O AgentCard da A2A tem versão própria e não segue esta. -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
 </Project>

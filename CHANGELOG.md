@@ -3,16 +3,16 @@
 Todas as mudanças relevantes deste projeto são registradas aqui.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e
-o versionamento pretende seguir
+o versionamento segue
 [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-> **Nenhuma versão oficial foi fechada ainda.** Todo o trabalho até aqui está
-> em `[Unreleased]`, agrupado por linha de trabalho. O primeiro release
-> receberá número e data quando for cortado.
+> A **1.0.0** é a primeira versão e reúne as entregas M1, M2 e M3.
 
 ---
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-11-19
 
 ### Added
 
@@ -1933,4 +1933,5 @@ o versionamento pretende seguir
   nas rotas autenticadas, e qualquer outro recebe `403`. As rotas anônimas
   (`/health`, webhooks de canal, push notification) não mudam.
 
-[Unreleased]: https://github.com/aldovrando-oliveira/buteco-agentes/commits/main
+[Unreleased]: https://github.com/aldovrando-oliveira/buteco-agentes/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/aldovrando-oliveira/buteco-agentes/releases/tag/v1.0.0

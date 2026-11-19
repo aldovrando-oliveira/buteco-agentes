@@ -157,5 +157,6 @@ Sem suíte rodando: o `conferencia-281.sh` toma o mesmo lock.
 
 **Depois do merge, no servidor de homologação, com a confirmação do dono sobre a máquina** (decisão do dono, 18/11/2026). Não é tarefa da change: vai como checklist no PR e o resultado vai como comentário na #281.
 
-- Antes de tudo, o dono confirma que o servidor de homologação **não** é a máquina do piloto (design, D6); se for, a reprodução não acontece ali.
-- Na janela que o dono combinar: o roteiro da D6 (o conectar parado na escolha de conta, o provedor tirado e o `api` reiniciado, a volta, as conferências e a restauração conferida).
+- [x] Antes de tudo, o dono confirma que o servidor de homologação **não** é a máquina do piloto (design, D6); se for, a reprodução não acontece ali.
+- [x] Na janela que o dono combinar: o roteiro da D6 (o conectar parado na escolha de conta, o provedor tirado e o `api` reiniciado, a volta, as conferências e a restauração conferida).
+  **Feito (19/11/2026), a homologação passou:** a reprodução do caso 1 no servidor de homologação voltou a `/account?recusa=falha`, com a linha `1199` e nenhum vínculo gravado. Registrado no `02`, "A homologação" da `conectar-falha-minha-conta`.
