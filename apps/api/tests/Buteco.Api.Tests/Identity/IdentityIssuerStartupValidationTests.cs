@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenIddict.Client;
 using OpenIddict.Server;
 
 namespace Buteco.Api.Tests.Identity;
@@ -282,6 +283,25 @@ public class IdentityIssuerStartupValidationTests
         var exception = Record.Exception(() => _ = factory.Services);
 
         Assert.Null(exception);
+    }
+
+    [Fact]
+    public void RealComposition_WithoutProvider_StillChecksTheClientEndpoints()
+    {
+        // Sem provedor (esta composição não tem a seção), o cliente OIDC existe sem registração desde a #281, e a
+        // checagem confere os endpoints dele nos dois sentidos, como com provedor (spec federated-providers, "Sem a
+        // seção, a checagem de boot do cliente passa"). O retorno tirado do cliente tem de reprovar o boot; antes da
+        // #281, sem provedor, a conferência no sentido da lista esperada era pulada e o boot passava.
+        using var factory = new Factory(
+            new() { ["PublicUrl:BaseUrl"] = ApiFactoryFixture.PublicBaseUrl },
+            services => services.Configure<OpenIddictClientOptions>(options => options.RedirectionEndpointUris.Clear()));
+
+        var exception = Record.Exception(() => _ = factory.Services);
+
+        Assert.NotNull(exception);
+        Assert.Contains(
+            "'/auth/federated/callback' está na lista esperada do cliente e não corresponde a nenhum endpoint configurado no cliente OIDC",
+            Flatten(exception), StringComparison.Ordinal);
     }
 
     [Fact]

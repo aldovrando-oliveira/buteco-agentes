@@ -14,8 +14,9 @@ namespace Buteco.Api.Identity.Federated;
 /// <c>ResolveClientRegistrationFromStateToken</c> do OpenIddict 7.7.2 chama o
 /// <c>GetClientRegistrationByIdAsync</c>, que lança quando a registração não está nas opções
 /// (<c>OpenIddictClientService.cs</c> l. 153–155), dentro do middleware de autenticação: o retorno respondia
-/// <c>500</c> antes de chegar à rota. Acontece quando a chave do provedor muda entre o início e o retorno (na
-/// M3, um provedor por issuer: tirar o único já cai no "nenhum provedor configurado" da rota).
+/// <c>500</c> antes de chegar à rota. Acontece quando a chave do provedor muda entre o início e o retorno, e
+/// quando o <c>apps/api</c> volta sem nenhum provedor: desde a #281 o cliente é registrado também sem provedor,
+/// sem registração, e este handler é quem recusa os dois casos, com as propriedades do state já restauradas.
 ///
 /// Roda logo antes do <c>ResolveClientRegistrationFromStateToken</c>, com os mesmos filtros (o state token já
 /// conferido, e já resgatado pelo <c>RedeemStateTokenEntry</c>, que vem antes). Com o

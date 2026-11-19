@@ -8753,6 +8753,7 @@ M3 Autenticação com Google                       acompanhamento #196
   27 #279  painel: contas conectadas (Minha conta, Usuários, Identidade) ← #190
      #285  o nginx serve o SPA no retorno do Google (frontend; achado da homologação, corrigido no PR #286)
      (#281, a falha do conectar que volta ao /entrar, saiu da M3 para o backlog em 17/11/2026)
+     #281  saiu do backlog em 17/11/2026, por decisão do dono, antes da M4 (sem milestone; change conectar-falha-minha-conta, aplicada em 18/11/2026)
 M4 Autenticação corporativa                      acompanhamento #197
   28 #191  provedor OIDC genérico                      ← #189
   29 #192  aplicações federadas (troca de token)       ← #187 #191
@@ -19532,3 +19533,53 @@ A correção foi a change `nginx-retorno-federado` (PR #286): um `location =` pr
 
 - A **#196** fecha com o merge deste registro. Todas as issues dela estão em `Done`, menos a #281, que foi para o backlog.
 - **A M4 — Autenticação corporativa (#197)** é a próxima: a #191 (provedor OIDC genérico), a #192 e a #193, nessa ordem. Pela regra da #196, as issues dela vão para `Ready` quando a M3 fechar.
+
+## `conectar-falha-minha-conta` — A falha do conectar sem provedor volta a Minha conta (#281)
+
+**Change proposta em 17/11/2026 e implementada em 18/11/2026**, na branch `fix/281-conectar-falha-minha-conta`, num worktree próprio, a partir de `0bfa1cf` (merge do PR #290). Bug do `apps/api` achado no design da #279 (Q10), que saiu da M3 para o backlog e voltou antes da M4 por decisão do dono, sem milestone. Quando o único provedor saía da configuração, com reinício do `api`, entre o início e a volta do Google, a falha do conectar respondia `302 /entrar?recusa=falha`: a rota recusava antes de ler o state, porque sem provedor o cliente OIDC nem era registrado e o esquema não existia. A #189, a #276 e a #279 não foram reabertas (convenção 23).
+
+- **A correção (D1, a A):** o cliente OIDC passa a ser registrado sempre, sem registração quando não há provedor. O retorno segue o caminho da chave trocada (#276): o OpenIddict confere o state (cifrado pelo anel, que existe sem provedor), restaura as propriedades, resgata o state, e o `FederatedMissingRegistrationHandler` recusa por falta da registração. A rota perdeu o desvio e responde pela intenção: `/account?recusa=falha&provedor=<chave>` no conectar, `/convite?…` no aceite e `/entrar?…` no login (Q1). O log `1199` diz `sem_provedor_configurado` com a chave do state. A checagem de boot confere o cliente também sem provedor.
+- **O caso 2 (D2, a N, decisão do dono):** o state que o cliente OIDC não reconhece (ausente, forjado, vencido ou já usado) não traz a intenção, e a falha continua no `/entrar?recusa=falha`, agora como regra escrita, com um cenário por sub-caso. O cookie do fluxo não serve de fonte: é do OpenIddict, só correlação, sem proteção, e falta justo no vencido e no já usado.
+- **A segurança (D3):** três destinos fixos e relativos, a chave escapada, nada do pedido no caminho; nenhum vínculo, sessão ou cookie novo; o log sem dado pessoal.
+- **Specs:** `federated-login` (três requisitos), `federated-providers` (o cliente sem provedor: sem rede, sem rota nova, a checagem passando) e `server-deployment` (o guarda do nginx da #285 nos dois hosts).
+
+### O que a implementação mediu
+
+**A tarefa 0, antes de qualquer código (condição do dono):** uma sonda descartável com o mínimo da A, num worktree próprio, apagado no fim (`~/.cache/buteco-agents/281/sonda/`).
+- **P1, o caso real no pod da 10.1 da #274:** as três voltas no `api` reiniciado sem a seção, no mesmo banco, deram os três destinos com `&provedor=corporativo`; os state tokens de `valid=3` a `redeemed=3`, sem erro de decifração. Passou.
+- **P2, sem provedor nada muda:** nas imagens do `origin/main` e da sonda, sem a seção e com o proxy morto, nenhum pedido de rede, a checagem de boot passando e o `providers` vazio. A lista de 22 caminhos diferiu só no `x5c`/`x5t` do JWKS, que muda **a cada boot também no `origin/main`** (o certificado gerado a partir da mesma chave); refeita com dois boots de cada imagem para provar. Passou.
+- **P3, o guarda da #285:** com a A, **a mutação antiga da 3.6 da #285 deixou de pegar** (aprovou); a forma nova, na fonte da lista, reprova nos dois hosts. Passou.
+
+| suíte | baseline `0bfa1cf` (`281/baseline/`) | fechamento | veredito |
+|---|---|---|---|
+| `api` | 1844 + 1 ignorado, 8 min 19 s, CPU mín. 46 | 1857 + 1 ignorado, 8 min 17 s, CPU mín. 46 (`281/fechamento-2/`) | APROVADA |
+| `rt-connectors` | 12/12, CPU mín. 100 | 12/12, CPU mín. 100 (`281/fechamento/`) | APROVADA |
+| `frontend` | 2820 em 207 arquivos, CPU mín. 48 | 2820 em 207 arquivos, CPU mín. 62 (`281/fechamento/`) | APROVADA |
+
+- **A primeira `api` de fechamento** reprovou um caso fora da lista do topo, `IdentityIssuerEndpointsPassthroughTests.WithBothRoutesAnonymousAndClassified_Passes`: o `WebApplication` mínimo dele não mapeava o retorno, que o cliente sempre registrado passou a cobrar. Foi parada; o dono aprovou mapear o `FederatedLogin.CallbackPath` no arranjo, como o `Program.cs`, com o nome e a asserção iguais. **Erro do design:** a D7 dizia que nenhum caso de hoje mudaria. Reprovada pelo caso que a change mudou, corrigida; a `api` refeita aprovou.
+- **Comparação por nome** contra a baseline: nenhum caso saiu nem mudou de resultado; entraram 13, todos aprovados. Na `frontend`, os mesmos 2820 nomes.
+- **Os guardas** (`~/.cache/buteco-agents/281-guardas/`), cada arquivo de volta pela cópia com o sha igual:
+  - G1, o desvio da rota de volta: os 5 casos do caso 1 com `/entrar?recusa=falha`;
+  - G1b, o registro condicional de volta: **por outro caminho**, a checagem de boot derrubou o host sem provedor antes do `500` previsto;
+  - G3, o ramo padrão ao `/account`: os quatro do caso 2 e o forjado sem provedor, e **também o login sem provedor**, que divide o ramo padrão com a intenção desconhecida;
+  - G4, o destino tirado da query: `Location` `https://outro.example/` e `//outro.example`;
+  - G0.2a, o discovery do Google aquecido no boot sem provedor: o contador de saída com a URL;
+  - G0.2b, um endpoint novo do cliente: "A mais: GET /auth/federated/logout-callback";
+  - G0.3a e G0.3b, o guarda da #285 com a lista vazia e sem o `location =`: os dois herdeiros reprovaram.
+- **A conferência local (4.1), com a imagem da change:** 28/28 conferências; as três linhas `1199` com `sem_provedor_configurado`; o log sem nenhum dos 13 valores procurados; a limpeza conferida.
+- **Build:** os mesmos 8 avisos distintos da baseline.
+- **Convenção 18**, contra o D7 (medida sem passar pelo índice: `git diff` nos modificados, `diff` contra `/dev/null` nos novos):
+
+  | | projetado | medido |
+  |---|---|---|
+  | produção | ~+23 / −19 | +35 / −23 (5 de lógica, 30 de comentário: 1 : 6) |
+  | casos de teste | ~+270 | +459 / −4 (103 são a lista dos endpoints gravada da baseline: +356 sem ela) |
+  | duplos | ~+65 | +200 / −3 (dois a mais: o `HostEndpointList` e o gancho de banco compartilhado no `ApiFactoryFixture`) |
+  | casos | 12 | 13 (o do destino fixo é um Theory com dois valores) |
+
+  O erro grande foi nos duplos (+208 %), como a `projecao-conv18-conta-duplos` já tinha visto: o host no mesmo banco precisou de gancho no fixture base, e a lista dos endpoints virou apoio próprio. A produção errou no comentário, e não na lógica: as três razões citadas do cliente sem registração custaram 14 linhas sem nenhuma de código.
+
+### Para as próximas
+
+- **A homologação (seção 7 da tasks), depois do merge, no servidor de homologação, com a confirmação do dono sobre a máquina:** se for a mesma do piloto, a reprodução não acontece ali. O roteiro está no `docs/deployment.md`, "A falha do conectar sem provedor volta a Minha conta (#281)". Resultado na #281.
+- **Teste que monta o registro do emissor sem o `Program.cs`** (como o `IdentityIssuerEndpointsPassthroughTests`) precisa mapear o retorno do cliente OIDC: o cliente existe sempre.

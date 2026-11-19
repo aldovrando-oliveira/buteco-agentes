@@ -184,8 +184,8 @@ public static class IdentityIssuerStartupValidation
         // O cliente OIDC dos provedores federados (design.md da change provedores-federados-google, D3):
         // a mesma conferência, nos dois sentidos, contra IdentityIssuerEndpoints.ExpectedClient. Só o
         // retorno existe, em passthrough.
-        // Sem provedor configurado, o cliente não é registrado, e não há o que conferir.
-        var clientRegistered = app.Services.GetService<Federated.FederatedProviderCatalog>() is { Providers.Count: > 0 };
+        // Também sem provedor: desde a #281 o cliente é registrado sempre, sem registração quando não há
+        // provedor, e o retorno continua sendo o único caminho dele (spec federated-providers).
         var client = ComposeClientWithoutKeys(app.Services);
         var clientPaths = client.RedirectionEndpointUris.Concat(client.PostLogoutRedirectionEndpointUris)
             .Select(PathOf).ToHashSet(StringComparer.Ordinal);
@@ -205,7 +205,7 @@ public static class IdentityIssuerStartupValidation
 
         foreach (var expected in IdentityIssuerEndpoints.ExpectedClient.Keys)
         {
-            if (clientRegistered && !clientPaths.Contains(expected))
+            if (!clientPaths.Contains(expected))
             {
                 problems.Add($"'{expected}' está na lista esperada do cliente e não corresponde a nenhum endpoint configurado no cliente OIDC");
             }

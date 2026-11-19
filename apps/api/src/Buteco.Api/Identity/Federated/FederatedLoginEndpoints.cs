@@ -129,13 +129,8 @@ public static partial class FederatedLoginEndpoints
         var logger = loggerFactory.CreateLogger(LoggerCategory);
         DeleteFlowCookies(httpContext);
 
-        // Sem provedor configurado, o cliente OIDC não existe (nem o esquema dele).
-        if (catalog.Providers.Count == 0)
-        {
-            LogFailed(logger, "(nenhum)", "sem_provedor_configurado");
-            return LoginRefusal(FederatedLogin.Refusals.Failure, providerKey: null);
-        }
-
+        // Sem provedor configurado, o cliente OIDC existe sem registração (#281): o state é lido mesmo assim, e a
+        // falha volta pela intenção dele. A rota NÃO recusa antes do AuthenticateAsync.
         var result = await httpContext.AuthenticateAsync(OpenIddictClientAspNetCoreDefaults.AuthenticationScheme);
 
         var items = result.Properties?.Items ?? new Dictionary<string, string?>();
@@ -145,8 +140,11 @@ public static partial class FederatedLoginEndpoints
 
         if (!result.Succeeded || result.Principal is not { } principal || provider is null)
         {
-            var error = Item(items, OpenIddictClientAspNetCoreConstants.Properties.Error)
-                ?? (provider is null && result.Succeeded ? "provedor_fora_da_configuracao" : "sem_detalhe");
+            // Com o catálogo vazio, o erro do log diz o caso, e não o invalid_request da registração ausente.
+            var error = catalog.Providers.Count == 0
+                ? "sem_provedor_configurado"
+                : Item(items, OpenIddictClientAspNetCoreConstants.Properties.Error)
+                    ?? (provider is null && result.Succeeded ? "provedor_fora_da_configuracao" : "sem_detalhe");
             LogFailed(logger, key ?? "(desconhecido)", error);
             return FailureRefusal(intent, key);
         }
@@ -166,7 +164,14 @@ public static partial class FederatedLoginEndpoints
         };
     }
 
-    /// <summary>A recusa <c>falha</c> volta para onde a intenção do state token começou; ilegível, ao login.</summary>
+    /// <summary>
+    /// A recusa <c>falha</c> volta para onde a intenção do state token começou, e só para um destes três
+    /// destinos fixos e relativos (spec <c>federated-login</c>, "Decisão do login no retorno"; #281, D3):
+    /// <c>/entrar?recusa=falha</c> (login), <c>/account?recusa=falha</c> (conectar) e
+    /// <c>/convite?recusa=falha</c> (aceite), com o <c>provedor</c> do state. A intenção desconhecida (o state
+    /// ausente, forjado, vencido ou já usado: o cliente OIDC recusou antes de restaurar as propriedades) vai ao
+    /// login, sem <c>provedor</c>; nada do pedido, do cookie do fluxo ou da sessão escolhe outro destino.
+    /// </summary>
     private static IResult FailureRefusal(string? intent, string? providerKey) => intent switch
     {
         FederatedLogin.Intents.Connect => AccountRefusal(FederatedLogin.Refusals.Failure, providerKey),

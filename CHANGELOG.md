@@ -1460,6 +1460,23 @@ o versionamento pretende seguir
 
 ### Fixed
 
+- **A falha do conectar sem provedor volta a Minha conta, e não ao login** (#281): quando o provedor saía da
+  configuração, com reinício do `api`, entre o início e a volta do Google, a falha do conectar ia a
+  `/entrar?recusa=falha`, com o aviso do login para quem estava logada no painel. Agora ela volta aonde o fluxo
+  começou: o conectar a `/account?recusa=falha&provedor=<chave>`, o aceite a `/convite?…` e o login a
+  `/entrar?…`, os três com o provedor. O cliente OIDC do `api` passa a ficar registrado também sem provedor, sem
+  registração: ele lê o state do fluxo anterior ao reinício e recusa por falta do provedor, como na chave trocada
+  (#276). Sem provedor, nada muda para quem não usa o Google: sem pedido de rede, sem rota nova, a checagem de boot
+  conferindo o cliente também. A volta com o state que o `api` não reconhece (ausente, forjado, vencido ou já usado)
+  continua no `/entrar?recusa=falha`, agora como regra escrita (decisão do dono, 17/11/2026). O guarda do nginx da
+  #285 roda nos dois hosts, com e sem provedor.
+  - convenção 18, contra o design (~+23 / −19 de produção, ~+270 de casos, ~+65 de duplo, 12 casos): produção
+    **+35 / −23** (5 de lógica e 30 de comentário), casos **+459 / −4** (103 linhas são a lista dos endpoints gravada
+    da baseline), duplos **+200 / −3** (dois a mais que o previsto: a lista dos endpoints e o gancho de banco
+    compartilhado no fixture), **13** casos novos;
+  - **Deploy:** só a imagem do `api` (`docs/deployment.md`, "A falha do conectar sem provedor volta a Minha conta
+    (#281)").
+
 - **A lista de agentes não perde mais as colunas com descrição longa** (#287): em `/agents`, um agente com
   descrição de ~330 caracteres fazia a tabela passar da largura do card, e só a coluna "Agente" ficava visível,
   sem rolagem. A tabela passa a ter largura fixa por coluna, como a das bases de conhecimento, e a descrição fica
