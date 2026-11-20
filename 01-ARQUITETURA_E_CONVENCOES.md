@@ -2169,6 +2169,22 @@ de propor algo nesta base:
     na tarefa de fechamento, e não à disciplina de quem roda** — escrito como
     tarefa, deixa de depender de alguém lembrar.
 
+    **E a rodada da suíte do `apps/api` registra com quantas threads rodou, e se
+    valeu** (`testes-api-paralelismo`, #302). O paralelismo dessa suíte é limitado
+    num arquivo do projeto, com um valor calibrado e **provisório**. A decisão só se
+    confirma ou se reverte pela série, e a série só existe se cada rodada for
+    registrada. Por isso, toda baseline e todo fechamento que rodar a suíte do
+    `apps/api` registra, **por rodada**: as threads **efetivas** (lidas do registro
+    da execução, o `.trx`, e não do arquivo de configuração), o veredito da regra
+    assimétrica (aprovada, reprovada válida ou inconclusiva), a duração e a CPU
+    mínima. A entrada da change no `02` traz a linha "`apps/api`: N rodadas, M
+    inconclusivas, K threads". O gatilho de recalibração, com os limites, está num
+    lugar só: o item "O paralelismo da suíte do `apps/api` (6 coleções, #302) é
+    calibração provisória", nos itens em aberto do `02`. **Como** ver as threads
+    efetivas está no `docs/development.md`, em "Rodar os testes". Isto é tarefa de
+    baseline e de fechamento no `tasks.md`, pela regra do parágrafo acima, e não
+    lembrança de quem roda.
+
     **E a QUARTA coisa, que é a direção inversa e já aconteceu duas vezes na linha
     de `metricas-de-operacao`: a máquina carregada produz falhas que PARECEM
     defeito.** Não é "pré-existente lido como regressão" — é **ambiente lido como
