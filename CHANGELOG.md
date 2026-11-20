@@ -17,6 +17,12 @@ o versionamento segue
 
 ### Changed
 
+- **`KnowledgeBaseCatalogTests` com um host derivado por classe nos casos de cadastro sincronizado**
+  (#303). Só testes do `apps/api`: os casos que falam com o connectors falso compartilham um host
+  por valor de `clientTimeout`, guardado na fixture, com o estado do duplo reposto a cada caso, e
+  requisição deixada em andamento por um caso reprova (no fim dele ou no seguinte, com o nome dele).
+  A classe sozinha caiu de 71–73 s para 10 s, e a suíte de 462–464 s para 372–411 s, com 6 threads.
+
 - **Suíte do `apps/api` com o paralelismo limitado a 6 coleções do xUnit** (#302). Só testes: um
   `xunit.runner.json` no `Buteco.Api.Tests`, com as mensagens de diagnóstico ligadas, para o `.trx`
   de toda execução registrar as threads efetivas. Com o padrão (12 nesta máquina), a suíte saía

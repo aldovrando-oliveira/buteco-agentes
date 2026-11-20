@@ -8702,6 +8702,34 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
     contenção que a própria suíte cria, e a `ICollectionFixture` (ou o Postgres
     compartilhado) muda as duas.
 
+- **`KnowledgeDocumentCatalogTests` deriva um host por chamada de
+  `WithFailingDocumentWrites`, e é candidata a host por classe** (saiu da #303,
+  `api-host-derivado-por-classe`, por decisão do dono em 20/11/2026).
+  - **Números, com 6 threads (baseline `ef3e9f1`):** 8 hosts por execução da classe
+    (2 em `Concurrency`, 5 em `SyncWrites_WhenTheBaseIsDeletedBetweenReadAndSave_Return404`
+    e 1 no caso do impasse). O caso de 5 hosts leva 6,9–8,1 s sozinho e 23,7 s dentro
+    da suíte; boots + descartes são 75–83% dele. A janela da classe ficou em 76–91 s,
+    a segunda maior da suíte e menos da metade da de `KnowledgeBaseCatalogTests`.
+    Ganho estimado: 7 hosts a menos × 3,5–4,5 s ≈ 25–30 s, fora do caminho crítico.
+    O detalhe por iteração está no design da #303, D0.
+  - **Por que saiu:** o ganho não paga o interceptor trocável, a concessão e os três
+    guardas que o host compartilhado exigiria (d11, d12 e d13 do design da #303, D5).
+  - **O que não é:** os 125 s e os ~85 s não atribuídos que motivaram o diagnóstico
+    eram do paralelismo de 12 threads e não se reproduziram com 6. Não há achado
+    aberto sobre eles.
+  - **Gatilho:** a janela de `KnowledgeDocumentCatalogTests` passar de **um terço
+    da duração da suíte** do `apps/api`, numa rodada válida (decisão do dono,
+    20/11/2026). No fechamento da #303 ela virou a maior janela da suíte, mas com
+    78–91 s numa suíte de 372–411 s (cerca de um quinto a um quarto), o gatilho
+    **não** está atingido. Ser a maior janela não basta, porque alguma classe sempre
+    é a maior.
+
+- **Os dois hosts derivados de `KnowledgeBaseCatalogTests.Deletion` (l. 241 e 329)
+  continuam por caso** (#303, design, D3). Ficaram fora do pedido daquela change e
+  do caminho crítico medido: os 9 casos de `Deletion` somaram 25–41 s nas rodadas
+  do estudo de suíte mais rápida. São candidatos ao `SharedDerivedHost` da
+  `ApiFactoryFixture`, sem gatilho: o ganho estimado é pequeno.
+
 ## Próximo passo
 
 ### Sequência de deploy fixada em 20/09/2026 (decisão desta sessão)
@@ -19649,3 +19677,62 @@ A correção foi a change `nginx-retorno-federado` (PR #286): um `location =` pr
 - **Toda baseline e todo fechamento do `apps/api`** registram por rodada as threads efetivas (do `.trx`), o veredito, a duração e a CPU mínima, e a entrada no `02` traz a linha "`apps/api`: N rodadas, M inconclusivas, K threads" (convenção 19). O `suite-302.sh` é o molde.
 - **O gatilho de recalibração** está nos itens em aberto.
 - **Medir com outro valor numa rodada só:** `-- xUnit.MaxParallelThreads=N`, que vence o arquivo.
+
+
+## `api-host-derivado-por-classe` — Host derivado por classe em `KnowledgeBaseCatalogTests.SyncedCreation` (#303)
+
+**Change proposta em 20/11/2026 sobre `c9733ce` e implementada no mesmo dia**, na branch `test/303-api-host-derivado-por-classe`, num worktree próprio. A branch foi avançada por fast-forward para `ef3e9f1` (merge do PR #304, a #302) antes do apply. É a segunda change de barateamento da suíte, depois da #302. Os 38 casos de `KnowledgeBaseCatalogTests.SyncedCreation` que falam com um connectors falso derivavam, cada um, um host novo da fixture. Como os 106 casos da classe rodam em série, a classe era o caminho crítico da suíte.
+
+- **A mudança:** só testes do `apps/api`.
+  - `ApiFactoryFixture.SharedDerivedHost<T>(chave, compor)`: um host derivado por chave, composto na primeira chamada e descartado no fim da fixture, antes do banco.
+  - `WithConnectors` passa a usar um host por classe e por `clientTimeout` (o padrão e o de 300 ms), com o cliente por caso.
+  - `FakeConnectorsHttpMessageHandler.Reset(caso)` e a contagem de requisições em andamento, e `LogEventCounter.Reset()`.
+  - **Estado em voo reprova em duas linhas:** no descarte do `ConnectorsHost`, o caso que vazou; no `Reset` do caso seguinte, com o nome do caso que vazou.
+  - Nenhum caso saiu, mudou de nome ou de asserção. Nenhum arquivo de produção mudou.
+- **Spec:** `api-scaffold`, um requisito escrito como condição: quando casos de uma classe compartilham um host derivado, o estado mutável é reposto antes de cada caso, e estado de outro caso em andamento reprova.
+- **O que saiu do escopo, por decisão do dono (20/11/2026):** a parte de `KnowledgeDocumentCatalogTests`, ou seja, o interceptor trocável, a concessão e os guardas d11, d12 e d13. O diagnóstico da D0 deu o host como custo dominante do caso de 5 hosts (75–83%). Mas, com 6 threads, o caso leva 24 s e a classe 76–91 s, e o ganho estimado de 25–30 s não paga o mecanismo. Ela ficou nos itens em aberto, com gatilho (a janela dela passar de um terço da suíte).
+
+### O que a implementação mediu
+
+**A D0, o diagnóstico do caso `SyncWrites_WhenTheBaseIsDeletedBetweenReadAndSave_Return404`** (`~/.cache/buteco-agents/303/diagnostico/`, tabelas por iteração no design):
+- sozinho, 8,1 s e 6,9 s, com boots + descartes em 75% e 76%;
+- dentro da suíte, 23,7 s, com 83%;
+- a exclusão de dentro do `SaveChanges` leva 6–30 ms. Os 125 s e os ~85 s não atribuídos do design eram do paralelismo de 12 e não se reproduziram com 6.
+
+**Os pontos de chamada eram 17, não os 18 da proposta:** 16 em `SyncedCreation` e 1 em `KnowledgeBaseCatalogTests.Deletion.cs:208` (`DeleteSyncedBase_FreesTheFolderForANewBase`), que passou ao host compartilhado sem mudar de forma. 39 casos, com as linhas de `Theory`.
+
+**A classe sozinha (4.1)**, intercalada, 106/106 e CPU 100 em todas: **baseline 73 s e 71 s; change 10 s e 10 s.**
+
+**Os guardas** (`~/.cache/buteco-agents/303-guardas/`), com a classe sozinha nas duas pontas:
+- **d9**, `"folder-in-use"` trocado em `KnowledgeBaseEndpoints`: a mesma lista nas duas pontas, 3 casos. São os 2 de `CreateSynced_FolderAlreadyUsed_Returns409WithTheBaseThatUsesIt` e `DeleteSyncedBase_FreesTheFolderForANewBase`.
+- **d10**, sem a checagem de pasta em uso antes do connectors em `CreateKnowledgeBaseCommandHandler`: a mesma lista nas duas pontas, 4 casos, entre eles `CreateSynced_FolderAlreadyUsed_Returns409EvenWithConnectorsDown`.
+- **O guarda do mecanismo (2.5)**, só na change, em `CreateSynced_StoresFolderNameAndUrlFromConnectors_NotFromTheBody` alterado para deixar uma requisição de 10 s em andamento depois da última asserção:
+  - na **primeira linha**, o próprio caso reprova no descarte, com "o caso … terminou com 1 requisição(ões) ao connectors falso em andamento";
+  - com a conferência do descarte desligada, o caso **aprova**, e o **seguinte** reprova no `Reset`, citando o nome dele (**segunda linha**).
+
+  Uma primeira tentativa, com o vazamento antes das asserções, reprovava o caso alterado por asserção própria e foi descartada. Ela mostrou a limitação da primeira linha: a exceção do descarte encobre a asserção do caso. Por decisão do dono, a mensagem passou a dizer isso e a mandar rodar o caso isolado. O guarda e a classe sozinha foram refeitos depois do ajuste, com o mesmo resultado.
+- Todos voltaram pela cópia, com o `sha256` de antes.
+
+**Ordem e isolamento:** a classe inteira duas vezes, os mesmos 106 nomes da baseline (3.1). Os 39 casos do host compartilhado, isolados por método: todos aprovados, o mesmo veredito de dentro da classe (3.2).
+
+**A série desta change**, uma suíte por vez, com o lock e a regra assimétrica:
+
+| rodada | worktree | threads | duração | CPU mín. | veredito | janela de `KnowledgeBaseCatalogTests` |
+|---|---|---|---|---|---|---|
+| diagnóstico (0.5) | `ef3e9f1` + instrumentação temporária | 6 | 416 s | 44 | **INCONCLUSIVA** (`SendMessageProviderRejectionTests…RecordsAgentNotFound…`, fora do escopo) | 190,5 s |
+| baseline (0.3) | `ef3e9f1` | 6 | 462 s | 41 | APROVADA | 197,8 s |
+| fechamento 1 | change | 6 | **372 s** | 51 | APROVADA | **27,9 s** |
+| fechamento 2 | `ef3e9f1` | 6 | 464 s | 46 | APROVADA | 181,6 s |
+| fechamento 3 | change | 6 | **411 s** | 34 | APROVADA | **27,0 s** |
+
+**`apps/api`: 5 rodadas, 1 inconclusiva, 6 threads.** Somada à série da #302 com 6 threads (0 em 8), são 1 inconclusiva em 13 rodadas, abaixo do gatilho (2 nas últimas 10).
+
+- **O caminho crítico mudou de classe:** nas duas rodadas da change, a maior janela passou a ser `KnowledgeDocumentCatalogTests` (90,5 s e 78,0 s).
+- **Comparação por nome:** as rodadas da change e as da baseline têm os mesmos 1861 nomes (1860 aprovados e 1 ignorado), sem nenhuma diferença.
+- **Build:** 19 avisos nas duas pontas, os mesmos 4 distintos.
+
+### Para as próximas
+
+- **Host derivado compartilhado:** `factory.SharedDerivedHost(chave, compor)` na `ApiFactoryFixture`. Quem compartilha repõe o estado mutável a cada caso e acusa o que ficar em andamento (o requisito novo do `api-scaffold`).
+- **Guarda de produção que corre no `dotnet test` sem `--no-build` deixa o binário mutado depois que o arquivo volta.** Recompilar antes de qualquer rodada `--no-build` (feito aqui depois de cada lote de guardas).
+- **`KnowledgeDocumentCatalogTests`** e os hosts de `KnowledgeBaseCatalogTests.Deletion` (D3) estão nos itens em aberto.
