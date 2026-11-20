@@ -8684,6 +8684,24 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   **Gatilho:** qualquer contagem global nova que a suíte venha a testar herda o
   mesmo problema, e a fatia é a forma já verificada de resolver.
 
+- **O paralelismo da suíte do `apps/api` (6 coleções, #302) é calibração provisória.**
+  Ele foi fixado em `xunit.runner.json` com a série de 20/11/2026: com 12 threads,
+  5 inconclusivas em 12 rodadas; com 6, 0 em 8; e a duração parecida. No limiar da
+  significância (Fisher exato sobre a série somada: p ≈ 0,05, unilateral e bilateral;
+  com a série só do design, era 0,12 e 0,23).
+  Cada baseline e cada fechamento do `apps/api` registra as rodadas (convenção 19).
+  - **Gatilho**, qualquer um: **2 inconclusivas nas últimas 10 rodadas** da suíte
+    do `apps/api` com 6 threads, contadas nas entradas das changes; **uma rodada
+    válida acima de ~10 min** (600 s), com o estado ao lado; **mudança da máquina
+    de referência** (núcleos do Mac, CPUs ou memória da VM do Podman, versão do
+    xUnit).
+  - **O que o gatilho dispara:** uma medição nova intercalada (4, 6 e 12, duas
+    rodadas cada) e a decisão de manter, mudar ou voltar ao padrão, e não uma troca
+    automática do valor.
+  - **Vizinho:** a "régua de contenção de `apps/api`", acima. As duas tratam da
+    contenção que a própria suíte cria, e a `ICollectionFixture` (ou o Postgres
+    compartilhado) muda as duas.
+
 ## Próximo passo
 
 ### Sequência de deploy fixada em 20/09/2026 (decisão desta sessão)
@@ -19593,3 +19611,41 @@ A correção foi a change `nginx-retorno-federado` (PR #286): um `location =` pr
 **Fechada em 19/11/2026**, na branch `release/v1.0.0` a partir de `ad6b142` (merge do PR #291). Reúne as entregas da M1, da M2 e da M3, a #281 e o trabalho anterior às milestones; o `CHANGELOG` passou de `[Unreleased]` a `[1.0.0] - 2026-11-19`.
 
 **Decisão do dono, 19/11/2026: a política de versão.** O projeto segue o Versionamento Semântico a partir da 1.0.0, porque está em produção e a API A2A é usada por aplicações externas. **Patch** para correção; **minor** para funcionalidade compatível (a M4 será a 1.1.0); **major** para quebra de contrato com quem integra: a API A2A, os tokens e as rotas públicas. A tag (`vX.Y.Z`, anotada) é criada só depois do merge do PR de release, no commit do merge. O fechamento de versão (o que o PR de release muda, a tag, a release, o AgentCard de fora) virou a convenção 26 do `01-ARQUITETURA_E_CONVENCOES.md`, "Fechamento de versão"; na 1.0.0, o PR #292 passou a levar também o `package.json` (com o lock), a `<Version>` do `Directory.Build.props` e o teste de coerência.
+
+## `testes-api-paralelismo` — O paralelismo da suíte do `apps/api` limitado a 6 (#302)
+
+**Change proposta e implementada em 20/11/2026**, na branch `test/302-testes-api-paralelismo`, num worktree próprio, a partir de `c9733ce` (merge do PR #295). É a primeira change de barateamento da suíte, saída de um estudo de suíte mais rápida (19–20/11/2026, numa branch descartável fora do `main`); as medições que a justificam estão no design. A suíte do `apps/api` rodava com o padrão do xUnit (12 coleções nesta máquina) e saía **inconclusiva** em boa parte das rodadas: um caso de prazo reprovava com a CPU estrangulada, e a rodada inteira se repetia.
+
+- **A mudança:** `apps/api/tests/Buteco.Api.Tests/xunit.runner.json` com `maxParallelThreads: 6` e `diagnosticMessages: true`, copiado para a saída pelo `.csproj`. Nenhum teste e nenhum código de produção mudaram. O `apps/workers` e os `tests/` continuam no padrão: lá não foi medido.
+- **O efeito esperado é validade, não velocidade** (design, D2).
+- **Spec:** `api-scaffold`, um requisito **sem o número nem o mecanismo** (decisão do dono, 20/11/2026): o limite é declarado num arquivo do projeto, e o valor efetivo é verificável no registro da execução. O `openspec validate` exige delta mesmo sem `--strict` (medido na proposta), e não só com `--strict`, como a #236 tinha registrado.
+- **A regra do registro por rodada** entrou na convenção 19 do `01`, e o *como* no `docs/development.md`, "Rodar os testes".
+
+### O que a implementação mediu
+
+**As conferências** (`~/.cache/buteco-agents/302/conferencias/` e `302-guardas/`):
+- **2.1, onde a linha das threads aparece:** na saída padrão do console, não aparece; com `--logger "console;verbosity=normal"`, sim. **O `.trx` grava a linha em qualquer verbosidade**, no bloco de saída da execução, e virou a forma descrita do requisito e a fonte dos scripts.
+- **2.2, o guarda (reprovou contra o defeito):** sem o `<Content …>` no `.csproj` e com o arquivo apagado da saída, `[12 threads]`. Restaurado pela cópia (`7287659414529f8c`, o mesmo sha de antes), `[6 threads]`.
+- **2.3, a precedência:** com o arquivo em 6 e `-- xUnit.MaxParallelThreads=4`, `[4 threads]`. A linha de comando vence o arquivo. A página de runsettings da documentação oficial estava em 404.
+- **2.4, o ruído:** 6 linhas por execução (adaptador, descoberta, partida com as threads, fim, aviso de dados não serializáveis). Ficou `true`.
+- **Build:** 19 avisos e 9 distintos nas duas pontas, a mesma lista.
+
+**A série desta change**, uma suíte por vez, com o lock e a regra assimétrica, intercalada no fechamento:
+
+| rodada | worktree | threads | duração | CPU mín. | veredito |
+|---|---|---|---|---|---|
+| baseline (0.3) | `c9733ce` | 12 | 502 s | 44 | APROVADA |
+| fechamento 1 | change | 6 | 456 s | 53 | APROVADA |
+| fechamento 2 | `c9733ce` | 12 | 446 s | 48 | **INCONCLUSIVA** (`FederatedProviderHangingTests`, 13 s) |
+| fechamento 3 | change | 6 | 458 s | 44 | APROVADA |
+
+**`apps/api`: 4 rodadas, 1 inconclusiva (com 12 threads), 0 inconclusivas com 6.** Somada às medições do design: **12 threads, 5 inconclusivas em 12; 6 threads, 0 em 8.** A duração com 6 ficou em 456–458 s, contra 446–502 s com 12.
+
+- **Comparação por nome:** as duas rodadas da change têm os mesmos 1861 nomes da baseline (1860 aprovados + 1 ignorado), sem nenhuma diferença.
+- **`openspec validate --strict`:** válido.
+
+### Para as próximas
+
+- **Toda baseline e todo fechamento do `apps/api`** registram por rodada as threads efetivas (do `.trx`), o veredito, a duração e a CPU mínima, e a entrada no `02` traz a linha "`apps/api`: N rodadas, M inconclusivas, K threads" (convenção 19). O `suite-302.sh` é o molde.
+- **O gatilho de recalibração** está nos itens em aberto.
+- **Medir com outro valor numa rodada só:** `-- xUnit.MaxParallelThreads=N`, que vence o arquivo.

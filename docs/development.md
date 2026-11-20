@@ -668,6 +668,53 @@ npm run test
 npm run build
 ```
 
+### Paralelismo da suíte do `apps/api`
+
+A suíte do `apps/api` roda com **no máximo 6 coleções do xUnit ao mesmo tempo**, e não com o
+padrão (uma por thread de CPU, 12 na máquina de referência). O valor fica em
+`apps/api/tests/Buteco.Api.Tests/xunit.runner.json` (`maxParallelThreads`), copiado para a
+saída pelo `.csproj`, e vale para qualquer forma de rodar a suíte: o projeto, a solução, a IDE.
+
+**O motivo é validade, não velocidade.** Quase toda classe dessa suíte sobe um Postgres
+próprio. Com 12 coleções ao mesmo tempo, a VM do Podman e a CPU do Mac saturam, a CPU é
+estrangulada, e um caso que mede prazo reprova (`FederatedProviderHangingTests`,
+`IdentityKeyRotationTests`): a rodada sai **inconclusiva** e se repete inteira. Medido em
+19–20/11/2026: com 12, 4 inconclusivas em 10 rodadas; com 6, 0 em 6, com tempo parecido
+(485–509 s contra 483–599 s). A duração não melhora; o que melhora é a taxa de rodadas válidas.
+
+**Calibrado numa máquina**: macOS com 12 núcleos e 16 GiB, VM do Podman (`applehv`) com 6 CPUs
+e 6 GiB, `postgres` e `rabbitmq` do compose de pé, em 20/11/2026. **É provisório.** O gatilho
+da recalibração, com os limites, fica num lugar só: o item "O paralelismo da suíte do
+`apps/api` (6 coleções, #302) é calibração provisória", nos itens em aberto do
+`02-HISTORICO_E_STATUS.md`.
+
+**Ver o valor efetivo de uma execução.** O `xunit.runner.json` liga `diagnosticMessages`, e o
+runner grava na partida do assembly a linha:
+
+```
+Starting:    Buteco.Api.Tests (parallel test collections = on [6 threads], …)
+```
+
+- **No `.trx`**, a linha fica gravada em **qualquer** verbosidade, no bloco de saída da execução.
+  É o registro que vale. Com `--logger "trx;LogFileName=…"`, procure por `parallel test
+  collections` no arquivo.
+- **No console**, ela só aparece com `--logger "console;verbosity=normal"` (ou `detailed`). Na
+  saída padrão do `dotnet test`, não aparece.
+- Se um dia as mensagens de diagnóstico forem desligadas no arquivo, a linha volta por
+  execução com `dotnet test … -- xUnit.DiagnosticMessages=true`.
+
+**Para mudar o valor numa execução só**, a linha de comando vence o arquivo:
+`dotnet test … -- xUnit.MaxParallelThreads=4` roda com `[4 threads]`. Use isso para medir,
+nunca como forma normal de rodar.
+
+**Toda baseline e todo fechamento** que rodarem a suíte do `apps/api` registram, por rodada, as
+threads efetivas (da linha acima), o veredito (aprovada, reprovada válida ou inconclusiva), a
+duração e a CPU mínima. A série fica no `02-HISTORICO_E_STATUS.md`, e a regra está na
+convenção 19 do `01-ARQUITETURA_E_CONVENCOES.md`.
+
+O `apps/workers` e os projetos de `tests/` continuam no padrão do xUnit: o paralelismo deles não
+foi medido.
+
 A suíte do `apps/connectors` tem um teste marcado `Category=Manual`, que fica pulado a
 menos que `GoogleDrive__ServiceAccountKeyBase64` e `CONNECTORS_MANUAL_FOLDER_ID`
 estejam no ambiente: ele lista a raiz de uma pasta real e baixa o markdown de cada

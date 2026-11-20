@@ -15,6 +15,14 @@ o versionamento segue
 
 ## [Unreleased]
 
+### Changed
+
+- **Suíte do `apps/api` com o paralelismo limitado a 6 coleções do xUnit** (#302). Só testes: um
+  `xunit.runner.json` no `Buteco.Api.Tests`, com as mensagens de diagnóstico ligadas, para o `.trx`
+  de toda execução registrar as threads efetivas. Com o padrão (12 nesta máquina), a suíte saía
+  inconclusiva em 5 de 12 rodadas; com 6, em 0 de 8, com a mesma duração. O valor é provisório, com
+  gatilho de recalibração; a regra de registrar as rodadas entrou na convenção 19.
+
 ## [1.0.0] - 2026-11-19
 
 ### Added
