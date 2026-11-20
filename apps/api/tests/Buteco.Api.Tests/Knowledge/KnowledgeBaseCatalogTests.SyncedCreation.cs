@@ -30,23 +30,66 @@ namespace Buteco.Api.Tests.Knowledge;
 /// anexado pelo handler real, que fica por cima do falso: desde a servicos-token-emissor, o
 /// token que o <c>apps/api</c> gera no processo pelo emissor.
 /// </para>
+///
+/// <para>
+/// O host derivado é <b>um por classe e por <c>clientTimeout</c></b>, guardado na fixture
+/// (change api-host-derivado-por-classe, #303): os casos rodam em série e o
+/// reaproveitam, cada um com o seu cliente. O handler falso e o contador de corrida são
+/// repostos a cada <c>WithConnectors</c>, e requisição em andamento que sobra de um caso
+/// reprova, no fim dele ou no seguinte, com o nome dele.
+/// </para>
 /// </summary>
 public partial class KnowledgeBaseCatalogTests
 {
+    /// <summary>
+    /// O acesso de UM caso ao host derivado com o connectors falso. O host é da fixture, compartilhado pelos casos
+    /// da classe (#303, D1 e D2); o cliente é do caso. O descarte, no fim do <c>await using</c> do caso, descarta só o
+    /// cliente e confere que nenhuma requisição do caso ficou em andamento (D4, primeira linha): se ficou, a
+    /// reprovação cai neste caso.
+    /// </summary>
     private sealed record ConnectorsHost(
         WebApplicationFactory<Program> Factory,
         HttpClient Client,
         FakeConnectorsHttpMessageHandler Connectors,
         LogEventCounter RaceCounter) : IAsyncDisposable
     {
-        public async ValueTask DisposeAsync()
+        public ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Factory.DisposeAsync();
+            Connectors.EnsureNothingInFlight();
+            return ValueTask.CompletedTask;
         }
     }
 
-    private ConnectorsHost WithConnectors(TimeSpan? clientTimeout = null)
+    /// <summary>A composição compartilhada: o host derivado e o que os casos alcançam dele.</summary>
+    private sealed record SharedConnectorsComposition(
+        WebApplicationFactory<Program> Factory,
+        FakeConnectorsHttpMessageHandler Connectors,
+        LogEventCounter RaceCounter) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync() => Factory.DisposeAsync();
+    }
+
+    /// <summary>
+    /// O host derivado com o connectors falso, um por classe e por <paramref name="clientTimeout"/> (#303, D2). O
+    /// handler e o contador são repostos a cada pedido, com o nome do caso: requisição de outro caso ainda em
+    /// andamento reprova aqui, com o nome dele (D4, segunda linha). <paramref name="caso"/> vem do compilador; o xUnit 2
+    /// não expõe o caso corrente.
+    /// </summary>
+    private ConnectorsHost WithConnectors(TimeSpan? clientTimeout = null, [System.Runtime.CompilerServices.CallerMemberName] string caso = "")
+    {
+        var key = $"connectors:{(clientTimeout is null ? "padrão" : $"{clientTimeout.Value.TotalMilliseconds} ms")}";
+        var shared = factory.SharedDerivedHost(key, () => ComposeConnectorsHost(clientTimeout));
+
+        shared.Connectors.Reset(caso);
+        shared.RaceCounter.Reset();
+
+        var client = shared.Factory.CreateClient();
+        TestAuthentication.AttachPanelToken(client, shared.Factory.Services);
+        return new ConnectorsHost(shared.Factory, client, shared.Connectors, shared.RaceCounter);
+    }
+
+    private SharedConnectorsComposition ComposeConnectorsHost(TimeSpan? clientTimeout)
     {
         var connectors = new FakeConnectorsHttpMessageHandler();
         var raceCounter = new LogEventCounter(CreateKnowledgeBaseCommandHandler.ConcurrentSyncedCreateRejectedEvent.Id);
@@ -70,9 +113,7 @@ public partial class KnowledgeBaseCatalogTests
             });
         });
 
-        var client = derived.CreateClient();
-        TestAuthentication.AttachPanelToken(client, derived.Services);
-        return new ConnectorsHost(derived, client, connectors, raceCounter);
+        return new SharedConnectorsComposition(derived, connectors, raceCounter);
     }
 
     private static string NewFolderId(string prefix = "pasta") => $"{prefix}-{Guid.NewGuid():N}";

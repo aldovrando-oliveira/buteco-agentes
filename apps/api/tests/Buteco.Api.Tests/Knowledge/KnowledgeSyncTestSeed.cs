@@ -126,6 +126,9 @@ internal sealed class LogEventCounter(int eventId) : ILoggerProvider
 
     public int Count => Volatile.Read(ref _count);
 
+    /// <summary>Zera a contagem entre casos que compartilham o host derivado (#303, D2).</summary>
+    public void Reset() => Interlocked.Exchange(ref _count, 0);
+
     public ILogger CreateLogger(string categoryName) => new CountingLogger(this);
 
     public void Dispose()

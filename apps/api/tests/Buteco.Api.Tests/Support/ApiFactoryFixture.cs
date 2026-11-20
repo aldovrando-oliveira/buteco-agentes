@@ -191,8 +191,36 @@ public class ApiFactoryFixture : WebApplicationFactory<Program>, IAsyncLifetime
         _migrated = true;
     }
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<IAsyncDisposable>> _sharedDerivedHosts = new();
+
+    /// <summary>
+    /// Um host derivado desta fixture <b>compartilhado</b> pelos casos da classe, por chave: compõe na primeira
+    /// chamada e devolve o mesmo nas seguintes (change api-host-derivado-por-classe, #303, D1). A fixture vive
+    /// exatamente o tempo da classe, e os casos de uma classe rodam em série.
+    /// </summary>
+    /// <remarks>
+    /// Quem compartilha repõe, a cada caso, o estado de teste mutável que o host carrega, e acusa o que ficou em
+    /// andamento (o requisito do <c>api-scaffold</c>). A composição guarda junto o que o caso precisa alcançar
+    /// (duplos, contadores), por isso o tipo é o do chamador. Os hosts são descartados no
+    /// <see cref="IAsyncLifetime.DisposeAsync"/>, antes do banco.
+    /// </remarks>
+    public T SharedDerivedHost<T>(string key, Func<T> compose) where T : class, IAsyncDisposable
+    {
+        var shared = _sharedDerivedHosts.GetOrAdd(key, _ => new Lazy<IAsyncDisposable>(compose)).Value;
+        return shared as T
+            ?? throw new InvalidOperationException(
+                $"o host derivado compartilhado '{key}' já foi composto como {shared.GetType().Name}, e não como {typeof(T).Name}");
+    }
+
     async Task IAsyncLifetime.DisposeAsync()
     {
+        foreach (var shared in _sharedDerivedHosts.Values.Where(shared => shared.IsValueCreated))
+        {
+            await shared.Value.DisposeAsync();
+        }
+
+        _sharedDerivedHosts.Clear();
+
         if (SharedDatabaseConnectionString is not null)
         {
             return;
