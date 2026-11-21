@@ -37,6 +37,7 @@ Ver CONTRIBUTING.md.
 - [ ] Testes cruzados em `tests/`, se o PR toca contrato entre apps
 - [ ] `npm run lint && npm run format:check && npm run test && npm run build`, se toca `apps/frontend`
 - [ ] `python3 scripts/check-docs.py`
+- [ ] `python3 -B -m unittest discover -s scripts/tests`
 - [ ] Conferência manual tela a tela, **nos dois esquemas de cor**, se há mudança visual
 
 <!-- Resultado, se algo falhou ou foi pulado: -->

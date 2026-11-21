@@ -8692,12 +8692,62 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   Cada baseline e cada fechamento do `apps/api` registra as rodadas (convenção 19).
   - **Gatilho**, qualquer um: **2 inconclusivas nas últimas 10 rodadas** da suíte
     do `apps/api` com 6 threads, contadas nas entradas das changes; **uma rodada
-    válida acima de ~10 min** (600 s), com o estado ao lado; **mudança da máquina
-    de referência** (núcleos do Mac, CPUs ou memória da VM do Podman, versão do
-    xUnit).
+    válida acima de ~10 min (600 s) com a mediana do `CPU_Speed_Limit` em 55 ou
+    mais**, com o estado ao lado; **mudança da máquina de referência** (núcleos do
+    Mac, CPUs ou memória da VM do Podman, versão do xUnit).
   - **O que o gatilho dispara:** uma medição nova intercalada (4, 6 e 12, duas
     rodadas cada) e a decisão de manter, mudar ou voltar ao padrão, e não uma troca
     automática do valor.
+  - **O piso da mediana (decisão do dono, 21/11/2026, #307).** Rodada válida acima de
+    ~600 s com a mediana **abaixo** de 55 é registrada como estrangulada, com a mediana
+    ao lado, e não conta para o gatilho. O valor é a menor mediana da série com as
+    amostras guardadas (`~/.cache/buteco-agents/302/` e `303/`, código de produção
+    limpo, `CPU_Speed_Limit` a cada 5 s):
+
+    | rodada | threads | duração | CPU mín. | CPU mediana |
+    |---|---|---|---|---|
+    | #302 baseline | 12 | 502 s | 44 | 55 |
+    | #302 fechamento 1 | 6 | 456 s | 53 | 65 |
+    | #302 fechamento 2 (inconclusiva) | 12 | 446 s | 48 | 62 |
+    | #302 fechamento 3 | 6 | 458 s | 44 | 67 |
+    | #303 baseline | 6 | 462 s | 41 | 60 |
+    | #303 diagnóstico (inconclusiva) | 6 | 416 s | 44 | 60 |
+    | #303 fechamento, baseline | 6 | 464 s | 46 | 58 |
+    | #303 fechamento, change | 6 | 372 s | 51 | 60 |
+    | #303 fechamento, change | 6 | 411 s | 34 | 58 |
+    | #307 medição 5.5 | 6 | **825 s** | 25 | **34** |
+    | #307 máquina fria | 6 | **590 s** | 23 | **44** |
+
+    **Por que a mediana, e não o mínimo:** a duração acompanha a mediana. As 9 rodadas
+    da série ficaram em 55–67 de mediana e 372–502 s; as duas de 21/11, em 34 e 44, e
+    825 s e 590 s. O mínimo não separa: uma rodada normal de 411 s teve mínimo 34, e a
+    de 590 s, 23. Um mergulho curto da CPU dá o mesmo mínimo numa rodada rápida e numa
+    lenta. O mínimo continua servindo à regra assimétrica (reprovação com a CPU abaixo
+    de 100 é inconclusiva).
+  - **Três rodadas seguidas do `apps/api` com a mediana abaixo de 55 são sinal para
+    investigar a máquina, e não o paralelismo** (decisão do dono, 21/11/2026). O que
+    investigar primeiro é o que a convenção 19 já lista: o `CPU_Speed_Limit` com a
+    máquina ociosa, `pmset -g therm`, a carga de fora da suíte e o relógio da VM.
+  - **Ocorrências de 21/11/2026 (#307), fechadas como ambiente** (decisão do dono): as
+    duas têm a mediana abaixo de toda a série, e a de 590 s também fica abaixo de 600 s.
+    - **Medição 5.5:** **825 s**, válida, `[6 threads]`, 1860 aprovados + 1 ignorado;
+      `CPU_Speed_Limit` mínimo 25 e mediana 34, load de 1 min em 15–21 gerado pela
+      própria suíte, VM do Podman a ~410% de CPU, nenhuma outra suíte rodando,
+      `5c21c89`. Veio depois de 40 min de outras suítes (frontend, inbox, workers).
+    - **Repetida com a máquina fria:** 5 min seguidos com o `CPU_Speed_Limit` em 100,
+      o load de 1 min em 2,0–2,4 e nenhum teste rodando antes
+      (`~/.cache/buteco-agents/307/api-maquina-fria-esfriamento.txt`), e uma única
+      rodada: **590 s**, válida, `[6 threads]`, 1860 + 1 ignorado; CPU mínima 23,
+      mediana 44, load de 1 min até 13.
+  - **Observação sobre a máquina, separada do paralelismo:** em **21/11/2026** a
+    máquina estrangulou mais do que em 20/11, **mesmo partindo fria**. Em 20/11 (#302 e
+    #303), as rodadas do `apps/api` com 6 threads tiveram a mediana do
+    `CPU_Speed_Limit` em 58–67 e duraram 372–464 s. Em 21/11, a rodada que partiu com a
+    CPU em 100 e o load em 2 teve mediana 44 e durou 590 s, e a que veio depois de outras
+    suítes, mediana 34 e 825 s. No mesmo dia, o Vitest inteiro foi de 145–147 s (CPU
+    mínima 83–100, à tarde) a 277 s (CPU mínima 34, à noite), e a suíte do
+    `apps/workers` levou 412 s com a CPU mínima em 25. O paralelismo era o mesmo nos
+    dois dias. A causa não foi investigada.
   - **Vizinho:** a "régua de contenção de `apps/api`", acima. As duas tratam da
     contenção que a própria suíte cria, e a `ICollectionFixture` (ou o Postgres
     compartilhado) muda as duas.
@@ -8729,6 +8779,22 @@ implementação (o custo de DI da causa 1 não era visível antes de injetar).
   do caminho crítico medido: os 9 casos de `Deletion` somaram 25–41 s nas rodadas
   do estudo de suíte mais rápida. São candidatos ao `SharedDerivedHost` da
   `ApiFactoryFixture`, sem gatilho: o ganho estimado é pequeno.
+
+- **Os limites da seleção pelo diff (#307, `selecao-de-testes-por-diff`).** O
+  `scripts/selecionar-testes.py` escolhe o que rodar nas rodadas intermediárias, e
+  três coisas ele não vê, registradas para não virarem confiança demais:
+  - o `vitest related` segue imports: contrato copiado à mão entre api e frontend (o
+    código `folder-in-use` que o painel lê, no estudo) não aparece do lado do frontend;
+  - o guarda de leitura cruzada (G4) é heurístico: uma leitura de arquivo por caminho
+    montado de outro jeito escapa dele;
+  - a amostra dos 13 fixes mede se o guarda do defeito está na seleção, e não se um
+    defeito novo seria pego, e é enviesada para o que é isolável.
+  - **O que cobre:** o fechamento completo, antes do archive (convenção 19).
+  - **Refinamento possível, sem gatilho:** `tests/Shared/**` selecionar só os três
+    projetos que linkam o arquivo, em vez de tudo.
+  - **Limite do `.gitignore`:** se ele passar a esconder um projeto de teste, a
+    descoberta do script e a do guarda de alcance (G3) deixam de vê-lo juntas,
+    porque as duas partem da mesma lista de arquivos.
 
 ## Próximo passo
 
@@ -19736,3 +19802,40 @@ A correção foi a change `nginx-retorno-federado` (PR #286): um `location =` pr
 - **Host derivado compartilhado:** `factory.SharedDerivedHost(chave, compor)` na `ApiFactoryFixture`. Quem compartilha repõe o estado mutável a cada caso e acusa o que ficar em andamento (o requisito novo do `api-scaffold`).
 - **Guarda de produção que corre no `dotnet test` sem `--no-build` deixa o binário mutado depois que o arquivo volta.** Recompilar antes de qualquer rodada `--no-build` (feito aqui depois de cada lote de guardas).
 - **`KnowledgeDocumentCatalogTests`** e os hosts de `KnowledgeBaseCatalogTests.Deletion` (D3) estão nos itens em aberto.
+
+## `selecao-de-testes-por-diff` — A seleção dos testes das rodadas intermediárias sai do diff (#307)
+
+**Change proposta e implementada em 21/11/2026**, na branch `test/307-selecao-de-testes-por-diff`, num worktree próprio, a partir de `5c21c89` (merge do PR #305). É a parte da "camada rápida" do estudo de suíte mais rápida que não marca nenhum teste: `Trait` e "área tocada" ficaram adiados por decisão do dono. A proposta foi aprovada com quatro correções, aplicadas antes do apply (design, "O que o apply mudou").
+
+**O que entrou:**
+
+- `scripts/selecionar-testes.py`, só biblioteca padrão. **Só planeja:** imprime os passos, com o comando e o motivo, e não roda nada. A execução continua no script local de suíte (o `suite-307.sh` ganhou o modo `plano`), que tem o lock e a regra assimétrica.
+- **As regras:** app .NET tocado roda a suíte inteira dele e os projetos de teste que dependem dele, pelo grafo de `ProjectReference` e `Compile Include` lido dos `.csproj` na hora; `tests/<P>` roda `P`; frontend roda `tsc -b`, lint e `related` (folha) ou o Vitest inteiro (núcleo, configuração, arquivo apagado); os artefatos lidos por outra pilha têm regra própria (`nginx.conf` → `Nginx*` de três apps e `nginxHeaders.test.ts`; `.csproj` e `package.json` do frontend → `ProductVersionCoherenceTests`); caminho não reconhecido roda tudo. O `check-docs.py` e os testes do script entram em todo plano.
+- **Achado do apply:** três testes do frontend varrem `src/` por `readdirSync` (`forbiddenPages`, `surfaceTokens`, `passwordFieldGuard`), e o `related` não os alcança. Passaram a rodar junto de todo `related` (`fe-varreduras`, 8 s).
+- `scripts/tests/`: 12 testes em 1,6–1,8 s, com a tabela à parte (48 linhas), os 13 fixes da amostra do estudo e os guardas de alcance (G3) e de leitura cruzada (G4).
+- Documentação: `docs/development.md` ("Rodadas intermediárias: a seleção pelo diff"), `CONTRIBUTING.md` §1 e o checklist do template de PR (os testes do script), e o parágrafo novo da convenção 19 no `01`.
+- **Nenhum teste existente e nenhum código de produção mudaram.**
+
+**Os guardas (convenção 15),** 9 mutações numa cópia do script, todas reprovando e nomeando o caso, com o versionado intacto (sha256 igual antes e depois), em `~/.cache/buteco-agents/307-guardas/`: o inbox sem a própria suíte; `deploy/**` como frontend comum; `src/auth/` fora do núcleo; o acréscimo de `.csproj` como linha da classificação (nunca dispara); a folha sem as varreduras; sem a regra do nginx (reprova o `b4fcf5d`); sem o grafo de `tests/` (reprova o `bfa1ec0`); a descoberta de projeto de teste pelo nome, com um projeto falso (o controle com o script correto passou verde); e o teste de versão fora das leituras cruzadas.
+
+**A conferência do `related` (2.6):** nos 4 fixes de folha do frontend da amostra, o `vitest list --changed`, sem rodar caso nenhum, lista o teste que pegou o defeito.
+
+**A medição (5.1–5.5),** um passo por vez, com o lock, todos aprovados, sobre `5c21c89`:
+
+| Tipo | Passos | CPU mín. no passo mais longo |
+|---|---|---|
+| folha do frontend | **59 s** (com `tsc` e lint) | 100 |
+| núcleo do frontend | 311 s (Vitest inteiro 277 s) | 34 |
+| só inbox | 125 s | 32 |
+| só workers | 505 s (workers 412 s) | 25 |
+| só api | 961 s (api 825 s) | 25 |
+
+A folha custa 19–33% dos mesmos passos com o Vitest inteiro (180–182 s na proposta, 311 s nesta sessão). No .NET, a seleção não acelera: com o app tocado, a suíte dele roda inteira. A sessão foi muito estrangulada: a rodada do api de 825 s (mediana da CPU 34) e a repetida com a máquina fria, de 590 s (mediana 44), fecharam como ambiente, e o gatilho 2 da #302 passou a exigir a mediana da CPU em 55 ou mais (decisão do dono, no item em aberto).
+
+**`apps/api`: 1 rodada, 0 inconclusivas, 6 threads** (a medição 5.5; não é baseline nem fechamento, porque a change não toca o api).
+
+### Para as próximas
+
+- **Rodada intermediária:** `python3 scripts/selecionar-testes.py --passos > plano.tsv` e o script local de suíte no modo `plano`. A tarefa da rodada no `tasks.md` cita o plano e o SHA da base (convenção 19).
+- **Ao mudar uma regra da seleção, mude primeiro `scripts/tests/selecao-esperada.md`, à mão.**
+

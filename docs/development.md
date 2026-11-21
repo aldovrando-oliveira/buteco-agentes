@@ -709,8 +709,10 @@ nunca como forma normal de rodar.
 
 **Toda baseline e todo fechamento** que rodarem a suíte do `apps/api` registram, por rodada, as
 threads efetivas (da linha acima), o veredito (aprovada, reprovada válida ou inconclusiva), a
-duração e a CPU mínima. A série fica no `02-HISTORICO_E_STATUS.md`, e a regra está na
-convenção 19 do `01-ARQUITETURA_E_CONVENCOES.md`.
+duração e o `CPU_Speed_Limit` mínimo e mediano, das amostras a cada 5 s. A mínima decide se
+uma reprovação vale (regra assimétrica); a mediana é a que acompanha a duração: as rodadas
+normais ficaram com mediana 55–67, e duas rodadas lentas, com 34 e 44. A série fica no
+`02-HISTORICO_E_STATUS.md`, e a regra está na convenção 19 do `01-ARQUITETURA_E_CONVENCOES.md`.
 
 O `apps/workers` e os projetos de `tests/` continuam no padrão do xUnit: o paralelismo deles não
 foi medido.
@@ -723,6 +725,63 @@ arquivo, imprimindo só nomes, códigos e tamanhos.
 Os três projetos em `tests/` são as únicas exceções ao isolamento entre apps,
 e existem exatamente para verificar acordos que nenhum app sozinho consegue
 verificar — ver [conventions.md](conventions.md).
+
+### Rodadas intermediárias: a seleção pelo diff
+
+Durante uma change, entre a baseline e o fechamento, não é preciso rodar todas as suítes a
+cada rodada. O `scripts/selecionar-testes.py` calcula, a partir do diff da branch contra o
+`origin/main` (com o que ainda não foi commitado e os arquivos novos), **o que rodar e por quê**:
+
+```bash
+python3 scripts/selecionar-testes.py            # o plano: os caminhos, a regra de cada um, os passos
+python3 scripts/selecionar-testes.py --passos   # uma linha por passo: id, diretório, comando
+python3 scripts/selecionar-testes.py --base <ref>
+echo apps/inbox/src/Buteco.Inbox/Program.cs | python3 scripts/selecionar-testes.py --caminhos -
+```
+
+**O script só planeja.** Ele não roda suíte nem compila, e não faz `fetch`: o plano imprime o
+SHA da base contra a qual foi calculado. Rode os passos **um por vez**, na ordem do plano, cada
+comando no diretório indicado. Duas suítes .NET com Testcontainers ao mesmo tempo estouram a
+VM do Podman.
+
+**A baseline e o fechamento continuam completos** (convenção 19 do
+`01-ARQUITETURA_E_CONVENCOES.md`), e a suíte de cada app afetado continua obrigatória antes do
+PR ([CONTRIBUTING](../CONTRIBUTING.md#1-testes-dos-apps-afetados)). O que a seleção não rodou, o
+fechamento roda.
+
+**Em todo plano** entram o `check-docs.py` e os testes do próprio script
+(`python3 -B -m unittest discover -s scripts/tests`, ~2 s). Os testes do script reprovam quando
+aparece projeto de teste que nenhuma regra alcança, ou teste que lê arquivo de fora do próprio
+projeto sem regra para isso. Essas duas coisas mudam em `apps/` e em `tests/`, não em `scripts/`.
+
+**As regras.** Cada caminho cai na primeira linha que casa. Os acréscimos valem além dela.
+
+| Caminho tocado | O que roda |
+|---|---|
+| `docs/`, `openspec/`, `.github/`, `.claude/`, `.gitignore` e `.md` da raiz, `LICENSE`, `NOTICE` | nada além dos dois de sempre |
+| `apps/{api,workers,inbox,connectors}/**` | a suíte inteira do app e os projetos de teste que dependem dele, pelo grafo de `ProjectReference` e `Compile Include` lido dos `.csproj` na hora |
+| `tests/<P>/**` (fora `tests/Shared`) | o projeto `P` |
+| `apps/frontend/deploy/**` | os testes `Nginx*` do api, do inbox e do connectors (filtrados) e o `nginxHeaders.test.ts` |
+| `apps/frontend/src/auth/**`, `src/app/**`, `src/theme.ts`, arquivo apagado de `src/` | `tsc -b`, lint e o Vitest inteiro |
+| `apps/frontend/src/**` (o resto) | `tsc -b`, lint, `vitest related --run <arquivos>` e as varreduras de `src/` |
+| `apps/frontend/**` (o resto: `package.json`, configuração, `index.html`) | `tsc -b`, lint e o Vitest inteiro |
+| `scripts/**` | nada além dos dois de sempre |
+| **qualquer outro** (`Directory.*.props`, `global.json`, `libs/`, `tests/Shared/`, app novo, `deploy/`, compose) | **tudo** |
+| acréscimo: qualquer `*.csproj`, e `apps/frontend/package.json` | o `ProductVersionCoherenceTests` do api (filtrado) |
+
+**Por que os artefatos de outra pilha têm regra própria.** O `nginx.conf` do frontend é
+conferido por testes .NET de três apps (`tests/Shared/NginxRouting.cs`). A versão do produto,
+no `package.json` do frontend e em todo `.csproj`, é conferida por um teste do api. Nenhum dos
+dois aparece pelo app tocado. **As varreduras** são os testes do frontend que leem `src/`
+inteiro por `readdirSync` (notificação vermelha fora do `notifyFailure`, tom fixo de superfície,
+`PasswordInput` direto). O `related` não os alcança, porque eles não importam o que varrem.
+
+**Limites.** O `related` segue imports: contrato copiado à mão entre api e frontend (um código
+de erro que o painel lê, por exemplo) não aparece do lado do frontend. É por isso que o
+fechamento é completo.
+
+A expectativa das regras está escrita à parte, em `scripts/tests/selecao-esperada.md`. Ao mudar
+uma regra, mude a tabela primeiro.
 
 ---
 

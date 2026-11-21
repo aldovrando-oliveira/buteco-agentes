@@ -2176,14 +2176,32 @@ de propor algo nesta base:
     registrada. Por isso, toda baseline e todo fechamento que rodar a suíte do
     `apps/api` registra, **por rodada**: as threads **efetivas** (lidas do registro
     da execução, o `.trx`, e não do arquivo de configuração), o veredito da regra
-    assimétrica (aprovada, reprovada válida ou inconclusiva), a duração e a CPU
-    mínima. A entrada da change no `02` traz a linha "`apps/api`: N rodadas, M
+    assimétrica (aprovada, reprovada válida ou inconclusiva), a duração e o
+    `CPU_Speed_Limit` **mínimo e mediano** da rodada. A mínima decide a validade de uma
+    reprovação; a mediana é a que acompanha a duração, e o gatilho de duração só conta
+    com ela em 55 ou mais (#307). A entrada da change no `02` traz a linha "`apps/api`: N rodadas, M
     inconclusivas, K threads". O gatilho de recalibração, com os limites, está num
     lugar só: o item "O paralelismo da suíte do `apps/api` (6 coleções, #302) é
     calibração provisória", nos itens em aberto do `02`. **Como** ver as threads
     efetivas está no `docs/development.md`, em "Rodar os testes". Isto é tarefa de
     baseline e de fechamento no `tasks.md`, pela regra do parágrafo acima, e não
     lembrança de quem roda.
+
+    **E as rodadas do meio rodam o que o diff seleciona, e dizem o que foi isso**
+    (`selecao-de-testes-por-diff`, #307). Entre a baseline e o fechamento, a escolha
+    do que rodar era decidida à mão a cada change, no cabeçalho do script de suíte, e
+    dependia de alguém lembrar que o `nginx.conf` do frontend é conferido por testes
+    .NET de três apps. Ela passa a sair do `scripts/selecionar-testes.py`, que
+    **só planeja**: o executor continua sendo quem tem o lock e a regra assimétrica.
+    Por isso, a tarefa de cada rodada intermediária no `tasks.md` **cita o plano** (a
+    saída de `--passos`, guardada junto da saída da rodada) e o SHA da base que ele
+    imprime. **A baseline e o fechamento continuam completos:** a seleção não toca os
+    dois. O que ela não rodou, o fechamento roda antes do archive, e a suíte de cada app
+    afetado continua obrigatória antes do PR (CONTRIBUTING §1). Uma rodada
+    intermediária verde **não** é evidência de que a change está pronta, só de que o que
+    o diff alcança passou. As regras, o motivo de cada artefato lido por outra pilha e
+    os limites (o `vitest related` segue imports, e contrato copiado à mão não aparece)
+    estão no `docs/development.md`, em "Rodar os testes".
 
     **E a QUARTA coisa, que é a direção inversa e já aconteceu duas vezes na linha
     de `metricas-de-operacao`: a máquina carregada produz falhas que PARECEM

@@ -17,6 +17,14 @@ o versionamento segue
 
 ### Changed
 
+- **A seleção dos testes das rodadas intermediárias de uma change sai do diff** (#307). Um script
+  novo, `scripts/selecionar-testes.py`, imprime o que rodar e por quê a partir do diff contra o
+  `origin/main`: a suíte inteira de cada app .NET tocado e os projetos de `tests/` que dependem
+  dele, `related` ou o Vitest inteiro no frontend, regra própria para o `nginx.conf` e para a versão
+  do produto (lidos por testes de outra pilha), e tudo quando o caminho não é reconhecido. Ele só
+  planeja; a baseline e o fechamento continuam completos. Os testes do script entram no checklist
+  antes do PR.
+
 - **`KnowledgeBaseCatalogTests` com um host derivado por classe nos casos de cadastro sincronizado**
   (#303). Só testes do `apps/api`: os casos que falam com o connectors falso compartilham um host
   por valor de `clientTimeout`, guardado na fixture, com o estado do duplo reposto a cada caso, e
