@@ -118,10 +118,23 @@ dotnet test tests/InboxOrchestratorRoundTrip.Tests
 dotnet test tests/ApiConnectorsRoundTrip.Tests
 
 cd apps/frontend && npm run lint && npm run format:check && npm run test && npm run build
+
+python3 -B -m unittest discover -s scripts/tests
 ```
 
 Se sua mudança toca o contrato entre dois apps, rode também os três projetos
 cruzados em `tests/` — são a única verificação de acordo real entre eles.
+
+Os testes de `scripts/tests` rodam em todo PR, e não só quando `scripts/` muda:
+eles reprovam quando aparece projeto de teste que nenhuma regra da seleção
+alcança, ou teste que lê arquivo de fora do próprio projeto sem regra para isso,
+e as duas coisas mudam em `apps/` e `tests/`. Levam poucos segundos.
+
+**Durante a mudança**, nas rodadas entre a baseline e o fechamento, você não
+precisa rodar tudo a cada vez: `python3 scripts/selecionar-testes.py` calcula, a
+partir do diff, o que rodar e por quê ([como usar](docs/development.md#rodadas-intermediárias-a-seleção-pelo-diff)).
+A seleção **não substitui** a lista acima: antes do PR, a suíte de cada app
+afetado continua obrigatória.
 
 ### 2. Integridade da documentação
 

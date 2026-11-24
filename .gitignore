@@ -44,3 +44,6 @@ Thumbs.db
 coverage/
 TestResults/
 *.received.*
+
+# Python (scripts/)
+__pycache__/
