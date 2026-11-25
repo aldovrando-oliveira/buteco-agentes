@@ -306,8 +306,8 @@ servidor. O mesmo problema apareceu duas vezes na máquina de desenvolvimento
 | `RABBITMQ_USER`/`RABBITMQ_PASSWORD` | (usada só na connection string) | rabbitmq, api, workers | sim | N/A |
 | `PUBLIC_DOMAIN` | `PublicUrl__BaseUrl` | api (externa — `AgentCard.SupportedInterfaces`), inbox (D8 — mesmo domínio, ver nota abaixo) | sim | mesmo valor nos dois, mas por motivos diferentes (não é o mesmo requisito, é coincidência desta change) |
 | `TZ` | `TZ` (env var direta, não `IConfiguration`) | workers | sim, fail-fast | N/A |
-| `OPENAI_BASE_URL`/`OPENAI_API_KEY` | `OpenAI__BaseUrl`/`OpenAI__ApiKey` | api (só checa presença), workers (usa de verdade) | sim (workers) | precisa ser a mesma chave configurada nos dois |
-| `ANTHROPIC_API_KEY`/`GEMINI_API_KEY` | `Anthropic__ApiKey`/`Gemini__ApiKey` | api (só checa presença), workers (usa de verdade) | não | vazias, os provedores não aparecem em `GET /providers` |
+| `OPENAI_BASE_URL`/`OPENAI_API_KEY` | `OpenAI__BaseUrl`/`OpenAI__ApiKey` | api (a presença habilita o provedor; desde a #296, a chave e o `BaseUrl` listam os modelos do fornecedor na curadoria), workers (conversa) | sim (workers) | precisa ser a mesma chave e o mesmo `BaseUrl` nos dois |
+| `ANTHROPIC_API_KEY`/`GEMINI_API_KEY` | `Anthropic__ApiKey`/`Gemini__ApiKey` | api (a presença habilita o provedor; desde a #296, a chave lista os modelos do fornecedor na curadoria), workers (conversa) | não | vazias, os provedores não aparecem em `GET /providers` |
 | `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` | `Embedding__Provider`/`__Model`/`__Dimensions` | workers | **sim** — o compose falha sem `MODEL` e `DIMENSIONS` | N/A. Sem elas o boot **passa** e a **primeira indexação** falha com modelo vazio e dimensão 0. A coluna do índice é `vector(4096)`, fixa na migration |
 | `MCP_CREDENTIAL_ENCRYPTION_KEY` | `Mcp__CredentialEncryptionKey` | api (cifra), workers (decifra) | sim | **sim, byte-idêntica** |
 | `IDENTITY_SIGNING_KEY_ENCRYPTION_KEY` | `Identity__SigningKeyEncryptionKey` | api (cifra das chaves do emissor OIDC) | sim, fail-fast (o emissor está ligado, porque `PUBLIC_DOMAIN` é obrigatória) | N/A — só um processo. **Distinta** das outras chaves |
@@ -329,6 +329,82 @@ ambiente; ficam fixos no compose: `Connectors__BaseUrl=http://connectors:8080`
 no `api` (validação de pasta), `Api__BaseUrl=http://api:8080` no `connectors`
 (ciclo de sincronização) e o build arg `VITE_CONNECTORS_BASE_URL=""` do
 `frontend`, que só existe junto com o bloco `/connectors` do `nginx.conf`.
+
+### Modelos por provedor curados no painel (#296)
+
+A lista de modelos de cada provedor de LLM deixou de ser fixa no código: fica na tabela
+`llm_enabled_models` do `apps/api`, e um **Admin** habilita e retira modelos pelas rotas
+`/providers/models`, `/providers/{provider}/vendor-models` e `/providers/{provider}/models`.
+Não há variável nova.
+
+- **No deploy, a migration habilita** os nove modelos do catálogo estático de antes e todo par
+  `provider`/`model` já gravado em agentes (só dos provedores `openai`, `anthropic` e
+  `gemini`). Nenhum agente que executava passa a ser recusado.
+- **As opções a habilitar vêm da listagem do fornecedor**, consultada com a chave do ambiente
+  só quando o Admin abre a curadoria, nunca no boot nem no caminho de uma mensagem. A
+  chave vai sempre em cabeçalho.
+- **Agente cujo modelo é retirado recusa novas tarefas** (motivo `ModelNotEnabled` no
+  Insights), na rota A2A e na delegação, até ser editado para um modelo habilitado. Tarefas
+  já publicadas terminam normalmente.
+- **Gateway compatível com OpenAI.** O `OpenAI__BaseUrl` do `api` é usado também para listar
+  (`GET {BaseUrl}/models`). Um gateway que **responde `200` sem nenhum modelo** (medido em
+  19/11/2026) ou que **não tem a rota** (`404`) não oferece modelo novo para habilitar: a
+  curadoria mostra "o fornecedor não listou nenhum modelo" ou o erro com o status. Os modelos
+  já habilitados, inclusive os da carga inicial, continuam valendo e podem ser retirados. A
+  saída é o gateway expor o `/models`.
+- **Rollback:** a versão anterior ignora a tabela e volta ao catálogo estático. O `Down` da
+  migration a remove, e as habilitações feitas depois do deploy se perdem.
+
+### Conferência real das listagens da Anthropic e do Gemini (#296)
+
+**Na homologação, depois do deploy, pelo dono** (decisão de 19/11/2026; issue #301). Os contratos
+das duas listagens foram tirados da documentação oficial de 19/11/2026 e testados com respostas
+copiadas dela, **não medidas**: não havia chave de nenhum dos dois quando a #296 foi implementada. A
+OpenAI foi medida contra um gateway compatível. Pré-requisito: `ANTHROPIC_API_KEY` e
+`GEMINI_API_KEY` no `.env.prod`, nos dois processos (`api` e `workers`).
+
+O token é o access token do painel de um Admin, como no roteiro de "Liberar um agente sem a tela":
+o cabeçalho `Authorization` de qualquer chamada do painel ao `api`, válido por 15 minutos.
+
+```
+TOKEN='<access token do painel do Admin>'
+API=https://[URL_PUBLICA]
+
+# 1. Anthropic: 200, "filter":"lifecycle-active", os ids e display_name do console.
+#    502 com "vendorStatus":null = algum item veio SEM o campo lifecycle com
+#    anthropic-version 2023-06-01 (a listagem inteira fica indisponível).
+#    502 com outro vendorStatus = o status que a Anthropic devolveu.
+curl -s "$API/providers/anthropic/vendor-models" -H "Authorization: Bearer $TOKEN"
+
+# 2. Gemini: 200, "filter":"supports-generate-content", ids SEM o prefixo models/.
+#    O 200 prova que a chave em cabeçalho (x-goog-api-key) foi aceita; 502 com
+#    vendorStatus 400, 401 ou 403 diz que não foi.
+curl -s "$API/providers/gemini/vendor-models" -H "Authorization: Bearer $TOKEN"
+
+# 3. Paginação: a quantidade de cada lista bate com a do console do fornecedor
+#    (com limit=1000 e pageSize=1000, uma página é o esperado).
+curl -s "$API/providers/anthropic/vendor-models" -H "Authorization: Bearer $TOKEN" | jq '.models | length'
+curl -s "$API/providers/gemini/vendor-models" -H "Authorization: Bearer $TOKEN" | jq '.models | length'
+
+# 4. O id do Gemini aceito pelo worker: habilitar um modelo que a rota 2 listou, cadastrar
+#    um agente com ele e mandar uma mensagem; a task chega a TASK_STATE_COMPLETED.
+curl -s -X POST "$API/providers/gemini/models" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"model":"<id listado na rota 2>"}'
+```
+
+O agente do passo 4 se cadastra pelo painel, e a mensagem vai pelo canal ou pela rota A2A, como em
+qualquer agente. Por último, a chave fora do log:
+
+```
+docker compose -f docker-compose.prod.yml logs api | grep -c -F "$GEMINI_API_KEY"     # 0
+docker compose -f docker-compose.prod.yml logs api | grep -c -F "$ANTHROPIC_API_KEY"  # 0
+```
+
+**Se divergir:** issue de correção, com a resposta real gravada fora do repositório e **sem a
+chave**. Nenhum agente em execução é afetado: a listagem só roda quando o Admin abre a curadoria ou
+habilita um modelo, nunca no boot, em `GET /providers`, na retirada, na validação de agente nem no
+caminho de uma mensagem, e os modelos já habilitados continuam valendo. O resultado vai na #301 e
+no `02-HISTORICO_E_STATUS.md`.
 
 ### Provedores federados (#189)
 

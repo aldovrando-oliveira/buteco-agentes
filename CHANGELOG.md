@@ -15,6 +15,26 @@ o versionamento segue
 
 ## [Unreleased]
 
+### Added
+
+- **Modelos por provedor de LLM curados no painel, a partir da listagem do fornecedor** (#296, backend). `apps/api`
+  e `apps/workers`; as telas são a #297.
+  - a lista de modelos habilitados de cada provedor fica na tabela `llm_enabled_models` do `apps/api`, e não mais no
+    código (o `ProviderModelCatalog` saiu). A migration habilita os nove modelos do catálogo de antes e todo par
+    `provider`/`model` já gravado em agentes dos três provedores, para nenhum agente que executava passar a ser
+    recusado;
+  - rotas só do Admin, com o papel gravado: `GET /providers/models` (a lista curada dos três provedores, com
+    `configured` e a contagem de agentes por modelo), `GET /providers/{provider}/vendor-models` (as opções que o
+    fornecedor lista para a chave do ambiente, com o `filter` aplicado: `none` na OpenAI, `lifecycle-active` na
+    Anthropic, `supports-generate-content` no Gemini), `POST /providers/{provider}/models` (habilita só um modelo que o
+    fornecedor listou naquele momento) e `DELETE /providers/{provider}/models?model=` (retira, sem consultar o
+    fornecedor, com ou sem a chave);
+  - a listagem do fornecedor tem orçamento de 30 s, vai com a chave sempre em cabeçalho, e a falha dela responde
+    `503 vendor-unavailable` ou `502 vendor-error` com `vendorStatus` (o status que o fornecedor devolveu, ou `null`).
+    Ela nunca roda no boot, em `GET /providers`, na retirada nem no caminho de uma mensagem;
+  - o `apps/api` passa a ler `OpenAI:BaseUrl` (que o compose de produção já entregava), para listar no mesmo endpoint em
+    que o `apps/workers` conversa.
+
 ### Changed
 
 - **Os testes do `rt-inbox` esperam uma condição durável, e não o `taskId` do registro de despacho**
@@ -44,6 +64,12 @@ o versionamento segue
   de toda execução registrar as threads efetivas. Com o padrão (12 nesta máquina), a suíte saía
   inconclusiva em 5 de 12 rodadas; com 6, em 0 de 8, com a mesma duração. O valor é provisório, com
   gatilho de recalibração; a regra de registrar as rodadas entrou na convenção 19.
+
+- **Agente cujo modelo saiu da lista recusa novas tarefas** (#296): o `SendMessage` é recusado sem publicar job, com o
+  motivo novo `ModelNotEnabled` na métrica de recusa (o Insights o mostra como o próprio texto até a #297), e a
+  delegação recusa o Source e o Target com modelo não habilitado. A edição de um agente que mantém um modelo retirado
+  responde `400` no campo `model`. `GET /providers` passa a vir da lista curada, com a mesma forma; um provedor com
+  chave e sem modelo habilitado aparece com `models: []`.
 
 ## [1.0.0] - 2026-11-19
 

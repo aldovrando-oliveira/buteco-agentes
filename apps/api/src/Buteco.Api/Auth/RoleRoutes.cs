@@ -44,6 +44,14 @@ public static class RoleRoutes
             [("PUT", "/agents/{id:guid}/knowledge-bases")] = Operate,
             [("GET", "/providers")] = All,
 
+            // Curadoria de modelos por provedor (design.md da change modelos-curados-por-provedor,
+            // D6): só o Admin, inclusive ler, e com o papel gravado (CurrentUser), como
+            // /applications. Retirar um modelo faz agentes de toda a instalação recusarem tarefas.
+            [("GET", "/providers/models")] = AdminOnly,
+            [("GET", "/providers/{provider}/vendor-models")] = AdminOnly,
+            [("POST", "/providers/{provider}/models")] = AdminOnly,
+            [("DELETE", "/providers/{provider}/models")] = AdminOnly,
+
             // MCP. Listar as ferramentas usa a credencial gravada sem devolvê-la, e é leitura; os
             // dois "testar" são ação com chamada de saída, e a credencial do não salvo vem no
             // corpo (Q8d).

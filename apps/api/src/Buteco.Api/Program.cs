@@ -29,6 +29,7 @@ using Buteco.Api.McpServers.Security;
 using Buteco.Api.Messaging;
 using Buteco.Api.Options;
 using Buteco.Api.Providers;
+using Buteco.Api.Providers.Vendors;
 using Buteco.Api.Providers.Endpoints;
 using Buteco.Api.RejectionMetrics;
 using Buteco.Api.Users;
@@ -100,7 +101,13 @@ builder.Services.AddSingleton(new KnowledgeIndexingRequestSchedule());
 builder.Services.AddSingleton<KnowledgeIndexingDispatchWindow>();
 builder.Services.AddSingleton<KnowledgeIndexingRequestDispatcher>();
 builder.Services.AddHostedService<KnowledgeIndexingRequestSweepService>();
-builder.Services.AddSingleton<ProviderCatalogService>();
+// Scoped: lê a lista curada do banco (design.md da change modelos-curados-por-provedor, D2).
+builder.Services.AddScoped<ProviderCatalogService>();
+
+// A listagem de modelos de cada fornecedor (D4, D5), via DI keyed pelo id do provedor, e
+// a checagem de boot nos dois sentidos logo depois (convenção 8).
+builder.Services.AddVendorModelListers();
+builder.Services.ValidateVendorModelListerRegistrations();
 
 // Escritor da métrica de recusa (design.md da change recusa-motivo-coleta, D8).
 // Singleton, como o resto do caminho A2A: ele cria o seu próprio escopo para o
@@ -255,6 +262,7 @@ app.MapIdentityOverviewEndpoint();
 app.MapEndSessionEndpoint();
 app.MapAgentEndpoints();
 app.MapProviderEndpoints();
+app.MapProviderCurationEndpoints();
 app.MapMcpServerEndpoints();
 app.MapAgentMcpBindingEndpoints();
 app.MapAgentDelegationEndpoints();

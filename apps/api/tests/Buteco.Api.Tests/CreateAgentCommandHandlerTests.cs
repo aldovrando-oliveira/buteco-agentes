@@ -3,6 +3,7 @@ using Buteco.Api.Agents.Commands.CreateAgent;
 using Buteco.Api.Agents.Entities;
 using Buteco.Api.Infrastructure;
 using Buteco.Api.Providers;
+using Buteco.Api.Providers.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Moq;
@@ -30,13 +31,20 @@ public class CreateAgentCommandHandlerTests
     private static IOptions<PublicUrlOptions> PublicUrl(string baseUrl = "https://api.exemplo.com") =>
         Microsoft.Extensions.Options.Options.Create(new PublicUrlOptions { BaseUrl = baseUrl });
 
-    private static ProviderCatalogService CreateProviderCatalogService()
+    // O contexto destes casos é o EF InMemory, que não roda migration: a carga inicial da lista
+    // curada não chega a ele (change modelos-curados-por-provedor, achado da tarefa 0.3). O
+    // arranjo grava o par habilitado aqui; as asserções são as de antes.
+    private static ProviderCatalogService CreateProviderCatalogService(AppDbContext dbContext)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["OpenAI:ApiKey"] = "changeme" })
             .Build();
 
-        return new ProviderCatalogService(configuration);
+        dbContext.EnabledLlmModels.Add(new EnabledLlmModel(Provider, Model));
+        dbContext.SaveChanges();
+        dbContext.ChangeTracker.Clear();
+
+        return new ProviderCatalogService(configuration, dbContext);
     }
 
     [Fact]
@@ -44,7 +52,7 @@ public class CreateAgentCommandHandlerTests
     {
         await using var dbContext = CreateInMemoryDbContext();
         var registryMock = new Mock<IAgentA2AServerRegistry>();
-        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService(), PublicUrl());
+        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService(dbContext), PublicUrl());
 
         var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", Provider, Model, null, []);
 
@@ -70,7 +78,7 @@ public class CreateAgentCommandHandlerTests
     {
         await using var dbContext = CreateInMemoryDbContext();
         var registryMock = new Mock<IAgentA2AServerRegistry>();
-        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService(), PublicUrl());
+        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService(dbContext), PublicUrl());
 
         var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", "anthropic", "claude-opus-5", null, []);
 
@@ -87,7 +95,7 @@ public class CreateAgentCommandHandlerTests
     {
         await using var dbContext = CreateInMemoryDbContext();
         var registryMock = new Mock<IAgentA2AServerRegistry>();
-        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService(), PublicUrl());
+        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService(dbContext), PublicUrl());
 
         var skills = new List<Skill> { new("Atendimento", "Responde dúvidas de clientes"), new("Vendas", null) };
         var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", Provider, Model, "Agente de atendimento geral.", skills);
@@ -109,7 +117,7 @@ public class CreateAgentCommandHandlerTests
     {
         await using var dbContext = CreateInMemoryDbContext();
         var registryMock = new Mock<IAgentA2AServerRegistry>();
-        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService(), PublicUrl());
+        var handler = new CreateAgentCommandHandler(dbContext, registryMock.Object, CreateProviderCatalogService(dbContext), PublicUrl());
 
         var command = new CreateAgentCommand("Atendente", "Você é um atendente simpático.", Provider, Model, null, []);
 

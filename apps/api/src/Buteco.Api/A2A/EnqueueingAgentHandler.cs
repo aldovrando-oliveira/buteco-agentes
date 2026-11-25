@@ -10,8 +10,7 @@ namespace Buteco.Api.A2A;
 public sealed class EnqueueingAgentHandler(
     Guid agentId,
     ITaskJobPublisher taskJobPublisher,
-    IServiceScopeFactory scopeFactory,
-    ProviderCatalogService providerCatalogService) : IAgentHandler
+    IServiceScopeFactory scopeFactory) : IAgentHandler
 {
     public async Task ExecuteAsync(RequestContext context, AgentEventQueue eventQueue, CancellationToken cancellationToken)
     {
@@ -59,13 +58,21 @@ public sealed class EnqueueingAgentHandler(
             return;
         }
 
-        // Provider estava configurado no cadastro/edição, mas pode ter
-        // deixado de estar (chave removida do ambiente) — ver Decision 5.
-        if (!providerCatalogService.IsProviderConfigured(agentState.Provider))
+        // O par pode ter deixado de estar disponível depois do cadastro ou da edição: a
+        // chave saiu do ambiente (Decision 5 da change backend-multi-provedor-llm) ou o
+        // modelo foi retirado da lista curada (change modelos-curados-por-provedor, D7).
+        // A regra é a MESMA da validação de agente, pelo MESMO método: o serviço é
+        // resolvido deste escopo e não recopiado aqui, e a ordem "chave antes de modelo"
+        // vem dele. O ProviderAvailabilityTests.AgentValidation_AndSendMessage_AgreeOnThePair amarra os dois lados.
+        var availability = await GetAvailabilityAsync(agentState.Provider, agentState.Model, cancellationToken);
+        if (availability != ProviderValidationOutcome.Valid)
         {
+            var reason = availability == ProviderValidationOutcome.ProviderNotConfigured
+                ? RejectionMetricsValues.Reason.ProviderNotConfigured
+                : RejectionMetricsValues.Reason.ModelNotEnabled;
+
             await updater.RejectAsync(cancellationToken: cancellationToken);
-            await RecordRejectionAsync(
-                context.TaskId, RejectionMetricsValues.Reason.ProviderNotConfigured, cancellationToken);
+            await RecordRejectionAsync(context.TaskId, reason, cancellationToken);
             return;
         }
 
@@ -94,6 +101,19 @@ public sealed class EnqueueingAgentHandler(
         var writer = scope.ServiceProvider.GetRequiredService<RejectionMetricsWriter>();
 
         await writer.WriteAsync(taskId, agentId, reason, cancellationToken);
+    }
+
+    /// <summary>
+    /// A disponibilidade do par pelo <see cref="ProviderCatalogService.ValidateAsync"/> de
+    /// um escopo próprio: o handler é criado por agente pelo registro (singleton), e o
+    /// serviço é scoped porque lê o banco. Nunca consulta fornecedor (convenção 4).
+    /// </summary>
+    private async Task<ProviderValidationOutcome> GetAvailabilityAsync(string provider, string model, CancellationToken cancellationToken)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var catalog = scope.ServiceProvider.GetRequiredService<ProviderCatalogService>();
+
+        return await catalog.ValidateAsync(provider, model, cancellationToken);
     }
 
     /// <summary>

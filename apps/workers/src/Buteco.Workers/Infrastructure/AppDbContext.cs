@@ -23,6 +23,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<Agent> Agents => Set<Agent>();
 
+    public DbSet<EnabledLlmModel> EnabledLlmModels => Set<EnabledLlmModel>();
+
     public DbSet<A2ATaskRecord> A2ATasks => Set<A2ATaskRecord>();
 
     public DbSet<McpServer> McpServers => Set<McpServer>();
@@ -57,6 +59,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             modelBuilder.HasPostgresExtension("vector");
         }
+
+        // Espelho de llm_enabled_models (change modelos-curados-por-provedor, D1 e D8): o
+        // par é a chave, com o mesmo nome de chave primária do apps/api.
+        modelBuilder.Entity<EnabledLlmModel>(entity =>
+        {
+            entity.ToTable("llm_enabled_models");
+            entity.HasKey(enabled => new { enabled.Provider, enabled.Model }).HasName("PK_llm_enabled_models");
+            entity.Property(enabled => enabled.Provider).IsRequired();
+            entity.Property(enabled => enabled.Model).IsRequired();
+        });
 
         modelBuilder.Entity<Agent>(entity =>
         {

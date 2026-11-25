@@ -206,8 +206,9 @@ public sealed class RoundTripFixture : IAsyncLifetime
                     // appsettings.Development.json, como a chave acima.
                     ["Identity:ServiceClients:Inbox:Secret"] = InboxServiceClientSecret,
                     ["Identity:ServiceClients:Connectors:Secret"] = ConnectorsServiceClientSecret,
-                    // Só precisa ser não-vazio — ProviderCatalogService.IsProviderConfigured("openai")
-                    // olha só a presença da chave (libs/ProviderCatalog/LlmProviders.cs); a chamada
+                    // Só precisa ser não-vazio — ProviderCatalogService.ValidateAsync, que o
+                    // EnqueueingAgentHandler chama, olha só a presença da chave
+                    // (libs/ProviderCatalog/LlmProviders.cs) e a lista curada; a chamada
                     // real ao LLM nunca acontece, IChatClientResolver está mockado em apps/workers.
                     ["OpenAI:ApiKey"] = "test-api-key",
                     ["Auth:OperatorPasswordHash"] = ComputeOperatorPasswordHash(),

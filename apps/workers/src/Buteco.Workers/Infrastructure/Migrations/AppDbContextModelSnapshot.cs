@@ -18,7 +18,7 @@ namespace Buteco.Workers.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
@@ -113,6 +113,20 @@ namespace Buteco.Workers.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("agents", (string)null);
+                });
+
+            modelBuilder.Entity("Buteco.Workers.Agents.Entities.EnabledLlmModel", b =>
+                {
+                    b.Property<string>("Provider")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Model")
+                        .HasColumnType("text");
+
+                    b.HasKey("Provider", "Model")
+                        .HasName("PK_llm_enabled_models");
+
+                    b.ToTable("llm_enabled_models", (string)null);
                 });
 
             modelBuilder.Entity("Buteco.Workers.EmbeddingMetrics.Entities.EmbeddingCall", b =>

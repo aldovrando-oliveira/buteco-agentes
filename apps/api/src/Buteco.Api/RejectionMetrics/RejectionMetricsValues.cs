@@ -53,6 +53,14 @@ public static class RejectionMetricsValues
         public const string ProviderNotConfigured = "ProviderNotConfigured";
 
         /// <summary>
+        /// O par <c>Provider</c>+<c>Model</c> do agente não está na lista curada de
+        /// modelos habilitados, com o provedor configurado (change
+        /// modelos-curados-por-provedor, D7). Vem do mesmo
+        /// <c>ProviderCatalogService.ValidateAsync</c> da validação de agente.
+        /// </summary>
+        public const string ModelNotEnabled = "ModelNotEnabled";
+
+        /// <summary>
         /// O vocabulário inteiro, para o guarda que afirma que nenhum outro valor
         /// aparece na coluna. Não é ponto de extensão: acrescentar valor aqui sem
         /// acrescentar o sítio que o grava deixa a lista mentindo.
@@ -63,6 +71,7 @@ public static class RejectionMetricsValues
             AgentInactive,
             ProviderOrModelMissing,
             ProviderNotConfigured,
+            ModelNotEnabled,
         ];
     }
 }

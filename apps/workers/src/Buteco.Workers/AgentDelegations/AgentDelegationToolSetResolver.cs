@@ -117,6 +117,19 @@ public sealed class AgentDelegationToolSetResolver(
             return "Delegação não realizada: o agente que está delegando não está mais ativo ou configurado.";
         }
 
+        // Modelo do Source retirado da lista curada no meio da própria task (change
+        // modelos-curados-por-provedor, D8): é o mesmo caso da desativação acima, e por isso a
+        // leitura é fresca e o texto devolvido ao LLM é o mesmo. O log nomeia a causa.
+        if (!await IsModelEnabledAsync(dbContext, source.Provider, source.Model, cancellationToken))
+        {
+            logger.LogWarning(
+                "Delegação do agente {SourceAgentId} para {TargetAgentId} recusada: o modelo do Source não está habilitado.",
+                sourceAgentId,
+                targetAgentId);
+            RecordNotStarted(sourceTaskId, sourceAgentId, targetAgentId, started);
+            return "Delegação não realizada: o agente que está delegando não está mais ativo ou configurado.";
+        }
+
         // Decision 4: Target lido fresco — AsNoTracking força uma consulta
         // nova ao banco a cada chamada, nunca reaproveita estado em memória.
         var target = await dbContext.Agents.AsNoTracking().FirstOrDefaultAsync(agent => agent.Id == targetAgentId, cancellationToken);
@@ -124,6 +137,19 @@ public sealed class AgentDelegationToolSetResolver(
         {
             logger.LogWarning(
                 "Delegação do agente {SourceAgentId} para {TargetAgentId} recusada: Target inativo, ausente ou sem Provider/Model configurados.",
+                sourceAgentId,
+                targetAgentId);
+            RecordNotStarted(sourceTaskId, sourceAgentId, targetAgentId, started);
+            return "Delegação não realizada: o agente Target não está disponível no momento.";
+        }
+
+        // A delegação não passa pelo EnqueueingAgentHandler do apps/api: sem esta conferência,
+        // o Target recusado na rota A2A por modelo não habilitado continuaria executando como
+        // Target de delegação (D8). Mesmo texto ao LLM; o log nomeia a causa.
+        if (!await IsModelEnabledAsync(dbContext, target.Provider, target.Model, cancellationToken))
+        {
+            logger.LogWarning(
+                "Delegação do agente {SourceAgentId} para {TargetAgentId} recusada: o modelo do Target não está habilitado.",
                 sourceAgentId,
                 targetAgentId);
             RecordNotStarted(sourceTaskId, sourceAgentId, targetAgentId, started);
@@ -146,6 +172,13 @@ public sealed class AgentDelegationToolSetResolver(
 
         return await WaitForTerminalStateAsync(targetTaskStore, targetTaskId, targetAgentId, sourceAgentId, sourceTaskId, started, cancellationToken);
     }
+
+    /// <summary>
+    /// O par está na lista curada (<c>llm_enabled_models</c>, lida pelo contexto espelho),
+    /// lido do banco agora, nunca de cache (D8).
+    /// </summary>
+    private static Task<bool> IsModelEnabledAsync(AppDbContext dbContext, string provider, string model, CancellationToken cancellationToken) =>
+        dbContext.EnabledLlmModels.AsNoTracking().AnyAsync(enabled => enabled.Provider == provider && enabled.Model == model, cancellationToken);
 
     private static void RecordNotStarted(string sourceTaskId, Guid sourceAgentId, Guid targetAgentId, long started) =>
         ExecutionMetricsScope.RecordDelegation(new DelegationOutcome(
