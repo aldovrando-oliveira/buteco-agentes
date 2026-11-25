@@ -879,6 +879,191 @@ public class AgentDelegationExecutionTests(WorkerInfrastructureFixture fixture) 
         return builder.Build();
     }
 
+    // ----------------------------------------------- MODELO HABILITADO (change modelos-curados-por-provedor, D8)
+
+    /// <summary>
+    /// Target com modelo fora da lista curada: a delegação não passa pelo EnqueueingAgentHandler do
+    /// apps/api, e sem esta conferência o Target recusado na rota A2A executaria como Target de
+    /// delegação (R8).
+    /// </summary>
+    [Fact]
+    public async Task TargetWithModelNotEnabled_RecordsNotStarted_WithoutTargetTask()
+    {
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, "claude-alvo-nao-habilitado");
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(ExpectedToolName("Financeiro"), "Uma tarefa qualquer.");
+        var clients = new Dictionary<(string Provider, string Model), IChatClient>
+        {
+            [(SourceProvider, SourceModel)] = sourceChatClient.Object,
+            [(TargetProvider, "claude-alvo-nao-habilitado")] = AnsweringTargetClient(),
+        };
+
+        // Duas réplicas, como o caso de ida e volta: o Target da mesma conversa só roda numa
+        // réplica que não segura a trava do contexto do Source. Com uma só, sem a conferência o
+        // Source esperaria o Target até o tempo da delegação, e o guarda reprovaria por timeout,
+        // não pela asserção (convenção 15).
+        using var host = BuildHost(clients);
+        using var replica = BuildHost(clients);
+        await host.StartAsync();
+        await replica.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            var sourceRecord = await PollUntilTerminalAsync(sourceTaskId);
+            Assert.Equal(nameof(TaskState.Completed), sourceRecord.State);
+            await ExecutionMetricsReader.WaitForClosedExecutionAsync(ConnectionString, sourceTaskId);
+        }
+        finally
+        {
+            await host.StopAsync();
+            await replica.StopAsync();
+        }
+
+        Assert.Null(await GetLatestTaskRecordForAgentAsync(targetId));
+        var outcome = Assert.Single(await ExecutionMetricsReader.DelegationOutcomesAsync(ConnectionString, sourceTaskId));
+        Assert.Equal(ExecutionMetricsValues.DelegationOutcome.NotStarted, outcome.Outcome);
+        Assert.Null(outcome.TargetTaskId);
+    }
+
+    [Fact]
+    public async Task TargetWithModelEnabledAgain_ReceivesTheDelegation()
+    {
+        const string targetModel = "claude-reabilitado";
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await EnableModelAsync(TargetProvider, targetModel);
+        await RetireModelAsync(TargetProvider, targetModel);
+        await EnableModelAsync(TargetProvider, targetModel);
+
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, SourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, targetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(ExpectedToolName("Financeiro"), "Quanto é 2 + 2?");
+        var targetChatClient = new Mock<IChatClient>();
+        targetChatClient
+            .Setup(c => c.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "O resultado é 4.")));
+        var clients = new Dictionary<(string Provider, string Model), IChatClient>
+        {
+            [(SourceProvider, SourceModel)] = sourceChatClient.Object,
+            [(TargetProvider, targetModel)] = targetChatClient.Object,
+        };
+
+        using var instanceA = BuildHost(clients);
+        using var instanceB = BuildHost(clients);
+        await instanceA.StartAsync();
+        await instanceB.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            var sourceRecord = await PollUntilTerminalAsync(sourceTaskId);
+            Assert.Equal(nameof(TaskState.Completed), sourceRecord.State);
+        }
+        finally
+        {
+            await instanceA.StopAsync();
+            await instanceB.StopAsync();
+        }
+
+        var targetRecord = await GetLatestTaskRecordForAgentAsync(targetId);
+        Assert.NotNull(targetRecord);
+        Assert.Equal(nameof(TaskState.Completed), targetRecord!.State);
+    }
+
+    [Fact]
+    public async Task SourceModelRetiredDuringOwnProcessing_DegradesGracefully_NoTaskCreatedForTarget()
+    {
+        const string sourceModel = "modelo-do-source-retirado";
+        var sourceId = Guid.NewGuid();
+        var targetId = Guid.NewGuid();
+        var contextId = Guid.NewGuid().ToString("N");
+        var sourceTaskId = Guid.NewGuid().ToString("N");
+
+        await EnableModelAsync(SourceProvider, sourceModel);
+        await SeedAgentAsync(sourceId, "Atendente Geral", SourceProvider, sourceModel);
+        await SeedAgentAsync(targetId, "Financeiro", TargetProvider, TargetModel);
+        await SeedAgentDelegationAsync(sourceId, targetId);
+        await SeedTaskAsync(sourceTaskId, sourceId, contextId, "Delegue, por favor.");
+
+        // Como no caso do Source desativado: a primeira chamada ao LLM (a que decide chamar a
+        // tool) retira o modelo do Source, depois de a task dele ter começado.
+        var sourceChatClient = BuildDelegationToolCallingChatClientMock(
+            ExpectedToolName("Financeiro"),
+            "Uma tarefa qualquer.",
+            beforeFirstCall: () => RetireModelAsync(SourceProvider, sourceModel).GetAwaiter().GetResult());
+        var clients = new Dictionary<(string Provider, string Model), IChatClient>
+        {
+            [(SourceProvider, sourceModel)] = sourceChatClient.Object,
+            [(TargetProvider, TargetModel)] = AnsweringTargetClient(),
+        };
+
+        // Duas réplicas, como o caso de ida e volta: o Target da mesma conversa só roda numa
+        // réplica que não segura a trava do contexto do Source. Com uma só, sem a conferência o
+        // Source esperaria o Target até o tempo da delegação, e o guarda reprovaria por timeout,
+        // não pela asserção (convenção 15).
+        using var host = BuildHost(clients);
+        using var replica = BuildHost(clients);
+        await host.StartAsync();
+        await replica.StartAsync();
+
+        try
+        {
+            await PublishJobAsync(sourceTaskId, sourceId, contextId);
+            var sourceRecord = await PollUntilTerminalAsync(sourceTaskId);
+            Assert.Equal(nameof(TaskState.Completed), sourceRecord.State);
+        }
+        finally
+        {
+            await host.StopAsync();
+            await replica.StopAsync();
+        }
+
+        Assert.Null(await GetLatestTaskRecordForAgentAsync(targetId));
+    }
+
+    /// <summary>
+    /// Um Target que responde, mapeado para o par do Target nos casos de modelo não habilitado: se a
+    /// conferência funcionar ele nunca é chamado; se ela sumir, a delegação conclui e a asserção que
+    /// reprova é "nenhuma task para o Target", e não um timeout de espera (convenção 15).
+    /// </summary>
+    private static IChatClient AnsweringTargetClient()
+    {
+        var target = new Mock<IChatClient>();
+        target
+            .Setup(c => c.GetResponseAsync(It.IsAny<IEnumerable<ChatMessage>>(), It.IsAny<ChatOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ChatResponse(new ChatMessage(ChatRole.Assistant, "Resposta do Target.")));
+        return target.Object;
+    }
+
+    private async Task EnableModelAsync(string provider, string model)
+    {
+        await using var dbContext = CreateDbContext();
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""INSERT INTO llm_enabled_models ("Provider", "Model") VALUES ({provider}, {model}) ON CONFLICT DO NOTHING""");
+    }
+
+    private async Task RetireModelAsync(string provider, string model)
+    {
+        await using var dbContext = CreateDbContext();
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""DELETE FROM llm_enabled_models WHERE "Provider" = {provider} AND "Model" = {model}""");
+    }
+
     private async Task SeedAgentAsync(
         Guid agentId, string agentName, string? provider = SourceProvider, string? model = SourceModel, bool isActive = true)
     {

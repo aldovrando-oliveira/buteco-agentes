@@ -68,6 +68,11 @@ public class RoleMatrixTests(RoleMatrixTests.Fixture factory) : IClassFixture<Ro
         [("PUT", "/agents/{id:guid}/delegations")] = "A O",
         [("PUT", "/agents/{id:guid}/knowledge-bases")] = "A O",
         [("GET", "/providers")] = "A O L",
+        // Curadoria de modelos por provedor (change modelos-curados-por-provedor, D6): só o Admin.
+        [("GET", "/providers/models")] = "A",
+        [("GET", "/providers/{provider}/vendor-models")] = "A",
+        [("POST", "/providers/{provider}/models")] = "A",
+        [("DELETE", "/providers/{provider}/models")] = "A",
         [("GET", "/mcp-servers/")] = "A O L",
         [("GET", "/mcp-servers/{id:guid}")] = "A O L",
         [("GET", "/mcp-servers/{id:guid}/tools")] = "A O L",
@@ -206,6 +211,9 @@ public class RoleMatrixTests(RoleMatrixTests.Fixture factory) : IClassFixture<Ro
             .Replace("{secretId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
             .Replace("{agentId:guid}", Guid.NewGuid().ToString(), StringComparison.Ordinal)
             .Replace("{chave}", "corporativo", StringComparison.Ordinal)
+            // Provedor fora de LlmProviders.All: o Admin passa pela autorização e recebe o 404 da
+            // rota, sem nenhuma chamada a fornecedor.
+            .Replace("{provider}", "provedor-da-matriz", StringComparison.Ordinal)
             .Replace("{id}", Guid.NewGuid().ToString(), StringComparison.Ordinal);
         if (path.Contains('{', StringComparison.Ordinal))
         {

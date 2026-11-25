@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - defined by change backend-agente-a2a-mvp. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Cadastro de agente
 O sistema SHALL permitir, via `apps/api`, cadastrar um agente informando
 nome, instruções (system prompt), `provider`, `model`, `description`
@@ -207,7 +205,8 @@ apenas na listagem, na consulta por id e na substituição do próprio vínculo.
 O sistema SHALL permitir, via `apps/api`, atualizar nome, instruções,
 `provider`, `model`, `description` e `skills` de um agente já cadastrado,
 com a mesma validação usada no cadastro (incluindo a validação de
-`provider`/`model` contra o catálogo disponível e de `name` não vazio em
+`provider`/`model` contra a lista curada de modelos habilitados, que é a
+mesma fonte de `GET /providers`, e de `name` não vazio em
 cada item de `skills`). Atualizar um agente que estava sem
 `provider`/`model` definidos com valores válidos e disponíveis SHALL
 retirá-lo do estado implícito de "precisa de reconfiguração". A
@@ -234,8 +233,8 @@ persistido (replace completo, sem merge).
 
 #### Scenario: Atualizar agente com provider ou model indisponíveis é rejeitado
 - **WHEN** um cliente envia `PUT /agents/{id}` com `provider` não
-  configurado no ambiente, ou com `model` que não consta no catálogo do
-  `provider` informado
+  configurado no ambiente, ou com `model` que não está habilitado na
+  lista curada do `provider` informado
 - **THEN** a API responde com erro de validação (HTTP 400) e não altera o
   registro existente
 
@@ -262,6 +261,20 @@ persistido (replace completo, sem merge).
   `skills` cujo `name` é vazio ou ausente
 - **THEN** a API responde com erro de validação (HTTP 400) identificando
   o item inválido e não altera o registro existente
+
+#### Scenario: Atualizar agente mantendo um modelo que foi retirado é rejeitado
+- **WHEN** um agente foi cadastrado com um par `provider`+`model` habilitado,
+  o Admin retirou esse modelo da lista curada, e um cliente envia
+  `PUT /agents/{id}` mudando só o nome e mantendo o mesmo `provider`/`model`
+- **THEN** a API responde com erro de validação (HTTP 400) no campo `model` e
+  não altera o registro existente
+
+#### Scenario: Atualizar agente com modelo retirado para um modelo habilitado volta a aceitar tarefas
+- **WHEN** um agente tem um `model` que foi retirado da lista curada e um
+  cliente envia `PUT /agents/{id}` com um `model` habilitado para o mesmo
+  `provider`
+- **THEN** a API atualiza o registro, responde com HTTP 200, e o `SendMessage`
+  seguinte para o agente é aceito e publica o job de execução
 
 ### Requirement: Ativação e desativação de agente
 O sistema SHALL permitir, via `apps/api`, ativar e desativar um agente
@@ -345,3 +358,4 @@ não se ele aceitará o que receber.
 - **WHEN** um cliente lista os agentes
 - **THEN** cada agente da lista carrega os mesmos endereços que a consulta por
   id devolveria para ele
+

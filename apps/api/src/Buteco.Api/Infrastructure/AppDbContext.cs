@@ -12,6 +12,7 @@ using Buteco.Api.KnowledgeBases.Entities;
 using Buteco.Api.KnowledgeDocuments.Entities;
 using Buteco.Api.KnowledgeFragments.Entities;
 using Buteco.Api.McpServers.Entities;
+using Buteco.Api.Providers.Entities;
 using Buteco.Api.RejectionMetrics.Entities;
 using Buteco.Api.ExternalApplications;
 using Buteco.Api.Users;
@@ -27,6 +28,9 @@ namespace Buteco.Api.Infrastructure;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    /// <summary>A chave primária de <c>llm_enabled_models</c> (D6: a violação dela é a corrida de dois POST).</summary>
+    public const string EnabledLlmModelsPrimaryKeyName = "PK_llm_enabled_models";
+
     public DbSet<Agent> Agents => Set<Agent>();
 
     public DbSet<A2ATaskRecord> A2ATasks => Set<A2ATaskRecord>();
@@ -76,6 +80,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ExternalApplicationAgent> ExternalApplicationAgents => Set<ExternalApplicationAgent>();
 
     public DbSet<UserFederatedIdentity> UserFederatedIdentities => Set<UserFederatedIdentity>();
+
+    public DbSet<EnabledLlmModel> EnabledLlmModels => Set<EnabledLlmModel>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -151,6 +157,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne<ExternalApplication>().WithMany()
                 .HasForeignKey(task => task.ApplicationId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(task => task.ApplicationId);
+        });
+
+        // A lista curada de modelos por provedor (design.md da change
+        // modelos-curados-por-provedor, D1): o par é a chave, sem outras colunas. O nome
+        // da chave primária é o que a rota de habilitar reconhece numa corrida de dois
+        // POST do mesmo par (D6), e por isso vai fixado.
+        modelBuilder.Entity<EnabledLlmModel>(entity =>
+        {
+            entity.ToTable("llm_enabled_models");
+            entity.HasKey(enabled => new { enabled.Provider, enabled.Model }).HasName(EnabledLlmModelsPrimaryKeyName);
+            entity.Property(enabled => enabled.Provider).IsRequired();
+            entity.Property(enabled => enabled.Model).IsRequired();
         });
 
         modelBuilder.Entity<McpServer>(entity =>

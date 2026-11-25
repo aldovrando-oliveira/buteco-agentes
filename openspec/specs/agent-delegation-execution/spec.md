@@ -11,9 +11,7 @@ Target no mesmo `contextId`, controle de profundidade da cadeia de
 delegação, espera com timeout pelo resultado do Target, e o comportamento
 esperado sob múltiplas réplicas de `apps/workers` consumindo a fila
 `agent-tasks`.
-
 ## Requirements
-
 ### Requirement: Tool de delegação exposta por vínculo cadastrado
 O sistema SHALL expor, para cada `AgentDelegation` (Source → Target) cadastrado, uma tool de delegação correspondente ao Target na lista de tools disponível para o LLM do agente Source, junto com as tools MCP já resolvidas para aquele agente.
 
@@ -65,8 +63,9 @@ o limite.
 ### Requirement: Validação fresca do Target antes de delegar
 No momento em que a tool de delegação é chamada, o Target SHALL ser
 validado com dados lidos do banco naquele instante (não de nenhum
-cache): `Agent.IsActive` deve ser verdadeiro, e `Provider`/`Model` não
-podem ser nulos. Se qualquer checagem falhar, a delegação SHALL ser
+cache): `Agent.IsActive` deve ser verdadeiro, `Provider`/`Model` não
+podem ser nulos, e o par `Provider`+`Model` SHALL estar na lista curada de
+modelos habilitados, lida do banco naquele mesmo instante. Se qualquer checagem falhar, a delegação SHALL ser
 tratada como falha da tool, sem criar nenhuma task para o Target.
 
 #### Scenario: Target inativo no momento da chamada
@@ -88,14 +87,34 @@ tratada como falha da tool, sem criar nenhuma task para o Target.
 - **THEN** a tool retorna um resultado de falha, refletindo o estado
   atual do Target, não o estado no momento do cadastro
 
+#### Scenario: Target com modelo não habilitado
+- **WHEN** a tool de delegação para um Target é chamada, e o par
+  `Provider`+`Model` do Target não está na lista curada de modelos
+  habilitados naquele momento
+- **THEN** a tool retorna um resultado de falha para o LLM do Source, sem
+  publicar nenhuma mensagem na fila `agent-tasks` e sem criar task para o
+  Target, e o resultado da delegação é gravado como não iniciada
+
+#### Scenario: Target com modelo habilitado de novo volta a receber delegação
+- **WHEN** o modelo do Target foi retirado e habilitado de novo antes de a
+  tool de delegação ser chamada
+- **THEN** a delegação cria a task do Target e publica o job, sem reiniciar
+  nenhum processo
+
 ### Requirement: Validação do Source antes de delegar
-O agente Source SHALL estar ativo e com `Provider`/`Model` configurados no momento em que a tool de delegação é chamada; se qualquer checagem falhar, a delegação SHALL ser tratada como falha da tool.
+O agente Source SHALL estar ativo, com `Provider`/`Model` configurados e com o par `Provider`+`Model` na lista curada de modelos habilitados, lidos do banco no momento em que a tool de delegação é chamada; se qualquer checagem falhar, a delegação SHALL ser tratada como falha da tool.
 
 #### Scenario: Source desativado durante o processamento da própria task
 - **WHEN** a tool de delegação é chamada, e o agente Source foi
   desativado depois que sua própria task começou a ser processada
 - **THEN** a tool retorna um resultado de falha para o LLM continuar,
   sem criar nenhuma task para o Target
+
+#### Scenario: Modelo do Source retirado durante o processamento da própria task
+- **WHEN** a tool de delegação é chamada, e o modelo do agente Source foi
+  retirado da lista curada depois que a task dele começou a ser processada
+- **THEN** a tool retorna um resultado de falha para o LLM continuar, sem
+  criar nenhuma task para o Target
 
 ### Requirement: Task delegada compartilha o contextId da conversa
 Ao delegar, `apps/workers` SHALL criar uma nova task A2A para o Target,
@@ -296,3 +315,4 @@ nenhuma das duas chaves.
 #### Scenario: Task externa não tem as chaves
 - **WHEN** uma task é criada por `SendMessage` em `apps/api`
 - **THEN** o `Metadata` dela não tem `delegationSourceAgentId` nem `delegationSourceTaskId`
+

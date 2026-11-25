@@ -182,8 +182,18 @@ curl -i http://localhost:5017/health
 # $TOKEN: o access token do emissor (ver "Primeiro Admin local e o fluxo do emissor")
 
 # provedores de LLM disponíveis — só aparecem os que têm variável
-# de ambiente configurada no ambiente de apps/api
+# de ambiente configurada no ambiente de apps/api, cada um com os modelos
+# HABILITADOS na lista curada (#296; a migration habilita os nove do catálogo
+# estático de antes e os pares já usados por agentes)
 curl -H "Authorization: Bearer $TOKEN" http://localhost:5017/providers
+
+# curadoria (só Admin, com o papel gravado): a lista curada com a contagem de
+# agentes, as opções que o fornecedor lista para a chave, habilitar e retirar
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5017/providers/models
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5017/providers/openai/vendor-models
+curl -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"model":"<id listado pelo fornecedor>"}' http://localhost:5017/providers/openai/models
+curl -X DELETE -H "Authorization: Bearer $TOKEN" "http://localhost:5017/providers/openai/models?model=<id>"
 
 # cadastrar um agente — provider/model precisam estar entre os
 # disponíveis em GET /providers

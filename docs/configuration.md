@@ -42,7 +42,7 @@ aparece longe da causa.
 | `ServiceClient:Secret` do `apps/inbox` e `Identity:ServiceClients:Inbox:Secret` do `apps/api` | `apps/inbox` + `apps/api` | O `/connect/token` responde `invalid_client`, e o inbox loga `Error` com o `client_id`. A validação de agente no cadastro de canal responde `502`, e o despacho de mensagens falha como com o `apps/api` fora do ar, tentativa a tentativa (#235) |
 | `ServiceClient:Secret` do `apps/connectors` e `Identity:ServiceClients:Connectors:Secret` do `apps/api` | `apps/connectors` + `apps/api` | O mesmo `invalid_client`, e o ciclo de sincronização e o "Sincronizar agora" falham como com o `apps/api` fora do ar (`503`) (#235) |
 | `Mcp:CredentialEncryptionKey` | `apps/api` + `apps/workers` | `apps/api` cifra a credencial do servidor MCP ao salvar; `apps/workers` não consegue decifrá-la para conectar durante uma execução |
-| Chaves de provedor de LLM | `apps/api` + `apps/workers` | `apps/api` anuncia o provedor como disponível em `GET /providers`, mas a task termina `failed` no worker |
+| Chaves de provedor de LLM | `apps/api` + `apps/workers` | `apps/api` anuncia o provedor como disponível em `GET /providers` (e lista os modelos do fornecedor na curadoria com a chave dele), mas a task termina `failed` no worker |
 
 Fora da tabela, porque não é segredo: `Identity:Issuer` do `apps/inbox` e do
 `apps/connectors` precisa ser o `PublicUrl:BaseUrl` do `apps/api` (a barra final
@@ -130,9 +130,9 @@ restrito, a extensão precisa ser criada antes, por fora da migração.
 | `Identity__TwoFactorEncryptionKey` | **fail-fast** | AES-256 (32 bytes) em base64, para cifrar em repouso o segredo do TOTP de cada usuário (#218), com o id do usuário como dado associado. **Distinta** de `Identity__SigningKeyEncryptionKey` e de `Mcp__CredentialEncryptionKey`: igual a uma delas, o boot falha dizendo qual. Exigida sempre: a verificação é obrigatória para todo usuário (#220). Gerar com `openssl rand -base64 32`. Trocá-la torna os segredos gravados ilegíveis (ver [deployment.md](deployment.md#verificação-em-2-etapas-218)). O `appsettings.Development.json` traz uma chave de desenvolvimento |
 | `Identity__ServiceClients__Inbox__Secret`, `Identity__ServiceClients__Connectors__Secret` | **fail-fast** | Segredos dos clientes de serviço do emissor, `buteco-servico-inbox` e `buteco-servico-connectors` (#234). Cada um em base64, com pelo menos 32 bytes, **distinto** do outro e de `Identity__SigningKeyEncryptionKey`, `Identity__TwoFactorEncryptionKey` e `Mcp__CredentialEncryptionKey`: igual a qualquer um, o boot falha nomeando as duas chaves, sem o valor. Obrigatórios mesmo sem `Connectors__BaseUrl`. O catálogo do emissor grava só o hash e regrava quando o configurado deixa de validar. Gerar com `openssl rand -base64 32`. O `appsettings.Development.json` traz valores de desenvolvimento |
 | `Identity__PanelBaseUrl` | não | Base do painel quando ele não fica na origem do issuer (#180). Alimenta o `redirect_uri` e o `post_logout_redirect_uri` do cliente `buteco-painel`, e é a segunda origem aceita no `POST /auth/session`. Ausente, vale `PublicUrl__BaseUrl`, que é o caso de produção. Em desenvolvimento, `http://localhost:5173` (o Vite) |
-| `OpenAI__BaseUrl` / `OpenAI__ApiKey` / `OpenAI__Model` | não | Presença habilita o provedor em `GET /providers` |
-| `Anthropic__ApiKey` | não | Idem, para Claude |
-| `Gemini__ApiKey` | não | Idem, para Gemini |
+| `OpenAI__BaseUrl` / `OpenAI__ApiKey` / `OpenAI__Model` | não | A presença da chave habilita o provedor em `GET /providers`. Desde a #296 o `apps/api` também usa a chave e o `BaseUrl` (padrão `https://api.openai.com/v1`, o mesmo do `apps/workers`) para listar os modelos do fornecedor na curadoria (`GET /providers/{provider}/vendor-models`), só a pedido do Admin, nunca no boot nem numa mensagem |
+| `Anthropic__ApiKey` | não | Idem, para Claude (listagem em `https://api.anthropic.com/v1/models`) |
+| `Gemini__ApiKey` | não | Idem, para Gemini (listagem em `https://generativelanguage.googleapis.com/v1beta/models`, com a chave em cabeçalho) |
 | `Connectors__BaseUrl` | não | Endereço do `apps/connectors`, usado só para validar a pasta no cadastro de base sincronizada. Em desenvolvimento, `http://localhost:5037`. Ver abaixo |
 
 `Connectors__BaseUrl` tem três estados, e só um deles derruba o processo:

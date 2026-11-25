@@ -27,7 +27,6 @@ O que esta capability fixa, e a ordem importa:
 
 A **exposição** desses números é de `system-insights-aggregation` e
 `agent-insights-aggregation`; aqui fica só a coleta.
-
 ## Requirements
 ### Requirement: Linha de recusa para toda task recusada antes de publicar job
 
@@ -59,6 +58,20 @@ execução que não houve.
   configurado no ambiente de `apps/api`
 - **THEN** existe exatamente uma linha de recusa com o motivo do provedor não
   configurado, distinto dos outros dois
+
+#### Scenario: Recusa por modelo não habilitado produz linha
+- **WHEN** um `SendMessage` é recusado porque o par `provider`+`model` do agente
+  não está na lista curada de modelos habilitados, com o provedor configurado
+  no ambiente
+- **THEN** existe exatamente uma linha de recusa com o motivo `ModelNotEnabled`,
+  distinto do motivo do provedor não configurado e do da configuração ausente
+- **AND** a linha não carrega provedor nem modelo
+
+#### Scenario: Provedor sem chave e modelo não habilitado gravam o motivo da chave
+- **WHEN** um `SendMessage` chega para um agente cujo provedor está sem chave no
+  ambiente **e** cujo modelo não está habilitado
+- **THEN** a linha de recusa traz o motivo do provedor não configurado, e **não**
+  `ModelNotEnabled`
 
 #### Scenario: Agente que não existe mais não é gravado como inativo
 - **WHEN** um `SendMessage` chega para um agente cujo registro já não está no
@@ -115,3 +128,4 @@ preenchida em parte dos casos, que qualquer agregação leria como distribuiçã
 - **WHEN** uma task é recusada por qualquer uma das causas
 - **THEN** a linha de recusa não tem provedor nem modelo, e nenhuma agregação de
   recusa por provedor ou por modelo é possível a partir dela
+

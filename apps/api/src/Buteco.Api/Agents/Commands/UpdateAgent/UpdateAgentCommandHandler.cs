@@ -27,7 +27,7 @@ public sealed class UpdateAgentCommandHandler(
             return UpdateAgentResult.NotFound();
         }
 
-        var validation = providerCatalogService.Validate(command.Provider, command.Model);
+        var validation = await providerCatalogService.ValidateAsync(command.Provider, command.Model, cancellationToken);
         if (validation != ProviderValidationOutcome.Valid)
         {
             return UpdateAgentResult.ValidationFailed(validation);

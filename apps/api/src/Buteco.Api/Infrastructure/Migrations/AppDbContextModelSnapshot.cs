@@ -919,6 +919,20 @@ namespace Buteco.Api.Infrastructure.Migrations
                     b.ToTable("mcp_servers", (string)null);
                 });
 
+            modelBuilder.Entity("Buteco.Api.Providers.Entities.EnabledLlmModel", b =>
+                {
+                    b.Property<string>("Provider")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Model")
+                        .HasColumnType("text");
+
+                    b.HasKey("Provider", "Model")
+                        .HasName("PK_llm_enabled_models");
+
+                    b.ToTable("llm_enabled_models", (string)null);
+                });
+
             modelBuilder.Entity("Buteco.Api.RejectionMetrics.Entities.TaskRejection", b =>
                 {
                     b.Property<string>("TaskId")

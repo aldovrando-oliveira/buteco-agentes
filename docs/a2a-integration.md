@@ -520,7 +520,7 @@ construa lógica de cliente para lidar com eles.
 | `TASK_STATE_WORKING` | Não | Um worker pegou o job e está chamando o LLM. | Continuar consultando `GetTask`. |
 | `TASK_STATE_COMPLETED` | Sim | O LLM respondeu com sucesso. | Ler a resposta em `artifacts[].parts[].text`. Para continuar a conversa, reenvie `contextId` na próxima `SendMessage`. |
 | `TASK_STATE_FAILED` | Sim | A chamada ao LLM lançou exceção, ou o provider do agente não está configurado no ambiente dos workers. | Parar de consultar. **Não há motivo estruturado disponível** — `status.message` é sempre `null` aqui; o detalhe do erro só existe nos logs do worker. Trate como falha genérica (ex.: oferecer nova tentativa como uma nova task). |
-| `TASK_STATE_REJECTED` | Sim | A task nunca chegou a um worker — rejeitada na hora do `SendMessage`. Três causas possíveis, indistinguíveis por essa resposta: agente inativo (`isActive = false`), agente sem `provider`/`model` configurados, ou o `provider` do agente não está mais configurado no ambiente da API. | Parar de consultar. Se precisar saber qual das três causas foi, consulte `GET /agents/{id}` separadamente e compare `isActive`/`provider`/`model`. |
+| `TASK_STATE_REJECTED` | Sim | A task nunca chegou a um worker — rejeitada na hora do `SendMessage`. Quatro causas possíveis, indistinguíveis por essa resposta: agente inativo (`isActive = false`), agente sem `provider`/`model` configurados, o `provider` do agente não está mais configurado no ambiente da API, ou o `model` do agente foi retirado da lista de modelos habilitados da instalação (#296). | Parar de consultar. Se precisar saber qual das quatro causas foi, consulte `GET /agents/{id}` separadamente e compare `isActive`/`provider`/`model` com `GET /providers`. |
 | *(nenhuma transição chega)* | — | Caso raro: falha de infraestrutura no worker fora do tratamento normal (ex.: banco indisponível ao carregar o job) faz a mensagem ser descartada sem reentrega e sem a task nunca virar `failed`. | O cliente precisa impor seu próprio timeout de polling — não assuma que todo `submitted`/`working` eventualmente termina. |
 
 **Sobre `contextId` e conversas com múltiplos turnos**: reenviar o mesmo
@@ -548,7 +548,7 @@ terminal antes de mandar a seguinte. As conversas que chegam pelos canais do
 stateDiagram-v2
     [*] --> TASK_STATE_SUBMITTED: SendMessage aceito
 
-    TASK_STATE_SUBMITTED --> TASK_STATE_REJECTED: agente inativo /\nsem provider-model /\nprovider indisponível
+    TASK_STATE_SUBMITTED --> TASK_STATE_REJECTED: agente inativo /\nsem provider-model /\nprovider indisponível /\nmodelo não habilitado
     TASK_STATE_SUBMITTED --> TASK_STATE_WORKING: worker consome o job
 
     TASK_STATE_WORKING --> TASK_STATE_COMPLETED: chamada ao LLM ok

@@ -19894,3 +19894,99 @@ Os guardas acharam três defeitos na primeira forma da correção, corrigidos no
 - **Teste de round-trip não espera dado que só existe entre duas transições do despacho.** Espera uma condição durável (a task em `a2a_tasks`, a saída entregue) e só depois afirma a ausência do registro.
 - **O critério para fechar a #176** (design da change, D6): 15 rodadas completas do `rt-inbox` na `main` depois do merge, em pelo menos 2 dias, com 0 reprovações do `Source3` de qualquer tipo. Rodadas de baseline de outras changes contam. Se o `CHANNEL_ERROR` voltar, a #176 fica aberta com ele como causa restante.
 - **A #296 é levada a esta base** depois do merge (cópia de segurança, plano, ok do dono), e as suítes de fechamento dela rodam de novo.
+
+## `modelos-curados-por-provedor` — Modelos por provedor de LLM curados no painel (#296)
+
+**Change proposta em 19/11/2026 e arquivada em 25/11/2026**, na branch `feat/296-modelos-curados-por-provedor`, num worktree próprio. Ela partiu de `c9733ce` (merge do PR #295) e foi levada por fast-forward a `4e44dd3` e depois a `3b6899b` (merge do PR #315), com o trabalho preservado em cópia de segurança com manifesto. É só o backend: as telas são a #297, bloqueada por esta change.
+
+**O que entrou:**
+
+- **A lista curada no banco do `apps/api`**, na tabela `llm_enabled_models`, com chave `(Provider, Model)`. O `ProviderModelCatalog` estático saiu.
+- **A carga inicial, pela migration:** habilita os nove modelos do catálogo de antes, mais todo par `provider`/`model` já gravado em agentes dos três provedores. **Por isso nenhum agente que executava passa a ser recusado no deploy.**
+- **Quatro rotas, só do Admin com o papel gravado** (`CurrentUser.FindAdminAsync`):
+  - `GET /providers/models`: a lista curada dos três provedores, com `configured` e a contagem de agentes por modelo;
+  - `GET /providers/{provider}/vendor-models`: as opções que o fornecedor lista agora para a chave do ambiente, com o `filter` aplicado;
+  - `POST /providers/{provider}/models`: habilita só o que o fornecedor listou naquele momento;
+  - `DELETE /providers/{provider}/models?model=`: retira sem consultar o fornecedor, com ou sem a chave.
+
+  O `RoleMatrixTests` ganhou as quatro entradas.
+- **A listagem do fornecedor:**
+  - roda com a chave sempre em cabeçalho, nunca em URL, log ou resposta, e com orçamento de 30 s;
+  - a falha responde `503 vendor-unavailable` ou `502 vendor-error`, este com `vendorStatus` (o status do fornecedor, ou `null` escrito quando ele responde `200` fora do contrato);
+  - nunca roda no boot, em `GET /providers`, na retirada nem no caminho de uma mensagem;
+  - o `apps/api` passa a ler `OpenAI:BaseUrl`.
+- **`GET /providers` e a validação de cadastro e edição** leem a lista curada, com a mesma forma. Provedor com chave e sem modelo habilitado aparece com `models: []`.
+- **BREAKING (comportamento):**
+  - o `SendMessage` para agente cujo modelo saiu da lista é recusado sem publicar job, com o motivo novo `ModelNotEnabled` na métrica de recusa (D7). A ordem "chave antes de modelo" é a do mesmo `ValidateAsync` da validação de agente, e o `ProviderAvailabilityAgreementTests` amarra os dois lados;
+  - a edição que mantém um modelo retirado responde `400` no campo `model`.
+- **Delegação no `apps/workers`:** o Source e o Target com modelo não habilitado não delegam nem recebem delegação, pela tabela lida no contexto espelho, com uma migration espelho para as fixtures (D8). O acordo do schema entre os dois contextos está em `tests/CrossAppTaskStoreCompatibility.Tests` (D9).
+- **O protótipo da tela (#297)** foi aprovado em 19/11/2026: canvas `H7dPBZafiSkdKd1hqesPZ6`, versão `1795117800-893f`, conferido contra as rotas (design, "Protótipo aprovado da tela"). As telas ficam para a #297.
+
+**Os guardas (convenção 15):** doze, cada um reprovando na asserção que nomeia e com o arquivo de volta pelo `sha256`. Cobrem:
+- a carga sobre banco povoado;
+- a lista vazia de provedor com chave;
+- o filtro por item da Anthropic;
+- a chave do Gemini fora da URL;
+- o `vendorStatus` no corpo;
+- o `POST` que só aceita o listado;
+- o Admin rebaixado;
+- a recusa do `SendMessage`;
+- a ordem chave antes de modelo;
+- o acordo entre validação e recusa;
+- o Target da delegação;
+- o espelho do `apps/workers`.
+
+**As paradas do fechamento:**
+
+- **Parada 1, a lista do topo:** o `FederatedClientWithoutProviderTests.TheHostWithoutProvider_ExposesTheSameEndpoints` (da #281) compara os endpoints com uma lista gravada, e as quatro rotas novas entraram nela, com a asserção igual (decisão do dono, 19/11/2026).
+- **Parada 2: (i), corrigida pelo #315.** O `OrphanDispatchRoundTripTests.Source3_…` do `rt-inbox` reprovava na change, 4 em 4 sobre `4e44dd3`, e não na baseline.
+  - **O mecanismo:** a espera do `taskId` da sentinela lia um dado transitório. O `taskId` só existe no registro de despacho do inbox entre a gravação e o fechamento pelo push: 46 a 140 ms, medidos com sondas que mudavam o tempo, contra uma consulta a cada 100 ms.
+  - **A conferência nova do `SendMessage`** (~4 ms) deslocava essa janela.
+  - **Os experimentos A e B:** com a consulta da sentinela a 5 ms, a change passou nas 4 rodadas válidas, o que descarta um defeito do inbox. A `main` com 4 e 8 ms de atraso derrubou os casos expostos, como indício não medido pela regra.
+  - **A correção** foi um PR próprio na `main`: a #309 (`rt-inbox-espera-taskid`, seção acima). Nenhum código desta change mudou por ela. A #176 segue aberta pela segunda causa, o `CHANNEL_ERROR` do RabbitMQ no reinício do worker.
+
+**As séries sobre `3b6899b` (25/11/2026)**, as cinco suítes nas duas pontas, uma por vez sob o lock. As dez aprovaram na primeira rodada:
+
+| suíte | baseline | change |
+|---|---|---|
+| `api` | 1860 + 1 ignorado de 1861, 567 s, CPU mínima 39 e mediana 48 | 1934 + 1 ignorado de 1935, 467 s, CPU mínima 46 e mediana 58 |
+| `workers` | 415/415 | 418/418 |
+| `rt-crossapp` | 6/6 | 8/8 |
+| `rt-inbox` | 16/16 | 16/16 |
+| `rt-connectors` | 12/12 | 12/12 |
+
+**`apps/api`: 1 rodada, 0 inconclusivas, 6 threads** em cada ponta. O registro de cada ponta traz a duração e a CPU mínima e mediana, na tabela.
+
+**A comparação por nome:** nenhum caso saiu, e todos os da baseline aprovaram na change.
+- `api` +74: `VendorModelsEndpointTests` 20, `ModelCurationEndpointsTests` 19, `ProviderAvailabilityTests` 16, `RoleMatrixTests` 12, `VendorModelListerRegistrationTests` 4, `LlmEnabledModelsMigrationTests` 2 e `AgentBeforeCurationMigrationTests` 1;
+- `workers` +3;
+- `rt-crossapp` +2.
+
+As medições sobre `c9733ce` e `4e44dd3` ficaram históricas (design, "Base nova").
+
+### Os contratos da Anthropic e do Gemini seguem NÃO medidos
+
+**Decisão do dono, 19/11/2026:** a conferência real das listagens de modelos da Anthropic (`GET /v1/models`) e do Gemini (`GET /v1beta/models`) sai do apply e passa a ser feita **na homologação, depois do deploy**, por ele, e **não bloqueia o archive** (tarefa 3.7 da change; issue **#301**; roteiro no `docs/deployment.md`, "Conferência real das listagens da Anthropic e do Gemini (#296)"). Não havia chave de nenhum dos dois no ambiente local, e os testes usam respostas **copiadas da documentação oficial de 19/11/2026**.
+
+**Até a homologação, os dois contratos seguem NÃO medidos** (riscos R3 e R12 do `design.md`):
+- o campo `lifecycle` presente em cada item com `anthropic-version: 2023-06-01`, a versão que o SDK do `apps/workers` manda. Se faltar, a listagem da Anthropic responde `502` com `vendorStatus` `null` e não oferece nada;
+- a chave do Gemini aceita por cabeçalho (`x-goog-api-key`), que está no exemplo REST oficial, enquanto a página da listagem usa `?key=`;
+- o id do Gemini (o `name` sem `models/`) aceito pelo `Google.GenAI` do `apps/workers`;
+- a paginação dos dois e os campos lidos.
+
+Se divergir, vira issue de correção. Nenhum agente em execução é afetado: a listagem só roda na curadoria, e os modelos já habilitados continuam valendo.
+
+A OpenAI foi medida contra o gateway compatível do ambiente local: o `GET {BaseUrl}/models` autentica (`401` sem chave e com chave errada) e responde `200` com `{"object":"list","data":[]}`.
+
+**A 3.7 fica para a homologação (#301):** a conferência real das duas listagens é do dono, depois do deploy, pelo roteiro do `docs/deployment.md`. Ela não bloqueou o archive, e até lá os dois contratos seguem não medidos.
+
+**O gateway da OpenAI lista vazio:** o compatível do ambiente local respondeu `200` com `data: []`. Com ele, a curadoria não oferece nada para habilitar, e a carga inicial é o que vale (`docs/deployment.md`).
+
+### Na fila
+
+- **#297:** as telas da curadoria, com o protótipo aprovado.
+- **#298:** a delegação não confere provedor sem chave no Source nem no Target.
+- **#299:** o vocabulário `Reason.All` não tem o guarda que o comentário dele promete.
+- **#300:** os casos de delegação recusada reprovam por tempo esgotado, e não pela asserção.
+- **#301:** a conferência na homologação dos contratos da Anthropic e do Gemini.
+- **#314:** a reintentativa de transporte do `SendMessage` pode criar uma segunda task (achada na #309).

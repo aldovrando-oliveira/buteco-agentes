@@ -149,5 +149,12 @@ public class FederatedClientWithoutProviderTests(WithoutProviderCountingFixture 
         "oidc-servidor EndSessionEndpointUris /connect/logout",
         "oidc-servidor JsonWebKeySetEndpointUris /.well-known/jwks",
         "oidc-servidor TokenEndpointUris /connect/token",
+
+        // Acrescentadas pela #296 (change modelos-curados-por-provedor, D6): as quatro rotas de curadoria de modelos
+        // por provedor, mapeadas com ou sem provedor federado. A asserção é a mesma: a lista inteira, nos dois sentidos.
+        "DELETE /providers/{provider}/models",
+        "GET /providers/models",
+        "GET /providers/{provider}/vendor-models",
+        "POST /providers/{provider}/models",
     ];
 }
