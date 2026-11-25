@@ -40,9 +40,11 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
         try
         {
             var (agentId, channelId, externalId) = await StartConversationAsync();
-            var taskId = await WaitForTaskIdAsync(channelId, externalId);
-
+            // Condição positiva e durável antes da ausência do registro (rt-inbox-espera-taskid,
+            // D1): o taskId do registro de despacho só existe entre a gravação e o fechamento.
+            await AgentTasks.WaitForTerminalAsync(fixture, agentId, ReconciliationTimeout);
             await PollUntilAsync(() => HasPendingDispatchAsync(channelId, externalId), has => !has, ReconciliationTimeout);
+            var taskId = await AgentTasks.SingleTaskIdAsync(fixture, agentId);
 
             Assert.Equal("TASK_STATE_COMPLETED", await GetTaskStateAsync(agentId, taskId));
             Assert.Contains("failed", fixture.PushGate.Outcomes);
@@ -66,9 +68,10 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
         try
         {
             var (agentId, channelId, externalId) = await StartConversationAsync();
-            var taskId = await WaitForTaskIdAsync(channelId, externalId);
-
+            // rt-inbox-espera-taskid, D1: a condição positiva antes da ausência.
+            await AgentTasks.WaitForTerminalAsync(fixture, agentId, TimeSpan.FromSeconds(20));
             await PollUntilAsync(() => HasPendingDispatchAsync(channelId, externalId), has => !has, TimeSpan.FromSeconds(20));
+            var taskId = await AgentTasks.SingleTaskIdAsync(fixture, agentId);
 
             Assert.Equal("TASK_STATE_FAILED", await GetTaskStateAsync(agentId, taskId));
             Assert.Contains("delivered:200", fixture.PushGate.Outcomes);
@@ -91,10 +94,13 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
         try
         {
             (agentId, channelId, externalId) = await StartConversationAsync();
-            taskId = await WaitForTaskIdAsync(channelId, externalId);
-
             // O push só é chamado DEPOIS de a task estar gravada terminal.
             await fixture.PushGate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(20));
+
+            // rt-inbox-espera-taskid, D4: o push está retido e o caso precisa do taskId antes do
+            // reinício. Lido de a2a_tasks DEPOIS do push entrar, com a gravação terminal já feita: lido
+            // antes, uma reintentativa ainda por nascer escaparia do Single (G3).
+            taskId = await AgentTasks.SingleTaskIdAsync(fixture, agentId);
             Assert.Equal("TASK_STATE_COMPLETED", await GetTaskStateAsync(agentId, taskId));
 
             fixture.PushGate.Reset(PushNotificationGateMode.PassThrough);
@@ -109,7 +115,15 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
         // consumidor e N = 1 (fixo na fixture), quando ela fecha o round-trip a mensagem
         // devolvida à fila na parada já foi reentregue e confirmada.
         var (_, sentinelChannelId, sentinelExternalId) = await StartConversationAsync();
-        await WaitForTaskIdAsync(sentinelChannelId, sentinelExternalId);
+        // rt-inbox-espera-taskid, D3: a condição positiva é uma mensagem de saída entregue à
+        // sentinela, que é durável (a resposta ou o aviso de falha), e a asserção exige que seja a
+        // resposta: só ela prova que a sentinela passou pelo worker. Uma sentinela recusada sem task
+        // também fecharia o registro, sem a garantia de ordem (G4).
+        var sentinelOutbound = await PollUntilAsync(
+            () => FindDeliveredOutboundAsync(sentinelChannelId, sentinelExternalId),
+            content => content is not null,
+            TimeSpan.FromSeconds(20));
+        Assert.Equal(RoundTripFixture.MockedAgentReplyText, sentinelOutbound);
         await PollUntilAsync(() => HasPendingDispatchAsync(sentinelChannelId, sentinelExternalId), has => !has, TimeSpan.FromSeconds(20));
 
         await PollUntilAsync(() => HasPendingDispatchAsync(channelId, externalId), has => !has, ReconciliationTimeout);
@@ -127,9 +141,11 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
         try
         {
             var (agentId, channelId, externalId) = await StartConversationAsync();
-            var taskId = await WaitForTaskIdAsync(channelId, externalId);
-
+            // Condição positiva e durável antes da ausência do registro (rt-inbox-espera-taskid,
+            // D1): o taskId do registro de despacho só existe entre a gravação e o fechamento.
+            await AgentTasks.WaitForTerminalAsync(fixture, agentId, ReconciliationTimeout);
             await PollUntilAsync(() => HasPendingDispatchAsync(channelId, externalId), has => !has, ReconciliationTimeout);
+            var taskId = await AgentTasks.SingleTaskIdAsync(fixture, agentId);
 
             Assert.Equal("TASK_STATE_FAILED", await GetTaskStateAsync(agentId, taskId));
             await AssertFailureNoticeAsync(channelId, externalId);
@@ -151,8 +167,10 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
         try
         {
             var (agentId, channelId, externalId) = await StartConversationAsync();
-            var taskId = await WaitForTaskIdAsync(channelId, externalId);
+            // rt-inbox-espera-taskid, D1: a condição positiva antes da ausência.
+            await AgentTasks.WaitForTerminalAsync(fixture, agentId, TimeSpan.FromSeconds(20));
             await PollUntilAsync(() => HasPendingDispatchAsync(channelId, externalId), has => !has, TimeSpan.FromSeconds(20));
+            var taskId = await AgentTasks.SingleTaskIdAsync(fixture, agentId);
 
             var status = await GetRawStatusAsync(agentId, taskId);
             Console.WriteLine($"MEDIDA status={status}");
@@ -202,11 +220,28 @@ public class OrphanDispatchRoundTripTests(RoundTripFixture fixture) : IClassFixt
         return (agentId, channelId, externalId);
     }
 
-    private async Task<string> WaitForTaskIdAsync(Guid channelId, string externalId) =>
-        (await PollUntilAsync(
-            async () => (await FindPendingDispatchAsync(channelId, externalId))?.TaskId,
-            id => id is not null,
-            TimeSpan.FromSeconds(10)))!;
+    // O conteúdo da primeira mensagem de saída entregue da conversa, ou null. Sem contato ainda,
+    // null, e não exceção (G2).
+    private async Task<string?> FindDeliveredOutboundAsync(Guid channelId, string externalId)
+    {
+        using var scope = fixture.InboxFactory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<InboxAppDbContext>();
+        var contact = await dbContext.Contacts.AsNoTracking().SingleOrDefaultAsync(c => c.ChannelId == channelId && c.ExternalId == externalId);
+        if (contact is null)
+        {
+            return null;
+        }
+
+        var sessionIds = await dbContext.Sessions.AsNoTracking().Where(s => s.ContactId == contact.Id).Select(s => s.Id).ToListAsync();
+        return await dbContext.Messages.AsNoTracking()
+            .Where(m =>
+                sessionIds.Contains(m.SessionId)
+                && m.Direction == InboxMessageDirection.Outbound
+                && m.DeliveryStatus == InboxMessageDeliveryStatus.Sent)
+            .OrderBy(m => m.OccurredAt)
+            .Select(m => m.Content)
+            .FirstOrDefaultAsync();
+    }
 
     private async Task AssertFailureNoticeAsync(Guid channelId, string externalId)
     {

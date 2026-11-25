@@ -61,27 +61,29 @@ public class SessionSerializationRoundTripTests(RoundTripFixture fixture) : ICla
             var (channelId, externalId) = await CreateChannelAsync(agentId);
 
             await ReceiveAsync(channelId, externalId, "msg1");
-            var firstTaskId = await PollUntilAsync(
-                async () => (await FindDispatchesAsync(channelId, externalId)).Select(d => d.TaskId).FirstOrDefault(id => id is not null),
-                id => id is not null,
-                Timeout);
+            // rt-inbox-espera-taskid, D4: os ids vêm de a2a_tasks pelo agente do caso, que nascem
+            // no Submit e não somem (D0), e não do TaskId da PendingDispatch, que é transitório. A
+            // msg2 ainda não saiu. Espera-se uma task que já saiu de Submitted: uma reintentativa
+            // abandonada nasce antes dela, então o Single a vê e reprova com a lista (D2, G3).
+            var firstTaskId = AgentTasks.Single(
+                await AgentTasks.WaitUntilAsync(fixture, agentId, rows => rows.Any(LeftSubmitted), Timeout, "a task da msg1 fora de Submitted"),
+                agentId).TaskId;
 
             // Ponto de sincronização por estado persistido, como em
             // ConversationContextLockFailureTests.cs:186-191: a primeira instância
             // está ocupada com a primeira task ANTES de a segunda existir. Sem isso,
             // as duas tasks poderiam cair na mesma instância, serializar na fila, e
             // o guarda passaria verde sem exercitar nada.
-            await PollUntilAsync(() => GetTaskStateAsync(agentId, firstTaskId!), state => state == "TASK_STATE_WORKING", Timeout);
+            await PollUntilAsync(() => GetTaskStateAsync(agentId, firstTaskId), state => state == "TASK_STATE_WORKING", Timeout);
             await fixture.StartSecondWorkersAsync();
 
             await ReceiveAsync(channelId, externalId, "msg2");
 
-            var secondTaskId = await PollUntilAsync(
-                async () => (await FindDispatchesAsync(channelId, externalId))
-                    .Select(d => d.TaskId)
-                    .FirstOrDefault(id => id is not null && id != firstTaskId),
-                id => id is not null,
-                Timeout);
+            var others = (await AgentTasks.WaitUntilAsync(
+                    fixture, agentId, rows => rows.Any(row => row.TaskId != firstTaskId && LeftSubmitted(row)), Timeout, "a task da msg2 fora de Submitted"))
+                .Where(row => row.TaskId != firstTaskId)
+                .ToList();
+            var secondTaskId = AgentTasks.Single(others, agentId).TaskId;
 
             await PollUntilAsync(async () => (await FindDispatchesAsync(channelId, externalId)).Count, count => count == 0, Timeout);
 
@@ -90,8 +92,8 @@ public class SessionSerializationRoundTripTests(RoundTripFixture fixture) : ICla
             // `failed` e o aviso entregue), e não só a primeira asserção que reprova.
             List<string> observed =
             [
-                await GetTaskStateAsync(agentId, firstTaskId!),
-                await GetTaskStateAsync(agentId, secondTaskId!),
+                await GetTaskStateAsync(agentId, firstTaskId),
+                await GetTaskStateAsync(agentId, secondTaskId),
                 .. (await GetMessagesAsync(channelId, externalId))
                     .Where(m => m.Direction == InboxMessageDirection.Outbound)
                     .OrderBy(m => m.OccurredAt)
@@ -109,6 +111,8 @@ public class SessionSerializationRoundTripTests(RoundTripFixture fixture) : ICla
             await fixture.StopSecondWorkersAsync();
         }
     }
+
+    private static bool LeftSubmitted(AgentTasks.Row row) => row.IsTerminal || row.State == nameof(global::A2A.TaskState.Working);
 
     private async Task ReceiveAsync(Guid channelId, string externalId, string text)
     {

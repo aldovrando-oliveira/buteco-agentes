@@ -19839,3 +19839,58 @@ A folha custa 19–33% dos mesmos passos com o Vitest inteiro (180–182 s na pr
 - **Rodada intermediária:** `python3 scripts/selecionar-testes.py --passos > plano.tsv` e o script local de suíte no modo `plano`. A tarefa da rodada no `tasks.md` cita o plano e o SHA da base (convenção 19).
 - **Ao mudar uma regra da seleção, mude primeiro `scripts/tests/selecao-esperada.md`, à mão.**
 
+## `rt-inbox-espera-taskid` — Os testes do `rt-inbox` esperam uma condição durável, e não o `taskId` do registro de despacho (#309)
+
+**Change proposta e implementada em 24/11/2026**, na branch `test/309-rt-inbox-espera-taskid`, num worktree próprio a partir de `4e44dd3` (merge do PR #308). Nasceu da parada 2 da #296: o `Source3` reprovava 4 em 4 na branch dela e 0 em 4 na `main`. É o mecanismo que a #176 descreveu em 18/10/2026, agora medido e com o escopo de todos os casos que usam a espera. O PR só referencia a #176 (`Refs #176`), porque ela tem uma segunda causa (abaixo).
+
+**O defeito:** o registro de despacho do inbox nasce no recebimento e só ganha o `taskId` quando o `SendMessage` responde. Depois ele some, quando o push fecha o despacho. Doze casos esperavam esse `taskId`, consultando a cada 100 ms com três buscas por consulta. Com o push livre e o LLM mockado sem atraso, a janela mediu 46 a 140 ms (com sondas, que mudam o tempo: 0 reprovações em 2 rodadas com elas, contra 4 em 4 sem elas).
+
+**As medidas da investigação** (sobre `4e44dd3`, uma rodada por vez sob o lock):
+
+- a branch da #296, com a espera da sentinela consultando a cada 5 ms: 4 rodadas válidas, as 4 aprovadas;
+- a `main` com 4 e 8 ms de atraso no `SendMessage`: 16 tentativas, 14 reprovando só nos casos expostos, mas inconclusivas pela CPU. É indício, não medida.
+
+**O universo, pelos dois critérios (convenção 25):**
+
+- o estreito (`WaitForTaskIdAsync`) dava 7 casos;
+- o largo (toda leitura de `TaskId` do registro) deu **12**, com os 4 do `RoundTripTests` e a `SessionSerialization`;
+- dois dos que o estreito não via caíram no experimento.
+
+**O que entrou:** só testes, em `tests/InboxOrchestratorRoundTrip.Tests`.
+
+- **Casos 1, 2 e 5–11:** cada um espera primeiro uma condição positiva e durável e só depois a ausência do registro. A condição é uma task do agente do caso em estado final em `a2a_tasks`, pelo `IsTerminal()` do SDK. O `taskId` vem de `a2a_tasks` com `Assert.Single`, e a mensagem lista o id e o estado de cada task do agente.
+- **Caso 3** (a conversa principal do `Source3`): lê a task depois de o push entrar no portão.
+- **Caso 12** (`SessionSerialization`): espera uma task fora de `Submitted`, a 1ª e depois a 2ª.
+- **A sentinela do `Source3`:** espera uma saída entregue, que é durável, e afirma que é a resposta do agente.
+- **A leitura nova:** `Support/AgentTasks.cs`.
+- **O que saiu:** o `WaitForTaskIdAsync` e o `GetPendingDispatchTaskIdAsync`.
+- **Nenhum caso saiu ou mudou de nome**, e nenhum código de produção mudou.
+
+**A conferência da D0:** nada apaga linha de `a2a_tasks` no fluxo de um despacho. O SDK A2A `1.0.0-preview2`, descompilado, só declara e implementa `DeleteTaskAsync`, e o repositório não o chama.
+
+**Os guardas (convenção 15).** As mutações de produção ficaram só em cópias descartáveis. Pela decisão do dono, a reprovação na asserção conta com qualquer CPU, e a reprovação por tempo segue a regra assimétrica.
+
+- **G1, o atraso de 8 ms**, por tempo:
+  - vermelho, na `main` com o atraso: a 6ª tentativa reprovou **válida**, com a CPU em 100, no `Source3` (`:112`) e no `PushNotificationReceived…` (`:55`), as duas esperas do `taskId`;
+  - verde, na change com o atraso: 16/16, três vezes.
+- **G2, a condição positiva:** numa cópia em que o recebimento grava o registro 300 ms depois de voltar, os 9 casos da D1 que leem task reprovam sem a condição positiva, com `há 0: nenhuma`. Com ela, passam 11/11. **O G2 não guarda a sentinela:** a espera de 15 s da reconciliação da conversa principal cobre a reentrega.
+- **G3, a segunda task:** com timeout de 1 s no cliente A2A do inbox e 2 s de atraso depois do `Submit`, os 11 casos que leem task reprovam com a lista, `<id> (Submitted), <id> (Completed|Failed|Working)`. O caso 12 entra.
+- **G4, a sentinela que passou pelo worker:** com a sentinela falando com um agente que o api não conhece, o caso reprova na asserção da resposta, com o aviso de falha no lugar. Só com a ausência do registro, passa.
+
+Os guardas acharam três defeitos na primeira forma da correção, corrigidos no design (convenção 9):
+
+- o caso 3 pegava a task abandonada pela reintentativa;
+- o caso 12 tinha o mesmo risco;
+- a espera da sentinela lançava sem o contato.
+
+**`rt-inbox`:** na baseline, 1 rodada, aprovada 16/16 com a CPU em 100; na change, 1 rodada completa, aprovada 16/16. Nenhuma inconclusiva nas completas. Os 16 nomes são os mesmos nos dois lados.
+
+**A segunda causa da #176, registrada como evidência:** na 3ª tentativa vermelha do G1, o `Source3` caiu também em `:101`, no `RestartWorkersAsync`, com `RabbitMQ.Client.Exceptions.AlreadyClosedException` (`AMQP close-reason, initiated by Peer, code=504, text='CHANNEL_ERROR - expected 'channel.open''`). É a mesma assinatura da baseline de 19/11/2026, fora da espera do `taskId`. A saída está em `~/.cache/buteco-agents/309/evidencia-176/g1-v3/`, com o `manifest.sha256`.
+
+**O achado que virou issue (convenção 23): a #314.** A reintentativa de transporte do `SendMessage` (timeout de 5 s do cliente A2A do inbox) pode criar uma segunda task para o mesmo pedido, quando o api já gravou a primeira. O G3 reproduziu o caso: a task abandonada fica em `Submitted`. A pergunta em aberto é se há resposta duplicada ao cliente.
+
+### Para as próximas
+
+- **Teste de round-trip não espera dado que só existe entre duas transições do despacho.** Espera uma condição durável (a task em `a2a_tasks`, a saída entregue) e só depois afirma a ausência do registro.
+- **O critério para fechar a #176** (design da change, D6): 15 rodadas completas do `rt-inbox` na `main` depois do merge, em pelo menos 2 dias, com 0 reprovações do `Source3` de qualquer tipo. Rodadas de baseline de outras changes contam. Se o `CHANNEL_ERROR` voltar, a #176 fica aberta com ele como causa restante.
+- **A #296 é levada a esta base** depois do merge (cópia de segurança, plano, ok do dono), e as suítes de fechamento dela rodam de novo.
