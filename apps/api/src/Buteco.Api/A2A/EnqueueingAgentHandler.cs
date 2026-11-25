@@ -63,7 +63,7 @@ public sealed class EnqueueingAgentHandler(
         // modelo foi retirado da lista curada (change modelos-curados-por-provedor, D7).
         // A regra é a MESMA da validação de agente, pelo MESMO método: o serviço é
         // resolvido deste escopo e não recopiado aqui, e a ordem "chave antes de modelo"
-        // vem dele. O ProviderAvailabilityAgreementTests amarra os dois lados.
+        // vem dele. O ProviderAvailabilityTests.AgentValidation_AndSendMessage_AgreeOnThePair amarra os dois lados.
         var availability = await GetAvailabilityAsync(agentState.Provider, agentState.Model, cancellationToken);
         if (availability != ProviderValidationOutcome.Valid)
         {

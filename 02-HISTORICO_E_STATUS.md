@@ -19917,7 +19917,7 @@ Os guardas acharam três defeitos na primeira forma da correção, corrigidos no
   - o `apps/api` passa a ler `OpenAI:BaseUrl`.
 - **`GET /providers` e a validação de cadastro e edição** leem a lista curada, com a mesma forma. Provedor com chave e sem modelo habilitado aparece com `models: []`.
 - **BREAKING (comportamento):**
-  - o `SendMessage` para agente cujo modelo saiu da lista é recusado sem publicar job, com o motivo novo `ModelNotEnabled` na métrica de recusa (D7). A ordem "chave antes de modelo" é a do mesmo `ValidateAsync` da validação de agente, e o `ProviderAvailabilityAgreementTests` amarra os dois lados;
+  - o `SendMessage` para agente cujo modelo saiu da lista é recusado sem publicar job, com o motivo novo `ModelNotEnabled` na métrica de recusa (D7). A ordem "chave antes de modelo" é a do mesmo `ValidateAsync` da validação de agente, e o `ProviderAvailabilityTests.AgentValidation_AndSendMessage_AgreeOnThePair` amarra os dois lados;
   - a edição que mantém um modelo retirado responde `400` no campo `model`.
 - **Delegação no `apps/workers`:** o Source e o Target com modelo não habilitado não delegam nem recebem delegação, pela tabela lida no contexto espelho, com uma migration espelho para as fixtures (D8). O acordo do schema entre os dois contextos está em `tests/CrossAppTaskStoreCompatibility.Tests` (D9).
 - **O protótipo da tela (#297)** foi aprovado em 19/11/2026: canvas `H7dPBZafiSkdKd1hqesPZ6`, versão `1795117800-893f`, conferido contra as rotas (design, "Protótipo aprovado da tela"). As telas ficam para a #297.

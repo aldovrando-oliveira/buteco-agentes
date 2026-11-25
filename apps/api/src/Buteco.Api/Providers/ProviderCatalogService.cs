@@ -23,7 +23,7 @@ namespace Buteco.Api.Providers;
 /// <b>A validação de agente e a recusa do <c>SendMessage</c> são o mesmo método</b>
 /// (<see cref="ValidateAsync"/>): a regra "par disponível" e a ordem "chave antes de
 /// modelo" moram aqui, e só aqui. O teste que amarra os dois lados é o de
-/// <c>ProviderAvailabilityAgreementTests</c>.
+/// <c>ProviderAvailabilityTests.AgentValidation_AndSendMessage_AgreeOnThePair</c>.
 /// </para>
 /// </summary>
 public sealed class ProviderCatalogService(IConfiguration configuration, AppDbContext dbContext)
