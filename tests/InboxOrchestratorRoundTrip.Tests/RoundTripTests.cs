@@ -49,15 +49,11 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
                 CancellationToken.None);
         }
 
-        // Debounce disparou o SendMessage real: a PendingDispatch fica
-        // Dispatching com um TaskId — captura pra conferir depois contra o
-        // GetTask real de apps/api.
-        var taskId = await PollUntilAsync(
-            () => GetPendingDispatchTaskIdAsync(channelId, externalId),
-            id => id is not null,
-            TimeSpan.FromSeconds(10));
-
-        Assert.NotNull(taskId);
+        // Debounce disparou o SendMessage real. A condição positiva é a task
+        // do agente em estado final em a2a_tasks, e não o TaskId da
+        // PendingDispatch, que só existe entre a gravação pelo inbox e o
+        // fechamento pelo push (rt-inbox-espera-taskid, D1).
+        await AgentTasks.WaitForTerminalAsync(fixture, agentId, TimeSpan.FromSeconds(20));
 
         // Round-trip completo: apps/workers processou a task (IChatClient
         // mockado) e a push notification real voltou para o endpoint
@@ -67,12 +63,13 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
             () => HasPendingDispatchAsync(channelId, externalId),
             hasPending => !hasPending,
             TimeSpan.FromSeconds(20));
+        var taskId = await AgentTasks.SingleTaskIdAsync(fixture, agentId);
 
         // Confirma o conteúdo do outro lado: apps/api reflete a mesma task
         // como Completed, com o texto exato que o IChatClient mockado
         // devolveu — prova que o payload que chegou na push notification
         // era o correto, não só que "alguma" notificação chegou.
-        var (state, artifactText) = await GetTaskFromApiAsync(agentId, taskId!);
+        var (state, artifactText) = await GetTaskFromApiAsync(agentId, taskId);
         Assert.Equal("TASK_STATE_COMPLETED", state);
         Assert.Contains(RoundTripFixture.MockedAgentReplyText, artifactText);
     }
@@ -117,11 +114,7 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
                 CancellationToken.None);
         }
 
-        var taskId = await PollUntilAsync(
-            () => GetPendingDispatchTaskIdAsync(channelId, externalId),
-            id => id is not null,
-            TimeSpan.FromSeconds(10));
-        Assert.NotNull(taskId);
+        await AgentTasks.WaitForTerminalAsync(fixture, agentId, TimeSpan.FromSeconds(20));
 
         // Mesmo limite do teste-irmão (20s) — a defasagem de latência sob
         // podman já registrada em 02-HISTORICO_E_STATUS.md
@@ -132,8 +125,9 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
             () => HasPendingDispatchAsync(channelId, externalId),
             hasPending => !hasPending,
             TimeSpan.FromSeconds(20));
+        var taskId = await AgentTasks.SingleTaskIdAsync(fixture, agentId);
 
-        var rawMessageInstant = await GetRawMessageInstantFromApiAsync(agentId, taskId!);
+        var rawMessageInstant = await GetRawMessageInstantFromApiAsync(agentId, taskId);
 
         Assert.NotNull(rawMessageInstant);
         Assert.Equal(receivedAt, DateTimeOffset.Parse(rawMessageInstant));
@@ -166,17 +160,14 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
                 CancellationToken.None);
         }
 
-        var taskId = await PollUntilAsync(
-            () => GetPendingDispatchTaskIdAsync(channelId, externalId),
-            id => id is not null,
-            TimeSpan.FromSeconds(10));
-        Assert.NotNull(taskId);
+        await AgentTasks.WaitForTerminalAsync(fixture, agentId, TimeSpan.FromSeconds(20));
         await PollUntilAsync(
             () => HasPendingDispatchAsync(channelId, externalId),
             hasPending => !hasPending,
             TimeSpan.FromSeconds(20));
+        var taskId = await AgentTasks.SingleTaskIdAsync(fixture, agentId);
 
-        var (state, _) = await GetTaskFromApiAsync(agentId, taskId!);
+        var (state, _) = await GetTaskFromApiAsync(agentId, taskId);
         Assert.Equal("TASK_STATE_COMPLETED", state);
         using var apiScope = fixture.ApiFactory.Services.CreateScope();
         var owner = await apiScope.ServiceProvider.GetRequiredService<ApiAppDbContext>().A2ATasks.AsNoTracking()
@@ -213,19 +204,16 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
                 CancellationToken.None);
         }
 
-        var taskId = await PollUntilAsync(
-            () => GetPendingDispatchTaskIdAsync(channelId, externalId),
-            id => id is not null,
-            TimeSpan.FromSeconds(10));
-        Assert.NotNull(taskId);
+        await AgentTasks.WaitForTerminalAsync(fixture, agentId, TimeSpan.FromSeconds(20));
 
         await PollUntilAsync(
             () => HasPendingDispatchAsync(channelId, externalId),
             hasPending => !hasPending,
             TimeSpan.FromSeconds(20));
+        var taskId = await AgentTasks.SingleTaskIdAsync(fixture, agentId);
 
-        var rawChannelType = await GetRawChannelContextValueFromApiAsync(agentId, taskId!, "channelType");
-        var rawContactExternalId = await GetRawChannelContextValueFromApiAsync(agentId, taskId!, "contactExternalId");
+        var rawChannelType = await GetRawChannelContextValueFromApiAsync(agentId, taskId, "channelType");
+        var rawContactExternalId = await GetRawChannelContextValueFromApiAsync(agentId, taskId, "contactExternalId");
 
         // "test-channel" é o ChannelType literal usado por CreateChannelAsync
         // acima (mesmo identificador de adapter de teste do repo inteiro).
@@ -267,12 +255,6 @@ public class RoundTripTests(RoundTripFixture fixture) : IClassFixture<RoundTripF
         await dbContext.SaveChangesAsync();
 
         return (channel.Id, $"+5511{Guid.NewGuid():N}"[..15]);
-    }
-
-    private async Task<string?> GetPendingDispatchTaskIdAsync(Guid channelId, string externalId)
-    {
-        var dispatch = await FindPendingDispatchAsync(channelId, externalId);
-        return dispatch?.TaskId;
     }
 
     private async Task<bool> HasPendingDispatchAsync(Guid channelId, string externalId) =>

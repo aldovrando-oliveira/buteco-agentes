@@ -17,6 +17,14 @@ o versionamento segue
 
 ### Changed
 
+- **Os testes do `rt-inbox` esperam uma condição durável, e não o `taskId` do registro de despacho**
+  (#309, Refs #176). Só testes, em `tests/InboxOrchestratorRoundTrip.Tests`. Doze casos esperavam o
+  `taskId` no registro de despacho do inbox, que só existe por ~50–140 ms entre a gravação e o
+  fechamento pelo push, e reprovavam por tempo quando a task terminava dentro de uma consulta. Agora
+  cada um espera primeiro a task do agente em estado final em `a2a_tasks` (ou, na sentinela do
+  `Source3`, a resposta entregue) e só depois a ausência do registro, com `Assert.Single` e a lista
+  das tasks na mensagem. Nenhum caso saiu e nenhum código de produção mudou.
+
 - **A seleção dos testes das rodadas intermediárias de uma change sai do diff** (#307). Um script
   novo, `scripts/selecionar-testes.py`, imprime o que rodar e por quê a partir do diff contra o
   `origin/main`: a suíte inteira de cada app .NET tocado e os projetos de `tests/` que dependem
